@@ -22,12 +22,12 @@ import INFINITY from 'std:math'
 # INFINITY where none is known. A bound computed with the operation's own rounding holds, as
 # rounding is monotonic: |a + b| is at most |a| + |b|, and so is its rounding at most that of the
 # bounds' sum.
-struct Range
+struct FloatRange
   nonnegative: Bool
   nonpositive: Bool
   bound: Float
 
-UNKNOWN := Range(nonnegative: false, nonpositive: false, bound: INFINITY)
+UNKNOWN := FloatRange(nonnegative: false, nonpositive: false, bound: INFINITY)
 
 # The binary operations that give no NaN: with their operands, for a tree's root, whose operands
 # check none; and of operands that are no NaN, for an operation of no tree, whose operands have
@@ -38,7 +38,7 @@ export class NanFree
 
 # Of an expression: its range, and whether it, with its operands, can give no NaN.
 struct Found
-  range: Range
+  range: FloatRange
   nan_free: Bool
 
 # The ranges of the Float locals that are followed, by their declarations' names: those of the
@@ -47,7 +47,7 @@ struct Found
 class Analysis
   facts: NodeFacts
   top_level_values: Set<Identifier>
-  ranges: Map<Identifier, Range> = Map()
+  ranges: Map<Identifier, FloatRange> = Map()
   found = NanFree()
   # What the last expression visited for its operations alone gives, which is not read: it holds
   # the result, as Lerta has no statement that drops a value.
@@ -153,7 +153,7 @@ condition_found := (analysis: Analysis, condition: Condition) ->
   forget_assigned analysis, [value]
   visit analysis, value
 
-restore := (analysis: Analysis, entries: (Identifier, Range)[]) ->
+restore := (analysis: Analysis, entries: (Identifier, FloatRange)[]) ->
   analysis.ranges = Map()
   analysis.ranges[local] = range for (local, range) in entries
 
@@ -166,7 +166,7 @@ forget_assigned := (analysis: Analysis, expressions: Expression[]) ->
   nodes: Statement[] = [expressions...]
   forget_locals analysis, assigned_in_blocks(analysis, [nodes])
 
-follow := (analysis: Analysis, name: Identifier, range: Range) ->
+follow := (analysis: Analysis, name: Identifier, range: FloatRange) ->
   return if name in analysis.facts.shared_vars or name in analysis.top_level_values
   analysis.ranges[name] = range
 
@@ -239,7 +239,7 @@ literal_found := (text: String) ->
   Found range: constant_range(value), nan_free: true
 
 constant_range := (value: Float) ->
-  Range nonnegative: value >= 0.0, nonpositive: value <= 0.0, bound: magnitude(value)
+  FloatRange nonnegative: value >= 0.0, nonpositive: value <= 0.0, bound: magnitude(value)
 
 magnitude := (value: Float) -> value < 0.0 then -value else value
 
@@ -270,7 +270,9 @@ binary_found := (analysis: Analysis, binary: BinaryOperation): Found ->
 # The range of `+ - * /` of the ranges, and whether it can give no NaN, which takes an infinity
 # less an infinity of the same sign, zero times an infinity, or zero, or an infinity, divided by
 # one.
-operation := (binary: BinaryOperation, left: Range, right: Range, square: Bool): (Range, Bool)? ->
+operation := (
+  binary: BinaryOperation, left: FloatRange, right: FloatRange, square: Bool
+): (FloatRange, Bool)? ->
   case binary.operator
     when '+' then (sum(left, right), finite(left) or finite(right) or same_sign(left, right))
     when '-'
@@ -283,35 +285,35 @@ operation := (binary: BinaryOperation, left: Range, right: Range, square: Bool):
     when '/' then quotient(left, constant_of(binary.right))
     else nil
 
-finite := (range: Range) -> range.bound < INFINITY
+finite := (range: FloatRange) -> range.bound < INFINITY
 
 # Both of one sign, so that two infinities are of one sign too and add up to one.
-same_sign := (left: Range, right: Range) ->
+same_sign := (left: FloatRange, right: FloatRange) ->
   (left.nonnegative and right.nonnegative) or (left.nonpositive and right.nonpositive)
 
-negation := (range: Range) ->
-  Range(range..., nonnegative: range.nonpositive, nonpositive: range.nonnegative)
+negation := (range: FloatRange) ->
+  FloatRange(range..., nonnegative: range.nonpositive, nonpositive: range.nonnegative)
 
-sum := (left: Range, right: Range) ->
+sum := (left: FloatRange, right: FloatRange) ->
   bound := finite(left) and finite(right) then left.bound + right.bound else INFINITY
-  Range
+  FloatRange
     bound
     nonnegative: left.nonnegative and right.nonnegative
     nonpositive: left.nonpositive and right.nonpositive
 
-product := (left: Range, right: Range) ->
+product := (left: FloatRange, right: FloatRange) ->
   nonnegative := same_sign(left, right)
   nonpositive :=
     (left.nonnegative and right.nonpositive) or (left.nonpositive and right.nonnegative)
-  Range nonnegative, nonpositive, bound: product_bound(left, right)
+  FloatRange nonnegative, nonpositive, bound: product_bound(left, right)
 
 # The bounds multiplied, where both are finite, as an infinity times 0 has no bound.
-product_bound := (left: Range, right: Range) ->
+product_bound := (left: FloatRange, right: FloatRange) ->
   finite(left) and finite(right) then left.bound * right.bound else INFINITY
 
 # Only a division by a constant other than 0 is followed, which gives no NaN: a range tells no
 # least magnitude, so that a divisor of any other range may be 0.
-quotient := (left: Range, divisor: Float?): (Range, Bool)? ->
+quotient := (left: FloatRange, divisor: Float?): (FloatRange, Bool)? ->
   constant := divisor ? return nil
   return nil if constant == 0.0
   bound := finite(left) then left.bound / magnitude(constant) else INFINITY

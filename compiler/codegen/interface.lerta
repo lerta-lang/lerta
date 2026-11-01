@@ -12,7 +12,7 @@ from './exceptions'
 import read_any_field, read_property from './expression'
 import finish from './function'
 import function_generator, Generator from './generator'
-import IrBuilder from './ir_builder'
+import IrBuilder, IrModule from './ir_builder'
 import
   emit_interface_data, emit_release, emit_release_value, emit_retain, extension_symbol,
   instance_symbol, INTERFACE_IR_TYPE, ir_return_type, ir_type, method_symbol, typed_params
@@ -50,11 +50,11 @@ export emit_interface_read := (
 define_itab := (g: Generator, itab: Itab) ->
   entries := [entry_function(g, itab, entry) for entry in itab.entries]
   key := "itab #{type_key(itab.type)} #{type_key(itab.target)} #{entries.join(' ')}"
-  define := (name: String) ->
+  define := (name: String, _module: IrModule) ->
     array_type := "[#{entries.length} x ptr]"
     init := ["ptr #{entry}" for entry in entries].join(', ')
     g.ir.module.define_global name, "private unnamed_addr constant #{array_type} [#{init}]"
-  g.ir.module.named key, '@lerta.itab', (name, module) -> define(name)
+  g.ir.module.named key, '@lerta.itab', define
 
 # The function of the entry: the method that gives the member, if it is written in Lerta, which
 # takes its object first; otherwise a function that reads the member, defined once.
@@ -71,7 +71,7 @@ entry_function := (g: Generator, itab: Itab, entry: ItabEntry) ->
 define_reader := (g: Generator, type: Type, entry: ItabEntry) ->
   member_type := entry.member.type
   key := "reader #{type_key(type)} #{entry.member.name}"
-  define := (symbol: String) ->
+  define := (symbol: String, _module: IrModule) ->
     reader := function_generator(g.code, g.extensions, g.facts, '')
     function_type := member_type is FunctionType then member_type
     params := function_type?.params ? []
@@ -84,7 +84,7 @@ define_reader := (g: Generator, type: Type, entry: ItabEntry) ->
     reader.ir.emit return_type == 'void' then 'ret void' else "ret #{return_type} #{result}"
     params_list := ['ptr %data', typed_params(params)...]
     finish reader, "private #{return_type} #{symbol}(#{params_list.join(', ')})"
-  g.ir.module.named key, '@lerta.reader', (symbol, module) -> define(symbol)
+  g.ir.module.named key, '@lerta.reader', define
 
 # The reader's result, computed from its data, `%data`, and its parameters, `operands`.
 generate_reading := (reader: Generator, type: Type, entry: ItabEntry, operands: String[]) ->

@@ -128,8 +128,9 @@ emit_optional_equals := (
   both := ir.assign("and i1 #{left_present}, #{right_present}")
   neither := ir.assign("icmp eq i1 #{left_present}, #{right_present}")
   compare_values := ->
-    values := [emit_unwrap(ir, left, type), emit_unwrap(ir, right, type)]
-    emit_equals_by_contents ir, program, values[0], values[1], type.inner
+    left_value := emit_unwrap(ir, left, type)
+    right_value := emit_unwrap(ir, right, type)
+    emit_equals_by_contents ir, program, left_value, right_value, type.inner
   emit_branch ir, 'i1', both, compare_values, neither
 
 # Members of the same type, compared as that member compares.
@@ -140,8 +141,9 @@ emit_union_equals := (
   same_type := ir.assign("icmp eq ptr #{left_type}, #{emit_object_type(ir, right)}")
   compare_members := ->
     of_member := (member: Type) ->
-      values := [emit_member_value(ir, left, member), emit_member_value(ir, right, member)]
-      emit_equals_by_contents ir, program, values[0], values[1], member
+      left_value := emit_member_value(ir, left, member)
+      right_value := emit_member_value(ir, right, member)
+      emit_equals_by_contents ir, program, left_value, right_value, member
     emit_member_dispatch ir, left, type.members, 'i1', of_member
   emit_branch ir, 'i1', same_type, compare_members, 'false'
 
@@ -176,11 +178,10 @@ emit_hash := (ir: IrBuilder, program: ProgramWide, value: String, type: Type): S
     else value
 
 combine := (ir: IrBuilder, hashes: String[]) ->
-  var result = '17'
-  for hash in hashes
+  add := (result: String, hash: String) ->
     scaled := ir.assign("mul i64 #{result}, 31")
-    result = ir.assign("add i64 #{scaled}, #{hash}")
-  result
+    ir.assign "add i64 #{scaled}, #{hash}"
+  hashes.fold '17', add
 
 # Whether two values of a type that is neither a reference nor optional are equal: as bits, but a
 # float's -0.0 equals 0.0.
