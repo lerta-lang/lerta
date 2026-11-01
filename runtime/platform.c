@@ -149,19 +149,38 @@ static char *join_path(const char *dir, const char *name) {
   return path;
 }
 
+// The text that `get` writes, as libuv's functions that tell the size that they need, through
+// `size`, with UV_ENOBUFS, write it; NULL if it fails otherwise. The caller frees it.
+static char *sized_text(int (*get)(const void *context, char *buffer, size_t *size),
+                        const void *context) {
+  size_t size = 256;
+  for (;;) {
+    char *text = lerta_checked_malloc(size);
+    int error = get(context, text, &size);
+    if (error == 0) return text;
+    free(text);
+    if (error != UV_ENOBUFS) return NULL;
+  }
+}
+
+static int get_temp_dir(const void *context, char *buffer, size_t *size) {
+  (void)context;
+  return uv_os_tmpdir(buffer, size);
+}
+
+static int get_env(const void *name, char *buffer, size_t *size) {
+  return uv_os_getenv(name, buffer, size);
+}
+
 // The path of `name` in the system's directory for temporary files, which the caller frees. libuv
 // takes the first of TMPDIR, TMP, TEMP and TEMPDIR that is set on POSIX, even if it is empty, which
 // is taken as unset, as most programs take it.
 static char *temp_path(const char *name) {
-  size_t size = 256;
-  for (;;) {
-    char *dir = lerta_checked_malloc(size);
-    int error = uv_os_tmpdir(dir, &size);
-    char *path = error != 0 ? NULL : join_path(dir[0] == '\0' ? "/tmp" : dir, name);
-    free(dir);
-    // `size` is now the size that the directory needs.
-    if (error != UV_ENOBUFS) return path;
-  }
+  char *dir = sized_text(get_temp_dir, NULL);
+  if (dir == NULL) return NULL;
+  char *path = join_path(dir[0] == '\0' ? "/tmp" : dir, name);
+  free(dir);
+  return path;
 }
 
 char *lerta_os_make_temp_dir(void) {
@@ -257,17 +276,7 @@ double lerta_os_unix_time(void) {
   return (double)now.tv_sec + (double)now.tv_nsec / 1e9;
 }
 
-char *lerta_os_env(const char *name) {
-  size_t size = 256;
-  for (;;) {
-    char *value = lerta_checked_malloc(size);
-    int error = uv_os_getenv(name, value, &size);
-    if (error == 0) return value;
-    free(value);
-    // `size` is now the size that the value needs.
-    if (error != UV_ENOBUFS) return NULL;
-  }
-}
+char *lerta_os_env(const char *name) { return sized_text(get_env, name); }
 
 void lerta_hash_init(void) {
   if (uv_random(NULL, NULL, lerta_hash_key, sizeof lerta_hash_key, 0, NULL) == 0) return;
