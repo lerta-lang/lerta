@@ -1,5 +1,6 @@
 # The types that std:json converts, which satisfy Jsonable by their parts, and the calls in it of
 # the code that the compiler generates for each (see codegen/json).
+import scan from 'std:scanner'
 import Call, Expression, Identifier, Position from '../ast'
 import fail from './diagnostics'
 import type_of from './expression'
@@ -60,19 +61,17 @@ same_camel_case := (names: String[], path: String) ->
 # ASCII letter is left out, and the letter written in uppercase; a leading `_`, and one after
 # another, stay.
 export camel_case := (name: String) ->
-  chars := name.to_array()
+  scanner := scan(name)
   var written = ''
-  var i = 0
-  while i < chars.length
-    c := chars[i]
-    after := chars.get(i + 1) ? ' '
-    joins := c == '_' and i > 0 and chars[i - 1] != '_' and after >= 'a' and after <= 'z'
-    if joins
+  var follows_other = false
+  while c := scanner.next()
+    after := scanner.peek()
+    if c == '_' and follows_other and after and after >= 'a' and after <= 'z'
       written += after.to_string().to_upper()
-      i += 2
+      scanner.next()
     else
       written += c
-      i += 1
+      follows_other = c != '_'
   written
 
 unconverted := (path: String, problem: String) ->
@@ -113,10 +112,8 @@ class PartFinder
     members_by_kind: Map<Int, Type>
     for member in type.members
       return part if part := @unjsonable_part(member, path)
-      kind := json_kind(member) ? return {
-        path
-        problem: "has a member of type #{format_type(member)}, which no union holds in JSON so far"
-      }
+      no_union := "has a member of type #{format_type(member)}, which no union holds in JSON so far"
+      kind := json_kind(member) ? return { path, problem: no_union }
       if other := members_by_kind[kind]
         both := "#{format_type(other)} and #{format_type(member)}"
         problem := "has two members that JSON writes as #{JSON_KIND_WORDS[kind]}, #{both}"
