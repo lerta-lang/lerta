@@ -119,23 +119,20 @@ result_line := (name: String, reasons: String[]) ->
 # The results that the driver printed, as result_line writes them. A result's line pads the name
 # and ends with the time; the reasons follow, indented by 6, and what they show by more.
 reported_results := (stdout: String) ->
-  results: String[]
-  var name: String?
-  var reasons: String[] = []
-  flush := ->
-    results.push result_line(current, reasons) if current := name
-    name = nil
-    reasons = []
+  results: HarnessResult[]
+  # Whether the lines that follow give reasons of the last result.
+  var in_result = false
   for line in stdout.split("\n")
     if line.starts_with('ok    ') or line.starts_with('FAIL  ')
-      flush()
-      name = line.without_prefix(line.starts_with('ok') then 'ok    ' else 'FAIL  ')!.split('  ')[0]
+      name :=
+        line.without_prefix(line.starts_with('ok') then 'ok    ' else 'FAIL  ')!.split('  ')[0]
+      results.push { name, reasons: [] }
+      in_result = true
     else if reason := line.without_prefix('      ')
-      reasons.push reason if name != nil and not reason.starts_with(' ')
+      results.last()!.reasons.push(reason) if in_result and not reason.starts_with(' ')
     else
-      flush()
-  flush()
-  results
+      in_result = false
+  [result_line(result.name, result.reasons) for result in results]
 
 harness_check := Check
   name: 'bin/test reports each test of tests/harness as it should, and keeps those that failed'
