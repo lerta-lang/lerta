@@ -75,7 +75,7 @@ static void drop_array(void *object) {
 }
 
 LERTA_STATIC_STRING(array_name, "Array");
-const LertaType lerta_array_type = {drop_array, visit_array, (const LertaString *)&array_name};
+const LertaType lerta_array_type = {drop_array, visit_array, LERTA_STR(array_name)};
 
 LertaArray *lerta_array_create(LertaItemKind item_kind) {
   LertaArray *array = lerta_new((int64_t)sizeof(LertaArray), &lerta_array_type);
@@ -96,7 +96,7 @@ static inline void fill_items(uint8_t *items, int64_t length, const void *item, 
 
 LertaArray *lerta_array_filled(LertaItemKind item_kind, int64_t length, const void *item) {
   if (length < 0) {
-    lerta_raise(LERTA_VALUE_ERROR, (const LertaString *)&negative_length);
+    lerta_raise(LERTA_VALUE_ERROR, LERTA_STR(negative_length));
     return NULL;
   }
   LertaArray *array = lerta_array_create(item_kind);
@@ -125,7 +125,7 @@ int64_t lerta_array_length(const LertaArray *array) { return array->length; }
 LERTA_STATIC_STRING(index_out_of_range, "index out of range");
 
 void lerta_raise_index_out_of_range(void) {
-  lerta_raise(LERTA_INDEX_ERROR, (const LertaString *)&index_out_of_range);
+  lerta_raise(LERTA_INDEX_ERROR, LERTA_STR(index_out_of_range));
 }
 
 uint8_t *lerta_array_checked_items(const LertaArray *array, int64_t index) {
@@ -158,7 +158,7 @@ void lerta_array_append(LertaArray *array, const void *item) {
 // The array's reference to the item passes to the caller.
 void lerta_array_take_last(LertaArray *array, void *item) {
   if (array->length == 0) {
-    lerta_raise(LERTA_INDEX_ERROR, (const LertaString *)&pop_from_empty);
+    lerta_raise(LERTA_INDEX_ERROR, LERTA_STR(pop_from_empty));
     return;
   }
   array->length--;

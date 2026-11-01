@@ -61,7 +61,7 @@ static int64_t leftover_length;
 static void settle_stdin_read(LertaPromise *promise, uint8_t *bytes, int64_t length) {
   if (length == LERTA_OUT_OF_MEMORY) lerta_panic("out of memory");
   if (length < 0) {
-    lerta_raise(LERTA_IO_ERROR, (const LertaString *)&cannot_read_stdin);
+    lerta_raise(LERTA_IO_ERROR, LERTA_STR(cannot_read_stdin));
     lerta_promise_reject(promise);
   } else {
     LertaString *chunk = length == 0 ? NULL : lerta_string_from_bytes(bytes, length);

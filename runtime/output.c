@@ -164,8 +164,8 @@ static void wait_in_flight(bool panicking) {
 }
 
 static void reject_failed(LertaPromise *promise, int fd) {
-  const void *message =
-      fd == STDOUT_FD ? (const void *)&cannot_write_stdout : (const void *)&cannot_write_stderr;
+  const LertaString *message =
+      fd == STDOUT_FD ? LERTA_STR(cannot_write_stdout) : LERTA_STR(cannot_write_stderr);
   lerta_raise(LERTA_IO_ERROR, message);
   lerta_promise_reject(promise);
 }

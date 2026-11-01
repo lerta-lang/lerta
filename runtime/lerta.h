@@ -49,6 +49,8 @@ struct LertaString {
     int64_t length;                                          \
     uint8_t bytes[sizeof(text) - 1] LERTA_NONSTRING;         \
   } name = {{LERTA_IMMORTAL, NULL}, sizeof(text) - 1, text}
+// The LertaString of a LERTA_STATIC_STRING.
+#define LERTA_STR(name) ((const LertaString *)&(name))
 
 // How arrays and maps hold their items. A plain item is 8 bytes, an Int as is; a reference is 8
 // bytes, its address, and is retained while it is held. An interface value is two pointers, its

@@ -215,7 +215,7 @@ static void visit_weak_box(void *box, LertaVisitor visitor) {
 
 LERTA_STATIC_STRING(weak_box_name, "weak box");
 static const LertaType weak_box_type = {
-    drop_weak_box, visit_weak_box, (const LertaString *)&weak_box_name};
+    drop_weak_box, visit_weak_box, LERTA_STR(weak_box_name)};
 
 // The slot of an object being dropped: its box, if it had one, no longer points at it, and a new
 // one would not either.

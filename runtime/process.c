@@ -245,14 +245,14 @@ int64_t lerta_program_start(const LertaString *command, const LertaArray *args,
   if (spawned) return (int64_t)(intptr_t)program;
   program->freed = true;
   free_program_if_done(program);
-  lerta_raise_with(LERTA_IO_ERROR, &cannot_run, command);
+  lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_run), command);
   return 0;
 }
 
 void lerta_system_pipe(LertaArray *files) {
   uv_file ends[2];
   if (uv_pipe(ends, 0, 0) != 0) {
-    lerta_raise(LERTA_IO_ERROR, (const LertaString *)&cannot_make_pipe);
+    lerta_raise(LERTA_IO_ERROR, LERTA_STR(cannot_make_pipe));
     return;
   }
   for (int i = 0; i < 2; i++) {

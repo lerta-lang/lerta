@@ -5,12 +5,12 @@ LERTA_STATIC_STRING(ended, "next past the end of an Iter");
 LERTA_STATIC_STRING(running, "an Iter cannot be read while its function runs");
 
 void lerta_iter_start(LertaIter *iter) {
-  if (iter->started) lerta_raise(LERTA_ITER_ERROR, (const LertaString *)&traversed_twice);
+  if (iter->started) lerta_raise(LERTA_ITER_ERROR, LERTA_STR(traversed_twice));
   iter->started = true;
 }
 
-void lerta_raise_iter_ended(void) { lerta_raise(LERTA_ITER_ERROR, (const LertaString *)&ended); }
+void lerta_raise_iter_ended(void) { lerta_raise(LERTA_ITER_ERROR, LERTA_STR(ended)); }
 
 void lerta_raise_iter_running(void) {
-  lerta_raise(LERTA_ITER_ERROR, (const LertaString *)&running);
+  lerta_raise(LERTA_ITER_ERROR, LERTA_STR(running));
 }

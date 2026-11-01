@@ -26,9 +26,9 @@ void lerta_main(void) {
   for (int i = 0; i < READS; i++) lerta_release(lerta_read_file_async(name));
   LERTA_STATIC_STRING(flushed, "flushed\n");
   LERTA_STATIC_STRING(printed, "printed\n");
-  lerta_release(lerta_stream_write(1, (const LertaString *)&flushed));
+  lerta_release(lerta_stream_write(1, LERTA_STR(flushed)));
   lerta_release(lerta_stream_flush(1));
-  lerta_print_stdout((const LertaString *)&printed);
+  lerta_print_stdout(LERTA_STR(printed));
   unlink(path);
   rmdir(dir);
   // The reads hold the loop, which would wait for them.

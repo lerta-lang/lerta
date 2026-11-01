@@ -89,7 +89,8 @@ typedef void (*LertaCancel)(void *context);
 void lerta_promise_on_cancel(LertaPromise *promise, LertaCancel cancel, void *context);
 void lerta_promise_reject_cancelled(LertaPromise *promise);
 // Rejects the promise with an IOError, its message made as by lerta_raise_with.
-void lerta_promise_reject_io(LertaPromise *promise, const void *prefix, const LertaString *detail);
+void lerta_promise_reject_io(LertaPromise *promise, const LertaString *prefix,
+                             const LertaString *detail);
 // The slot of a settled promise; if it holds an exception, throws it.
 void *lerta_promise_result(LertaPromise *promise);
 
@@ -155,7 +156,7 @@ void lerta_trace_forget(void *object);
 void lerta_trace_load(const LertaTrace *saved);
 // As lerta_raise, with the message made of a prefix, a LertaString such as a LERTA_STATIC_STRING,
 // and the detail.
-void lerta_raise_with(LertaErrorKind kind, const void *prefix, const LertaString *detail);
+void lerta_raise_with(LertaErrorKind kind, const LertaString *prefix, const LertaString *detail);
 // An IndexError of an index out of range, as of an array or a Binary.
 void lerta_raise_index_out_of_range(void);
 // Prints the message to stderr and exits with status 1: for an uncaught exception, and for an

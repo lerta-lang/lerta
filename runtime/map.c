@@ -72,7 +72,7 @@ static void drop_map(void *object) {
 }
 
 LERTA_STATIC_STRING(map_name, "Map");
-const LertaType lerta_map_type = {drop_map, visit_map, (const LertaString *)&map_name};
+const LertaType lerta_map_type = {drop_map, visit_map, LERTA_STR(map_name)};
 
 LertaMap *lerta_map_create(LertaKeyKind key_kind, LertaItemKind value_kind, LertaHash hash,
                            LertaEquals equals) {
@@ -178,7 +178,7 @@ static void drop_cursor(void *object) {
 }
 
 LERTA_STATIC_STRING(cursor_name, "Map cursor");
-static const LertaType cursor_type = {drop_cursor, visit_cursor, (const LertaString *)&cursor_name};
+static const LertaType cursor_type = {drop_cursor, visit_cursor, LERTA_STR(cursor_name)};
 
 LertaMapCursor *lerta_map_cursor(LertaMap *map) {
   LertaMapCursor *cursor = lerta_new((int64_t)sizeof(LertaMapCursor), &cursor_type);

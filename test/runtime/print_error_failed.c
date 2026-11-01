@@ -12,18 +12,18 @@ LERTA_STATIC_STRING(dropped, "dropped\n");
 
 static void fail(void) {
 #ifdef FAIL_BY_WRITE
-  lerta_release(lerta_stream_write(2, (const LertaString *)&lost));
+  lerta_release(lerta_stream_write(2, LERTA_STR(lost)));
   lerta_output_flush();
 #else
-  lerta_print_stderr((const LertaString *)&lost);
+  lerta_print_stderr(LERTA_STR(lost));
 #endif
 }
 
 static void drop(void) {
 #ifdef DROP_BY_WRITE
-  lerta_release(lerta_stream_write(2, (const LertaString *)&dropped));
+  lerta_release(lerta_stream_write(2, LERTA_STR(dropped)));
 #else
-  lerta_print_stderr((const LertaString *)&dropped);
+  lerta_print_stderr(LERTA_STR(dropped));
 #endif
 }
 

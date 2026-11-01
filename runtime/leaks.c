@@ -75,7 +75,7 @@ static void count_holders_outside(void) {
 LERTA_STATIC_STRING(string_name, "String or Binary");
 
 static const LertaString *name_of(LertaHeader *object) {
-  if (object->type == NULL) return (const LertaString *)&string_name;
+  if (object->type == NULL) return LERTA_STR(string_name);
   return object->type->name;
 }
 

@@ -7,9 +7,9 @@ void lerta_main(void) {
   LERTA_STATIC_STRING(first, "first\n");
   LERTA_STATIC_STRING(second, "second\n");
   LERTA_STATIC_STRING(third, "third\n");
-  lerta_release(lerta_stream_write(1, (const LertaString *)&first));
-  lerta_release(lerta_stream_write(2, (const LertaString *)&second));
-  lerta_release(lerta_stream_write(1, (const LertaString *)&third));
+  lerta_release(lerta_stream_write(1, LERTA_STR(first)));
+  lerta_release(lerta_stream_write(2, LERTA_STR(second)));
+  lerta_release(lerta_stream_write(1, LERTA_STR(third)));
 #ifdef EXIT_AT_ONCE
   _exit(0);
 #endif

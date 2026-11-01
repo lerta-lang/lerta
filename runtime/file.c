@@ -47,7 +47,7 @@ bool lerta_stat_fields(const LertaString *path, LertaArray *fields) {
   LertaFileStatus status;
   int found = stat_of(path, &status);
   if (found < 0) {
-    lerta_raise_with(LERTA_IO_ERROR, &cannot_stat, path);
+    lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_stat), path);
     return false;
   }
   if (found == 0) return false;
@@ -62,7 +62,7 @@ void lerta_make_link(const LertaString *target, const LertaString *path) {
   bool made = lerta_os_make_link(target_name, name);
   free(target_name);
   free(name);
-  if (!made) lerta_raise_with(LERTA_IO_ERROR, &cannot_make_link, path);
+  if (!made) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_make_link), path);
 }
 
 // std:io refuses an empty path, which Windows would read `\*` in as the root of the drive.
@@ -73,7 +73,7 @@ LertaArray *lerta_list_dir_names(const LertaString *path) {
   free(name);
   if (!listed) {
     lerta_release(names);
-    lerta_raise_with(LERTA_IO_ERROR, &cannot_list, path);
+    lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_list), path);
     return NULL;
   }
   return names;
@@ -97,7 +97,7 @@ LertaString *lerta_real_path(const LertaString *path) {
   char *resolved = lerta_os_real_path(name);
   free(name);
   if (resolved == NULL) {
-    lerta_raise_with(LERTA_IO_ERROR, &cannot_resolve, path);
+    lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_resolve), path);
     return NULL;
   }
   return string_from_os(resolved);
@@ -106,7 +106,7 @@ LertaString *lerta_real_path(const LertaString *path) {
 LertaString *lerta_make_temp_dir(void) {
   char *path = lerta_os_make_temp_dir();
   if (path == NULL) {
-    lerta_raise(LERTA_IO_ERROR, (const LertaString *)&cannot_make_temp_dir);
+    lerta_raise(LERTA_IO_ERROR, LERTA_STR(cannot_make_temp_dir));
     return NULL;
   }
   return string_from_os(path);
@@ -119,7 +119,7 @@ LertaString *lerta_make_temp_dir(void) {
 typedef struct {
   LertaPromise *promise;
   LertaString *path;
-  const void *failure;
+  const LertaString *failure;
   char *name;
   char *to_name;
   LertaString *data;
@@ -180,9 +180,9 @@ static void end_task(void *data) {
   free(task);
 }
 
-static LertaPromise *start_task(LertaItemKind kind, const LertaString *path, const void *failure,
-                                const LertaString *data, const LertaString *to,
-                                void (*work)(void *data)) {
+static LertaPromise *start_task(LertaItemKind kind, const LertaString *path,
+                                const LertaString *failure, const LertaString *data,
+                                const LertaString *to, void (*work)(void *data)) {
   LertaPromise *promise = lerta_promise_new(kind);
   char *name = lerta_c_string(path);
   char *to_name = to == NULL ? NULL : lerta_c_string(to);
@@ -198,19 +198,19 @@ static LertaPromise *start_task(LertaItemKind kind, const LertaString *path, con
 }
 
 LertaPromise *lerta_read_file_async(const LertaString *path) {
-  return start_task(LERTA_REFERENCE_ITEMS, path, &cannot_read, NULL, NULL, read_work);
+  return start_task(LERTA_REFERENCE_ITEMS, path, LERTA_STR(cannot_read), NULL, NULL, read_work);
 }
 
 LertaPromise *lerta_write_file_async(const LertaString *path, const LertaString *data) {
-  return start_task(LERTA_PLAIN_ITEMS, path, &cannot_write, data, NULL, write_work);
+  return start_task(LERTA_PLAIN_ITEMS, path, LERTA_STR(cannot_write), data, NULL, write_work);
 }
 
 LertaPromise *lerta_remove_tree_async(const LertaString *path) {
-  return start_task(LERTA_PLAIN_ITEMS, path, &cannot_remove, NULL, NULL, remove_work);
+  return start_task(LERTA_PLAIN_ITEMS, path, LERTA_STR(cannot_remove), NULL, NULL, remove_work);
 }
 
 LertaPromise *lerta_copy_file_async(const LertaString *from, const LertaString *to) {
-  return start_task(LERTA_PLAIN_ITEMS, from, &cannot_copy, NULL, to, copy_work);
+  return start_task(LERTA_PLAIN_ITEMS, from, LERTA_STR(cannot_copy), NULL, to, copy_work);
 }
 
 // A file of std:io's open, which Lerta holds by its address, in a FileWriter, and frees. Each write
@@ -261,7 +261,7 @@ int64_t lerta_open_for_writing(const LertaString *path) {
   int64_t file = lerta_os_open_for_writing(name);
   free(name);
   if (file < 0) {
-    lerta_raise_with(LERTA_IO_ERROR, &cannot_open, path);
+    lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_open), path);
     return 0;
   }
   OpenFile *open = lerta_checked_calloc(1, sizeof(OpenFile));
@@ -273,7 +273,7 @@ int64_t lerta_open_for_writing(const LertaString *path) {
 // Throws the failure of a write before, if one has failed.
 void lerta_open_file_check(int64_t pointer) {
   OpenFile *open = open_file_of(pointer);
-  if (open->failed) lerta_raise_with(LERTA_IO_ERROR, &cannot_write, open->path);
+  if (open->failed) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_write), open->path);
 }
 
 // The place of the next `length` bytes, which a write takes.
@@ -298,7 +298,7 @@ static void end_file_write(void *data) {
     if (write->succeeded) {
       lerta_promise_resolve(write->promise);
     } else {
-      lerta_promise_reject_io(write->promise, &cannot_write, open->path);
+      lerta_promise_reject_io(write->promise, LERTA_STR(cannot_write), open->path);
     }
     lerta_release(write->promise);
   }
@@ -365,7 +365,7 @@ void lerta_make_dir(const LertaString *path) {
   char *name = lerta_c_string(path);
   bool made = make_dir_and_parents(name);
   free(name);
-  if (!made) lerta_raise_with(LERTA_IO_ERROR, &cannot_make_dir, path);
+  if (!made) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_make_dir), path);
 }
 
 void lerta_rename(const LertaString *from, const LertaString *to) {
@@ -374,7 +374,7 @@ void lerta_rename(const LertaString *from, const LertaString *to) {
   bool renamed = lerta_os_rename(from_name, to_name);
   free(from_name);
   free(to_name);
-  if (!renamed) lerta_raise_with(LERTA_IO_ERROR, &cannot_rename, from);
+  if (!renamed) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_rename), from);
 }
 
 // Reads in chunks, so that files whose size is not known in advance work too.

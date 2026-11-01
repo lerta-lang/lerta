@@ -59,7 +59,7 @@ LERTA_STATIC_STRING(cancelled, "cancelled");
 static const LertaType *cancelled_error_type = NULL;
 
 static void raise_cancelled(void) {
-  lerta_raise(LERTA_CANCELLED_ERROR, (const LertaString *)&cancelled);
+  lerta_raise(LERTA_CANCELLED_ERROR, LERTA_STR(cancelled));
   cancelled_error_type = ((LertaHeader *)lerta_exception.data)->type;
 }
 
@@ -96,7 +96,7 @@ static void drop_promise(void *object) {
 
 LERTA_STATIC_STRING(promise_name, "Promise");
 static const LertaType promise_type = {
-    drop_promise, visit_promise, (const LertaString *)&promise_name};
+    drop_promise, visit_promise, LERTA_STR(promise_name)};
 
 LertaPromise *lerta_promise_new(LertaItemKind kind) {
   LertaPromise *promise = lerta_new(sizeof(LertaPromise), &promise_type);
@@ -205,7 +205,8 @@ void lerta_promise_reject_cancelled(LertaPromise *promise) {
   lerta_promise_reject(promise);
 }
 
-void lerta_promise_reject_io(LertaPromise *promise, const void *prefix, const LertaString *detail) {
+void lerta_promise_reject_io(LertaPromise *promise, const LertaString *prefix,
+                             const LertaString *detail) {
   lerta_raise_with(LERTA_IO_ERROR, prefix, detail);
   lerta_promise_reject(promise);
 }
@@ -248,7 +249,7 @@ LERTA_STATIC_STRING(never_settled, "the top-level code awaits a promise that is 
 
 // Its exception has ended the program already, if it threw (see lerta_watch_top_level).
 void lerta_finish_top_level(LertaPromise *promise) {
-  if (promise->state == PENDING) lerta_exit_with_error((const LertaString *)&never_settled);
+  if (promise->state == PENDING) lerta_exit_with_error(LERTA_STR(never_settled));
   // The promise is released next, and another may take its place.
   top_level = NULL;
 }

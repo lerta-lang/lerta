@@ -29,7 +29,7 @@ void lerta_raise(LertaErrorKind kind, const LertaString *message) {
   registered_raise((int32_t)kind, message);
 }
 
-void lerta_raise_with(LertaErrorKind kind, const void *prefix, const LertaString *detail) {
+void lerta_raise_with(LertaErrorKind kind, const LertaString *prefix, const LertaString *detail) {
   LertaString *message = lerta_string_concat(2, prefix, detail);
   lerta_raise(kind, message);
   lerta_release(message);
