@@ -143,12 +143,6 @@ void lerta_program_stop(int64_t pointer) {
   uv_timer_start(&program->kill_timer, kill_program, program->kill_after, 0);
 }
 
-static void close_file(uv_file file) {
-  uv_fs_t request;
-  uv_fs_close(NULL, &request, file, NULL);
-  uv_fs_req_cleanup(&request);
-}
-
 // A pipe of the system for the stream of a handle, rather than the pipes that libuv makes for a
 // program, which are sockets on Unix, which some programs tell apart, as `script` does by its
 // stdin: the program's end, which it inherits, in `child`, and this program's, which the handle
@@ -169,8 +163,8 @@ static bool open_pipe(int64_t handle, bool program_reads, uv_file *child, bool *
   if (uv_pipe(files, read_flags, write_flags) != 0) return false;
   uv_file own = program_reads ? files[1] : files[0];
   if (uv_pipe_open((uv_pipe_t *)lerta_handle_stream(handle), own) != 0) {
-    close_file(files[0]);
-    close_file(files[1]);
+    lerta_os_close(files[0]);
+    lerta_os_close(files[1]);
     return false;
   }
   *child = program_reads ? files[0] : files[1];
@@ -207,7 +201,7 @@ static bool spawn(Program *program, char *file, char **args, char **env, const c
   program->process.data = program;
   bool spawned = opened && uv_spawn(uv_default_loop(), &program->process, &options) == 0;
   for (int i = 0; i < 3; i++) {
-    if (made[i]) close_file(children[i]);
+    if (made[i]) lerta_os_close(children[i]);
   }
   if (spawned) {
     program->open_handles++;
@@ -261,7 +255,7 @@ void lerta_system_pipe(LertaArray *files) {
   }
 }
 
-void lerta_file_close(int64_t file) { close_file((uv_file)file); }
+void lerta_file_close(int64_t file) { lerta_os_close(file); }
 
 // Its cancel stops the program, and rejects the promise once it has ended.
 static void cancel_wait(void *context) {
