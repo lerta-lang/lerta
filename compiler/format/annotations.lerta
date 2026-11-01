@@ -2,7 +2,7 @@
 # annotations in docs/reference/style.md), the enums of members and the names of the constructions
 # of structs that it shows are expected (see Expected types there), and the imports of the enums and
 # the structs that these leave unused, which `lerta fmt` leaves out.
-import Identifier, Node, Statement from '../ast'
+import FunctionLiteral, Identifier, Node, Statement from '../ast'
 import ProgramWide, Shared from '../checker/shared'
 import CompileError from '../errors'
 import imported_files, load_modules, Module, module_key from '../loader'
@@ -91,7 +91,7 @@ add_removable := (removable: Map<String, String[]>, entry: String, wanted: Set<S
   candidates := candidates_of(held, checked)
   return if candidates.is_empty()
   program := -> quiet_program(entry, modules)
-  accepted := accepted_among(candidates, checked, program)
+  accepted := writable(accepted_among(candidates, checked, program))
   imports := unused_type_imports(accepted, held, checked, program)
   for placed in [accepted..., imports...]
     keys := removable[placed.key]!
@@ -156,6 +156,17 @@ accepted_among := (candidates: Placed[], checked: ProgramWide, program: () -> Pr
     not merged.any((arms) -> arms.key == placed.key and in_body(arms, at))
   outside := [placed for placed in others when is_outside(placed)]
   removable_among merged, outside, checks_the_same(with_arms, false, false)
+
+# The annotations accepted but the types of the parameters of a literal that keeps its return type,
+# as `(x): T -> x` does not parse. Keeping a type that could be left out changes no checking.
+writable := (accepted: Placed[]) ->
+  returns_left_out: Set<FunctionLiteral>
+  for placed in accepted
+    returns_left_out.add function if function := placed.annotation.function
+  is_writable := (placed: Placed) ->
+    literal := placed.annotation.parameter_of ? return true
+    literal.return_type == nil or literal in returns_left_out
+  [placed for placed in accepted when is_writable(placed)]
 
 # The imports of enums and structs that the program used, but that it does not once the annotations
 # accepted are left out, as the members of enums written alone, the constructions written as records
