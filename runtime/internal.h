@@ -141,8 +141,9 @@ bool lerta_loop_wait(void);
 // touch what the main thread does, such as Lerta's allocator.
 void lerta_loop_work(void *data, void (*work)(void *data), void (*done)(void *data));
 
-// The most bytes that a read or a write asks for at once, 1 GiB, as macOS rejects one of more than
-// INT_MAX bytes, and Windows and libuv's buffers there count their bytes in 32 bits.
+// Reads and writes (platform*.c, handle.c): the most bytes that one asks for at once, 1 GiB, as
+// macOS rejects one of more than INT_MAX bytes, and Windows and libuv's buffers there count their
+// bytes in 32 bits.
 #define LERTA_IO_CHUNK ((int64_t)1 << 30)
 static inline int64_t lerta_io_chunk(int64_t length) {
   return length < LERTA_IO_CHUNK ? length : LERTA_IO_CHUNK;
@@ -150,7 +151,6 @@ static inline int64_t lerta_io_chunk(int64_t length) {
 
 // Process (process.c): main's arguments, without the program name.
 void lerta_set_arguments(int argc, char **argv);
-
 
 // Output (output.c), buffered for stdout and stderr together (see docs/internals.md#output).
 enum { STDOUT_FD = 1, STDERR_FD = 2 };
