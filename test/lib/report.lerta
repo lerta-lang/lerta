@@ -94,65 +94,87 @@ format_duration := (duration: Float) ->
   return "#{rounded}ms" if rounded < 1000
   "#{(duration / 1000.0).to_fixed(1)}s"
 
+# The run of a suite's checks: several at once, each result shown in order as soon as it and those
+# before it have finished, then, with retry, those that failed, once more, one at a time.
+class SuiteRun
+  title: String
+  checks: Check[]
+  # Results are printed as they come, so the width also counts checks that turn out not to apply.
+  name_width: Int
+  failed: String[] = []
+  retried: Check[] = []
+  flaky_count = 0
+  run_count = 0
+  results: Result?[] = []
+  next_to_print = 0
+  next_to_start = 0
+
+  show = (status: String, check: Check, result: Result, reasons: String[]) ->
+    duration := format_duration(result.duration).pad_start(6)
+    print "#{status.pad_end(5)} #{check.name.pad_end(@name_width)}  #{duration}"
+    print "      #{reason}" for reason in reasons
+
+  fail = (check: Check) ->
+    @failed.push check.name
+    failed_keys.push key(@title, check.name)
+
+  report = (check: Check, result: Result) ->
+    ran_keys.push key(@title, check.name)
+    reasons := result.reasons ? return
+    @run_count += 1
+    if reasons.is_empty()
+      @show 'ok', check, result, reasons if not options().quiet
+    else if options().retry
+      @retried.push check
+      @show 'FAIL?', check, result, reasons
+    else
+      @fail check
+      @show 'FAIL', check, result, reasons
+
+  # Runs the checks not started yet, one after another, and reports those finished in order.
+  work = ->
+    while @next_to_start < @checks.length
+      index := @next_to_start
+      @next_to_start += 1
+      @results[index] = await run_one(@checks[index])
+      while @next_to_print < @checks.length
+        result := @results[@next_to_print] ? break
+        @report @checks[@next_to_print], result
+        @next_to_print += 1
+
+  run_all = ->
+    @results = [nil for _ in @checks]
+    await all([@work() for _ in 0...jobs()])
+
+  retry = ->
+    if not @retried.is_empty()
+      print "#{@title}: running the #{@retried.length} that failed once more, one at a time"
+    for check in @retried
+      result := await run_one(check)
+      # A check that does not apply now did not pass either.
+      reasons := result.reasons ? ['did not apply when run once more']
+      if reasons.is_empty()
+        # Shown even with quiet, as the end of the FAIL? that was shown.
+        @flaky_count += 1
+        @show 'ok', check, result, reasons
+      else
+        @fail check
+        @show 'FAIL', check, result, reasons
+
 # Runs the checks that select gave, and gives the number of those that failed. With retry, a check
 # that failed is shown as FAIL? and run once more after the others, alone, as a check that failed
 # only because of the load of the others then passes; it is then counted as passed, and as flaky.
 export run_checks := (title: String, checks: Check[]) ->
-  # Results are printed as they come, so the width also counts checks that turn out not to apply.
   name_width := min((width(check.name) for check in checks).max() ? 0, MAX_NAME_WIDTH)
   started := milliseconds()
-  failed: String[]
-  retried: Check[]
-  var flaky_count = 0
-  var run_count = 0
-  show := (status: String, check: Check, result: Result, reasons: String[]) ->
-    duration := format_duration(result.duration).pad_start(6)
-    print "#{status.pad_end(5)} #{check.name.pad_end(name_width)}  #{duration}"
-    print "      #{reason}" for reason in reasons
-  fail := (check: Check) ->
-    failed.push check.name
-    failed_keys.push key(title, check.name)
-  report := (check: Check, result: Result) ->
-    ran_keys.push key(title, check.name)
-    reasons := result.reasons ? return
-    run_count += 1
-    if reasons.is_empty()
-      show 'ok', check, result, reasons if not options().quiet
-    else if options().retry
-      retried.push check
-      show 'FAIL?', check, result, reasons
-    else
-      fail check
-      show 'FAIL', check, result, reasons
-  results: Result?[] = [nil for _ in checks]
-  var next_to_print = 0
-  var next_to_start = 0
-  worker := ->
-    while next_to_start < checks.length
-      index := next_to_start
-      next_to_start += 1
-      results[index] = await run_one(checks[index])
-      while next_to_print < checks.length
-        result := results[next_to_print] ? break
-        report checks[next_to_print], result
-        next_to_print += 1
-  await all([worker() for _ in 0...jobs()])
-  if not retried.is_empty()
-    print "#{title}: running the #{retried.length} that failed once more, one at a time"
-  for check in retried
-    result := await run_one(check)
-    # A check that does not apply now did not pass either.
-    reasons := result.reasons ? ['did not apply when run once more']
-    if reasons.is_empty()
-      # Shown even with quiet, as the end of the FAIL? that was shown.
-      flaky_count += 1
-      show 'ok', check, result, reasons
-    else
-      fail check
-      show 'FAIL', check, result, reasons
+  run := SuiteRun(title, checks, name_width)
+  await run.run_all()
+  await run.retry()
+  failed := run.failed
   total := format_duration(milliseconds() - started)
-  flaky := flaky_count > 0 then ", #{flaky_count} flaky" else ''
-  print "#{title}: #{run_count - failed.length} passed, #{failed.length} failed#{flaky} in #{total}"
+  flaky := run.flaky_count > 0 then ", #{run.flaky_count} flaky" else ''
+  print
+    "#{title}: #{run.run_count - failed.length} passed, #{failed.length} failed#{flaky} in #{total}"
   print "  FAIL #{name}" for name in failed
   print ''
   failed.length
