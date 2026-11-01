@@ -1,7 +1,7 @@
 # Reading a String by code points (see docs/reference/std.md#stdscanner). The position is a
 # byte offset that only a TextScanner holds, which is seen only as a Scanner, so that it only ever
-# stands at the start of a code point, and every part taken is valid UTF-8 without a check.
-import char_at, sequence_length, text_between from './internal/utf8'
+# stands at the start of a code point, and no part taken is cut within one.
+import char_at, lerta_string_slice, sequence_length from './internal/utf8'
 
 export interface Scanner
   done: () -> Bool
@@ -14,6 +14,8 @@ export interface Scanner
   rest: () -> String
 
 class TextScanner: Scanner
+  text: String
+  # The text's bytes, kept as a field, which a read borrows, where `@text.binary` would retain them.
   bytes: Binary
   var at = 0
   done = -> @at == @bytes.length
@@ -42,6 +44,6 @@ class TextScanner: Scanner
     @at = @bytes.length
     @since start
   # The text passed over since the position `start`.
-  since = (start: Int) -> text_between(@bytes, start, @at)
+  since = (start: Int) -> lerta_string_slice(@text, start, @at)
 
-export scan := (text: String): Scanner -> TextScanner(text.binary)
+export scan := (text: String): Scanner -> TextScanner(text, bytes: text.binary)

@@ -2,7 +2,7 @@
 # generated code and is linked with the runtime as `build` links it.
 import build_flags from '../compiler/clang_flags'
 import Check, run_checks, select from './lib/report'
-import compare_text, expect_status, reason_if from './lib/expect'
+import compare_text, expect_status, lines, reason_if from './lib/expect'
 import host_systems, read_text_or_throw, root_dir, SetupError, suite_dir from './lib/lerta'
 import timeout from 'std:async'
 import encode_json from 'std:json'
@@ -222,6 +222,23 @@ checks := [
     'the debug runtime stops a release of an object queued to be dropped'
     'release_queued'
     'release of a dropped object'
+  )
+  Check(name: 'lerta_string_slice throws unless both ends are within and at characters', run: ->
+    outcome := await build_and_run('string_slice', false)
+    out_of_range := 'error 0: slice out of range'
+    within := 'error 0: slice within a character'
+    in_place := ["'a'", "'é'", "'😀'", "''"]
+    expected := [
+      in_place...
+      within
+      within
+      within
+      within
+      out_of_range
+      out_of_range
+      out_of_range
+    ]
+    [compare_text('stdout', lines(expected), outcome.stdout)..., expect_clean(outcome)...]
   )
   clean_check('the optimized runtime does not count objects', 'leak', true)
   clean_check('a write of more than 2 GiB is done whole', 'write_large', false)

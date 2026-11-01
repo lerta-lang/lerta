@@ -202,6 +202,9 @@ int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const L
 // The bytes from `start` up to, but not including, `end`, copied into a new Binary; throws unless
 // 0 <= start <= end <= the length.
 LertaString *lerta_binary_slice(const LertaString *binary, int64_t start, int64_t end);
+// The bytes of `s` from `start` up to `end`, both at the start of a character or the end of `s`,
+// as a new String; else it throws an IndexError.
+LertaString *lerta_string_slice(const LertaString *s, int64_t start, int64_t end);
 // The same object, whose bytes the caller has checked to be valid UTF-8, as a String (retained).
 LertaString *lerta_binary_as_string(LertaString *binary);
 

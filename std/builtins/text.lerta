@@ -1,7 +1,7 @@
 # Text: what makes it, prints it and reads it, and the methods of Char, String and Binary (see
 # docs/reference/builtins.md).
 import
-  char_at, is_utf8, lerta_binary_as_string, sequence_length, text_between
+  char_at, is_utf8, lerta_binary_as_string, lerta_string_slice, sequence_length
 from '../internal/utf8'
 import INFINITY from './numbers'
 # Writes at once, unlike std:io's Writer (see runtime/io.c).
@@ -122,7 +122,7 @@ extend String
     return nil if not is_decimal_number(@binary)
     bits := lerta_float_literal_bits(@)
     bits != -1 then lerta_float_from_bits(bits)
-  # Cutting valid UTF-8 around a valid separator leaves valid UTF-8.
+  # A valid separator starts and ends at code points, so the pieces are cut at them.
   split = (separator: String) ->
     throw ValueError(message: 'split by an empty separator') if separator == ''
     bytes := @binary
@@ -132,9 +132,9 @@ extend String
     pieces: String[]
     var start = 0
     while found := bytes.index_of(part, start)
-      pieces.push text_between(bytes, start, found)
+      pieces.push lerta_string_slice(@, start, found)
       start = found + separator_bytes.length
-    pieces.push text_between(bytes, start, bytes.length)
+    pieces.push lerta_string_slice(@, start, bytes.length)
     pieces
   starts_with = (prefix: String) -> @binary.occurs_at(0, prefix.binary)
   ends_with = (suffix: String) ->
@@ -154,14 +154,14 @@ extend String
   # Whether the String is one or more ASCII digits (see Char.is_digit).
   is_digits = -> not @is_empty() and @all((c) -> c.is_digit())
   # Without the whitespace at both ends: the ASCII spaces of Byte.is_space, which no byte of a
-  # multi-byte character is, so that what is left is valid UTF-8.
+  # multi-byte character is, so that what is left is cut at code points.
   trim = ->
     start := text_start(@binary)
-    text_between @binary, start, text_end(@binary, start)
+    lerta_string_slice @, start, text_end(@binary, start)
   # Likewise, at the start only.
-  trim_start = -> text_between(@binary, text_start(@binary), @binary.length)
+  trim_start = -> lerta_string_slice(@, text_start(@binary), @binary.length)
   # Likewise, at the end only.
-  trim_end = -> text_between(@binary, 0, text_end(@binary, 0))
+  trim_end = -> lerta_string_slice(@, 0, text_end(@binary, 0))
   # Each occurrence of the part, from the start and without overlapping, replaced.
   replace = (part: String, by: String) ->
     throw ValueError(message: 'replace of an empty part') if part == ''
@@ -185,9 +185,9 @@ extend String
     throw ValueError(message: 'split by an empty separator') if separator == ''
     bytes := @binary
     found := bytes.index_of(separator.binary) ? return nil
-    before := text_between(bytes, 0, found)
+    before := lerta_string_slice(@, 0, found)
     after := found + separator.binary.length
-    (before, text_between(bytes, after, bytes.length))
+    (before, lerta_string_slice(@, after, bytes.length))
 
 extend Binary
   is_empty = -> @length == 0
