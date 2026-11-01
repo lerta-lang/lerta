@@ -3,7 +3,7 @@
 import
   ArrayLiteral, Assignment, Await, BinaryOperation, Binding, Call, Case, Cast, Coalesce,
   Comprehension, Condition, Conditional, Declaration, Expression, Extend, For, FunctionLiteral, If,
-  Index, IsTest, MapEntry, MapLiteral, Member, MemberDeclaration, NamedValue, Parameter, Range,
+  Index, IsTest, MapEntry, MapLiteral, Member, MemberDeclaration, NamedValue, Range,
   RecordLiteral, Return, Statement, Throw, Try, TupleItem, TupleLiteral, TypeDeclaration,
   UnaryOperation, Unwrap, While, Yield
 from '../ast'
@@ -25,10 +25,10 @@ visit_place := (visit: Visit, value: Expression, place: Place) ->
   visit.after value, place
 
 visit_statements := (visit: Visit, statements: Statement[]): void ->
-  visit_statement visit, statements, i for i in 0...statements.length
+  for statement, i in statements
+    visit_statement visit, statement, (value) -> statements[i] = value
 
-visit_statement := (visit: Visit, statements: Statement[], i: Int) ->
-  statement := statements[i]
+visit_statement := (visit: Visit, statement: Statement, place: Place) ->
   case statement
     when Declaration then visit_place(visit, statement.value, (value) -> statement.value = value)
     when Assignment
@@ -41,17 +41,13 @@ visit_statement := (visit: Visit, statements: Statement[], i: Int) ->
       visit_place visit, statement.iterable, (value) -> statement.iterable = value
       visit_statements visit, statement.body
     when TypeDeclaration, Extend then visit_members(visit, statement.members)
-    when Expression then visit_place(visit, statement, (value) -> statements[i] = value)
+    when Expression then visit_place(visit, statement, place)
     else pass
 
 visit_members := (visit: Visit, members: MemberDeclaration[]) ->
-  visit_member visit, members, i for i in 0...members.length
-
-visit_member := (visit: Visit, members: MemberDeclaration[], i: Int) ->
-  value := members[i].value ? return
-  visit_place visit, value, (new_value) ->
-    { name, modifier, type, has_default, position } := members[i]
-    members[i] = { name, modifier, type, has_default, position, value: new_value }
+  for member, i in members
+    if value := member.value
+      visit_place visit, value, (new_value) -> members[i] = { member..., value: new_value }
 
 visit_condition := (visit: Visit, condition: Condition, place: Place) ->
   case condition
@@ -59,33 +55,30 @@ visit_condition := (visit: Visit, condition: Condition, place: Place) ->
     else visit_place(visit, condition, place)
 
 visit_all := (visit: Visit, values: Expression[]) ->
-  visit_at visit, values, i for i in 0...values.length
-
-visit_at := (visit: Visit, values: Expression[], i: Int) ->
-  visit_place visit, values[i], (value) -> values[i] = value
+  for value, i in values
+    visit_place visit, value, (new_value) -> values[i] = new_value
 
 visit_named := (visit: Visit, values: NamedValue[]) ->
-  visit_named_at visit, values, i for i in 0...values.length
+  for named, i in values
+    visit_place visit, named.value, (value) -> values[i] = { named..., value }
 
-visit_named_at := (visit: Visit, values: NamedValue[], i: Int) ->
-  visit_place visit, values[i].value, (value) -> values[i] = { value, name: values[i].name }
-
+# The key and the value of an entry are replaced each in the entry that the other may have
+# replaced.
 visit_entries := (visit: Visit, entries: MapEntry[]) ->
-  visit_entry visit, entries, i for i in 0...entries.length
-
-visit_entry := (visit: Visit, entries: MapEntry[], i: Int) ->
-  visit_place visit, entries[i].key, (key) -> entries[i] = { key, value: entries[i].value }
-  visit_place visit, entries[i].value, (value) -> entries[i] = { value, key: entries[i].key }
+  for entry, i in entries
+    visit_place visit, entry.key, (key) ->
+      current := entries[i]
+      entries[i] = { current..., key }
+    visit_place visit, entry.value, (value) ->
+      current := entries[i]
+      entries[i] = { current..., value }
 
 visit_function := (visit: Visit, literal: FunctionLiteral) ->
-  visit_default visit, literal.params, i for i in 0...literal.params.length
+  params := literal.params
+  for param, i in params
+    if default := param.default
+      visit_place visit, default, (value) -> params[i] = { param..., default: value }
   visit_statements visit, literal.body
-
-visit_default := (visit: Visit, params: Parameter[], i: Int) ->
-  default := params[i].default ? return
-  visit_place visit, default, (value) ->
-    { name, type, variadic } := params[i]
-    params[i] = { name, type, variadic, default: value }
 
 # The parts of an expression. The element and the guard of a comprehension are not places: its
 # lazy functions share them (see Comprehension). Nor are the values of an interpolation, which is
