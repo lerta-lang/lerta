@@ -23,23 +23,30 @@ first_line := (text: String) ->
   (line, _) := text.split_once("\n") ? return ''
   "#{line}\n"
 
+# How program_check runs the program, and what else it expects of it.
+struct ProgramOptions
+  env: Map<String, String> = default Map()
+  args: String[] = default []
+  unset_env: String[] = default []
+  expected_stderr = default ''
+
 program_check := (
-  name: String
-  source: String
-  input: Binary
-  expected: String
-  env: Map<String, String> = Map()
-  args: String[] = []
-  unset_env: String[] = []
-  expected_stderr = ''
+  name: String, source: String, input: Binary, expected: String, options: ProgramOptions
 ) -> Check(name, run: ->
   built := await build_program(name, source)
   return built.errors if not built.errors.is_empty()
-  ran := await run_command(built.executable, args, built.dir, input, env, unset_env)
+  ran := await run_command(
+    built.executable
+    options.args
+    built.dir
+    input
+    options.env
+    options.unset_env
+  )
   [
     expect_status(0, ran.status)...
     compare_output('stdout', expected.binary, ran.stdout)...
-    compare_output('stderr', expected_stderr.binary, ran.stderr)...
+    compare_output('stderr', options.expected_stderr.binary, ran.stderr)...
   ]
 )
 
@@ -337,10 +344,7 @@ write_both_check := ->
     "#{root_dir}/tests/io/lib/write_both.lerta"
     ''.binary
     "ac\n"
-    Map()
-    []
-    []
-    'b'
+    expected_stderr: 'b'
 
 write_both_order_check := ->
   posix_check 'a built program preserves stdout and stderr write order when combined', ->
@@ -355,10 +359,7 @@ write_then_error_check := ->
     "#{root_dir}/tests/print/lib/write_then_print_error.lerta"
     ''.binary
     "out printed\n"
-    Map()
-    []
-    []
-    "error\n"
+    expected_stderr: "error\n"
 
 merged_output_order_check := ->
   posix_check 'a built program preserves write order when stdout and stderr are combined', ->
@@ -379,8 +380,7 @@ wc_check := ->
     "#{root_dir}/examples/wc.lerta"
     ''.binary
     "1 3 21 #{root_dir}/examples/hello.lerta\n"
-    Map()
-    ["#{root_dir}/examples/hello.lerta"]
+    args: ["#{root_dir}/examples/hello.lerta"]
 
 environment_check := (
   name: String
@@ -393,19 +393,17 @@ environment_check := (
     "#{root_dir}/tests/process/lib/print_env.lerta"
     ''.binary
     expected
-    env
-    []
-    unset_env
+    env: env
+    unset_env: unset_env
 
 # An empty TMPDIR counts as unset, so the directory is made in /tmp, not at the root.
 empty_temp_dir_check := ->
-  env := { 'TMPDIR': '' }
   check := program_check
     'a built program makes a temporary directory under an empty TMPDIR'
     "#{root_dir}/tests/io/lib/make_temp_dir.lerta"
     ''.binary
     "true\n"
-    env
+    env: { 'TMPDIR': '' }
   posix_check check.name, check.run
 
 argv_check := ->
@@ -414,8 +412,7 @@ argv_check := ->
     "#{root_dir}/tests/binary/lib/decode_arguments.lerta"
     ''.binary
     "true\ntrue\ntrue\n"
-    Map()
-    ['hello', 'héllo', '😀']
+    args: ['hello', 'héllo', '😀']
 
 COLOR_VARIABLES := ['NO_COLOR', 'FORCE_COLOR', 'TERM']
 
@@ -432,10 +429,9 @@ color_check := (name: String, color_variables: Map<String, String>, expected: St
     "#{root_dir}/tests/io/lib/print_color.lerta"
     ''.binary
     "stdout: #{expected}\n"
-    env
-    []
-    unset_env
-    "stderr: #{expected}\n"
+    env: env
+    unset_env: unset_env
+    expected_stderr: "stderr: #{expected}\n"
 
 # The lines that it prints, `expected`, with stdout and stderr on a terminal, which `script` makes,
 # but as the shell redirection `redirect` sends them. The terminal ends lines with CRLF, and macOS's
