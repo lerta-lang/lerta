@@ -11,9 +11,9 @@ import
   parse_type_alias, parse_type_declaration, starts_type_alias
 from './declaration'
 import
-  call_of, continue_with_members, operator_at, parse_arguments, parse_block_arguments,
-  parse_expression, parse_identifier, parse_loop_header, parse_tuple_names, parse_value,
-  starts_block_arguments, take_apart, take_apart_item, tuple_holder
+  call_of, COMPARISON_WORDS, continue_with_members, operator_at, parse_arguments,
+  parse_block_arguments, parse_expression, parse_identifier, parse_loop_header, parse_tuple_names,
+  parse_value, starts_block_arguments, take_apart, take_apart_item, tuple_holder
 from './expression'
 import compile_errors, CompileError, Located from '../errors'
 import Token, TokenKind from '../lexer/tokens'
@@ -345,11 +345,9 @@ export starts_spaced_operand := (tokens: TokenStream, offset: Int) ->
   token := tokens.peek_at(offset)
   return false if not token.spaced
   return not tokens.peek_at(offset + 1).spaced if token.kind == '-'
-  # `is`, `as` and `in` are not keywords, but `x is T` is a test, `x as T?` a cast and `x in xs`
-  # and `x not in xs` tests, not calls of x.
-  is_word := (each: Token, word: String) -> each.kind == IDENTIFIER and each.text == word
-  return false if is_word(token, 'is') or is_word(token, 'as') or is_word(token, 'in')
-  return false if token.kind == 'not' and is_word(tokens.peek_at(offset + 1), 'in')
+  # A comparison, not a call of the word.
+  return false if COMPARISON_WORDS.any((word) -> token.is_word(word))
+  return false if token.kind == 'not' and tokens.peek_at(offset + 1).is_word('in')
   is_one_of token.kind, COMMAND_ARGUMENT_STARTS
 
 # The number of tokens of the callee of a call without parentheses at the next token: a name or

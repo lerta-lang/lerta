@@ -23,6 +23,9 @@ POSTFIX_OPERATORS: TokenKind[] = ['(', '[', '.', '!']
 
 COMPARISON_OPERATORS: TokenKind[] = ['==', '!=', '<', '<=', '>', '>=']
 
+# Not keywords, but `x is T` is a test, `x as T?` a cast and `x in xs` and `x not in xs` tests.
+export COMPARISON_WORDS := ['is', 'as', 'in']
+
 export struct Arguments
   args: Expression[]
   named_args: NamedValue[]
@@ -171,12 +174,11 @@ parse_not := (tokens: TokenStream): Expression ->
     position: token.position()
 
 at_comparison_start := (tokens: TokenStream) ->
-  is_word := (word: String) -> tokens.continues_with_word(word)
-  is_word('is') or is_word('as') or is_word('in') or at_not_in(tokens) or at_comparison(tokens)
+  at_word := COMPARISON_WORDS.any((word) -> tokens.continues_with_word(word))
+  at_word or at_not_in(tokens) or at_comparison(tokens)
 
 at_not_in := (tokens: TokenStream) ->
-  after := tokens.peek_at(1)
-  tokens.peek_continuation() == 'not' and after.kind == IDENTIFIER and after.text == 'in'
+  tokens.peek_continuation() == 'not' and tokens.peek_at(1).is_word('in')
 
 parse_comparison := (tokens: TokenStream) ->
   left := parse_coalesce(tokens)
