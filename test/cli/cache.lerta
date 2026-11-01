@@ -2,7 +2,7 @@
 import LTO_CACHE, lto_link_flags from '../../compiler/clang_flags'
 import Check from '../lib/report'
 import compare_text, expect_status, reason_unless from '../lib/expect'
-import compiler, host_systems, read_text_or_throw, root_dir from '../lib/lerta'
+import compiler, host_libuv_items, host_systems, read_text_or_throw, root_dir from '../lib/lerta'
 import
   CliRun, cli_work_dir, executable_suffix, expect_left, expect_success, host_platform, host_triple,
   new_cli_dir, new_cli_dirs, run_command, run_in_dir, run_in_new_dir
@@ -43,14 +43,11 @@ runtime_file_names := ->
   is_for_host := (name: String) -> host_systems.contains(name.without_prefix('platform_') ? 'all')
   names := [file.without_suffix('.c') for file in list_dir("#{root_dir}/runtime")]
   runtime := ["#{name}.o" for name in names when name and is_for_host(name)]
-  libuv_text := await read_text_or_throw("#{root_dir}/third_party/libuv.txt")
-  libuv: String[]
-  for line in libuv_text.split("\n")
-    continue if line.is_empty() or line.starts_with('#')
-    fields := line.split(' ')
-    continue if fields.length != 3 or not host_systems.contains(fields[0])
-    continue if fields[1] != 'source' or not fields[2].ends_with('.c')
-    libuv.push "libuv-#{fields[2].without_suffix('.c')!.replace('/', '-')}.o"
+  libuv := [
+    "libuv-#{source.without_suffix('.c')!.replace('/', '-')}.o"
+    for source in await host_libuv_items('source')
+    when source.ends_with('.c')
+  ]
   [runtime..., libuv..., 'function_attributes.txt', 'coro_end_type.txt'].sorted((a, b) ->
     a.compare b
   )

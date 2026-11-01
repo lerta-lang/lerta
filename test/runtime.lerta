@@ -3,7 +3,7 @@
 import build_flags from '../compiler/clang_flags'
 import Check, run_checks, select from './lib/report'
 import compare_text, expect_status, lines, reason_unless from './lib/expect'
-import host_systems, read_text_or_throw, root_dir, SetupError, suite_dir from './lib/lerta'
+import host_libuv_items, host_systems, root_dir, SetupError, suite_dir from './lib/lerta'
 import timeout from 'std:async'
 import encode_json from 'std:json'
 import platform, run from 'std:process'
@@ -60,32 +60,24 @@ struct Libuv
 var libuv = Libuv(objects: [], libraries: [])
 
 # Compiles the sources and links the libraries that third_party/libuv.txt lists for the host's
-# system, by the rule of is_for in compiler/libuv.lerta, with its flags, into the directory that
-# clang runs in.
+# system, with its flags, into the directory that clang runs in.
 set_up_libuv := ->
-  lines := [
-    line.split(' ')
-    for line in (await read_text_or_throw("#{root_dir}/third_party/libuv.txt")).split("\n")
-    when not line.is_empty() and not line.starts_with('#')
-  ]
-  listed := (kind: String) ->
-    [words[2] for words in lines when words[1] == kind and host_systems.contains(words[0])]
   objects_dir := "#{work_dir}/libuv"
   make_dir objects_dir
   await clang(
     [
       '-c'
-      listed('flag')...
+      await host_libuv_items('flag')...
       "-I#{libuv_dir}/include"
       "-I#{libuv_dir}/src"
       '-w'
-      ("#{libuv_dir}/#{source}" for source in listed('source'))...
+      ("#{libuv_dir}/#{source}" for source in await host_libuv_items('source'))...
     ]
     objects_dir
   )
   libuv =
     objects: ["#{objects_dir}/#{file}" for file in list_dir(objects_dir)]
-    libraries: listed('library')
+    libraries: await host_libuv_items('library')
 
 # The host's: platform_<systems>.c only for the host's systems, as compiler/runtime_cache.lerta
 # takes them.
