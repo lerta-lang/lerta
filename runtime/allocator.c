@@ -190,6 +190,7 @@ static Region *new_slab(int size_class) {
 
 __attribute__((noinline)) static void *alloc_large(int64_t size) {
   int64_t mask = LERTA_REGION_SIZE - 1;
+  if (size > INT64_MAX - PLACES_START - mask) lerta_panic("out of memory");
   int64_t region_size = (PLACES_START + size + mask) & ~mask;
   Region *region = map_region(region_size);
   *region = (Region){.place_size = region_size, .is_large = true};

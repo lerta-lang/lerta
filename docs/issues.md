@@ -2,22 +2,6 @@
 
 Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `Array(n, value)` with a huge `n` writes past its allocation in an optimized build
-
-Severity: High.
-
-`lerta_array_filled` (runtime/array.c:105) only refuses `length > INT64_MAX / size`, so `length * size` may be close to `INT64_MAX`. `alloc_large` (runtime/allocator.c:191-197) then computes `PLACES_START + size + mask` in `int64_t`, which overflows: undefined behavior. With `-O` the overflowed size becomes one 64 KiB slab place, `lerta_mem_alloc` returns it, and the fill loop writes `length` items into it. Without `-O` the overflow wraps and the program panics `out of memory`, so the tests, which use the debug runtime, do not see it.
-
-```
-n := 9223372036854775807 / 8
-xs: Int[] = Array(n, 0)
-print xs.length
-```
-
-`bin/lerta build huge.lerta -o huge -O && ./huge` dies with SIGSEGV writing in `lerta_array_filled`; without `-O` it panics `out of memory`. A length that comes from input lets an attacker choose `n`.
-
-Fix: make `alloc_large` compute the region size in `uint64_t` and return NULL, which the caller reports as out of memory, when `PLACES_START + size + mask` would overflow; or refuse in `lerta_array_filled` any `length` above `(INT64_MAX - LERTA_REGION_SIZE) / size`. `grow` in array.c, map.c and string.c has the same unchecked product, but grows step by step and runs out of memory first.
-
 ## Three syntactic forms escape the nesting limit and overflow the compiler's stack
 
 Severity: Medium.
