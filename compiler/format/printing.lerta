@@ -1,6 +1,9 @@
 # What the printers of the AST share: where they print, how they lay out lists, and the helpers for
 # the tokens that they place at their positions in the source.
-import Expression, Import, Position from '../ast'
+import
+  BinaryOperation, Binding, Call, Cast, Coalesce, Conditional, Expression, If, Import, Index,
+  IsTest, Member, Position, Range, This, Unwrap
+from '../ast'
 import TokenKind from '../lexer/tokens'
 import annotation_key, import_prefix from './annotated'
 import
@@ -10,6 +13,35 @@ from './doc'
 import StatementLines from './kept'
 import LONG_LISTS, StyleRule, TYPE_ANNOTATIONS from './rules'
 import SourceText from './source'
+
+# The expression whose token comes first in the source.
+export leftmost := (expression: Expression): Expression ->
+  case expression
+    when BinaryOperation then leftmost(expression.left)
+    when Range then leftmost(expression.start)
+    when IsTest, Cast, Coalesce then leftmost(expression.value)
+    when Conditional then leftmost(expression.condition)
+    when Member
+      expression.object is This then expression.object else leftmost(expression.object)
+    when Call then leftmost(expression.callee)
+    when Index then leftmost(expression.object)
+    when Unwrap then leftmost(expression.operand)
+    when If
+      if expression.nil_safe
+        leftmost (expression.condition as Binding!).value
+      else
+        expression
+    else expression
+
+# Whether a comment ends the line before the value, of its `=`, key, `then`, `else` or `return`,
+# which would leave the value at the start of the next line: it goes below, one level deeper.
+export follows_comment := (value: Expression, context: Context) ->
+  context.source.comment_before leftmost(value).position
+
+# The value's doc after the word before it, as `then` or `key:`: after a space, or on the next line
+# after a comment (see follows_comment).
+export spaced_value := (value: Expression, doc: Doc, context: Context) ->
+  follows_comment(value, context) then indent(join([line_feed(), doc])) else join([text(' '), doc])
 
 # Where a part is printed. Inside brackets, a call without parentheses would take the items after
 # it, and no block can be written; on the line of an arm or of a function literal, a call keeps

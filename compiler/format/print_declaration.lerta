@@ -32,7 +32,7 @@ export declaration_doc := (statement: Statement, context: Context) ->
       join [head, indent(join([line_feed(), separated(members, line_feed())]))]
     when TypeAlias
       head := join([declared_head('type ', statement, context), text(' =')])
-      join [head, aliased_type(statement)]
+      join [head, aliased_type(statement, context)]
     when Extern
       parts :=
         exported(statement.exported, statement.position, context)
@@ -98,17 +98,20 @@ enum_member := (member: Identifier | StringLiteral, context: Context) ->
     when Identifier then name_doc(member)
     when StringLiteral then string_doc(member, context)
 
-# A union on the line, or on the indented lines below with as many members on each as fit.
-aliased_type := (alias: TypeAlias) ->
+# A union on the line, or on the indented lines below with as many members on each as fit; below,
+# after a comment that ends the line of `=` (see follows_comment).
+aliased_type := (alias: TypeAlias, context: Context) ->
   type := alias.type
-  on_line := join([text(' '), type_doc(type)])
-  return on_line if type is not UnionTypeName
-  members := [type_doc(member) for member in type.members]
+  members :=
+    type is UnionTypeName then [type_doc(member) for member in type.members] else [type_doc(type)]
   parts: Doc[]
   for member, i in members
     parts.push
       i == 0 then member else choice(join([text(' | '), member]), join([line_feed(), member]))
-  breaking LONG_LISTS, on_line, indent(join([line_feed(), join(parts)]))
+  below := indent(join([line_feed(), join(parts)]))
+  return below if context.source.comment_before(type.position)
+  on_line := join([text(' '), type_doc(type)])
+  type is UnionTypeName then breaking(LONG_LISTS, on_line, below) else on_line
 
 # `import a, b as c from 'module'`, or `export` before them, with the names in an indented block
 # when they do not fit on the line (see Multi-line literals). One that names were left out of is

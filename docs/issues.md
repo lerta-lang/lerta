@@ -2,21 +2,22 @@
 
 Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `lerta fmt` breaks a value that follows a comment on the line of its `=`, `:=`, `return`, `then` or key
+## `lerta fmt` breaks an expression after a comment that ends the line of `(`, `not` or `-`
 
 Severity: Medium.
 
-`print_comments_before` (compiler/format/doc.lerta:203-222) appends a comment that ends a line and forces a line end, but `value_after` (compiler/format/print_literal.lerta:175-210) and `aliased_type` (compiler/format/print_declaration.lerta:102-111) print the value on the operator's line, so the value lands alone at column 1 of the next line.
+A comment that ends the line of an opening parenthesis or a prefix operator is flushed before the next token, which forces a line end, so the rest of the expression lands at column 1 of the next line, as a value after `=` did before `follows_comment` (compiler/format/printing.lerta).
 
 ```
-x :=  # c
-  1
+a := 1
+x := (  # c
+  a + 2) * 3
 print x
 ```
 
-The program compiles and prints 1; `lerta fmt --fix` reports `1:11: expected expression, found end of line`, a position in the formatter's own output, and writes nothing. The same happens after `type Only =  # c`, `x =  # c`, `{ a:  # c`, a block literal field, `true then  # c` and `f(a:  # c`. After `return  # c` the output parses as `return` without a value, and `fmt` reports `the formatter would change the program, which is a bug`.
+The program compiles and prints 9; `lerta fmt` reports `the formatter would write a program that does not parse, which is a bug`. So do `z := not  # c` and `w := -  # c` with their operand on the next line.
 
-Fix: when the source has a comment on the operator's line before the value (`SourceText.has_comment`), print the value in the next-line form, `indent(join([line_feed(), value]))`; and report a reparse failure of the formatted text as the formatter's bug, like the self-check, rather than as a syntax error with positions in the output.
+Fix: print the operand of a prefix operator, and the expression in parentheses, on the next line, deeper, when `SourceText.comment_before` its first token holds, as `spaced_value` does.
 
 ## `lerta fmt` prints a comment between `weak` and what it qualifies
 

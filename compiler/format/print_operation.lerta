@@ -7,7 +7,7 @@ from '../ast'
 import breaking, Choice, indent, join, line_feed, rule, text, token from './doc'
 import clarified, operand, written_in_parentheses from './print_expression'
 import cast_type_doc, type_doc from './print_type'
-import Context, keyword from './printing'
+import Context, keyword, spaced_value from './printing'
 import CAST_FALLBACKS, ELSE_NIL, LINE_LENGTH, NEGATED_IN_TESTS, NEGATED_IS_TESTS from './rules'
 
 # Precedence levels, weakest first (see Operators in docs/reference/syntax.md).
@@ -146,10 +146,12 @@ export conditional_doc := (conditional: Conditional, context: Context) ->
       clarified conditional.then_value, context
     else
       operand conditional.then_value, context, CONDITIONAL, false
-  head := join([condition, text(' then '), then_value])
+  head :=
+    join([condition, text(' then'), spaced_value(conditional.then_value, then_value, context)])
   return head if conditional.without_else
   return join([head, rule(ELSE_NIL, text(''))]) if conditional.else_value is NilLiteral
-  join [head, text(' else '), operand(conditional.else_value, context, CONDITIONAL, true)]
+  else_value := operand(conditional.else_value, context, CONDITIONAL, true)
+  join [head, text(' else'), spaced_value(conditional.else_value, else_value, context)]
 
 export is_doc := (test: IsTest, context: Context, word: String) ->
   join [operand(test.value, context, COALESCE, false), text(word), type_doc(test.type)]

@@ -4,10 +4,9 @@ import
   ArrayLiteral, ArrayTypeName, Assignment, Await, BinaryOperation, Binding, BooleanLiteral, Call,
   Case, Coalesce, Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression,
   Extend, Extern, FloatLiteral, For, FunctionLiteral, Identifier, If, Import, IntegerLiteral,
-  InterfaceDeclaration, Interpolation, IsTest, Cast, MapLiteral, Member, NamedType, NilLiteral,
-  Pass, Position, Range, RecordLiteral, Return, Statement, StringLiteral, This, Throw, Try,
-  TupleLiteral, TupleItem, TypeAlias, TypeDeclaration, TypeName, UnaryOperation, UnionTypeName,
-  Unwrap, While, Yield, Index
+  InterfaceDeclaration, Interpolation, MapLiteral, Member, NamedType, NilLiteral, Pass, Position,
+  Range, RecordLiteral, Return, Statement, StringLiteral, This, Throw, Try, TupleLiteral, TupleItem,
+  TypeAlias, TypeDeclaration, TypeName, UnaryOperation, UnionTypeName, While, Yield
 from '../ast'
 import
   choice, Doc, has_line_feed, indent, join, line_feed, rule, separated, text, token
@@ -23,7 +22,7 @@ import arguments, call_doc, expression_doc, loop_header from './print_expression
 import value_after from './print_literal'
 import function_doc from './print_block'
 import kept_or_printed from './kept'
-import Context, has_left_out_names, keyword, removed_type, word_before from './printing'
+import Context, has_left_out_names, keyword, leftmost, removed_type, word_before from './printing'
 
 # The statements, one on each line, or as they are written where they are kept (see
 # kept_or_printed).
@@ -390,24 +389,6 @@ starts_command := (call: Call) ->
   return true if call.args.is_empty() and not call.named_args.is_empty()
   return false if call.args.is_empty()
   starts_argument leftmost(call.args[0])
-
-leftmost := (expression: Expression): Expression ->
-  case expression
-    when BinaryOperation then leftmost(expression.left)
-    when Range then leftmost(expression.start)
-    when IsTest, Cast, Coalesce then leftmost(expression.value)
-    when Conditional then leftmost(expression.condition)
-    when Member
-      expression.object is This then expression.object else leftmost(expression.object)
-    when Call then leftmost(expression.callee)
-    when Index then leftmost(expression.object)
-    when Unwrap then leftmost(expression.operand)
-    when If
-      if expression.nil_safe
-        leftmost (expression.condition as Binding!).value
-      else
-        expression
-    else expression
 
 CONTINUING_WORDS := ['is', 'as', 'in']
 

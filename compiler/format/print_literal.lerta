@@ -21,7 +21,9 @@ import
   takes_block_arguments
 from './print_expression'
 import operation_start from './print_operation'
-import bracketed, bracketed_or, Context, Item, lines_of_items, opened_list from './printing'
+import
+  bracketed, bracketed_or, Context, follows_comment, Item, lines_of_items, opened_list, spaced_value
+from './printing'
 
 export item := (expression: Expression, context: Context) ->
   doc := expression_doc(expression, context)
@@ -70,7 +72,8 @@ flat_literal := (literal: Expression, context: Context) ->
 
 export named_item := (named: NamedValue, context: Context) ->
   name := token(named.name.name, named.name.position)
-  doc := join([name, text(': '), expression_doc(named.value, context)])
+  doc := join
+    [name, text(':'), spaced_value(named.value, expression_doc(named.value, context), context)]
   after_comment := context.source.comment_before(named.name.position)
   Item doc, after_comment, simple: is_simple(named.value)
 
@@ -116,7 +119,8 @@ entry_item := (entry: MapEntry, context: Context) ->
       clarified entry.key, context
     else
       expression_doc entry.key, context
-  doc := join([key, text(': '), expression_doc(entry.value, context)])
+  doc :=
+    join([key, text(':'), spaced_value(entry.value, expression_doc(entry.value, context), context)])
   after_comment := context.source.comment_before(entry.key.position)
   Item doc, after_comment, simple: is_simple(entry.key) and is_simple(entry.value)
 
@@ -173,6 +177,8 @@ opening_brace := (literal: Braced, spelling: String, context: Context) ->
 # that does not fit on the line goes in a block below it without brackets (see Multi-line literals),
 # and an `if`, a `case` or a `try` starts a line of its own (see Branches).
 export value_after := (value: Expression, context: Context) ->
+  if follows_comment(value, context)
+    return indent(join([line_feed(), expression_doc(value, context)]))
   on_line := join([text(' '), expression_doc(value, context)])
   return on_line if context.in_brackets
   case value
