@@ -7,7 +7,7 @@ import lex, Lexed from '../lexer/tokens'
 import parse from '../parser/statement'
 import Annotation, imported_name, key_line from './annotated'
 import left_out_candidates from './annotations'
-import hunks from './diff'
+import Hunk, hunks, kept_lines from './diff'
 import join, lay_out, Layout, line_feed, RulePlace, text, WIDTH from './doc'
 import StatementLines from './kept'
 import block_doc, is_left_out_import, left_out_import_mark from './print_statement'
@@ -132,8 +132,10 @@ findings := (source: SourceText, formatted: String, rules: RulePlace[], kept_lin
   differing: Set<Int>
   for hunk in hunks(old, new)
     differing.add line for line in hunk.old_start...(hunk.old_start + hunk.old_count)
-    # Where as many lines differ in each, each pair of lines is a place of its own.
-    pairs := hunk.old_count == hunk.new_count then hunk.old_count else 1
+    # Where as many lines differ in each, and none has moved, each pair of lines is a place of its
+    # own.
+    paired := hunk.old_count == hunk.new_count and not moves(old, new, hunk)
+    pairs := paired then hunk.old_count else 1
     for i in 0...pairs
       old_count := pairs == 1 then hunk.old_count else 1
       new_count := pairs == 1 then hunk.new_count else 1
@@ -157,6 +159,17 @@ findings := (source: SourceText, formatted: String, rules: RulePlace[], kept_lin
     too_long := columns(old[i]) > WIDTH and i not in differing and i + 1 not in kept_lines
     result.push { rule: LINE_LENGTH, at: { line: i + 1, column: WIDTH + 1 } } if too_long
   result
+
+# Whether a line of the hunk, but for its indentation, is at another line of it in the other text,
+# as the lines below a line that a body joins are, which shift up by one.
+moves := (old: String[], new: String[], hunk: Hunk) ->
+  trimmed := (lines: String[], start: Int, count: Int) ->
+    [lines[start + i].trim_start() for i in 0...count]
+  old_lines := trimmed(old, hunk.old_start, hunk.old_count)
+  new_lines := trimmed(new, hunk.new_start, hunk.new_count)
+  kept := kept_lines(old_lines, new_lines)
+  moved := [old_index for (old_index, new_index) in kept when old_index != new_index]
+  not moved.is_empty()
 
 # The column where the lines first differ, counted in code points from 1.
 first_difference := (old: String, new: String) ->
