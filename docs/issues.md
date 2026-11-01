@@ -2,14 +2,6 @@
 
 Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `run` of a `.bat` or `.cmd` file on Windows is a command injection
-
-Severity: Medium.
-
-*Unverified* (no Windows host). `lerta_os_program_file` (runtime/platform_windows.c:309-341) returns whatever `SearchPathW` finds, `.bat` and `.cmd` included, and `spawn` (runtime/process.c:184-208) passes it to libuv. When `CreateProcessW` runs a batch file, Windows runs it through `cmd.exe`, which parses the command line again with its own metacharacters (`&`, `|`, `<`, `>`, `^`, `%VAR%`). libuv quotes arguments only for `CommandLineToArgvW` (`"` and `\`), so `run('t.bat', 'a&calc')` becomes `cmd.exe /c t.bat a&calc` and runs `calc`. This is the class of CVE-2024-24576. A program that runs `npm.cmd` with an argument from input is affected.
-
-Fix: on Windows, refuse a command whose file ends in `.bat` or `.cmd` with `cannot run`, or quote for `cmd.exe` too: wrap in `"`, double inner `"`, prefix each metacharacter with `^`, and reject `%` and newlines.
-
 ## String keys are hashed without a seed or a mix, so a map can be flooded
 
 Severity: Medium.

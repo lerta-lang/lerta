@@ -332,11 +332,30 @@ static bool has_directory(const char *command) {
   return strpbrk(command, "/\\:") != NULL;
 }
 
+// Windows runs a batch file through cmd.exe, which parses the command line again with its own
+// metacharacters, which libuv's quoting does not escape. Windows drops the dots and spaces that end
+// a name, so `t.bat.` names t.bat.
+static bool is_batch_file(const char *file) {
+  size_t length = strlen(file);
+  while (length > 0 && (file[length - 1] == '.' || file[length - 1] == ' ')) length--;
+  if (length < 4) return false;
+  const char *extension = file + length - 4;
+  return _strnicmp(extension, ".bat", 4) == 0 || _strnicmp(extension, ".cmd", 4) == 0;
+}
+
 char *lerta_os_program_file(const char *command) {
-  if (has_directory(command)) return _strdup(command);
-  wchar_t *found = search_path(command);
-  char *file = found == NULL ? NULL : to_utf8(found);
-  free(found);
+  char *file;
+  if (has_directory(command)) {
+    file = _strdup(command);
+  } else {
+    wchar_t *found = search_path(command);
+    file = found == NULL ? NULL : to_utf8(found);
+    free(found);
+  }
+  if (file != NULL && is_batch_file(file)) {
+    free(file);
+    return NULL;
+  }
   return file;
 }
 

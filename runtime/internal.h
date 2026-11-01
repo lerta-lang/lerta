@@ -256,7 +256,8 @@ bool lerta_os_is_running(int id);
 bool lerta_os_same_env_name(const char *a, const char *b);
 // The file of a command for a program that run starts, which on Windows is searched for on PATH if it
 // holds no directory, as libuv would look in the directory that the program runs in first (see
-// docs/reference/std.md#stdprocess); NULL if there is none. The caller frees it.
+// docs/reference/std.md#stdprocess); NULL if there is none, or if it is a batch file on Windows. The
+// caller frees it.
 char *lerta_os_program_file(const char *command);
 
 #endif
