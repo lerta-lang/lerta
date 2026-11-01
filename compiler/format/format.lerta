@@ -149,6 +149,8 @@ findings := (source: SourceText, formatted: String, rules: RulePlace[], kept_lin
       rule :=
         if only_blank_lines_differ(old_lines, new_lines)
           BLANK_LINES
+        else if only_indentation_differs(old_lines, new_lines)
+          LAYOUT
         else
           last_line := in_new.line + new_count
           inner := innermost_rule(rules, in_new, marks_from)
@@ -163,10 +165,8 @@ findings := (source: SourceText, formatted: String, rules: RulePlace[], kept_lin
 # Whether a line of the hunk, but for its indentation, is at another line of it in the other text,
 # as the lines below a line that a body joins are, which shift up by one.
 moves := (old: String[], new: String[], hunk: Hunk) ->
-  trimmed := (lines: String[], start: Int, count: Int) ->
-    [lines[start + i].trim_start() for i in 0...count]
-  old_lines := trimmed(old, hunk.old_start, hunk.old_count)
-  new_lines := trimmed(new, hunk.new_start, hunk.new_count)
+  old_lines := unindented(old.slice(hunk.old_start, hunk.old_start + hunk.old_count))
+  new_lines := unindented(new.slice(hunk.new_start, hunk.new_start + hunk.new_count))
   kept := kept_lines(old_lines, new_lines)
   moved := [old_index for (old_index, new_index) in kept when old_index != new_index]
   not moved.is_empty()
@@ -224,13 +224,15 @@ only_blank_lines_differ := (old: String[], new: String[]) ->
   not_blank := (lines: String[]) -> [line for line in lines when without_spaces(line) != '']
   not_blank(old) == not_blank(new)
 
+only_indentation_differs := (old: String[], new: String[]) -> unindented(old) == unindented(new)
+
+unindented := (lines: String[]) -> [line.trim_start() for line in lines]
+
 # The spaces before a comment, spaces within the lines, or else the layout of the lines.
 # `old` starts at the line `line` of the source.
 kind_of_difference := (old: String[], new: String[], source: SourceText, line: Int) ->
   squeezed := (lines: String[]) -> without_spaces(lines.join(''))
   return LAYOUT if squeezed(old) != squeezed(new) or old.length != new.length
-  indented := (lines: String[]) -> [line.trim_start() for line in lines]
-  return LAYOUT if indented(old) == indented(new)
   return SPACING if old.length != 1
   ending := source.comments.find((c) -> c.line == line and not c.own_line)
   comment := ending ? return SPACING
