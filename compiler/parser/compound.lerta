@@ -200,14 +200,11 @@ parse_record_item := (tokens: TokenStream): RecordItem ->
   starts_spread(tokens) then parse_element(tokens) as Comprehension! else parse_record_field(tokens)
 
 export record_of := (tokens: TokenStream, items: RecordItem[], position: Position) ->
-  var spread: Comprehension?
-  fields: NamedValue[]
-  for item, i in items
-    if item is Comprehension
-      tokens.fail item.position, 'a spread comes first in an anonymous struct, once' if i > 0
-      spread = item
-    else
-      fields.push item
+  if misplaced := [item for item in items.slice(1) when item is Comprehension].first()
+    tokens.fail misplaced.position, 'a spread comes first in an anonymous struct, once'
+  fields := [item for item in items when item is NamedValue]
+  first := items.first()
+  spread := first is Comprehension then first
   RecordLiteral fields, position, spread
 
 parse_record_field := (tokens: TokenStream) ->
