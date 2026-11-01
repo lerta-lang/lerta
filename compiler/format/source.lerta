@@ -40,24 +40,11 @@ export class SourceText
   # postfix form of the block, or the block on that line, would move. The head ends at the first
   # line end outside its brackets.
   block_has_comments = (at: Position) ->
-    var index = @token_at(at) ? return false
-    var brackets = 0
-    while @tokens[index].kind != EOF and (@tokens[index].kind != NEWLINE or brackets > 0)
-      kind := @tokens[index].kind
-      brackets += 1 if is_opening(kind)
-      brackets -= 1 if is_closing(kind)
-      index += 1
-    head_end := @tokens[index].line
-    return false if @tokens[index + 1].kind != INDENT
-    var depth = 0
-    index += 1
-    while true
-      kind := @tokens[index].kind
-      depth += 1 if kind == INDENT
-      depth -= 1 if kind == DEDENT
-      break if depth == 0 or kind == EOF
-      index += 1
-    end_line := @tokens[index].line
+    start := @token_at(at) ? return false
+    head_end_index := @head_end(start)
+    head_end := @tokens[head_end_index].line
+    return false if @tokens[head_end_index + 1].kind != INDENT
+    end_line := @tokens[@block_end(head_end_index + 1)].line
     indentation := @indentation(at.line)
     for comment in @comments
       # One that ends the line of the head would go before the statement of the block.
@@ -124,17 +111,44 @@ export class SourceText
   # The index of the token that starts at the position, if one does.
   token_at = (position: Position) -> @token_indexes[position]
 
-  # The index of the bracket that closes the one at `open`, past the pairs nested in it.
-  closing = (open: Int) ->
+  # The index of the line end that ends the line of the token at `start`, past the brackets that
+  # are open there, or of the EOF.
+  head_end = (start: Int) ->
+    var index = start
+    while @tokens[index].kind != EOF and @tokens[index].kind != NEWLINE
+      index = @closing(index) if is_opening(@tokens[index].kind)
+      index += 1
+    index
+
+  # The index of the DEDENT that ends the block that the INDENT at `indent` starts, or of the EOF.
+  block_end = (indent: Int) ->
     var depth = 0
-    var index = open
+    var index = indent
+    while true
+      kind := @tokens[index].kind
+      depth += 1 if kind == INDENT
+      depth -= 1 if kind == DEDENT
+      return index if depth == 0 or kind == EOF
+      index += 1
+    indent
+
+  # The index of the bracket that closes the one at `open`, past the pairs nested in it.
+  closing = (open: Int) -> @matching(open, 1)
+
+  # The index of the bracket that opens the one at `close`, past the pairs nested in it.
+  opening = (close: Int) -> @matching(close, -1)
+
+  # The index of the bracket that pairs with the one at `start`, going from it by `step`.
+  matching = (start: Int, step: Int) ->
+    var depth = 0
+    var index = start
     while true
       kind := @tokens[index].kind
       depth += 1 if is_opening(kind)
       depth -= 1 if is_closing(kind)
       return index if depth == 0
-      index += 1
-    open
+      index += step
+    start
 
   # The index of the first token of the kind from `start` up to `end`, if there is one.
   find = (kind: TokenKind, start: Int, end: Int) ->
