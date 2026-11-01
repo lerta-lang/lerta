@@ -192,7 +192,7 @@ export generate_try := (g: Generator, try_expression: Try) ->
   ir.start_block done_label
   result := merge(g, type, incoming)
   # The value is held while the finally block runs, which may throw.
-  run_finally := -> generate_block(g, finally_body ? [], no_locals)
+  run_finally := -> generate_block(g, finally_body ? [])
   while_holding g, result, type, run_finally
   result
 
@@ -234,7 +234,7 @@ run_finally_unwinding := (g: Generator, finally_body: Statement[]) ->
   depth := g.temporaries.length
   g.temporaries.push { operand: set_aside, owned: INTERFACE }
   g.temporaries.push { operand: trace, owned: TRACE }
-  generate_block g, finally_body, no_locals
+  generate_block g, finally_body
   pop_temporaries g, depth
   ir.store INTERFACE_IR_TYPE, set_aside, exception_global(ir)
   call_void_runtime ir, 'void @lerta_trace_restore(ptr)', "ptr #{trace}"
@@ -262,7 +262,7 @@ run_finally_left := (g: Generator, left: Finally, finally_depth: Int) ->
   scopes := g.locals.set_aside(left.scope_depth)
   handlers := take_from(g.handlers, left.handler_depth)
   finallies := take_from(g.finallies, finally_depth)
-  generate_block g, left.body, no_locals
+  generate_block g, left.body
   g.locals.put_back scopes
   g.handlers.append handlers
   g.finallies.append finallies
