@@ -53,30 +53,56 @@ export infer_type_arguments := (
   body: Body, call: Call, args: Expression[], generic: GenericFunction, expected: Type?,
   receiver: TypeBinding?
 ) ->
-  params := generic.params
   bindings := written_bindings(body, call, generic)
   written := Set(bindings.keys().to_array())
-  inferred: InferredArgument[]
-  bind_at := (at: Position) ->
+  inferrer := Inferrer(body, args, generic, bindings, written)
+  inferrer.bind_from generic.receiver!.type, receiver.type, receiver.at if receiver
+  is_function := (i: Int) -> args[i] is FunctionLiteral
+  is_literal := (i: Int) -> needs_context(body, args[i]) and not is_function(i)
+  for arg, i in args
+    inferrer.check_argument i if not needs_context(body, arg)
+  if result := generic.result
+    inferrer.bind_from result, expected, call.position if expected
+  literals := [i for i in 0...args.length when is_literal(i)]
+  inferrer.check_argument i for i in float_first(literals, (i) -> args[i])
+  inferrer.bind_from_bounds()
+  for i in 0...args.length
+    inferrer.check_argument i if is_function(i)
+  Inference bindings, inferred: inferrer.inferred
+
+# The type arguments of a call as they are found, from those written on.
+class Inferrer
+  body: Body
+  args: Expression[]
+  generic: GenericFunction
+  bindings: Map<String, TypeBinding>
+  # The names of the type arguments written, which nothing inferred replaces.
+  written: Set<String>
+  inferred: InferredArgument[] = []
+
+  bind_at = (at: Position) ->
     (name: String, bound_type: Type) ->
       # nil and never tell nothing about the type.
       return if is_one_of_kinds(bound_type, ['nil', 'never'])
-      if bound := bindings[name]
-        return if name in written or not widens(bound.type, bound_type)
-      bindings[name] = { at, type: bound_type }
+      if bound := @bindings[name]
+        return if name in @written or not widens(bound.type, bound_type)
+      @bindings[name] = { at, type: bound_type }
+
   # A value converts to an interface type, whose type arguments its members may give.
-  bind_from := (pattern: Type, type: Type, at: Position) ->
-    infer pattern, type, bind_at(at)
+  bind_from = (pattern: Type, type: Type, at: Position) ->
+    infer pattern, type, @bind_at(at)
     target := inner_of(pattern)
     value_type := inner_of(type)
     if target is InterfaceType and value_type is not InterfaceType
-      infer_through_members body, target, value_type, at, bind_at(at)
-  bind_from generic.receiver!.type, receiver.type, receiver.at if receiver
-  check_argument := (index: Int) ->
-    arg := args[index]
-    param := substitute(params[index], types_of(bindings))
+      infer_through_members @body, target, value_type, at, @bind_at(at)
+
+  check_argument = (index: Int) ->
+    body := @body
+    arg := @args[index]
+    declared := @generic.params[index]
+    param := substitute(declared, types_of(@bindings))
     # A parameter whose type names no type parameter takes its argument as in any call.
-    declared_alone := not has_type_parameters(params[index])
+    declared_alone := not has_type_parameters(declared)
     if declared_alone or (needs_context(body, arg) and not has_type_parameters(param))
       expect_type body, arg, param
       # The other arguments gave the type, which the constructions in the literal show as theirs do.
@@ -85,27 +111,16 @@ export infer_type_arguments := (
     # A function literal's parameters may take the types that are known already.
     type := type_of(body, arg, arg is FunctionLiteral then param)
     fail body.program, arg.position, 'expected a value, got void' if is_kind(type, 'void')
-    bind_from params[index], type, arg.position
-    inferred.push { arg, type, index }
-  is_function := (i: Int) -> args[i] is FunctionLiteral
-  is_literal := (i: Int) -> needs_context(body, args[i]) and not is_function(i)
-  for arg, i in args
-    check_argument i if not needs_context(body, arg)
-  if result := generic.result
-    bind_from result, expected, call.position if expected
-  literals := [i for i in 0...args.length when is_literal(i)]
-  check_argument i for i in float_first(literals, (i) -> args[i])
+    @bind_from declared, type, arg.position
+    @inferred.push { arg, type, index }
+
   # The type argument of a bounded type parameter gives those that its bound names, as `X:
   # Iterable<T>` gives T, before function literals take their parameters' types.
-  bind_from_bounds := ->
-    for (type_param, written_bound) in generic.type_params.zip(generic.bounds)
+  bind_from_bounds = ->
+    for (type_param, written_bound) in @generic.type_params.zip(@generic.bounds)
       bound := written_bound ? continue
-      known := bindings[type_param.name.name] ? continue
-      infer_through_members body, bound, known.type, known.at, bind_at(known.at)
-  bind_from_bounds()
-  for i in 0...args.length
-    check_argument i if is_function(i)
-  Inference bindings, inferred
+      known := @bindings[type_param.name.name] ? continue
+      infer_through_members @body, bound, known.type, known.at, @bind_at(known.at)
 
 widens := (bound: Type, type: Type) -> type is OptionalType then type.inner == bound else false
 
