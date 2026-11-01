@@ -8,10 +8,11 @@
 #include "internal.h"
 
 void lerta_main(void) {
-  enum { LEVELS = 2, LEVEL_LENGTH = 1 + 200 };
-  char dir[512];
-  // Two levels, as a name holds at most 255 bytes, each a separator and 200 bytes.
-  if (getcwd(dir, sizeof dir - LEVELS * LEVEL_LENGTH) == NULL) _exit(1);
+  // Two levels, as a name holds at most 255 bytes, each a separator and 200 bytes, after a cwd of
+  // up to CWD_SIZE bytes with its NUL.
+  enum { CWD_SIZE = 4096, LEVELS = 2, LEVEL_LENGTH = 1 + 200 };
+  char dir[CWD_SIZE + LEVELS * LEVEL_LENGTH];
+  if (getcwd(dir, CWD_SIZE) == NULL) _exit(1);
   for (int level = 0; level < LEVELS; level++) {
     strcat(dir, "/");
     size_t length = strlen(dir);
