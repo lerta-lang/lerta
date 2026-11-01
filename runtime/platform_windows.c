@@ -122,7 +122,17 @@ bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length) {
                             : write_all(handle, bytes, length);
 }
 
-void lerta_os_stdio_init(void) {}
+// A console shows the escape sequences of colors, as a terminal does, only once told to. The mode
+// is left so at exit, as it shows what other programs write as before.
+void lerta_os_stdio_init(void) {
+  for (int fd = 1; fd <= 2; fd++) {
+    HANDLE handle = standard_handle(fd);
+    DWORD mode;
+    if (GetConsoleMode(handle, &mode)) {
+      SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+    }
+  }
+}
 
 void lerta_os_exit(int code) {
   ExitProcess((UINT)code);

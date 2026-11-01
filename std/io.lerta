@@ -156,6 +156,9 @@ export stat := (path: String) ->
 
 extern lerta_stream_write: (Int, Binary) -> Promise
 extern lerta_stream_flush: (Int) -> Promise
+extern lerta_stream_is_terminal: (Int) -> Bool
+# std:process imports std:io, so std:io reads the environment itself.
+extern lerta_env: (String) -> Binary?
 
 # What data is written to, as a stream: `end` closes it, which its reader reads as its end.
 export interface Writer
@@ -173,6 +176,21 @@ class StandardOutput
   end = -> return
 
   flush = -> await lerta_stream_flush(@fd)
+
+  is_terminal = -> lerta_stream_is_terminal(@fd)
+
+  # Whether to color the output, as NO_COLOR, FORCE_COLOR and TERM ask (see no-color.org), or else
+  # whether it goes to a terminal.
+  uses_color = ->
+    return false if is_set('NO_COLOR')
+    return true if is_set('FORCE_COLOR')
+    return false if lerta_env('TERM')?.text() == 'dumb'
+    @is_terminal()
+
+# Set to a value that is not empty, as NO_COLOR and FORCE_COLOR are read.
+is_set := (name: String) ->
+  value := lerta_env(name) ? return false
+  not value.is_empty()
 
 export stdout := StandardOutput(fd: 1)
 export stderr := StandardOutput(fd: 2)

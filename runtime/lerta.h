@@ -389,6 +389,7 @@ void lerta_handle_end(int64_t pointer);
 // docs/internals.md#output).
 LertaPromise *lerta_stream_write(int64_t fd, const LertaString *bytes);
 LertaPromise *lerta_stream_flush(int64_t fd);
+bool lerta_stream_is_terminal(int64_t fd);
 void lerta_print_stdout(const LertaString *text);
 void lerta_print_stderr(const LertaString *text);
 // Stdin (stdin.c): up to 64 KiB of what it has, read on a thread of its own, or NULL at its end.

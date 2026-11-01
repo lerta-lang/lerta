@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <uv.h>
+
 #include "internal.h"
 
 void lerta_stderr_write(const uint8_t *bytes, int64_t length) {
@@ -28,6 +30,10 @@ LertaPromise *lerta_stream_write(int64_t fd, const LertaString *bytes) {
 
 LertaPromise *lerta_stream_flush(int64_t fd) {
   return lerta_output_wait((int)fd);
+}
+
+bool lerta_stream_is_terminal(int64_t fd) {
+  return uv_guess_handle((int)fd) == UV_TTY;
 }
 
 // print and print_error write at once, after what the buffer holds, so that the output keeps its
