@@ -1,0 +1,53 @@
+# Checks that the type arguments of an instance of a generic class or struct satisfy the bounds of
+# its type parameters, where the instance is given, with the extends in effect there.
+import Position from '../ast'
+import check_part, in_module from './diagnostics'
+import info_of from './object_types'
+import reject_unsatisfied from './satisfaction'
+import Body, ProgramWide from './shared'
+import module_resolver from './type_names'
+import has_type_parameters, parts_of, substitute from './type_patterns'
+import InterfaceType, ObjectType, Type, type_key from '../types'
+
+# Checks the instance once the extends of every module are in effect, which may give the members
+# that a bound asks for.
+export reject_unsatisfied_object_bounds := (
+  program: ProgramWide, module_index: Int, type: ObjectType, at: Position
+) ->
+  if program.extends_known
+    reject_in_module program, module_index, type, at
+  else
+    program.early_bound_checks.push { type, at, module_index }
+
+# Checks the instances given before the extends were in effect, each as a part of the program.
+export check_early_bounds := (program: ProgramWide) ->
+  program.extends_known = true
+  for instance in program.early_bound_checks
+    shared := program.shared[instance.module_index]
+    in_module shared, ->
+      check_part program, ->
+        reject_in_module program, instance.module_index, instance.type as ObjectType!, instance.at
+
+reject_in_module := (program: ProgramWide, module_index: Int, type: ObjectType, at: Position) ->
+  shared := program.shared[module_index]
+  resolver := module_resolver(module_index)
+  body := Body(shared, resolver, extensions: shared.extensions, facts: shared.facts)
+  seen: Set<String>
+  reject_within body, type, at, seen
+
+# The instance's fields may hold instances that its type arguments make, as `Heap<T>` in a
+# `Wrapper<T>` does, whose bounds are checked here too.
+reject_within := (body: Body, type: Type, at: Position, seen: Set<String>): void ->
+  reject_within body, part, at, seen for part in parts_of(type)
+  return if type is not ObjectType or type.args.is_empty() or has_type_parameters(type)
+  return if not seen.add(type_key(type))
+  info := info_of(body.program, type)
+  generic := info.generic!
+  type_bindings: Map<String, Type>
+  type_params := generic.declaration.type_params
+  type_bindings[param.name.name] = arg for (param, arg) in type_params.zip(type.args)
+  for (arg, written_bound) in type.args.zip(generic.bounds)
+    bound := written_bound ? continue
+    reject_unsatisfied body, arg, substitute(bound, type_bindings) as InterfaceType!, at
+  for field in info.fields
+    reject_within body, field_type, at, seen if field_type := field.type

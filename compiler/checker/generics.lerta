@@ -78,11 +78,7 @@ export make_generic_function := (
   resolver := module_resolver(shared.index)
   reject_bad_type_parameters program, resolver, type_params
   generic_resolver := with_type_parameters(resolver, placeholders(type_params))
-  # A bound may name the type parameters, as in `X: Iterable<T>`.
-  bound_of := (param: TypeParameter) ->
-    bound := param.bound ? return nil
-    bound_interface program, generic_resolver, bound
-  bounds := [bound_of(param) for param in type_params]
+  bounds := bounds_of(program, generic_resolver, type_params)
   params := parameter_types(program, generic_resolver, literal)
   return_type := literal.return_type
   result := return_type then resolve_result(program, generic_resolver, return_type)
@@ -95,6 +91,14 @@ export make_generic_function := (
     params
     result
     module_index: shared.index
+
+# The interface types that bound the type parameters, which a bound may name, as in
+# `X: Iterable<T>`; the resolver has them stand for themselves.
+export bounds_of := (program: ProgramWide, resolver: Resolver, type_params: TypeParameter[]) ->
+  bound_of := (param: TypeParameter) ->
+    bound := param.bound ? return nil
+    bound_interface program, resolver, bound
+  [bound_of(param) for param in type_params]
 
 export reject_bad_type_parameters := (
   program: ProgramWide, resolver: Resolver, type_params: TypeParameter[]

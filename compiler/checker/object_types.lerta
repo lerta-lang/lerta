@@ -2,8 +2,7 @@
 # an initializer alone are found on demand, and so are the instances of a generic class or struct
 # (see info_of).
 import
-  Expression, FunctionLiteral, Identifier, MemberDeclaration, Position, TypeDeclaration, TypeName,
-  TypeParameter
+  Expression, FunctionLiteral, Identifier, MemberDeclaration, Position, TypeDeclaration, TypeName
 from '../ast'
 import check_equality_methods, check_object, check_satisfies from './bodies'
 import
@@ -12,8 +11,8 @@ import
 from './diagnostics'
 import add_function, add_generic, CheckState, method_key from './functions'
 import
-  endless_instances, GenericRef, Instance, instantiate, make_generic_function, MAX_INSTANCES,
-  MAX_TYPE_DEPTH, Receiver, reject_bad_type_parameters
+  bounds_of, endless_instances, GenericRef, Instance, instantiate, make_generic_function,
+  MAX_INSTANCES, MAX_TYPE_DEPTH, Receiver, reject_bad_type_parameters
 from './generics'
 import builtin_type, imported_type from './imports'
 import bound_interface, has_declared_type, InterfaceMember, members_for from './interfaces'
@@ -55,6 +54,9 @@ export class ObjectInfo
   fields: FieldInfo[] = []
   # The interface that the declaration says it satisfies, with the type arguments of an instance.
   satisfies: InterfaceType? = nil
+  # Of a generic class or struct: the interface types that bound its type parameters (see
+  # object_bounds).
+  bounds: InterfaceType?[] = []
   methods: Map<String, FunctionLiteral> = Map()
   # The generic methods, those with type parameters, which have instances instead of a function.
   generics: Map<String, GenericRef> = Map()
@@ -88,7 +90,6 @@ export add_objects := (shared: Shared, declarations: TypeDeclaration[]) ->
     symbol := declared_symbol(shared, name)
     is_struct := declaration.is_struct
     { type_params } := declaration
-    reject_bounds program, type_params
     own := placeholders(type_params)
     args := [own[param.name.name]! for param in type_params]
     type := ObjectType(name, symbol, is_struct, args, module: shared.name)
@@ -97,16 +98,13 @@ export add_objects := (shared: Shared, declarations: TypeDeclaration[]) ->
     shared.objects[name] = info
     program.infos[symbol] = info
 
-reject_bounds := (program: ProgramWide, type_params: TypeParameter[]) ->
-  for param in type_params
-    if bound := param.bound
-      fail program, bound.position, "a class's or struct's type parameter takes no bound so far"
-
 # Resolves the written field types and adds the methods to the module's functions.
 export add_members := (shared: Shared) ->
   program := shared.program
   for info in shared.objects.values()
-    reject_bad_type_parameters program, module_resolver(shared.index), info.declaration.type_params
+    { type_params } := info.declaration
+    reject_bad_type_parameters program, module_resolver(shared.index), type_params
+    info.bounds = bounds_of(program, info.resolver, type_params)
     seen: Set<String>
     for member in info.declaration.members
       { name, position } := member.name

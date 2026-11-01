@@ -5,6 +5,7 @@ import Position from '../ast'
 import check_item_type, check_map_types, check_value_type, reject_map_key from './collection'
 import check_part, in_module from './diagnostics'
 import members_for from './interfaces'
+import reject_unsatisfied_object_bounds from './object_bounds'
 import info_of from './object_types'
 import ProgramWide from './shared'
 import has_type_parameters, parts_of from './type_patterns'
@@ -27,7 +28,8 @@ reject_invalid_map := (program: ProgramWide, type: MapType, at: Position) ->
   check_map_types program, type.key, type.value, at, at
 
 # Checks the field types of an instance of a generic class or struct, or the member types of one of
-# a generic interface, where the module gives it, once they are known.
+# a generic interface, where the module gives it, once they are known, and the bounds of the
+# former's type arguments.
 export reject_invalid_instance := (
   program: ProgramWide, module_index: Int, type: ObjectType | InterfaceType, at: Position
 ) ->
@@ -35,6 +37,7 @@ export reject_invalid_instance := (
     reject_invalid_instance_types program, type, at
   else
     program.early_instances.push { type, at, module_index }
+  reject_unsatisfied_object_bounds program, module_index, type, at if type is ObjectType
 
 # Checks the instances given before the fields and members were known, each as a part of the
 # program.
