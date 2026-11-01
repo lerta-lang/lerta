@@ -40,12 +40,32 @@ export struct Checked
 
 # The diagnostics of the program whose entry module is at the path, by the paths of its files,
 # every one of them, those without any too, but the standard modules; only the entry module's and
-# those that have some if the modules cannot be loaded. An error that is found in no module is the
-# entry module's, at its start. A module is loaded with the statements that parse, so
-# that the program is checked while it is being written.
+# those that have some if the modules cannot be loaded.
 export check_file := (path: String, encoding: PositionEncoding) ->
+  found := await found_in(path)
   by_path: Map<String, LspDiagnostic[]>
-  by_path[path] = []
+  by_path[location] = [] for location in found.locations
+  add := (located: Located, severity: Int) ->
+    return if is_standard_name(located.location)
+    diagnostic := await diagnostic_of(located, severity, encoding)
+    by_path[located.location, default: []].push(diagnostic)
+  await add(each, ERROR) for each in found.errors
+  await add(each, WARNING) for each in found.warnings
+  Checked by_path, program: found.program
+
+# What the check of a program found: the errors and the warnings, the program as far as it is
+# checked, if its modules could be loaded, and the locations of its modules that are not standard.
+struct Found
+  errors: Located[]
+  warnings: Located[]
+  program: ProgramWide?
+  locations: String[]
+
+# What the check of the program whose entry module is at the path finds. An error that is found in
+# no module is the entry module's, at its start. A module is loaded with the statements that parse,
+# so that the program is checked while it is being written.
+found_in := (path: String) ->
+  locations := [path]
   var warnings: Located[] = []
   var errors: Located[] = []
   parse_errors: Located[]
@@ -57,7 +77,7 @@ export check_file := (path: String, encoding: PositionEncoding) ->
     modules := await load_modules_partially(path, parse_errors)
     for module in modules
       location := module_location(path, module.display_path)
-      by_path[location] = [] if not is_standard_name(location)
+      locations.push location if not is_standard_name(location)
     check_modules path, modules, keep_warnings
   catch error: CompileError
     placed := Located(location: path, line: 1, column: 1, message: error.message)
@@ -69,16 +89,15 @@ export check_file := (path: String, encoding: PositionEncoding) ->
   # An error of loading, which ends it before the checker starts, is kept.
   errors = [each for each in errors when each.location not in unparsed] if checked
   errors.append parse_errors
-  warnings = [each for each in warnings when each.location not in unparsed]
-  add := (located: Located, severity: Int) ->
-    return if is_standard_name(located.location)
-    at := await position(located, encoding)
-    range := LspRange(start: at, end: at)
-    diagnostic := LspDiagnostic(range, severity, source: 'lerta', message: located.message)
-    by_path[located.location, default: []].push(diagnostic)
-  await add(each, ERROR) for each in errors
-  await add(each, WARNING) for each in warnings
-  Checked by_path, program: checked
+  Found
+    locations
+    errors
+    warnings: [each for each in warnings when each.location not in unparsed]
+    program: checked
+
+diagnostic_of := (located: Located, severity: Int, encoding: PositionEncoding) ->
+  at := await position(located, encoding)
+  LspDiagnostic severity, range: { start: at, end: at }, source: 'lerta', message: located.message
 
 # The position of the diagnostic, whose column counts code points: in UTF-16 units, those before
 # it on its line count 2 each above U+FFFF.
