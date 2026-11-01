@@ -94,26 +94,39 @@ export generate_index := (g: Generator, index: Index, borrowed = false) ->
   generate_position := -> generate(g, index.index)
   position :=
     is_owned then holding(g, object, object_type, generate_position) else generate_position()
-  is_map := object_type is MapType
-  is_binary := is_kind(object_type, 'Binary')
-  items := not is_map and not is_binary then emit_checked_items(g.ir, object, position)
-  outside := is_binary then emit_binary_out_of_range(g.ir, object, position)
-  get_or_put := (default_value: Expression) ->
-    put := -> generate_put_default(g, object, position, object_type as MapType!, default_value)
-    held_position := -> holding(g, position, type_at_use(g, index.index), put)
-    is_owned then holding(g, object, object_type, held_position) else held_position()
-  item :=
+  (item, check) :=
     case
-      when items then emit_get_from(g.ir, items, position, type_of(g, index), not borrowed)
-      when index.default_value then get_or_put(index.default_value!)
-      when object_type is MapType then emit_map_get(g.ir, object, position, object_type)
-      else emit_binary_get_unless(g.ir, object, position, outside!)
+      when object_type is MapType then map_item(g, index, object, object_type, is_owned, position)
+      when is_kind(object_type, 'Binary') then binary_item(g, object, position)
+      else array_item(g, index, object, position, borrowed)
   release_if_reference g, index.index, position
   emit_release g.ir, object if is_owned
-  # An index out of range throws: the runtime has raised it where an array's items tell, and a
-  # Binary's is raised here.
-  case
-    when items then emit_exception_check_if(g, emit_is_out_of_range(g.ir, items))
-    when outside then throw_if(g, outside, INDEX_OUT_OF_RANGE)
-    else emit_exception_check(g)
+  check()
   item
+
+# Each of these gives the item at the position and what checks, once the operands are released,
+# for an exception it raised.
+
+map_item := (
+  g: Generator, index: Index, map: String, type: MapType, is_owned: Bool, key: String
+): (String, () -> void) ->
+  check := -> emit_exception_check(g)
+  default_value := index.default_value ? return (emit_map_get(g.ir, map, key, type), check)
+  put := -> generate_put_default(g, map, key, type, default_value)
+  held_key := -> holding(g, key, type_at_use(g, index.index), put)
+  item := is_owned then holding(g, map, type, held_key) else held_key()
+  (item, check)
+
+# A Binary's index out of range is raised here.
+binary_item := (g: Generator, binary: String, position: String): (String, () -> void) ->
+  outside := emit_binary_out_of_range(g.ir, binary, position)
+  item := emit_binary_get_unless(g.ir, binary, position, outside)
+  (item, -> throw_if(g, outside, INDEX_OUT_OF_RANGE))
+
+# The runtime has raised an index out of range where the array's items tell.
+array_item := (
+  g: Generator, index: Index, array: String, position: String, borrowed: Bool
+): (String, () -> void) ->
+  items := emit_checked_items(g.ir, array, position)
+  item := emit_get_from(g.ir, items, position, type_of(g, index), not borrowed)
+  (item, -> emit_exception_check_if(g, emit_is_out_of_range(g.ir, items)))
