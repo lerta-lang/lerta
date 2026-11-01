@@ -115,21 +115,28 @@ emit_read_map := (ir: IrBuilder, reader: Coder, type: MapType) ->
   map := emit_map_new(ir, reader.program, type)
   unwind := -> release_and_return(ir, map, type)
   call_void_method ir, reader, 'begin_object', [], unwind
-  var key = ''
-  more := ->
-    key = call_method(ir, reader, 'next_key', optional_type(string_type), [], unwind)
-    ir.is_not_null key
-  read_entry := ->
-    release_key := ->
-      emit_release ir, key
-      unwind()
+  read_entry := (key: String, release_key: () -> void) ->
     value := emit_read(ir, reader, type.value, release_key)
     # The map retains the key and the value, which this function owned.
     emit_map_set ir, map, key, value, type
     emit_release ir, key
     emit_release_value ir, value, type.value
-  emit_while ir, more, read_entry
+  emit_for_each_key ir, reader, unwind, read_entry
   map
+
+# Runs `body` with each key of the object being read, owned, and what releases the key and
+# unwinds, for where reading its value fails.
+emit_for_each_key := (
+  ir: IrBuilder, reader: Coder, unwind: () -> void, body: (String, () -> void) -> void
+) ->
+  var key = ''
+  more := ->
+    key = call_method(ir, reader, 'next_key', optional_type(string_type), [], unwind)
+    ir.is_not_null key
+  release_key := ->
+    emit_release ir, key
+    unwind()
+  emit_while ir, more, -> body(key, release_key)
 
 # The items in their order, which the function holds until it makes the tuple of them.
 emit_read_tuple := (ir: IrBuilder, reader: Coder, type: TupleType) ->
@@ -186,16 +193,20 @@ class FieldValues
   fields: FieldToRead[]
   # The type that the function gives.
   type: Type
-  slots: String[] = []
-  given_slots: String[] = []
+  slots: FieldSlots[] = []
 
   values = -> [@value(i) for i in 0...@fields.length]
-  value = (i: Int) -> @ir.load(ir_type(@fields[i].type), @slots[i])
-  given = (i: Int) -> @ir.load('i1', @given_slots[i])
+  value = (i: Int) -> @ir.load(ir_type(@fields[i].type), @slots[i].value)
+  given = (i: Int) -> @ir.load('i1', @slots[i].given)
 
   unwind = ->
     emit_release_value @ir, @value(i), field.type for field, i in @fields
     emit_return_thrown @ir, @type
+
+# The slots of a field: of its value, and of whether its key was given.
+struct FieldSlots
+  value: String
+  given: String
 
 emit_read_fields := (
   ir: IrBuilder, reader: Coder, type: Type, fields: FieldToRead[], make: (FieldValues) -> String
@@ -205,23 +216,15 @@ emit_read_fields := (
     slot := ir.alloca(ir_type(field.type))
     empty := field.type is OptionalType then nil_constant(field.type) else 'zeroinitializer'
     ir.store ir_type(field.type), empty, slot
-    values.slots.push slot
     given := ir.alloca('i1')
     ir.store 'i1', 'false', given
-    values.given_slots.push given
+    values.slots.push { value: slot, given }
   unwind := -> values.unwind()
   call_void_method ir, reader, 'begin_object', [], unwind
-  var key = ''
-  more := ->
-    key = call_method(ir, reader, 'next_key', optional_type(string_type), [], unwind)
-    ir.is_not_null key
-  read_key := ->
-    release_key := ->
-      emit_release ir, key
-      unwind()
+  read_key := (key: String, release_key: () -> void) ->
     emit_read_field_of_key ir, reader, values, key, release_key
     emit_release ir, key
-  emit_while ir, more, read_key
+  emit_for_each_key ir, reader, unwind, read_key
   for field, i in fields
     continue if not is_required(field)
     fail := -> call_void_method(ir, reader, 'fail_missing', field_name_args(ir, field.name), unwind)
@@ -242,8 +245,8 @@ emit_read_field_of_key := (
     ir.branch_if matches, read, next
     ir.start_block read
     value := emit_read(ir, reader, field.type, unwind)
-    ir.store ir_type(field.type), value, values.slots[i]
-    ir.store 'i1', 'true', values.given_slots[i]
+    ir.store ir_type(field.type), value, values.slots[i].value
+    ir.store 'i1', 'true', values.slots[i].given
     ir.branch done
     ir.start_block next
   call_void_method ir, reader, 'skip_value', [], unwind

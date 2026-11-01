@@ -23,17 +23,16 @@ import ArrayType, ObjectType from '../types'
 export borrowing_all := (g: Generator, expressions: Expression[], use: (String[]) -> String) ->
   depth := g.temporaries.length
   operands: String[]
-  owned: Bool[]
+  owned: (Expression, String)[]
   for expression, i in expressions
-    later := [other for other, j in expressions when j > i]
-    (operand, is_owned) := generate_borrowed(g, expression, later)
-    push_temporary g, operand, type_at_use(g, expression) if is_owned
+    (operand, is_owned) := generate_borrowed(g, expression, expressions.slice(i + 1))
+    if is_owned
+      push_temporary g, operand, type_at_use(g, expression)
+      owned.push (expression, operand)
     operands.push operand
-    owned.push is_owned
   result := use(operands)
   pop_temporaries g, depth
-  for expression, i in expressions
-    release_if_reference g, expression, operands[i] if owned[i]
+  release_if_reference g, expression, operand for (expression, operand) in owned
   result
 
 # The value of the expression and whether it is owned: borrowed when it is a local whose scope

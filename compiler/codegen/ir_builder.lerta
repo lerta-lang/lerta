@@ -300,12 +300,14 @@ export emit_branch := (
   ir: IrBuilder, type: String, condition: String, then_value: () -> String, otherwise: String
 ) ->
   from := ir.current_block
-  var value = ''
-  var value_block = ''
-  compute := ->
-    value = then_value()
-    value_block = ir.current_block
-  emit_when ir, condition, compute
+  then_label := ir.fresh_label('branch.then')
+  end_label := ir.fresh_label('branch.end')
+  ir.branch_if condition, then_label, end_label
+  ir.start_block then_label
+  value := then_value()
+  value_block := ir.current_block
+  ir.branch end_label
+  ir.start_block end_label
   ir.assign "phi #{type} [ #{otherwise}, %#{from} ], [ #{value}, %#{value_block} ]"
 
 # Runs `body` with each index from 0 up to `count`, as an i64.
