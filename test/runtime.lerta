@@ -7,7 +7,9 @@ import host_libuv, host_systems, root_dir, SetupError, shown_text, suite_dir fro
 import timeout from 'std:async'
 import encode_json from 'std:json'
 import platform, run from 'std:process'
-import is_dir, is_file, list_dir, make_dir, make_link, make_temp_dir, write_file from 'std:io'
+import
+  is_dir, is_file, list_dir, make_dir, make_link, make_temp_dir, remove_tree, write_file
+from 'std:io'
 
 runtime_dir := "#{root_dir}/runtime"
 sources_dir := "#{root_dir}/test/runtime"
@@ -179,12 +181,15 @@ remove_tree_check := Check
       reason_unless(is_file("#{linked}/file"), 'the link was followed')...
     ]
 
-# In a directory of its own, where it makes the long one.
+# In a directory of its own, where it makes the long one, removed after.
 long_temp_dir_check := Check
   name: 'lerta_os_make_temp_dir makes one in a TMPDIR longer than its first buffer for it'
   run: ->
     dir := make_temp_dir().text()!
-    expect_clean await execute(await build('long_temp_dir', false), [], dir)
+    try
+      expect_clean await execute(await build('long_temp_dir', false), [], dir)
+    finally
+      await remove_tree(dir)
 
 checks := [
   remove_tree_check
