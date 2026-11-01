@@ -57,11 +57,7 @@ bool lerta_stat_fields(const LertaString *path, LertaArray *fields) {
 }
 
 void lerta_make_link(const LertaString *target, const LertaString *path) {
-  char *target_name = lerta_c_string(target);
-  char *name = lerta_c_string(path);
-  bool made = lerta_os_make_link(target_name, name);
-  free(target_name);
-  free(name);
+  bool made = lerta_with_c_strings(target, path, lerta_os_make_link);
   if (!made) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_make_link), path);
 }
 
@@ -363,10 +359,6 @@ void lerta_make_dir(const LertaString *path) {
 }
 
 void lerta_rename(const LertaString *from, const LertaString *to) {
-  char *from_name = lerta_c_string(from);
-  char *to_name = lerta_c_string(to);
-  bool renamed = lerta_os_rename(from_name, to_name);
-  free(from_name);
-  free(to_name);
+  bool renamed = lerta_with_c_strings(from, to, lerta_os_rename);
   if (!renamed) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_rename), from);
 }

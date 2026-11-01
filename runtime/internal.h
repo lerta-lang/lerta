@@ -69,6 +69,9 @@ int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]);
 // The string as a NUL-terminated C string, which the caller frees. It must hold no NUL byte, which C
 // would take as its end: std refuses those first.
 char *lerta_c_string(const LertaString *s);
+// Calls `call` with both strings as C strings, as lerta_c_string makes them, and frees them after.
+bool lerta_with_c_strings(const LertaString *a, const LertaString *b,
+                          bool (*call)(const char *a, const char *b));
 // The String of the C string's bytes, which end at its NUL.
 LertaString *lerta_string_from_c(const char *text);
 // Appends the C string to an array of strings, as a new string.

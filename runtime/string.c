@@ -250,6 +250,16 @@ char *lerta_c_string(const LertaString *s) {
   return result;
 }
 
+bool lerta_with_c_strings(const LertaString *a, const LertaString *b,
+                          bool (*call)(const char *a, const char *b)) {
+  char *c_a = lerta_c_string(a);
+  char *c_b = lerta_c_string(b);
+  bool result = call(c_a, c_b);
+  free(c_a);
+  free(c_b);
+  return result;
+}
+
 // The bits of the value that the text reads as, a double, or a float if is_float32, which is
 // widened to a double; -1 if it is beyond the largest.
 static int64_t literal_bits(const LertaString *text, bool is_float32) {

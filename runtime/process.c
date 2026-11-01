@@ -284,12 +284,7 @@ void lerta_program_free(int64_t pointer) {
 }
 
 bool lerta_same_env_name(const LertaString *a, const LertaString *b) {
-  char *c_a = lerta_c_string(a);
-  char *c_b = lerta_c_string(b);
-  bool same = lerta_os_same_env_name(c_a, c_b);
-  free(c_a);
-  free(c_b);
-  return same;
+  return lerta_with_c_strings(a, b, lerta_os_same_env_name);
 }
 
 // std:process gives no name that holds `=`.
