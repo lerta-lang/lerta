@@ -5,7 +5,9 @@ import BooleanLiteral, FloatLiteral, IntegerLiteral from '../ast'
 import integer_float_text from '../float_literals'
 import float_constant from './float'
 import IrBuilder from './ir_builder'
-import integer_bits, is_float, is_signed, kind_of, SimpleType, Type, TypeKind from '../types'
+import
+  EnumType, integer_bits, is_float, is_signed, kind_of, SimpleType, Type, TypeKind
+from '../types'
 
 export struct Scalar
   ir_type: String
@@ -18,38 +20,25 @@ integer_row := (kind: TypeKind) ->
   bits := integer_bits(type)
   Scalar bits, ir_type: "i#{bits}", signed: is_signed(type)
 
-INT := integer_row('Int')
-INT8 := integer_row('Int8')
-INT16 := integer_row('Int16')
-INT32 := integer_row('Int32')
-BYTE := integer_row('Byte')
-UINT16 := integer_row('UInt16')
-UINT32 := integer_row('UInt32')
-UINT64 := integer_row('UInt64')
-CHAR := integer_row('Char')
-BOOL := Scalar(ir_type: 'i1', bits: 1, signed: false)
-# Its sign is that of no integer: its bits are a word already, and a Float32's are zero-extended.
-FLOAT := Scalar(ir_type: 'double', bits: 64, signed: false, is_float: true)
-FLOAT32 := Scalar(ir_type: 'float', bits: 32, signed: false, is_float: true)
+SCALARS: Map<TypeKind, Scalar> =
+  'Int': integer_row('Int')
+  'Int8': integer_row('Int8')
+  'Int16': integer_row('Int16')
+  'Int32': integer_row('Int32')
+  'Byte': integer_row('Byte')
+  'UInt16': integer_row('UInt16')
+  'UInt32': integer_row('UInt32')
+  'UInt64': integer_row('UInt64')
+  'Char': integer_row('Char')
+  'Bool': { ir_type: 'i1', bits: 1, signed: false }
+  # Its sign is that of no integer: its bits are a word already, and a Float32's are zero-extended.
+  'Float': { ir_type: 'double', bits: 64, signed: false, is_float: true }
+  'Float32': { ir_type: 'float', bits: 32, signed: false, is_float: true }
+
 # A place is never negative.
 ENUM_VALUE := Scalar(ir_type: 'i64', bits: 64, signed: false)
 
-export scalar_of := (type: Type) ->
-  case kind_of(type)
-    when 'Int' then INT
-    when 'Int8' then INT8
-    when 'Int16' then INT16
-    when 'Int32' then INT32
-    when 'Byte' then BYTE
-    when 'UInt16' then UINT16
-    when 'UInt32' then UINT32
-    when 'UInt64' then UINT64
-    when 'Char' then CHAR
-    when 'Bool' then BOOL
-    when 'Float' then FLOAT
-    when 'Float32' then FLOAT32
-    when ENUM then ENUM_VALUE
-    else nil
+export scalar_of := (type: Type) -> type is EnumType then ENUM_VALUE else SCALARS[kind_of(type)]
 
 # The value as an i64: a float's bits, or another value, extended by its sign.
 export widened_to_word := (ir: IrBuilder, operand: String, scalar: Scalar) ->

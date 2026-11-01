@@ -17,20 +17,25 @@ import
   type_key
 from '../types'
 
-# The values of LertaKeyKind in runtime/lerta.h: a key narrower than a word is of the integer keys
+# The values of LertaKeyKind in runtime/lerta.h; a key narrower than a word is of the integer keys
 # of the kind of its items.
+INT_KEYS := 0
+STRING_KEYS := 1
+OBJECT_KEYS := 2
+VALUE_KEYS := 3
+
 key_kind := (program: ProgramWide, key: Type) ->
   narrow := narrow_item_kind(key)
   case
     when narrow != nil then narrow
-    when is_number(key) or is_one_of_kinds(key, ['Char', ENUM]) then 0
-    when is_one_of_kinds(key, ['String', 'Binary']) then 1
-    when is_identity_type(key) and not compares_by_contents(program, key) then 2
-    else 3
+    when is_number(key) or is_one_of_kinds(key, ['Char', ENUM]) then INT_KEYS
+    when is_one_of_kinds(key, ['String', 'Binary']) then STRING_KEYS
+    when is_identity_type(key) and not compares_by_contents(program, key) then OBJECT_KEYS
+    else VALUE_KEYS
 
 # Whether the runtime hashes and compares the keys itself, rather than through functions that may
 # run code of the program, as a key's own `hash` and `==` do.
-export are_keys_plain := (program: ProgramWide, key: Type) -> key_kind(program, key) != 3
+export are_keys_plain := (program: ProgramWide, key: Type) -> key_kind(program, key) != VALUE_KEYS
 
 key_word := (ir: IrBuilder, key: String, type: Type) ->
   is_float(type) then emit_float_word(ir, key, type) else to_item(ir, key, type)
@@ -38,7 +43,7 @@ key_word := (ir: IrBuilder, key: String, type: Type) ->
 # Keys that compare by their contents come with the functions that hash and compare them.
 export emit_map_new := (ir: IrBuilder, program: ProgramWide, type: MapType) ->
   kind := key_kind(program, type.key)
-  functions := kind == 3 then item_functions(ir.module, program, type.key)
+  functions := kind == VALUE_KEYS then item_functions(ir.module, program, type.key)
   hash := functions?.hash ? 'null'
   equals := functions?.equals ? 'null'
   args := "i32 #{kind}, i32 #{item_kind(type.value)}, ptr #{hash}, ptr #{equals}"
