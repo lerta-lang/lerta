@@ -17,8 +17,8 @@ import compare_output, expect_status from './lib/expect'
 import
   cli_work_dir, expect_left, host_triple, read_optional, runtime_flags, run_in_new_dir
 from './lib/cli'
-import build_runtimes, compiler, read_text_or_throw, root_dir from './lib/lerta'
-import is_file, list_dir, make_dir from 'std:io'
+import build_runtimes, compiler, read_text_or, read_text_or_throw, root_dir from './lib/lerta'
+import list_dir, make_dir from 'std:io'
 import checks as std_checks from './cli/std'
 import checks as build_checks from './cli/build'
 import checks as extern_checks from './cli/extern'
@@ -54,17 +54,12 @@ struct FileCase
   stderr: Binary
 
 read_expected_text := (name: String, extension: String) ->
-  path := "#{cases_dir}/#{name}.#{extension}"
-  is_file(path) then expand(await read_text_or_throw(path)) else ''
+  expand await read_text_or("#{cases_dir}/#{name}.#{extension}", '')
 
 file_case := (name: String) ->
   args := content_lines(await read_text_or_throw("#{cases_dir}/#{name}.args"))
   input := await read_optional("#{cases_dir}/#{name}.in") ? ''.binary
-  status_text :=
-    if is_file("#{cases_dir}/#{name}.status")
-      await read_text_or_throw("#{cases_dir}/#{name}.status")
-    else
-      '0'
+  status_text := await read_text_or("#{cases_dir}/#{name}.status", '0')
   status := parse_status(status_text, "#{name}.status")
   FileCase
     title: "lerta #{args.join(' ')}"
