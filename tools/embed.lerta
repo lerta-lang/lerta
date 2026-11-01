@@ -4,33 +4,10 @@
 import read_file, write_file from 'std:io'
 import argv from 'std:process'
 
-# The path as a '...' literal, which has no escapes.
-path_literal := (path: String) ->
-  is_plain := path.split("'").length == 1 and path.split('\').length == 1
-  is_plain then "'#{path}'" else throw ValueError("#{path}: a path cannot hold ' or \\")
-
-# The contents as a "..." literal on one line.
+# The contents as a literal.
 contents_literal := (path: String) ->
-  bytes: Byte[] = ['"']
-  for byte in await read_file(path)
-    escape :=
-      case byte
-        when "\n" then '\n'
-        when "\t" then '\t'
-        when "\r" then '\r'
-        when "\0" then '\0'
-        when '\' then '\\'
-        when '"' then '\"'
-        when '#' then '\#'
-        else nil
-    if escape
-      bytes.push each for each in escape.binary
-    else
-      problem := 'a control character that a literal has no escape for'
-      throw ValueError("#{path}: #{problem}") if byte < 0x20
-      bytes.push byte
-  bytes.push '"'
-  bytes.to_binary().text() ? throw ValueError("'#{path}' is not valid UTF-8")
+  text := (await read_file(path)).text() ? throw ValueError("'#{path}' is not valid UTF-8")
+  text.to_literal()
 
 # The module of either mode, which the compiler uses alike: EMBEDDED_PATHS, the paths, and
 # embedded_source, the contents of one of them, or nil for another path.
@@ -67,8 +44,8 @@ SEED_PART := '''
   export embedded_source := (path: String) -> CONTENTS[path]
   '''
 normal_part := ->
-  path_list := ["  #{path_literal(path)}\n" for path in paths].join('')
-  contents := ["  #{path_literal(path)}: #{await contents_literal(path)}\n" for path in paths]
+  path_list := ["  #{path.to_literal()}\n" for path in paths].join('')
+  contents := ["  #{path.to_literal()}: #{await contents_literal(path)}\n" for path in paths]
   return """
     export EMBEDDED_PATHS := [
     #{path_list}]
