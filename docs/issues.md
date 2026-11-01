@@ -2,38 +2,6 @@
 
 Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## A `return` in a `map` or `filter` literal that a loop fuses emits malformed IR
-
-Severity: Medium.
-
-`generate_in_place` (compiler/codegen/fusion.lerta:297) gives the fused literal a `FusedExit` with an empty label, since a comprehension's element can hold no `return`. `takes_in_place` (fusion.lerta:209-213) does not exclude an explicit literal that does, unlike `fused_call` and `inlined_method`, so `emit_return` branches to `br label %` and clang refuses the module.
-
-```
-xs := [1, 2, 3]
-for y in xs.map((x) -> return x * 2)
-  print y
-```
-
-`bin/lerta build` fails at the clang step with `expected value token`; the unfused form (`var its = xs.map(...)` then `for y in its`) prints 2, 4, 6. The same holds for `filter` and for an inlined `.count()` chain.
-
-Fix: in `takes_in_place`, refuse a literal whose body holds a `return` (walk the statements as `yield_count` does), or give `generate_in_place` a real exit label and result slot as `generate_inlined_method` has.
-
-## A `yield` or `await` in a `map` or `filter` literal that a loop fuses crashes the compiler
-
-Severity: Medium.
-
-`takes_in_place` (compiler/codegen/fusion.lerta:209-213) checks only weak captures, while `fused_call` refuses `literal.yields` and `inlined_method` refuses `literal.yields or literal.awaits`. A literal that yields or awaits is a coroutine of its own, and generating it inline with the loop's generator reaches `g.yield_kind!` (compiler/codegen/yielding.lerta:53) or `g.coroutine!` (compiler/codegen/awaiting.lerta:59) as nil.
-
-```
-xs := [1, 2, 3]
-for it in xs.map((x) -> yield x)
-  print it.next()
-```
-
-The compiler dies with `unwrapped nil at generate_yield`; with `await` instead, `unwrapped nil at emit_await`. The unfused form prints 1, 2, 3.
-
-Fix: in `takes_in_place`, `return false if literal.yields or literal.awaits or literal in g.facts.settling`, as `is_awaiting` in function.lerta does.
-
 ## `lerta fmt` breaks a value that follows a comment on the line of its `=`, `:=`, `return`, `then` or key
 
 Severity: Medium.

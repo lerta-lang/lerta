@@ -16,7 +16,8 @@ import generate, held_value, type_at_use, type_of from './expression'
 import nan_free_operations from './float_ranges'
 import all_but_last from '../arrays'
 import
-  generate_block_with, generate_last_statement, generate_statements, release_scope, store_in_slot
+  generate_block_with, generate_last_statement, generate_statements, is_awaiting, release_scope,
+  store_in_slot
 from './function'
 import emit_when from './ir_builder'
 import ir_type, returns_nothing from './lerta_ir'
@@ -199,12 +200,14 @@ export struct LazySource
 
 # The lazy source, if a loop can go through its source and take its functions in place: a
 # comprehension of no index and no bindings, or a call of `map` or `filter` of std:builtins, which
-# are written as such comprehensions, over a range, an array or an Iter; whose functions capture
-# nothing weakly.
+# are written as such comprehensions, over a range, an array or an Iter; whose functions neither
+# yield nor await, and capture nothing weakly.
 export fused_comprehension := (g: Generator, iterable: Expression) ->
   lazy := lazy_source(g, iterable) ? return nil
   takes_in_place := (literal: FunctionLiteral?) ->
     return true if literal == nil
+    # A literal that yields or awaits is a coroutine of its own, which the loop cannot run inline.
+    return false if literal.yields or is_awaiting(g, literal)
     captures := g.facts.captures[literal] ? []
     not literal.weak and not captures.any((capture) -> capture.is_weak)
   takes_in_place(lazy.guard) and takes_in_place(lazy.element) then lazy
