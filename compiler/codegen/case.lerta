@@ -40,12 +40,12 @@ export generate_case := (g: Generator, case_expression: Case) ->
     value := generate_block_value(g, body, no_locals)
     operand := value.is_empty() then 'poison' else value
     incoming.push "[ #{operand}, %#{ir.current_block} ]"
-    ir.emit "br label %#{end_label}"
+    ir.branch end_label
   for arm in case_expression.arms
     test := generate_test(g, arm, subject_type, subject_operand)
     arm_label := ir.fresh_label('case.arm')
     next_label := ir.fresh_label('case.next')
-    ir.emit "br i1 #{test}, label %#{arm_label}, label %#{next_label}"
+    ir.branch_if test, arm_label, next_label
     ir.start_block arm_label
     generate_arm_value arm.body
     ir.start_block next_label
@@ -85,12 +85,12 @@ branch_values := (g: Generator, test: String, then_value: () -> String, else_val
   then_label := ir.fresh_label('branch.then')
   else_label := ir.fresh_label('branch.else')
   end_label := ir.fresh_label('branch.end')
-  ir.emit "br i1 #{test}, label %#{then_label}, label %#{else_label}"
+  ir.branch_if test, then_label, else_label
   branch := (label: String, value: () -> String) ->
     ir.start_block label
     operand := value()
     from := ir.current_block
-    ir.emit "br label %#{end_label}"
+    ir.branch end_label
     "[ #{operand == '' then 'poison' else operand}, %#{from} ]"
   incoming := [branch(then_label, then_value), branch(else_label, else_value)]
   ir.start_block end_label

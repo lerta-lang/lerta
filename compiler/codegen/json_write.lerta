@@ -97,7 +97,7 @@ emit_write_map := (ir: IrBuilder, writer: Coder, map: String, type: MapType): vo
     value_slot := emit_item_slot(ir, type.value)
     args := "ptr #{cursor}, ptr #{key_slot}, ptr #{value_slot}"
     call_void_runtime ir, 'void @lerta_map_cursor_next(ptr, ptr, ptr)', args
-    key := from_item(ir, ir.assign("load i64, ptr #{key_slot}"), type.key)
+    key := from_item(ir, ir.load('i64', key_slot), type.key)
     value := emit_load_item(ir, value_slot, type.value)
     release_entry := ->
       emit_release ir, key
@@ -147,12 +147,7 @@ emit_write_object := (
     field_type := field.type!
     pointer := emit_field_pointer(ir, object, info, name)
     emit_write_field ir, writer, name, unwind
-    emit_write
-      ir
-      writer
-      ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
-      field_type
-      unwind
+    emit_write ir, writer, ir.load(ir_type(field_type), pointer), field_type, unwind
   call_void_method ir, writer, 'end_object', [], unwind
   call_void_method ir, writer, 'leave', [], unwind if may_cycle
 
@@ -172,7 +167,7 @@ emit_write_field := (ir: IrBuilder, writer: Coder, name: String, unwind: () -> v
 # The value of an anonymous struct or a tuple at the index, borrowed.
 emit_borrowed_value := (ir: IrBuilder, values: String, type: Type, index: Int) ->
   value_type := value_types(type)[index]
-  ir.assign "load #{ir_type(value_type)}, ptr #{emit_value_pointer(ir, values, type, index)}"
+  ir.load ir_type(value_type), emit_value_pointer(ir, values, type, index)
 
 # Whether a value of the class or struct may hold itself, through its parts and theirs.
 may_hold_itself := (program: ProgramWide, type: ObjectType) ->

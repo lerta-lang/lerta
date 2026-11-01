@@ -190,8 +190,8 @@ class FieldValues
   given_slots: String[] = []
 
   values = -> [@value(i) for i in 0...@fields.length]
-  value = (i: Int) -> @ir.assign("load #{ir_type(@fields[i].type)}, ptr #{@slots[i]}")
-  given = (i: Int) -> @ir.assign("load i1, ptr #{@given_slots[i]}")
+  value = (i: Int) -> @ir.load(ir_type(@fields[i].type), @slots[i])
+  given = (i: Int) -> @ir.load('i1', @given_slots[i])
 
   unwind = ->
     emit_release_value @ir, @value(i), field.type for field, i in @fields
@@ -204,10 +204,10 @@ emit_read_fields := (
   for field in fields
     slot := ir.alloca(ir_type(field.type))
     empty := field.type is OptionalType then nil_constant(field.type) else 'zeroinitializer'
-    ir.emit "store #{ir_type(field.type)} #{empty}, ptr #{slot}"
+    ir.store ir_type(field.type), empty, slot
     values.slots.push slot
     given := ir.alloca('i1')
-    ir.emit "store i1 false, ptr #{given}"
+    ir.store 'i1', 'false', given
     values.given_slots.push given
   unwind := -> values.unwind()
   call_void_method ir, reader, 'begin_object', [], unwind
@@ -239,15 +239,15 @@ emit_read_field_of_key := (
     next := ir.fresh_label('json.key.next')
     args := ["ptr #{key}", field_name_args(ir, field.name)...]
     matches := call_method(ir, reader, 'is_field_key', bool_type, args, unwind)
-    ir.emit "br i1 #{matches}, label %#{read}, label %#{next}"
+    ir.branch_if matches, read, next
     ir.start_block read
     value := emit_read(ir, reader, field.type, unwind)
-    ir.emit "store #{ir_type(field.type)} #{value}, ptr #{values.slots[i]}"
-    ir.emit "store i1 true, ptr #{values.given_slots[i]}"
-    ir.emit "br label %#{done}"
+    ir.store ir_type(field.type), value, values.slots[i]
+    ir.store 'i1', 'true', values.given_slots[i]
+    ir.branch done
     ir.start_block next
   call_void_method ir, reader, 'skip_value', [], unwind
-  ir.emit "br label %#{done}"
+  ir.branch done
   ir.start_block done
 
 # The member that the kind of the value tells (see checker/json), in its box if it has one.
@@ -265,7 +265,7 @@ emit_read_union := (ir: IrBuilder, reader: Coder, type: UnionType) ->
     value := emit_read(ir, reader, member, unwind)
     boxed := is_boxed(member) then emit_box(ir, value, member) else value
     incoming.push "[ #{boxed}, %#{ir.current_block} ]"
-    ir.emit "br label %#{done}"
+    ir.branch done
   ir.start_block other
   expected := shared_string_constant(ir, format_type(type))
   call_void_method ir, reader, 'fail_expected', ["ptr #{expected}"], unwind

@@ -109,12 +109,12 @@ emit_filter_iter := (ir: IrBuilder, source: String, test: String, item: Type) ->
     found_label := body.fresh_label('filter.found')
     end_label := body.fresh_label('filter.end')
     is_held := load_state(body, kind, 2)
-    body.emit "br i1 #{is_held}, label %#{found_label}, label %#{search_label}"
+    body.branch_if is_held, found_label, search_label
     body.start_block search_label
     source_iter := load_state(body, kind, 0)
     has_more := emit_has_next(body, source_iter)
     emit_check_or_return_thrown body, bool_type
-    body.emit "br i1 #{has_more}, label %#{test_label}, label %#{end_label}"
+    body.branch_if has_more, test_label, end_label
     body.start_block test_label
     value := emit_next(body, source_iter, item)
     emit_check_or_return_thrown body, bool_type
@@ -123,14 +123,14 @@ emit_filter_iter := (ir: IrBuilder, source: String, test: String, item: Type) ->
       emit_release_value body, value, item
       emit_return_thrown body, bool_type
     emit_check_with body, release_and_return
-    body.emit "br i1 #{keep}, label %#{keep_label}, label %#{skip_label}"
+    body.branch_if keep, keep_label, skip_label
     body.start_block keep_label
     store_state body, kind, 3, value
     store_state body, kind, 2, 'true'
-    body.emit "br label %#{found_label}"
+    body.branch found_label
     body.start_block skip_label
     emit_release_value body, value, item
-    body.emit "br label %#{search_label}"
+    body.branch search_label
     body.start_block found_label
     body.emit 'ret i1 true'
     body.start_block end_label

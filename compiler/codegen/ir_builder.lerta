@@ -202,6 +202,17 @@ export class IrBuilder
 
   emit = (instruction: String) -> @body.push("  #{instruction}#{@debug_location()}")
 
+  # Loads a value of the IR type; the tag, as `, !tbaa !<n>`, says what the memory may alias.
+  load = (type: String, pointer: String, tag = '') -> @assign("load #{type}, ptr #{pointer}#{tag}")
+
+  store = (type: String, value: String, pointer: String, tag = '') ->
+    @emit "store #{type} #{value}, ptr #{pointer}#{tag}"
+
+  branch = (label: String) -> @emit("br label %#{label}")
+
+  branch_if = (condition: String, then_label: String, else_label: String) ->
+    @emit "br i1 #{condition}, label %#{then_label}, label %#{else_label}"
+
   # `, !dbg !<n>`: where the instruction comes from, if the module has source lines and the
   # function a place in the source.
   debug_location = ->
@@ -254,10 +265,10 @@ export emit_seldom_branch := (
 export emit_when := (ir: IrBuilder, condition: String, body: () -> void) ->
   then_label := ir.fresh_label('branch.then')
   end_label := ir.fresh_label('branch.end')
-  ir.emit "br i1 #{condition}, label %#{then_label}, label %#{end_label}"
+  ir.branch_if condition, then_label, end_label
   ir.start_block then_label
   body()
-  ir.emit "br label %#{end_label}"
+  ir.branch end_label
   ir.start_block end_label
 
 # Emits `then_body` to run where the condition holds, and `else_body` elsewhere.
@@ -267,13 +278,13 @@ export emit_if_else := (
   then_label := ir.fresh_label('branch.then')
   else_label := ir.fresh_label('branch.else')
   end_label := ir.fresh_label('branch.end')
-  ir.emit "br i1 #{condition}, label %#{then_label}, label %#{else_label}"
+  ir.branch_if condition, then_label, else_label
   ir.start_block then_label
   then_body()
-  ir.emit "br label %#{end_label}"
+  ir.branch end_label
   ir.start_block else_label
   else_body()
-  ir.emit "br label %#{end_label}"
+  ir.branch end_label
   ir.start_block end_label
 
 # A value of the IR type: `then_value` where the condition holds, computed only there, and
@@ -293,19 +304,19 @@ export emit_branch := (
 # Runs `body` with each index from 0 up to `count`, as an i64.
 export emit_count_up := (ir: IrBuilder, count: String, body: (String) -> void) ->
   counter := ir.alloca('i64')
-  ir.emit "store i64 0, ptr #{counter}"
+  ir.store 'i64', '0', counter
   loop := ir.fresh_label('count')
   step := ir.fresh_label('count.step')
   done := ir.fresh_label('count.done')
-  ir.emit "br label %#{loop}"
+  ir.branch loop
   ir.start_block loop
-  index := ir.assign("load i64, ptr #{counter}")
+  index := ir.load('i64', counter)
   is_done := ir.assign("icmp eq i64 #{index}, #{count}")
-  ir.emit "br i1 #{is_done}, label %#{done}, label %#{step}"
+  ir.branch_if is_done, done, step
   ir.start_block step
   body index
-  ir.emit "store i64 #{ir.assign("add i64 #{index}, 1")}, ptr #{counter}"
-  ir.emit "br label %#{loop}"
+  ir.store 'i64', ir.assign("add i64 #{index}, 1"), counter
+  ir.branch loop
   ir.start_block done
 
 # Runs `body` while `more`, which it emits at the start of each turn, gives true.
@@ -313,10 +324,10 @@ export emit_while := (ir: IrBuilder, more: () -> String, body: () -> void) ->
   loop := ir.fresh_label('while')
   step := ir.fresh_label('while.step')
   done := ir.fresh_label('while.done')
-  ir.emit "br label %#{loop}"
+  ir.branch loop
   ir.start_block loop
-  ir.emit "br i1 #{more()}, label %#{step}, label %#{done}"
+  ir.branch_if more(), step, done
   ir.start_block step
   body()
-  ir.emit "br label %#{loop}"
+  ir.branch loop
   ir.start_block done

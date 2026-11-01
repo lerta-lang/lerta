@@ -159,7 +159,7 @@ export emit_settling_closure := (g: Generator, closure: String, source: Type, ta
   generate_body := ->
     ir := body_generator.ir
     pointer := emit_capture_pointer(ir, '%closure', slots, 0)
-    callee := ir.assign("load ptr, ptr #{pointer}#{access_tag(ir, slots[0])}")
+    callee := ir.load('ptr', pointer, access_tag(ir, slots[0]))
     result := emit_closure_call(ir, callee, source, args)
     emit_exception_check body_generator
     emit_return body_generator, result, value
@@ -191,7 +191,7 @@ hold_weak_this := (g: Generator, scope: Map<String, CodegenLocal>) ->
   gone_label := ir.fresh_label('weak.gone')
   alive_label := ir.fresh_label('weak.alive')
   is_gone := ir.assign("icmp eq ptr #{object}, null")
-  ir.emit "br i1 #{is_gone}, label %#{gone_label}, label %#{alive_label}"
+  ir.branch_if is_gone, gone_label, alive_label
   ir.start_block gone_label
   emit_return g, '', void_type
   ir.start_block alive_label
@@ -269,7 +269,7 @@ generate_function_body := (
   for capture, i in captured
     { name, type, is_var } := capture
     pointer := emit_capture_pointer(ir, '%closure', slots, i)
-    value := ir.assign("load #{slots[i].ir_type}, ptr #{pointer}#{access_tag(ir, slots[i])}")
+    value := ir.load(slots[i].ir_type, pointer, access_tag(ir, slots[i]))
     cell := CellSlot(cell: value, is_owned: false)
     weak := capture.is_weak
     scope[name] =
@@ -343,8 +343,7 @@ export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo)
   g.result_type = info.type
   object := emit_allocate(ir, info)
   field_pointer := (field: FieldInfo) -> emit_field_pointer(ir, object, info, field.name.name)
-  for field in info.fields
-    ir.emit "store #{ir_type(field.type!)} zeroinitializer, ptr #{field_pointer(field)}"
+  ir.store ir_type(field.type!), 'zeroinitializer', field_pointer(field) for field in info.fields
   g.unwind_cleanup = ->
     mark := call_runtime(ir, 'i64 @lerta_drop_mark()', '')
     for field in info.fields
@@ -390,7 +389,7 @@ store_field := (g: Generator, object: String, info: ObjectInfo, field: FieldInfo
   pointer := emit_field_pointer(g.ir, object, info, field.name.name)
   stored := field.weak then weak_box_of(g, value, field.type!) else value
   emit_release g.ir, value if field.weak
-  g.ir.emit "store #{ir_type(field.type!)} #{stored}, ptr #{pointer}"
+  g.ir.store ir_type(field.type!), stored, pointer
 
 # A weak local or field holds the box of its object, which stays borrowed.
 export weak_box_of := (g: Generator, object: String, type: Type) ->
@@ -406,10 +405,10 @@ emit_return := (g: Generator, value: String, type: Type): void ->
   while_holding g, value, type, -> leave_scopes(g, 0)
   on_return value if on_return := g.on_return
   if exit := g.fused_exit
-    g.ir.emit "br label %#{exit.label}"
+    g.ir.branch exit.label
     return
   if coroutine := g.coroutine
-    g.ir.emit "br label %#{coroutine.end_label}"
+    g.ir.branch coroutine.end_label
     return
   result := g.result_type
   g.ir.emit returns_nothing(result) then 'ret void' else "ret #{ir_type(result)} #{value}"
@@ -564,7 +563,7 @@ generate_declaration := (g: Generator, declaration: Declaration) ->
     g.unchecked_floats[slot.pointer] = true if defers
     g.locals.define name, SlotLocal(type, weak, is_var: declaration.mutable, pointer: slot.pointer)
     return
-  ir.emit "store #{ir_type(type)} #{value}, ptr #{global.pointer}#{top_level_tag(ir)}"
+  ir.store ir_type(type), value, global.pointer, top_level_tag(ir)
   emit_mark_initialized ir, global
   g.locals.define name, top_level_slot(global, false)
 
@@ -597,5 +596,5 @@ generate_declared_value := (g: Generator, declaration: Declaration, is_held_as_i
 
 export store_in_slot := (g: Generator, value: String, type: Type) ->
   pointer := g.ir.alloca(ir_type(type))
-  g.ir.emit "store #{ir_type(type)} #{value}, ptr #{pointer}"
+  g.ir.store ir_type(type), value, pointer
   SlotLocal pointer, type

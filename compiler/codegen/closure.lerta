@@ -47,7 +47,7 @@ emit_code_pointer := (ir: IrBuilder, closure: String) ->
 # Calls a closure with the operands of its arguments; the closure is borrowed.
 export emit_closure_call := (ir: IrBuilder, closure: String, type: Type, args: String[]) ->
   { params, result } := function_type_of(type)
-  code := ir.assign("load ptr, ptr #{emit_code_pointer(ir, closure)}#{access_tag(ir, CODE)}")
+  code := ir.load('ptr', emit_code_pointer(ir, closure), access_tag(ir, CODE))
   all_args := ["ptr #{closure}"]
   all_args.push "#{ir_type(param)} #{arg}" for (param, arg) in params.zip(args)
   return_type := ir_return_type(result)
@@ -87,19 +87,19 @@ export emit_local_closure := (
 ) ->
   layout := closure_ir_type(slots)
   closure := emit_laundered(ir, ir.alloca(layout))
-  ir.emit "store i64 #{LERTA_IMMORTAL}, ptr #{closure}"
+  ir.store 'i64', LERTA_IMMORTAL, closure
   type := ir.assign("getelementptr #{layout}, ptr #{closure}, i32 0, i32 1")
-  ir.emit "store ptr null, ptr #{type}"
+  ir.store 'ptr', 'null', type
   emit_fill_closure ir, closure, symbol, slots, operands
   closure
 
 emit_fill_closure := (
   ir: IrBuilder, closure: String, symbol: String, slots: HeapField[], operands: String[]
 ) ->
-  ir.emit "store ptr #{symbol}, ptr #{emit_code_pointer(ir, closure)}#{access_tag(ir, CODE)}"
+  ir.store 'ptr', symbol, emit_code_pointer(ir, closure), access_tag(ir, CODE)
   for slot, i in slots
     pointer := emit_capture_pointer(ir, closure, slots, i)
-    ir.emit "store #{slot.ir_type} #{operands[i]}, ptr #{pointer}#{access_tag(ir, slot)}"
+    ir.store slot.ir_type, operands[i], pointer, access_tag(ir, slot)
 
 define_closure_type := (ir: IrBuilder, type: String, name: String, slots: HeapField[]) ->
   define := (module: IrModule) ->

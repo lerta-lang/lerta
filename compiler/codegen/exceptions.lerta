@@ -52,7 +52,7 @@ export holding := (g: Generator, operand: String, type: Type, rest: () -> String
 
 # The exception is taken: there is none pending.
 emit_clear_exception := (ir: IrBuilder) ->
-  ir.emit "store #{INTERFACE_IR_TYPE} zeroinitializer, ptr #{exception_global(ir)}"
+  ir.store INTERFACE_IR_TYPE, 'zeroinitializer', exception_global(ir)
 
 # Returns at once, from code that is no function of the program, if the call before it has thrown.
 export emit_check_or_return_thrown := (ir: IrBuilder, type: Type) ->
@@ -70,7 +70,7 @@ export emit_exception_check_if := (g: Generator, thrown: String) ->
 # Runs `unwind` if the call before it has thrown, in code that is no function of the program, as an
 # Iter's has_next and next are: it releases what that code holds and returns.
 export emit_check_with := (ir: IrBuilder, unwind: () -> void) ->
-  data := ir.assign("load ptr, ptr #{exception_global(ir)}#{pointer_tag(ir)}")
+  data := ir.load('ptr', exception_global(ir), pointer_tag(ir))
   emit_unwind_if ir, ir.assign("icmp ne ptr #{data}, null"), unwind
 
 emit_unwind_if := (ir: IrBuilder, thrown: String, unwind: () -> void) ->
@@ -125,13 +125,13 @@ emit_unwind := (g: Generator) ->
   if handler == nil
     cleanup() if cleanup := g.unwind_cleanup
   if handler
-    ir.emit "br label %#{handler.label}"
+    ir.branch handler.label
     return
   if exit := g.fused_exit
     exit.unwind()
     return
   if coroutine := g.coroutine
-    ir.emit "br label %#{coroutine.end_label}"
+    ir.branch coroutine.end_label
     return
   emit_return_thrown ir, g.result_type
 
@@ -148,7 +148,7 @@ export release_held := (g: Generator, scope_depth: Int, temporary_depth: Int) ->
 # there, goes on with its trace; any other throw starts a new one, even of an object thrown before,
 # whose trace tells where that throw went, not this one.
 export emit_throw_error := (g: Generator, value: String, rethrows: Bool) ->
-  g.ir.emit "store #{INTERFACE_IR_TYPE} #{value}, ptr #{exception_global(g.ir)}"
+  g.ir.store INTERFACE_IR_TYPE, value, exception_global(g.ir)
   emit_traced_unwind g, rethrows then TRACE_PUSH else TRACE_START
   g.ir.start_unreachable()
   'poison'
@@ -179,14 +179,14 @@ export generate_try := (g: Generator, try_expression: Try) ->
         generate_block g, body, define
         ''
     incoming.push "[ #{value == '' then 'poison' else value}, %#{ir.current_block} ]"
-    ir.emit "br label %#{done_label}"
+    ir.branch done_label
   with_handler g, catches_label, -> generate_value(try_expression.body, no_locals)
   ir.start_block catches_label
   # A catch's own exception goes through the finally block, if there is one.
   catch_handler := finally_body then rethrow_label
   generate_catch g, clause, catch_handler, generate_value for clause in try_expression.catches
   # No catch takes the exception.
-  ir.emit "br label %#{rethrow_label}"
+  ir.branch rethrow_label
   g.finallies.pop() if g.finallies.length > finally_depth
   ir.start_block rethrow_label
   run_finally_unwinding g, finally_body if finally_body
@@ -205,14 +205,14 @@ generate_catch := (
   generate_value: (Statement[], (Map<String, CodegenLocal>) -> void) -> void
 ) ->
   ir := g.ir
-  exception := ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
+  exception := ir.load(INTERFACE_IR_TYPE, exception_global(ir))
   caught_type := type_of(g, clause.name)
   data := emit_interface_data(ir, exception)
   takes_any := is_kind(caught_type, INTERFACE)
   matched := takes_any then 'true' else emit_type_test(ir, data, caught_type)
   clause_label := ir.fresh_label('catch')
   next_label := ir.fresh_label('catch.next')
-  ir.emit "br i1 #{matched}, label %#{clause_label}, label %#{next_label}"
+  ir.branch_if matched, clause_label, next_label
   ir.start_block clause_label
   emit_clear_exception ir
   caught := takes_any then exception else data
@@ -230,7 +230,7 @@ generate_catch := (
 # back after.
 run_finally_unwinding := (g: Generator, finally_body: Statement[]) ->
   ir := g.ir
-  set_aside := ir.assign("load #{INTERFACE_IR_TYPE}, ptr #{exception_global(ir)}")
+  set_aside := ir.load(INTERFACE_IR_TYPE, exception_global(ir))
   trace := call_runtime(ir, 'ptr @lerta_trace_save()', '')
   emit_clear_exception ir
   depth := g.temporaries.length
@@ -238,7 +238,7 @@ run_finally_unwinding := (g: Generator, finally_body: Statement[]) ->
   g.temporaries.push { operand: trace, owned: TRACE }
   generate_block g, finally_body, no_locals
   pop_temporaries g, depth
-  ir.emit "store #{INTERFACE_IR_TYPE} #{set_aside}, ptr #{exception_global(ir)}"
+  ir.store INTERFACE_IR_TYPE, set_aside, exception_global(ir)
   call_void_runtime ir, 'void @lerta_trace_restore(ptr)', "ptr #{trace}"
 
 # Releases the scopes from `scope_depth` inward, innermost first, as a jump out of them does, and

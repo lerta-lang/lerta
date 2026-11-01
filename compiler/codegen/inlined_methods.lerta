@@ -160,7 +160,7 @@ export generate_inlined_method := (
   inner.result_type = type.result
   result_type := ir_type(type.result)
   result_slot := ir.alloca(result_type)
-  inner.on_return = (value) -> ir.emit("store #{result_type} #{value}, ptr #{result_slot}")
+  inner.on_return = (value) -> ir.store(result_type, value, result_slot)
   exit_label := ir.fresh_label('inlined.exit')
   unwind := -> at_call(-> emit_traced_unwind(g, TRACE_PUSH))
   inner.fused_exit = { unwind, label: exit_label }
@@ -185,7 +185,7 @@ export generate_inlined_method := (
   inner.locals.pop()
   ir.start_block exit_label
   locate g, position
-  result := ir.assign("load #{result_type}, ptr #{result_slot}")
+  result := ir.load(result_type, result_slot)
   release_scope g, arguments_scope
   g.locals.pop()
   result
@@ -300,7 +300,7 @@ go_through_receiver := (
   g.handlers.pop()
   g.locals.scopes.truncate base_depth
   next_label := ir.fresh_label('inlined.next')
-  ir.emit "br label %#{next_label}"
+  ir.branch next_label
   ir.start_block unwind_label
   locate inner, loop_position
   emit_traced_unwind inner, TRACE_PUSH

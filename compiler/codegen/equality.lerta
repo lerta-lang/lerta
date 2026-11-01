@@ -104,14 +104,14 @@ emit_equals := (
       info := info_of(program, type)
       field_equals := (name: String, field_type: Type) ->
         load := (object: String) ->
-          ir.assign "load #{ir_type(field_type)}, ptr #{emit_field_pointer(ir, object, info, name)}"
+          ir.load ir_type(field_type), emit_field_pointer(ir, object, info, name)
         nested field_type, load(left), load(right)
       all_of ir, [field_equals(field.name.name, field.type!) for field in info.fields]
     when is_one_of_kinds(type, [RECORD, TUPLE])
       value_equals := (value_type: Type, index: Int) ->
         load := (object: String) ->
           pointer := emit_value_pointer(ir, object, type, index)
-          ir.assign "load #{ir_type(value_type)}, ptr #{pointer}"
+          ir.load ir_type(value_type), pointer
         nested value_type, load(left), load(right)
       all_of ir, [value_equals(each, i) for each, i in value_types(type)]
     when type is ArrayType
@@ -165,13 +165,13 @@ emit_hash := (ir: IrBuilder, program: ProgramWide, value: String, type: Type): S
       info := info_of(program, type)
       field_hash := (name: String, field_type: Type) ->
         pointer := emit_field_pointer(ir, value, info, name)
-        loaded := ir.assign("load #{ir_type(field_type)}, ptr #{pointer}")
+        loaded := ir.load(ir_type(field_type), pointer)
         emit_hash_by_contents ir, program, loaded, field_type
       combine ir, [field_hash(field.name.name, field.type!) for field in info.fields]
     when is_one_of_kinds(type, [RECORD, TUPLE])
       value_hash := (value_type: Type, index: Int) ->
         pointer := emit_value_pointer(ir, value, type, index)
-        loaded := ir.assign("load #{ir_type(value_type)}, ptr #{pointer}")
+        loaded := ir.load(ir_type(value_type), pointer)
         emit_hash_by_contents ir, program, loaded, value_type
       combine ir, [value_hash(each, i) for each, i in value_types(type)]
     when type is ArrayType

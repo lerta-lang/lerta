@@ -90,8 +90,8 @@ assign_weak := (g: Generator, assignment: Assignment, pointer: String, type: Typ
   value := generate(g, assignment.value)
   box := weak_box_of(g, value, type)
   emit_release ir, value
-  replaced := ir.assign("load ptr, ptr #{pointer}")
-  ir.emit "store ptr #{box}, ptr #{pointer}"
+  replaced := ir.load('ptr', pointer)
+  ir.store 'ptr', box, pointer
   emit_release ir, replaced
 
 export field_pointer := (g: Generator, object: String, type: Type, name: String) ->
@@ -208,7 +208,7 @@ assign_through := (
   g: Generator, assignment: Assignment, pointer: String, type: Type, tag: String
 ) ->
   ir := g.ir
-  load := -> ir.assign("load #{ir_type(type)}, ptr #{pointer}#{tag}")
+  load := -> ir.load(ir_type(type), pointer, tag)
   operand := assignment.value
   is_plain := assignment.operator == '='
   # `x += e` of a Float or a Float32, where e is a tree (see float_tree) or a leaf, is a tree whose
@@ -224,7 +224,7 @@ assign_through := (
   old := is_plain then '' else load()
   result := combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
   replaced := is_plain and ownership(type) != NONE then load() else ''
-  ir.emit "store #{ir_type(type)} #{result}, ptr #{pointer}#{tag}"
+  ir.store ir_type(type), result, pointer, tag
   emit_release_value ir, replaced, type if not replaced.is_empty()
 
 # The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.

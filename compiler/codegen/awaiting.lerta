@@ -27,7 +27,7 @@ export generate_awaiting_function := (
   g.unwind_cleanup = -> call_void_runtime(body_ir, reject, 'ptr %promise')
   end := ->
     emit_release g.ir, '%promise'
-    g.ir.emit "br label %#{g.coroutine!.free_label}"
+    g.ir.branch g.coroutine!.free_label
   generate_coroutine g, body_symbol, ['ptr %promise', params...], generate_body, end
   ir := IrBuilder(g.ir.module)
   promise := call_runtime(ir, 'ptr @lerta_promise_new(i32)', "i32 #{item_kind(value)}")
@@ -40,7 +40,7 @@ export generate_awaiting_function := (
 emit_resolve := (ir: IrBuilder, type: Type, result: String) ->
   if not returns_nothing(type)
     slot := call_runtime(ir, 'ptr @lerta_promise_slot(ptr)', 'ptr %promise')
-    ir.emit "store #{ir_type(type)} #{result}, ptr #{slot}"
+    ir.store ir_type(type), result, slot
   call_void_runtime ir, 'void @lerta_promise_resolve(ptr)', 'ptr %promise'
 
 # The value of the promise, which the body waits for if it is pending; its exception is thrown.
@@ -62,15 +62,15 @@ emit_await := (g: Generator, promise: String, value: Type) ->
   is_pending := call_runtime(ir, 'i1 @lerta_promise_wait_in(ptr, ptr, ptr)', args)
   wait_label := ir.fresh_label('await.wait')
   settled_label := ir.fresh_label('await.settled')
-  ir.emit "br i1 #{is_pending}, label %#{wait_label}, label %#{settled_label}"
+  ir.branch_if is_pending, wait_label, settled_label
   ir.start_block wait_label
   emit_wait g
-  ir.emit "br label %#{settled_label}"
+  ir.branch settled_label
   ir.start_block settled_label
   result_args := "ptr #{promise}, ptr %promise"
   slot := call_runtime(ir, 'ptr @lerta_promise_result_in(ptr, ptr)', result_args)
   emit_exception_check g
-  result := returns_nothing(value) then '' else ir.assign("load #{ir_type(value)}, ptr #{slot}")
+  result := returns_nothing(value) then '' else ir.load(ir_type(value), slot)
   emit_retain_value ir, result, value if not result.is_empty()
   emit_release ir, promise
   result

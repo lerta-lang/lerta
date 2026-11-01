@@ -118,7 +118,7 @@ export generate_fused_loop := (
     g.fused_copies = copies
     generate_loop_body g, body, exit_label, resume_label, define, outer_depth
     g.fused_copies = outer_copies
-    ir.emit "br label %#{resume_label}"
+    ir.branch resume_label
     ir.start_block resume_label
     g.locals.scopes.truncate outer_depth
   params := function_type_of(type_of(inner, literal)).params
@@ -303,7 +303,7 @@ export generate_in_place := (
   has_value := not returns_nothing(type.result)
   result_slot := has_value then ir.alloca(result_type) else ''
   if has_value
-    inner.on_return = (value) -> ir.emit("store #{result_type} #{value}, ptr #{result_slot}")
+    inner.on_return = (value) -> ir.store(result_type, value, result_slot)
   exit_label := ir.fresh_label('in_place.exit')
   inner.fused_exit = { unwind, label: exit_label }
   scope := inner.locals.push()
@@ -315,4 +315,4 @@ export generate_in_place := (
   generate_last_statement inner, literal.body, type.result
   inner.locals.pop()
   ir.start_block exit_label
-  has_value then ir.assign("load #{result_type}, ptr #{result_slot}") else ''
+  has_value then ir.load(result_type, result_slot) else ''

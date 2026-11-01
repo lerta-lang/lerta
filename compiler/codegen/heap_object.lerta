@@ -157,7 +157,7 @@ export record_field_index := (type: RecordType, name: String) ->
 # A class's object starts without a weak box.
 export emit_allocate := (ir: IrBuilder, info: ObjectInfo) ->
   object := emit_heap_allocate(ir, object_ir_type(info.type), type_symbol(info.type))
-  ir.emit "store ptr null, ptr #{emit_weak_slot_pointer(ir, object, info)}" if is_class(info)
+  ir.store 'ptr', 'null', emit_weak_slot_pointer(ir, object, info) if is_class(info)
   object
 
 # Its type has the linkage.
@@ -227,7 +227,7 @@ runtime_type := (ir: IrBuilder, name: String) ->
 # The type in the object's header.
 export emit_object_type := (ir: IrBuilder, object: String) ->
   pointer := ir.assign("getelementptr { i64, ptr }, ptr #{object}, i32 0, i32 1")
-  ir.assign "load ptr, ptr #{pointer}"
+  ir.load 'ptr', pointer
 
 # A value of the IR type, computed by `of_member` for the member of the union that the object is:
 # each member but the last is tested in turn.
@@ -242,11 +242,11 @@ export emit_member_dispatch := (
     if not is_last
       matched := ir.fresh_label('member.matched')
       test := emit_type_test(ir, object, member)
-      ir.emit "br i1 #{test}, label %#{matched}, label %#{next}"
+      ir.branch_if test, matched, next
       ir.start_block matched
     value := of_member(member)
     block := ir.current_block
-    ir.emit "br label %#{done}"
+    ir.branch done
     ir.start_block next if not is_last
     incoming.push "[ #{value}, %#{block} ]"
   ir.start_block done
@@ -287,7 +287,7 @@ export emit_values := (ir: IrBuilder, type: Type, values: String[]) ->
   object := emit_heap_allocate(ir, layout, values_type_symbol(type))
   for value_type, i in value_types(type)
     pointer := emit_heap_field_pointer(ir, layout, object, i)
-    ir.emit "store #{ir_type(value_type)} #{values[i]}, ptr #{pointer}"
+    ir.store ir_type(value_type), values[i], pointer
   object
 
 # A new anonymous struct, which takes over the values, owned, given by field name.
@@ -302,7 +302,7 @@ export emit_value_pointer := (ir: IrBuilder, object: String, type: Type, index: 
 export emit_value_at := (ir: IrBuilder, object: String, type: Type, index: Int) ->
   value_type := value_types(type)[index]
   pointer := emit_value_pointer(ir, object, type, index)
-  value := ir.assign("load #{ir_type(value_type)}, ptr #{pointer}")
+  value := ir.load(ir_type(value_type), pointer)
   emit_retain_value ir, value, value_type
   value
 
@@ -323,7 +323,7 @@ cell_layout := (ir: IrBuilder, type: Type) ->
 export emit_cell := (ir: IrBuilder, type: Type, value: String) ->
   layout := cell_layout(ir, type)
   cell := emit_heap_allocate(ir, layout, layout_type(layout))
-  ir.emit "store #{ir_type(type)} #{value}, ptr #{emit_cell_pointer(ir, type, cell)}"
+  ir.store ir_type(type), value, emit_cell_pointer(ir, type, cell)
   cell
 
 # The pointer to the cell's value, which a var's reads and writes go through.
