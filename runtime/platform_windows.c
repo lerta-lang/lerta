@@ -22,6 +22,16 @@ static char *to_utf8(const wchar_t *utf16) {
   return utf8;
 }
 
+// Calls `call` with both texts as UTF-16, freeing them after; false if either is not valid UTF-8.
+static bool with_utf16(const char *a, const char *b, bool (*call)(wchar_t *a, wchar_t *b)) {
+  wchar_t *wide_a = to_utf16(a);
+  wchar_t *wide_b = to_utf16(b);
+  bool result = wide_a != NULL && wide_b != NULL && call(wide_a, wide_b);
+  free(wide_a);
+  free(wide_b);
+  return result;
+}
+
 static LONG CALLBACK on_exception(EXCEPTION_POINTERS *exception) {
   if (exception->ExceptionRecord->ExceptionCode == EXCEPTION_STACK_OVERFLOW) {
     lerta_panic("stack overflow");
@@ -195,13 +205,10 @@ int64_t lerta_os_read_stdin(uint8_t *buffer, int64_t size) {
   return count < 0 && GetLastError() == ERROR_BROKEN_PIPE ? 0 : count;
 }
 
+static bool copy_file(wchar_t *from, wchar_t *to) { return CopyFileW(from, to, FALSE); }
+
 bool lerta_os_copy_file(const char *from, const char *to) {
-  wchar_t *wide_from = to_utf16(from);
-  wchar_t *wide_to = to_utf16(to);
-  bool copied = wide_from != NULL && wide_to != NULL && CopyFileW(wide_from, wide_to, FALSE);
-  free(wide_from);
-  free(wide_to);
-  return copied;
+  return with_utf16(from, to, copy_file);
 }
 
 
@@ -227,37 +234,33 @@ static bool links_to_dir(const wchar_t *target, const wchar_t *path) {
   return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY);
 }
 
+static void replace_slashes(wchar_t *path) {
+  for (wchar_t *c = path; *c != L'\0'; c++) {
+    if (*c == L'/') *c = L'\\';
+  }
+}
+
 // Windows reads only backslashes in a link's target. Making a link needs no privilege in
 // developer mode, which the flag asks for.
+static bool make_link(wchar_t *target, wchar_t *path) {
+  replace_slashes(target);
+  replace_slashes(path);
+  DWORD flags = SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE;
+  if (links_to_dir(target, path)) flags |= SYMBOLIC_LINK_FLAG_DIRECTORY;
+  return CreateSymbolicLinkW(path, target, flags);
+}
+
 bool lerta_os_make_link(const char *target, const char *path) {
-  wchar_t *wide_target = to_utf16(target);
-  wchar_t *wide_path = to_utf16(path);
-  bool made = false;
-  if (wide_target != NULL && wide_path != NULL) {
-    for (wchar_t *c = wide_target; *c != L'\0'; c++) {
-      if (*c == L'/') *c = L'\\';
-    }
-    for (wchar_t *c = wide_path; *c != L'\0'; c++) {
-      if (*c == L'/') *c = L'\\';
-    }
-    DWORD flags = SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE;
-    if (links_to_dir(wide_target, wide_path)) flags |= SYMBOLIC_LINK_FLAG_DIRECTORY;
-    made = CreateSymbolicLinkW(wide_path, wide_target, flags);
-  }
-  free(wide_target);
-  free(wide_path);
-  return made;
+  return with_utf16(target, path, make_link);
 }
 
 // Windows compares the names of variables without case.
+static bool same_env_name(wchar_t *a, wchar_t *b) {
+  return CompareStringOrdinal(a, -1, b, -1, TRUE) == CSTR_EQUAL;
+}
+
 bool lerta_os_same_env_name(const char *a, const char *b) {
-  wchar_t *wide_a = to_utf16(a);
-  wchar_t *wide_b = to_utf16(b);
-  bool same = wide_a != NULL && wide_b != NULL &&
-              CompareStringOrdinal(wide_a, -1, wide_b, -1, TRUE) == CSTR_EQUAL;
-  free(wide_a);
-  free(wide_b);
-  return same;
+  return with_utf16(a, b, same_env_name);
 }
 
 bool lerta_os_is_separator(char c) {
