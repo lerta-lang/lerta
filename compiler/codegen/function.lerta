@@ -40,7 +40,8 @@ from './heap_object'
 import emit_when, IrBuilder, IrModule from './ir_builder'
 import
   constructor_symbol, default_entry_symbol, emit_release, emit_release_stored, emit_retain,
-  emit_retain_value, ir_return_type, ir_type, ownership, returns_nothing, special_method_symbol
+  emit_retain_value, ir_return_type, ir_type, ownership, returns_nothing, special_method_symbol,
+  typed_params
 from './lerta_ir'
 import referred_local, top_level_slot from './references'
 import call_runtime, call_void_runtime from './runtime_calls'
@@ -163,8 +164,7 @@ export emit_settling_closure := (g: Generator, closure: String, source: Type, ta
     result := emit_closure_call(ir, callee, source, args)
     emit_exception_check body_generator
     emit_return body_generator, result, value
-  typed_params := ["#{ir_type(param)} %p#{i}" for param, i in params]
-  all_params := ['ptr %closure', typed_params...]
+  all_params := ['ptr %closure', typed_params(params)...]
   generate_awaiting_function body_generator, 'private ', symbol, all_params, value, generate_body
   emit_closure g.ir, symbol, name, slots, [closure]
 
@@ -218,7 +218,7 @@ export generate_function := (
   params: String[]
   params.push 'ptr %closure' if captures != nil
   params.push "#{ir_type(this_type)} %this" if this_type
-  params.push "#{ir_type(param)} %p#{i}" for param, i in type.params
+  params.append typed_params(type.params)
   generate_body := (result: Type) -> generate_function_body(g, literal, this_type, captures, result)
   if literal.yields
     item := iterable_item(type.result)!
@@ -313,7 +313,7 @@ generate_default_entry := (
   g.locals.pop()
   params: String[]
   params.push "#{ir_type(this_type)} %this" if this_type
-  params.push "#{ir_type(type.params[i])} %p#{i}" for i in 0...given
+  params.append typed_params(type.params.slice(0, given))
   entry := default_entry_symbol(symbol, given)
   finish g, "#{linkage}#{ir_return_type(type.result)} #{entry}(#{params.join(', ')})"
 
@@ -321,11 +321,9 @@ generate_default_entry := (
 export generate_last_statement := (g: Generator, body: Statement[], result: Type) ->
   has_result := not is_kind(result, 'void')
   last := body.last()
-  if last
-    value := last as Expression?
-    if value
-      return emit_return(g, generate(g, value), type_at_use(g, value)) if has_result
-    generate_statement g, last
+  value := last as Expression?
+  return emit_return(g, generate(g, value), type_at_use(g, value)) if value and has_result
+  generate_statement g, last if last
   if has_result
     g.ir.emit 'unreachable'
   else
@@ -354,11 +352,10 @@ export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo)
     call_void_runtime ir, 'void @lerta_free_unfinished(ptr, ptr, i64)', args
   arguments := [field for field in info.fields when is_argument(field)]
   given := (field: FieldInfo) -> "%given#{argument_index(arguments, field)}"
-  for field in arguments
-    store_argument := ->
-      store_field g, object, info, field, "%p#{argument_index(arguments, field)}"
+  for field, i in arguments
+    store_argument := -> store_field(g, object, info, field, "%p#{i}")
     if field.has_default
-      emit_when ir, given(field), store_argument
+      emit_when ir, "%given#{i}", store_argument
     else
       store_argument()
   scope := g.locals.push()

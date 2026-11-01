@@ -4,7 +4,9 @@ import
   access_tag, fixed, HeapField, plain_field
 from './heap_object'
 import IrBuilder, IrModule from './ir_builder'
-import ir_return_type, ir_type, LERTA_IMMORTAL, prefixed_symbol, suffixed_symbol from './lerta_ir'
+import
+  ir_return_type, ir_type, LERTA_IMMORTAL, prefixed_symbol, suffixed_symbol, typed_params
+from './lerta_ir'
 import emit_valueless_call from './runtime_calls'
 import FunctionType, Type from '../types'
 
@@ -18,15 +20,15 @@ export emit_function_closure := (ir: IrBuilder, symbol: String, type: Type) ->
   { params, result } := function_type_of(type)
   thunk := prefixed_symbol('lerta.thunk', symbol)
   define := (module: IrModule) ->
-    typed_params := ["#{ir_type(param)} %p#{i}" for param, i in params]
+    params_list := typed_params(params)
     return_type := ir_return_type(result)
-    call := "call #{return_type} #{symbol}(#{typed_params.join(', ')})"
+    call := "call #{return_type} #{symbol}(#{params_list.join(', ')})"
     body :=
       if return_type == 'void'
         ["  #{call}", '  ret void']
       else
         ["  %result = #{call}", "  ret #{return_type} %result"]
-    all_params := ['ptr %closure', typed_params...]
+    all_params := ['ptr %closure', params_list...]
     signature := "#{return_type} #{thunk}(#{all_params.join(', ')})"
     module.define_function "private #{signature}", body
   ir.module.define_once thunk, define

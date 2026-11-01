@@ -1,5 +1,6 @@
 # Objects on the heap with fields: classes and structs, anonymous structs and tuples, and cells
 # (see docs/internals.md#objects).
+import all_but_last from '../arrays'
 import FieldInfo, info_of, ObjectInfo from '../checker/object_types'
 import ProgramWide from '../checker/shared'
 import emit_box_test from './boxes'
@@ -52,8 +53,7 @@ export plain_field := (ir: String) -> HeapField(ir_type: ir, owned: NONE)
 
 # The LLVM struct type of a heap object with the fields: the header, then the fields.
 export heap_object_type := (fields: HeapField[]) ->
-  types := ['i64', 'ptr']
-  types.push field.ir_type for field in fields
+  types := ['i64', 'ptr', [field.ir_type for field in fields]...]
   "{ #{types.join(', ')} }"
 
 # Defines the LLVM struct type `layout` with the fields, and the type of its objects (see
@@ -239,19 +239,19 @@ export emit_member_dispatch := (
 ) ->
   done := ir.fresh_label('member.done')
   incoming: String[]
-  for member, i in members
-    is_last := i == members.length - 1
-    next := is_last then '' else ir.fresh_label('member.next')
-    if not is_last
-      matched := ir.fresh_label('member.matched')
-      test := emit_type_test(ir, object, member)
-      ir.branch_if test, matched, next
-      ir.start_block matched
+  emit_member := (member: Type) ->
     value := of_member(member)
-    block := ir.current_block
+    incoming.push "[ #{value}, %#{ir.current_block} ]"
     ir.branch done
-    ir.start_block next if not is_last
-    incoming.push "[ #{value}, %#{block} ]"
+  # The last member is what the object is where it is none of the others.
+  for member in all_but_last(members)
+    next := ir.fresh_label('member.next')
+    matched := ir.fresh_label('member.matched')
+    ir.branch_if emit_type_test(ir, object, member), matched, next
+    ir.start_block matched
+    emit_member member
+    ir.start_block next
+  emit_member members.last()!
   ir.start_block done
   return '' if result_type == 'void'
   ir.assign "phi #{result_type} #{incoming.join(', ')}"
