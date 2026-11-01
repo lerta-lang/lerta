@@ -5,7 +5,9 @@ import Reader from 'std:io'
 import connect_tcp, Socket from 'std:net'
 import scan from 'std:scanner'
 import time from 'std:time'
-import CHUNK_SIZE, chunk_bytes, ChunkedBody, LAST_CHUNK, MAX_LINE, well_formed from './http_chunks'
+import
+  CHUNK_SIZE, chunk_bytes, ChunkedBody, ended_early, LAST_CHUNK, MAX_LINE, SizedBody, well_formed
+from './http_chunks'
 import Body, check_field, Headers, is_token, keeps_alive, Response from './http_message'
 import bytes_of from './utf8'
 
@@ -94,8 +96,12 @@ export class Client
         else
           socket.close()
       { reader } := socket
-      chunks := chunked then ChunkedBody(reader, name: 'response', room: INT_MAX)
-      body := BodyChunks(socket, finish, left, chunks)
+      chunks: ChunkedBody | SizedBody =
+        if chunked
+          ChunkedBody reader, name: 'response', room: INT_MAX
+        else
+          SizedBody reader, left, name: 'response'
+      body := BodyChunks(socket, finish, chunks)
       # A body that is empty by its framing does not hold the connection until it is read.
       body.end() if left == 0 and not chunked
       Response body: Reader(-> await body.next()), status: head.status, headers: head.headers
@@ -252,7 +258,7 @@ read_head := (socket: Socket, request: Outgoing, writes: Bool) ->
   while head.status < 200
     # What follows a 101 is another protocol, which the client does not speak.
     throw IOError('switching protocols not supported') if head.status == 101
-    head = await read_any_head(reader, await read_line(reader) ? throw ended_early())
+    head = await read_any_head(reader, await read_line(reader) ? throw ended_early('response'))
   head
 
 # The first line of the response to the request, which is written first if `writes`; a failure
@@ -293,7 +299,7 @@ read_fields := (reader: Reader) ->
       headers.append name, value.trim()
     catch _: ValueError
       throw malformed()
-  throw ended_early()
+  throw ended_early('response')
 
 folded := (field: (String, String), line: String) ->
   (name, value) := field
@@ -304,8 +310,6 @@ read_line := (reader: Reader) -> await well_formed(reader.read_line(MAX_LINE), '
 MAX_FIELDS := 256
 
 malformed := -> IOError('a malformed response')
-
-ended_early := -> IOError('a response ended early')
 
 # How the body of a response is told to end: `left`, the bytes of a body of a Content-Length, or nil
 # for one that ends with the connection; or `chunked`.
@@ -328,16 +332,14 @@ framing := (head: Head, method: String) ->
 class BodyChunks
   socket: Socket
   finish: () -> void
-  # The bytes left of a body that is not chunked; nil for one that ends with the connection.
-  left: Int?
-  const chunks: ChunkedBody?
+  chunks: ChunkedBody | SizedBody
   ended = false
 
   next = ->
     return nil if @ended
     chunk :=
       try
-        await (@chunks then @chunks.next() else @next_sized())
+        await @chunks.next()
       # A cancelled read leaves the reader where it was, for the next read to go on from.
       catch error: IOError
         @socket.close()
@@ -348,13 +350,6 @@ class BodyChunks
   end = ->
     @ended = true
     @finish()
-
-  next_sized = ->
-    left := @left ? return await @socket.reader.read(CHUNK_SIZE)
-    return nil if left == 0
-    chunk := await @socket.reader.read(min(left, CHUNK_SIZE)) ? throw ended_early()
-    @left = left - chunk.length
-    chunk
 
 # The request that a redirect asks for, or nil for a response that is none. A 303, and a 301 or a
 # 302 to POST, as browsers do, ask for a GET without the body. A request to another host or port

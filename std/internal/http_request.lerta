@@ -5,7 +5,7 @@ import TimeoutError from 'std:async'
 import LineTooLongError, Reader from 'std:io'
 import Socket from 'std:net'
 import Deadline from './deadline'
-import CHUNK_SIZE, ChunkedBody from './http_chunks'
+import ChunkedBody, SizedBody from './http_chunks'
 import Headers, keeps_alive, Request from './http_message'
 
 # Where a server listens, at a free port if `port` is 0, and how much and how long it waits for of a
@@ -56,8 +56,12 @@ export read_rest_of_request := (
   length := content_length(headers)
   throw RequestError(status: 413, message: 'content too large') if length > options.max_body
   { max_body, body_timeout } := options
-  chunks := chunked then ChunkedBody(reader, name: 'body', room: max_body)
-  body := BodyChunks(reader, chunks, deadline, left: length, seconds: body_timeout)
+  chunks: ChunkedBody | SizedBody =
+    if chunked
+      ChunkedBody reader, name: 'body', room: max_body
+    else
+      SizedBody reader, name: 'body', left: length
+  body := BodyChunks(chunks, deadline, seconds: body_timeout)
   # HTTP/1.0 has no 100 Continue.
   expects := (headers.get('expect') ? '').to_lower() == '100-continue'
   body.continue_on = socket if expects and version == 'HTTP/1.1' and (chunked or length > 0)
@@ -142,13 +146,11 @@ url_of := (host: String, target: String) ->
   return target if lower.starts_with('http://') or lower.starts_with('https://')
   target.starts_with('/') then "http://#{host}#{target}"
 
-# The chunks of a body, read from the connection's reader, each within `seconds`, which for `chunks`
-# bounds the lines read before a chunk too, as the trailer: `left` bytes, or those of `chunks`. A
-# read that fails leaves the place in the body unknown, so the later ones fail too.
+# The chunks of a body, each read within `seconds`, which for a chunked body bounds the lines read
+# before a chunk too, as the trailer. A read that fails leaves the place in the body unknown, so the
+# later ones fail too.
 export class BodyChunks
-  reader: Reader
-  left: Int
-  const chunks: ChunkedBody?
+  chunks: ChunkedBody | SizedBody
   deadline: Deadline
   seconds: Float
   ended = false
@@ -164,20 +166,11 @@ export class BodyChunks
     chunk :=
       try
         await @send_continue()
-        await @within_seconds(@chunk())
+        await @within_seconds(@chunks.next())
       catch error: IOError
         @failure = error
         throw error
     @ended = chunk == nil
-    chunk
-
-  chunk = -> @chunks then await @chunks.next() else await @sized()
-
-  sized = ->
-    return nil if @left == 0
-    ended_early := IOError('a body ended early')
-    chunk := await @reader.read(min(@left, CHUNK_SIZE)) ? throw ended_early
-    @left -= chunk.length
     chunk
 
   send_continue = ->

@@ -2,6 +2,20 @@
 
 import LineTooLongError, Reader from 'std:io'
 
+# The bytes of a body of `left` bytes as they come from `reader`, or of all that it gives where
+# `left` is nil, or nil at its end. `name` names the message in its error, `a <name> ended early`.
+export class SizedBody
+  reader: Reader
+  name: String
+  left: Int?
+
+  next = ->
+    left := @left ? return await @reader.read(CHUNK_SIZE)
+    return nil if left == 0
+    chunk := await @reader.read(min(left, CHUNK_SIZE)) ? throw ended_early(@name)
+    @left = left - chunk.length
+    chunk
+
 # The bytes of a chunked body as they come from `reader`, without the extensions of its chunks and
 # its trailer fields, or nil at its end. `name` names the message in its errors, as `a malformed
 # <name>`, `a <name> ended early` and `a <name> too large`, once more than `room` bytes of data have
@@ -35,7 +49,7 @@ export class ChunkedBody
         await @skip_trailer()
         @ended = true
         return nil
-    chunk := await @reader.read(min(@left, CHUNK_SIZE)) ? throw @ended_early()
+    chunk := await @reader.read(min(@left, CHUNK_SIZE)) ? throw ended_early(@name)
     @left -= chunk.length
     @ending_chunk = @left == 0
     @data_taken += chunk.length
@@ -44,7 +58,7 @@ export class ChunkedBody
 
   # The size of the next chunk, in hexadecimal before its extensions.
   size = ->
-    line := await @line() ? throw @ended_early()
+    line := await @line() ? throw ended_early(@name)
     var size_text = line
     if parts := line.split_once(';')
       (before, _extensions) := parts
@@ -64,13 +78,13 @@ export class ChunkedBody
     size
 
   end_chunk = ->
-    line := await @line() ? throw @ended_early()
+    line := await @line() ? throw ended_early(@name)
     throw @malformed() if not line.is_empty()
 
   skip_trailer = ->
     while line := await @line()
       return if line.is_empty()
-    throw @ended_early()
+    throw ended_early(@name)
 
   # A line, its line end counted as CR LF.
   line = ->
@@ -84,7 +98,7 @@ export class ChunkedBody
 
   malformed = -> IOError("a malformed #{@name}")
 
-  ended_early = -> IOError("a #{@name} ended early")
+export ended_early := (name: String) -> IOError("a #{name} ended early")
 
 # The bytes of a chunk of a body that is sent in chunks; LAST_CHUNK ends them.
 export chunk_bytes := (data: Binary) -> "#{data.length.to_hex()}\r\n".binary + data + "\r\n".binary
