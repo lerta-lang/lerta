@@ -3,7 +3,7 @@
 # It ends the checking of the part of the program it is found in, and the errors of all the parts
 # end the build together, after the warnings (see check_part and report_errors).
 import compare_positions, Identifier, Position from '../ast'
-import compile_errors, Located from '../errors'
+import compile_errors, DiagnosticKind, Located from '../errors'
 import is_standard_module, Module from '../loader'
 import is_nested_name, is_standard_name, module_location from '../source'
 import CheckError, Diagnostic, ProgramWide, Shared from './shared'
@@ -95,8 +95,8 @@ export in_module := (shared: Shared, check: () -> void) ->
   check()
   shared.program.modules_checked.pop()
 
-export warn := (shared: Shared, at: Position, message: String) ->
-  shared.warnings.push { message, at }
+export warn := (shared: Shared, at: Position, message: String, kind: DiagnosticKind = OTHER) ->
+  shared.warnings.push { message, at, kind }
 
 export warn_if_unused := (shared: Shared, local: Local) ->
   { name, position } := local.identifier
@@ -128,7 +128,8 @@ export all_warnings := (program: ProgramWide) ->
 located_diagnostics := (program: ProgramWide, path: String?, diagnostics: Diagnostic[]) ->
   location := module_location(program.entry_path, path)
   located := (each: Diagnostic) ->
-    Located location, line: each.at.line, column: each.at.column, message: each.message
+    { at, message, kind } := each
+    Located location, message, kind, line: at.line, column: at.column
   [located(each) for each in in_source_order(diagnostics)]
 
 # The names of the top-level code and the imports that are never used.
@@ -139,7 +140,8 @@ warn_unused := (shared: Shared) ->
   imports: (ImportedName | ModuleAlias)[] = [names.values()..., modules.values()...]
   for imported in imports
     { name, used } := imported
-    warn shared, name.position, "'#{name.name}' is imported but never used" if not used
+    message := "'#{name.name}' is imported but never used"
+    warn shared, name.position, message, UNUSED_IMPORT if not used
 
 # Warnings are found as scopes end, and errors as parts are checked on demand; they are reported in
 # source order, once each, though each instance of a generic function finds those of its body
