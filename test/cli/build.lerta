@@ -597,17 +597,6 @@ source_lines_check := -> Check(name: 'lerta run --source-lines runs a program', 
   [expect_status(0, ran.status)..., compare_output('stdout', "2\n7\n".binary, ran.stdout)...]
 )
 
-contains_bytes := (bytes: Binary, text: String) ->
-  wanted := text.binary
-  return true if wanted.is_empty()
-  return false if wanted.length > bytes.length
-  for start in 0...(bytes.length - wanted.length + 1)
-    var same = true
-    for index in 0...wanted.length
-      same = false if bytes[start + index] != wanted[index]
-    return true if same
-  false
-
 # macOS keeps the debug information beside the executable, in its dSYM bundle.
 debug_file_of := (executable: String) ->
   return executable if host_platform != 'macos'
@@ -618,15 +607,9 @@ has_debug_info := (executable: String) ->
   debug_file := debug_file_of(executable)
   return false if not is_file(debug_file)
   marker := host_platform == 'macos' then '__debug_line' else '.debug_line'
-  contains_bytes await read_file(debug_file), marker
+  (await read_file(debug_file)).index_of(marker.binary) != nil
 
-source_line_number := (text: String) ->
-  return nil if text.is_empty()
-  var number = 0
-  for digit in text
-    return nil if not digit.is_digit()
-    number = number * 10 + digit.to_int() - 48
-  number
+source_line_number := (text: String) -> text.is_digits() then text.parse_int()
 
 tool_on_path := (name: String) ->
   path := env('PATH') ? return nil
@@ -710,7 +693,7 @@ no_trace_check := ->
     [
       expect_status(1, ran.status)...
       compare_text('stderr', "failed\n", ran.stderr.text()!)...
-      (contains_bytes(program, '<top level>') then [
+      (program.index_of('<top level>'.binary) != nil then [
         'the program holds the names of traces'
       ] else no_reasons)...
     ]
