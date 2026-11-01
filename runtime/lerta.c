@@ -140,6 +140,7 @@ void lerta_check_comparison(void) {
 
 int main(int argc, char **argv) {
   lerta_stack_init();
+  lerta_hash_init();
   lerta_set_arguments(argc, argv);
   lerta_output_init();
   lerta_main();

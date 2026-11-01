@@ -242,3 +242,10 @@ char *lerta_os_env(const char *name) {
     if (error != UV_ENOBUFS) return NULL;
   }
 }
+
+void lerta_hash_init(void) {
+  if (uv_random(NULL, NULL, lerta_hash_key, sizeof lerta_hash_key, 0, NULL) == 0) return;
+  // Without the system's randomness, the time and an address that ASLR moves still differ by run.
+  lerta_hash_key[0] = uv_hrtime();
+  lerta_hash_key[1] = (uint64_t)(uintptr_t)&lerta_hash_key;
+}

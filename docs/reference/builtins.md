@@ -31,7 +31,7 @@ Builtin [interfaces](objects.md#interfaces), of `std:builtins`, for bounds such 
 - `Comparable`: `compare: (Self) -> Ordering`, where the builtin enum `Ordering` has the members `LESS`, `EQUAL` and `GREATER`.
 - `Hashable`: `equals: (Self) -> Bool` and `hash: () -> Int`.
 
-Every type that `==` compares has `equals`, which compares as `==` does, and every type that can be a [map key](types.md#map) has `hash`, which equal values share: builtin ones, unless a class or struct declares [its own](objects.md#equality-and-order), and one that declares `compare` has a builtin `equals` by it. So they satisfy `Equatable` and `Hashable`. The numbers and `String` have a `compare`, and so satisfy `Comparable`, as does a class or struct that declares its own; `<` and the like order by it. A module's own names shadow them.
+Every type that `==` compares has `equals`, which compares as `==` does, and every type that can be a [map key](types.md#map) has `hash`, which equal values share: builtin ones, unless a class or struct declares [its own](objects.md#equality-and-order), and one that declares `compare` has a builtin `equals` by it. So they satisfy `Equatable` and `Hashable`. The builtin `hash` of a `String` or a `Binary`, or of a value that holds one, differs from one run of the program to the next. The numbers and `String` have a `compare`, and so satisfy `Comparable`, as does a class or struct that declares its own; `<` and the like order by it. A module's own names shadow them.
 
 ## Operators
 

@@ -171,6 +171,9 @@ _Noreturn void lerta_panic_with_exception(const char *prefix);
 // NUL-terminated UTF-8, and a false or NULL result is a failure.
 // Stack overflow: reported as a panic. Called first thing in main.
 void lerta_stack_init(void);
+// The key of lerta_string_hash, which lerta_hash_init makes random for each process.
+extern uint64_t lerta_hash_key[2];
+void lerta_hash_init(void);
 // Gives main's arguments as the system's bytes, which are UTF-8 on Windows: POSIX leaves them as
 // they are, and Windows replaces them with ones read from its UTF-16 command line.
 void lerta_os_arguments(int *argc, char ***argv);

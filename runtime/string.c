@@ -164,11 +164,51 @@ LertaString *lerta_string_push(LertaString *s, uint32_t c) {
   return pushed_beyond_ascii(s, c);
 }
 
-// FNV-1a over the bytes.
+uint64_t lerta_hash_key[2];
+
+static uint64_t rotated(uint64_t x, int bits) { return (x << bits) | (x >> (64 - bits)); }
+
+static void sip_round(uint64_t v[4]) {
+  v[0] += v[1];
+  v[1] = rotated(v[1], 13) ^ v[0];
+  v[0] = rotated(v[0], 32);
+  v[2] += v[3];
+  v[3] = rotated(v[3], 16) ^ v[2];
+  v[0] += v[3];
+  v[3] = rotated(v[3], 21) ^ v[0];
+  v[2] += v[1];
+  v[1] = rotated(v[1], 17) ^ v[2];
+  v[2] = rotated(v[2], 32);
+}
+
+static void sip_compress(uint64_t v[4], uint64_t word) {
+  v[3] ^= word;
+  sip_round(v);
+  v[0] ^= word;
+}
+
+static uint64_t little_endian_word(const uint8_t *bytes, int64_t count) {
+  uint64_t word = 0;
+  for (int64_t i = 0; i < count; i++) word |= (uint64_t)bytes[i] << (8 * i);
+  return word;
+}
+
+// SipHash-1-3 under lerta_hash_key, which is random per process, so that keys that collide cannot
+// be computed ahead of time to flood a map.
 uint64_t lerta_string_hash(const LertaString *s) {
-  uint64_t hash = 0xCBF29CE484222325u;
-  for (int64_t i = 0; i < s->length; i++) hash = (hash ^ s->bytes[i]) * 0x100000001B3u;
-  return hash;
+  uint64_t v[4] = {
+      lerta_hash_key[0] ^ 0x736F6D6570736575u,
+      lerta_hash_key[1] ^ 0x646F72616E646F6Du,
+      lerta_hash_key[0] ^ 0x6C7967656E657261u,
+      lerta_hash_key[1] ^ 0x7465646279746573u,
+  };
+  int64_t whole = s->length & ~(int64_t)7;
+  for (int64_t i = 0; i < whole; i += 8) sip_compress(v, little_endian_word(s->bytes + i, 8));
+  uint64_t last = little_endian_word(s->bytes + whole, s->length - whole);
+  sip_compress(v, last | (uint64_t)s->length << 56);
+  v[2] ^= 0xFF;
+  for (int i = 0; i < 3; i++) sip_round(v);
+  return v[0] ^ v[1] ^ v[2] ^ v[3];
 }
 
 bool lerta_string_equals(const LertaString *a, const LertaString *b) {

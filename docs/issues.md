@@ -2,14 +2,6 @@
 
 Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## String keys are hashed without a seed or a mix, so a map can be flooded
-
-Severity: Medium.
-
-`hash_key` (runtime/map.c:16-22) passes integer and value keys through `mix` (splitmix64) but uses `lerta_string_hash` (runtime/string.c:148-152), plain FNV-1a, directly for string keys; the slot is `hash & mask` with linear probing. FNV-1a is keyless, so short strings whose hashes share their low bits can be computed offline, and a `Map<String, ...>` or `Set<String>` built from input (HTTP headers, JSON keys) degrades to a linear probe per operation: quadratic CPU on an attacker's input. *Unverified* end to end; the path is direct.
-
-Fix: pass the string hash through `mix`, which stops precomputing the low bits, and seed `lerta_string_hash` per process, which stops precomputing collisions at all.
-
 ## `fetch` buffers the whole body of a redirect response
 
 Severity: Medium.
