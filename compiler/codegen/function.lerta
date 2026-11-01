@@ -545,37 +545,54 @@ generate_declaration := (g: Generator, declaration: Declaration) ->
   if read := defers_to_read(g, declaration)
     g.deferred_values[read] = declaration.value
     return
-  ir := g.ir
-  type := type_of(g, declaration.name)
-  weak := declaration.weak
-  name := declaration.name.name
   code := g.code
   is_top_level := g.top_level_code and g.locals.depth() == 1
-  global := is_top_level then code.globals[code.module.index][name]
-  if global == nil and holds_borrowed(g, declaration)
+  if global := is_top_level then code.globals[code.module.index][declaration.name.name]
+    generate_top_level_declaration g, declaration, global
+  else
+    generate_local_declaration g, declaration
+
+# A top-level value is never shared, as no function literal captures it.
+generate_top_level_declaration := (
+  g: Generator, declaration: Declaration, global: TopLevelGlobal
+) ->
+  ir := g.ir
+  type := type_of(g, declaration.name)
+  value := held_value_of(g, declaration, generate_declared_value(g, declaration, false), type)
+  ir.store ir_type(type), value, global.pointer, top_level_tag(ir)
+  emit_mark_initialized ir, global
+  g.locals.define declaration.name.name, top_level_slot(global, false)
+
+generate_local_declaration := (g: Generator, declaration: Declaration) ->
+  ir := g.ir
+  type := type_of(g, declaration.name)
+  { weak, mutable } := declaration
+  name := declaration.name.name
+  if holds_borrowed(g, declaration)
     borrowed := generate_borrowed_value(g, declaration.value)
     g.locals.define name, ValueLocal(type, operand: borrowed)
     return
-  defers := global == nil and defers_declaration(g, declaration)
+  defers := defers_declaration(g, declaration)
   g.defers_float_checks = true if defers
-  generated := generate_declared_value(g, declaration, global == nil and not weak)
+  generated := generate_declared_value(g, declaration, not weak)
   g.defers_float_checks = false if defers
-  value := weak then weak_box_of(g, generated, type) else generated
-  emit_release ir, generated if weak
+  value := held_value_of(g, declaration, generated, type)
   if declaration.name in g.facts.shared_vars
     cell := emit_cell(ir, type, value)
     pointer := emit_cell_pointer(ir, type, cell)
     owned := CellSlot(cell, is_owned: true)
-    g.locals.define name, SlotLocal(type, pointer, weak, is_var: declaration.mutable, cell: owned)
+    g.locals.define name, SlotLocal(type, pointer, weak, is_var: mutable, cell: owned)
     return
-  if global == nil
-    slot := store_in_slot(g, value, type)
-    g.unchecked_floats.add slot.pointer if defers
-    g.locals.define name, SlotLocal(type, weak, is_var: declaration.mutable, pointer: slot.pointer)
-    return
-  ir.store ir_type(type), value, global.pointer, top_level_tag(ir)
-  emit_mark_initialized ir, global
-  g.locals.define name, top_level_slot(global, false)
+  slot := store_in_slot(g, value, type)
+  g.unchecked_floats.add slot.pointer if defers
+  g.locals.define name, SlotLocal(type, weak, is_var: mutable, pointer: slot.pointer)
+
+# What the declared name holds of the value generated for it: the value, or its weak box.
+held_value_of := (g: Generator, declaration: Declaration, generated: String, type: Type) ->
+  return generated if not declaration.weak
+  box := weak_box_of(g, generated, type)
+  emit_release g.ir, generated
+  box
 
 # Whether the const, which is no top-level value, holds its value unchecked for NaN: a tree of float
 # arithmetic (see float_tree) whose root may give a NaN, which is checked where the value leaves
