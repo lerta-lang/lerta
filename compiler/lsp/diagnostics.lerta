@@ -1,7 +1,7 @@
 # The errors and warnings of a program, as the LSP publishes them for each of its files: its entry
 # module is checked as `lerta build` checks it, without generating code.
 import check_modules from '../checker/modules'
-import Position from '../ast'
+import Identifier, Position from '../ast'
 import ProgramWide from '../checker/shared'
 import CompileError, Located from '../errors'
 import load_modules_partially from '../loader'
@@ -112,6 +112,13 @@ export lsp_position := (location: String, at: Position, encoding: PositionEncodi
   return LspPosition(line, character: before) if encoding == UTF32
   LspPosition line, character: characters(await line_text(location, line), encoding, before)
 
+# The range of the name in the file at the location, as the LSP takes it.
+export name_range := (location: String, name: Identifier, encoding: PositionEncoding) ->
+  { line, column } := name.position
+  start := await lsp_position(location, name.position, encoding)
+  end := await lsp_position(location, { line, column: column + name.name.count() }, encoding)
+  LspRange start, end
+
 # The position that the LSP gives in the file at the location, of lines and columns from 1 and
 # columns in code points.
 export source_position := (location: String, at: LspPosition, encoding: PositionEncoding) ->
@@ -121,7 +128,7 @@ export source_position := (location: String, at: LspPosition, encoding: Position
   var counted = 0
   for code in await line_text(location, at.line)
     break if units >= at.character
-    units += code.to_int() > 0xFFFF then 2 else 1
+    units += units_of(code, UTF16)
     counted += 1
   Position line: at.line + 1, column: counted + 1
 
@@ -135,6 +142,10 @@ export characters := (text: String, encoding: PositionEncoding, count: Int? = ni
   var counted = 0
   for code in text
     break if counted == count
-    units += encoding == UTF16 and code.to_int() > 0xFFFF then 2 else 1
+    units += units_of(code, encoding)
     counted += 1
   units
+
+# The units of the encoding that the code point takes: in UTF-16, 2 above U+FFFF.
+units_of := (code: Char, encoding: PositionEncoding) ->
+  encoding == UTF16 and code.to_int() > 0xFFFF then 2 else 1

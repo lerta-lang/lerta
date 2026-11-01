@@ -1,7 +1,7 @@
 # The messages of the Language Server Protocol, which come on stdin and go on stdout, each after a
 # header that gives its length in bytes, as JSON whose keys are in camel case.
 import stdin, stdout from 'std:io'
-import encode_json, Jsonable from 'std:json'
+import decode_json, encode_json, Jsonable from 'std:json'
 
 # What the server reads of a message first, to tell what it is: a request has an id too, which its
 # response gives back.
@@ -58,6 +58,15 @@ export read_message := ->
   return '' if count < 1
   body := await stdin.read_exactly(count) ? throw IOError("the end came after 0 of #{count} bytes")
   body.text() ? throw ValueError('an LSP message that is not valid UTF-8')
+
+export decode_header := (body: String) -> decode_json<Header>(body, CAMEL_CASE)
+
+export decode_request := <P: Jsonable>(body: String): Request<P> ->
+  decode_json<Request<P>>(body, CAMEL_CASE)
+
+# The params of a notification.
+export decode_notification := <P: Jsonable>(body: String): P ->
+  decode_json<Notification<P>>(body, CAMEL_CASE).params
 
 export respond := <R: Jsonable>(id: Int | String, result: R) ->
   await write_message(encode_json(Response(id, result, jsonrpc: JSONRPC), CAMEL_CASE))

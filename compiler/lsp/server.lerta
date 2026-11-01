@@ -4,7 +4,7 @@
 # would write it, and gives the types of a name in it and where the name is declared.
 import is_file from 'std:io'
 import exit from 'std:process'
-import decode_json, JsonError from 'std:json'
+import JsonError from 'std:json'
 import ProgramWide from '../checker/shared'
 import CompileError from '../errors'
 import AnnotationKey from '../format/annotated'
@@ -13,14 +13,14 @@ import format_source from '../format/format'
 import module_key from '../loader'
 import is_standard_name, open_texts, read_source, text_key from '../source'
 import
-  characters, check_file, LspDiagnostic, lsp_position, LspPosition, LspRange, PositionEncoding,
+  characters, check_file, LspDiagnostic, LspPosition, LspRange, name_range, PositionEncoding,
   source_position
 from './diagnostics'
 import completion_items, CompletionItem, probe_text, writing_at from './complete'
 import definition_of, hover_lines, is_written, location_of, module_at from './locate'
 import
-  Header, INTERNAL_ERROR, INVALID_PARAMS, METHOD_NOT_FOUND, PARSE_ERROR, Notification, notify,
-  read_message, Request, respond, respond_error
+  decode_header, decode_notification, decode_request, INTERNAL_ERROR, INVALID_PARAMS,
+  METHOD_NOT_FOUND, PARSE_ERROR, notify, read_message, Request, respond, respond_error
 from './protocol'
 import path_of_uri, uri_of_path from './uri'
 
@@ -117,7 +117,7 @@ class Server
   handle = (body: String) ->
     header :=
       try
-        decode_json<Header>(body, CAMEL_CASE)
+        decode_header body
       catch error: JsonError
         return await respond_error(nil, PARSE_ERROR, error.message)
     try
@@ -131,38 +131,34 @@ class Server
 
   dispatch = (method: String, id: Int | String?, body: String) ->
     case method
-      when 'initialize'
-        await @initialize(decode_json<Request<InitializeParams>>(body, CAMEL_CASE))
+      when 'initialize' then await @initialize(decode_request<InitializeParams>(body))
       when 'textDocument/didOpen'
-        params := decode_json<Notification<DidOpenParams>>(body, CAMEL_CASE).params
+        params := decode_notification<DidOpenParams>(body)
         await @set_text(params.text_document.uri, params.text_document.text)
       when 'textDocument/didChange'
-        params := decode_json<Notification<DidChangeParams>>(body, CAMEL_CASE).params
+        params := decode_notification<DidChangeParams>(body)
         if change := params.content_changes.last()
           await @set_text(params.text_document.uri, change.text)
       when 'textDocument/didClose'
-        await @close(
-          decode_json<Notification<DocumentParams>>(body, CAMEL_CASE).params.text_document.uri
-        )
+        await @close(decode_notification<DocumentParams>(body).text_document.uri)
       when 'textDocument/formatting'
-        request := decode_json<Request<DocumentParams>>(body, CAMEL_CASE)
+        request := decode_request<DocumentParams>(body)
         await respond(
           request.id
           await formatting_edits(request.params.text_document.uri, @encoding)
         )
       when 'textDocument/hover'
-        request := decode_json<Request<PositionParams>>(body, CAMEL_CASE)
+        request := decode_request<PositionParams>(body)
         await respond(request.id, await @hover(request.params))
       when 'textDocument/definition'
-        request := decode_json<Request<PositionParams>>(body, CAMEL_CASE)
+        request := decode_request<PositionParams>(body)
         await respond(request.id, await @definition(request.params))
       when 'textDocument/completion'
-        request := decode_json<Request<PositionParams>>(body, CAMEL_CASE)
+        request := decode_request<PositionParams>(body)
         await respond(request.id, await @completion(request.params))
       when 'shutdown'
         @shut_down = true
-        none: Bool? = nil
-        await respond(given, none) if given := id
+        await respond<Bool?>(given, nil) if given := id
       when 'exit' then exit(@shut_down then 0 else 1)
       else await respond_error(given, METHOD_NOT_FOUND, "no method #{method}") if given := id
 
@@ -223,28 +219,19 @@ class Server
     location := location_of(program, declared.module_index)
     return nil if is_standard_name(location)
     return nil if not is_written((await read_source(location)).split("\n"), declared.name)
-    start := await lsp_position(location, declared.name.position, @encoding)
-    end := await lsp_position(
-      location
-      {
-        line: declared.name.position.line
-        column: declared.name.position.column + declared.name.name.count()
-      }
-      @encoding
-    )
-    Location uri: uri_of_path(location), range: { start, end }
+    range := await name_range(location, declared.name, @encoding)
+    Location range, uri: uri_of_path(location)
 
   # What may be written where a name is being written, from a check of the document's text with
   # the checker's own name there (see complete.lerta), whose diagnostics are not published.
-  completion = (params: PositionParams) ->
-    none: CompletionItem[]
-    path := path_of_uri(params.text_document.uri) ? return none
+  completion = (params: PositionParams): Promise<CompletionItem[]> ->
+    path := path_of_uri(params.text_document.uri) ? return []
     key := text_key(path)
-    text := open_texts[key] ? return none
-    return none if not is_file(path)
+    text := open_texts[key] ? return []
+    return [] if not is_file(path)
     at := await source_position(path, params.position, @encoding)
     lines := text.split("\n")
-    return none if at.line > lines.length
+    return [] if at.line > lines.length
     writing := writing_at(lines[at.line - 1], at.column)
     open_texts[key] = probe_text(text, at.line - 1, writing)
     checked :=
@@ -252,8 +239,8 @@ class Server
         await check_file(path, @encoding)
       finally
         open_texts[key] = text
-    program := checked.program ? return none
-    module_index := module_at(program, path) ? return none
+    program := checked.program ? return []
+    module_index := module_at(program, path) ? return []
     completion_items program, module_index, program.completion
 
   program_of = (path: String) ->
@@ -305,10 +292,9 @@ formatting_edits := (uri: String, encoding: PositionEncoding) ->
 
 # The annotations that `lerta fmt --fix` leaves out of the file, which the checker tells; none for
 # a document that is no file yet, which no program holds.
-removable_types := (path: String) ->
-  none: AnnotationKey[]
-  return none if not is_file(path)
-  (await removable_annotations([path]))[module_key(path)] ? none
+removable_types := (path: String): Promise<AnnotationKey[]> ->
+  return [] if not is_file(path)
+  (await removable_annotations([path]))[module_key(path)] ? []
 
 export lsp_command := (args: String[]) ->
   throw CompileError('lerta lsp takes no arguments') if not args.is_empty()
