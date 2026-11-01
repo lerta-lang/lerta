@@ -8,8 +8,8 @@ import encode_json from 'std:json'
 import
   uri_of, frame, did_open, did_change, did_change_at, did_close, formatting_request,
   definition_request, hover_request, location_fragment, hover_fragment, initialize, finish, session,
-  message_bodies, diagnostic_body, published_diagnostics, initialize_response, shutdown_response,
-  exact_responses, exact_messages
+  message_bodies, diagnostic_body, published_diagnostics, initialize_response, exact_responses,
+  exact_messages
 from '../lib/lsp'
 
 initialize_check := ->
@@ -27,11 +27,7 @@ initialize_check := ->
     )
     [
       expect_status(0, ran.status)...
-      compare_text(
-        'responses'
-        [initialize_response('utf-16'), shutdown_response].join("\n")
-        message_bodies(ran.stdout_text()).join("\n")
-      )...
+      exact_messages(ran.stdout_text(), [])...
       expect_status(1, utf32.status)...
       compare_text(
         'responses'
@@ -51,19 +47,14 @@ error_request_check := ->
     ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
-      compare_text(
-        'responses'
+      exact_messages(
+        ran.stdout_text()
         [
-          initialize_response('utf-16')
           '{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"no method ' +
             'textDocument/references"}}'
           '{"jsonrpc":"2.0","id":2,"error":{"code":-32602,' +
             "\"message\":#{encode_json('$.params: missing the key "textDocument"')}}}"
-          shutdown_response
-        ].join(
-          "\n"
-        )
-        message_bodies(ran.stdout_text()).join("\n")
+        ]
       )...
     ]
 
@@ -76,16 +67,9 @@ diagnostic_check := -> Check(name: 'lerta lsp reports diagnostics for an opened 
   ran := await session(dir, message)
   [
     expect_status(0, ran.status)...
-    compare_text(
-      'messages'
-      [
-        initialize_response('utf-16')
-        published_diagnostics(uri, [diagnostic_body(0, 6, 1, "undefined name 'missing'")])
-        shutdown_response
-      ].join(
-        "\n"
-      )
-      message_bodies(ran.stdout_text()).join("\n")
+    exact_messages(
+      ran.stdout_text()
+      [published_diagnostics(uri, [diagnostic_body(0, 6, 1, "undefined name 'missing'")])]
     )...
   ]
 )
@@ -105,19 +89,14 @@ diagnostic_lifecycle_check := ->
     ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
-      compare_text(
-        'messages'
+      exact_messages(
+        ran.stdout_text()
         [
-          initialize_response('utf-16')
           published_diagnostics(uri, [diagnostic_body(0, 6, 1, "undefined name 'missing'")])
           published_diagnostics(uri, [diagnostic_body(0, 0, 2, "'unused' is never used")])
           published_diagnostics(uri, [])
           published_diagnostics(uri, [])
-          shutdown_response
-        ].join(
-          "\n"
-        )
-        message_bodies(ran.stdout_text()).join("\n")
+        ]
       )...
     ]
 
@@ -133,20 +112,15 @@ imported_diagnostic_check := ->
     ran := await session(dir, message)
     [
       expect_status(0, ran.status)...
-      compare_text(
-        'messages'
+      exact_messages(
+        ran.stdout_text()
         [
-          initialize_response('utf-16')
           published_diagnostics(uri, [])
           published_diagnostics(
             uri_of(imported)
             [diagnostic_body(0, 19, 1, "undefined name 'nothing'")]
           )
-          shutdown_response
-        ].join(
-          "\n"
-        )
-        message_bodies(ran.stdout_text()).join("\n")
+        ]
       )...
     ]
 
@@ -182,17 +156,12 @@ malformed_message_check := ->
     ran := await session(dir, frame('{bad}'))
     [
       expect_status(0, ran.status)...
-      compare_text(
-        'responses'
+      exact_messages(
+        ran.stdout_text()
         [
-          initialize_response('utf-16')
           '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,' +
             "\"message\":#{encode_json("$: expected a key, found 'b'")}}}"
-          shutdown_response
-        ].join(
-          "\n"
-        )
-        message_bodies(ran.stdout_text()).join("\n")
+        ]
       )...
     ]
 
@@ -251,19 +220,14 @@ empty_body_check := -> Check(name: 'lerta lsp reports empty message bodies as pa
   ran := await run_command(compiler, ['lsp'], dir, input.binary)
   [
     expect_status(0, ran.status)...
-    compare_text(
-      'responses'
+    exact_messages(
+      ran.stdout_text()
       [
-        initialize_response('utf-16')
         '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, ' +
           'found the end of the text"}}'
         '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, ' +
           'found the end of the text"}}'
-        shutdown_response
-      ].join(
-        "\n"
-      )
-      message_bodies(ran.stdout_text()).join("\n")
+      ]
     )...
   ]
 )
@@ -310,18 +274,13 @@ formatting_new_document_check := ->
     ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
-      compare_text(
-        'responses'
+      exact_messages(
+        ran.stdout_text()
         [
-          initialize_response('utf-16')
           '{"jsonrpc":"2.0","id":1,"result":[{"range":{"start":{"line":0,' +
             '"character":0},"end":{"line":0,"character":11}},' +
             "\"newText\":#{encode_json("print '#{emoji}'\n")}}]}"
-          shutdown_response
-        ].join(
-          "\n"
-        )
-        message_bodies(ran.stdout_text()).join("\n")
+        ]
       )...
     ]
 
@@ -782,18 +741,13 @@ partial_parse_check := ->
       ran := await session(dir, messages)
       [
         expect_status(0, ran.status)...
-        compare_text(
-          'messages'
+        exact_messages(
+          ran.stdout_text()
           [
-            initialize_response('utf-16')
             published_diagnostics(uri, [diagnostic_body(0, 5, 1, "expected expression, found '+'")])
             "{\"jsonrpc\":\"2.0\",#{hover_fragment(1, 'value: Int')}}"
             "{\"jsonrpc\":\"2.0\",#{location_fragment(2, uri, 2, 0, 5)}}"
-            shutdown_response
-          ].join(
-            "\n"
-          )
-          message_bodies(ran.stdout_text()).join("\n")
+          ]
         )...
       ]
 
@@ -935,10 +889,9 @@ partial_block_check := ->
     ran := await session(dir, messages)
     [
       expect_status(0, ran.status)...
-      compare_text(
-        'messages'
+      exact_messages(
+        ran.stdout_text()
         [
-          initialize_response('utf-16')
           published_diagnostics(
             uri
             [
@@ -962,11 +915,7 @@ partial_block_check := ->
           '{"jsonrpc":"2.0","id":8,"result":null}'
           "{\"jsonrpc\":\"2.0\",#{hover_fragment(9, 'p: () -> Int')}}"
           "{\"jsonrpc\":\"2.0\",#{hover_fragment(10, 'q: () -> Iter<Int>')}}"
-          shutdown_response
-        ].join(
-          "\n"
-        )
-        message_bodies(ran.stdout_text()).join("\n")
+        ]
       )...
     ]
 
@@ -990,10 +939,9 @@ partial_import_check := ->
       ran := await session(dir, messages)
       [
         expect_status(0, ran.status)...
-        compare_text(
-          'messages'
+        exact_messages(
+          ran.stdout_text()
           [
-            initialize_response('utf-16')
             published_diagnostics(uri, [diagnostic_body(2, 0, 2, "'kept' is never used")])
             published_diagnostics(
               uri_of(lib)
@@ -1007,11 +955,7 @@ partial_import_check := ->
               ]
             )
             "{\"jsonrpc\":\"2.0\",#{hover_fragment(1, 'a: Int')}}"
-            shutdown_response
-          ].join(
-            "\n"
-          )
-          message_bodies(ran.stdout_text()).join("\n")
+          ]
         )...
       ]
 
