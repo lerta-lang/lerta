@@ -102,9 +102,8 @@ enum_items := (type: EnumType) ->
 # builtin methods and properties of its kind; of the type without nil, for `?.`.
 member_items := (program: ProgramWide, shared: Shared, probe: CompletionProbe, read_type: Type) ->
   type := inner_of(read_type)
-  items: CompletionItem[]
-  add := (label: String, kind: Int, detail: String?) ->
-    items.push { label, kind, detail } if not items.any((each) -> each.label == label)
+  items: Map<String, CompletionItem>
+  add := (label: String, kind: Int, detail: String?) -> add_new(items, { label, kind, detail })
   if type is ObjectType
     info := info_of(program, type)
     add field.name.name, FIELD, formatted(field.type) for field in info.fields
@@ -125,7 +124,7 @@ member_items := (program: ProgramWide, shared: Shared, probe: CompletionProbe, r
   for method in extensions.in_effect
     name := method.name.name
     add name, METHOD, nil if method.bound == nil and find_extension(extensions, type, name) != nil
-  items
+  items.values().to_array()
 
 # The names of the builtin members of the builtin types, whose methods and properties
 # checker/builtins and member_targets give by name; the operators' methods are left out.
@@ -146,43 +145,52 @@ local_items := (locals: Map<String, Type>) ->
 module_items := (program: ProgramWide, shared: Shared, in_top_level: Bool) ->
   own := names_of(program, shared)
   declared_later := (item: CompletionItem) -> in_top_level and item.label in shared.top_level.locals
-  items := [item for item in own when not declared_later(item)]
-  items.push { label: name, kind: MODULE, detail: nil } for name in shared.imports.modules.keys()
+  items := by_label([item for item in own when not declared_later(item)])
+  for name in shared.imports.modules.keys()
+    add_new items, { label: name, kind: MODULE, detail: nil }
   # An imported name is as its module declares it, under the name it is imported by; a name of a
   # module imported as a name, `m.x`, is no name of its own.
   for (name, imported) in shared.imports.names.entries()
-    continue if '.' in name or items.any((each) -> each.label == name)
+    continue if '.' in name or name in items
     source := imported.source
     item :=
       case source
         when ExportRef
           declared := exported_items(program, program.shared[source.module_index])
           declared.find((each) -> each.label == source.name) ? continue
-        when ExternExport then extern_item(source.type)
-    items.push { label: name, kind: item.kind, detail: item.detail }
+        when ExternExport then extern_item(name, source.type)
+    add_new items, { item..., label: name }
   if builtins := shared.imports.builtins
-    for item in exported_items(program, program.shared[builtins])
-      items.push item if not items.any((each) -> each.label == item.label)
-  items
+    add_new items, item for item in exported_items(program, program.shared[builtins])
+  items.values().to_array()
 
 # The names that the module exports: its own, C functions, as `panic` of std:builtins, and those
 # it exports from other modules.
 exported_items := (program: ProgramWide, shared: Shared): CompletionItem[] ->
-  items := [item for item in names_of(program, shared) when shared.exported.contains(item.label)]
+  items := by_label([item for item in names_of(program, shared) when item.label in shared.exported])
   for name in shared.exported.keys()
-    continue if items.any((each) -> each.label == name)
+    continue if name in items
     exported := export_of(program, shared.index, name)
-    if exported is ExternExport
-      item := extern_item(exported.type)
-      items.push { label: name, kind: item.kind, detail: item.detail }
+    add_new items, extern_item(name, exported.type) if exported is ExternExport
   for name in shared.reexported.keys()
     ref := export_ref(program, shared.index, name) ? continue
     declared := exported_items(program, program.shared[ref.module_index])
     item := declared.find((each) -> each.label == ref.name) ? continue
-    items.push { label: name, kind: item.kind, detail: item.detail }
-  items
+    add_new items, { item..., label: name }
+  items.values().to_array()
 
-extern_item := (type: Type) -> CompletionItem(label: '', kind: FUNCTION, detail: format_type(type))
+# The items by their labels, each label once, in the order the items first give them.
+by_label := (items: CompletionItem[]) ->
+  labeled: Map<String, CompletionItem>
+  add_new labeled, item for item in items
+  labeled
+
+# Adds the item, unless one of its label is there.
+add_new := (items: Map<String, CompletionItem>, item: CompletionItem) ->
+  items[item.label] = item if item.label not in items
+
+extern_item := (name: String, type: Type) ->
+  CompletionItem label: name, kind: FUNCTION, detail: format_type(type)
 
 # The top-level names that the module declares.
 names_of := (program: ProgramWide, shared: Shared) ->
@@ -209,9 +217,7 @@ KEYWORDS :=
 
 keyword_items := -> [CompletionItem(label: word, kind: KEYWORD, detail: nil) for word in KEYWORDS]
 
-formatted := (type: Type?) ->
-  known := type ? return nil
-  format_type known
+formatted := (type: Type?) -> type then format_type(type)
 
 # Whether the Char may be in a name.
 export is_name_character := (c: Char) -> c.is_letter() or c.is_digit() or c == '_'
