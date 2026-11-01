@@ -1,6 +1,6 @@
 # Built programs run with the process environment and standard input supplied by the test.
 import Check from '../lib/report'
-import compare_output, compare_text, expect_status from '../lib/expect'
+import compare_output, compare_text, expect_status, reason_unless from '../lib/expect'
 import compiler, root_dir from '../lib/lerta'
 import executable_suffix, expect_success, host_platform, new_cli_dir, run_command from '../lib/cli'
 import is_file from 'std:io'
@@ -9,8 +9,6 @@ struct BuiltProgram
   dir: String
   executable: String
   errors: String[]
-
-check_reason := (condition: Bool, reason: String): String[] -> condition then [] else [reason]
 
 build_program := (name: String, source: String) ->
   dir := new_cli_dir("program-#{name}")
@@ -168,7 +166,10 @@ closed_stdio_check := ->
       ran := await run_command('sh', ['-c', script, built.executable, ended], built.dir)
       [
         expect_status(1, ran.status)...
-        check_reason(is_file("#{built.dir}/#{ended}"), "#{redirection}: the program did not end")...
+        reason_unless(
+          is_file("#{built.dir}/#{ended}")
+          "#{redirection}: the program did not end"
+        )...
       ]
     [
       await run_closed('>&- 2>&-', 'output-closed')...
@@ -243,7 +244,7 @@ read_before_exit_check := ->
     [
       expect_status(0, ran.status)...
       compare_text('first line', 'a', lines[0])...
-      check_reason(['0', '1', '2'].contains(lines[1]), "program took #{lines[1]} seconds")...
+      reason_unless(['0', '1', '2'].contains(lines[1]), "program took #{lines[1]} seconds")...
     ]
 
 read_then_run_check := ->
@@ -474,7 +475,7 @@ terminal_color_check := (
   shown := ran.stdout.text()!
   [
     expect_status(0, ran.status)...
-    check_reason(expected.all((line) -> "#{line}\r\n" in shown), "the terminal shows: #{shown}")...
+    reason_unless(expected.all((line) -> "#{line}\r\n" in shown), "the terminal shows: #{shown}")...
   ]
 )
 

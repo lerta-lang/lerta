@@ -2,7 +2,7 @@
 # generated code and is linked with the runtime as `build` links it.
 import build_flags from '../compiler/clang_flags'
 import Check, run_checks, select from './lib/report'
-import compare_text, expect_status, lines, reason_if from './lib/expect'
+import compare_text, expect_status, lines, reason_unless from './lib/expect'
 import host_systems, read_text_or_throw, root_dir, SetupError, suite_dir from './lib/lerta'
 import timeout from 'std:async'
 import encode_json from 'std:json'
@@ -144,7 +144,7 @@ stop_check := (name: String, source: String, message: String, macros: String[] =
     outcome := await build_and_run(source, false, macros)
     [
       compare_text('stderr', "#{message}\n", outcome.stderr)...
-      reason_if(outcome.status == 0, 'expected the program to stop, but it exited with 0')...
+      reason_unless(outcome.status != 0, 'expected the program to stop, but it exited with 0')...
     ]
 
 use_after_drop := (use: String) ->
@@ -182,8 +182,8 @@ remove_tree_check := Check
     outcome := await execute(executable, [], work_dir, nil, { 'LERTA_TEST_TREE': tree })
     [
       expect_clean(outcome)...
-      reason_if(is_dir(tree), "#{tree} is still there")...
-      reason_if(not is_file("#{linked}/file"), 'the link was followed')...
+      reason_unless(not is_dir(tree), "#{tree} is still there")...
+      reason_unless(is_file("#{linked}/file"), 'the link was followed')...
     ]
 
 checks := [
@@ -274,7 +274,7 @@ checks := [
       compare_text('stdout', lines([known..., own_hashes[0]]), first.stdout)...
       expect_clean(first)...
       expect_clean(second)...
-      reason_if(own_hashes[0] == own_hashes[1], 'two processes hashed "a" alike')...
+      reason_unless(own_hashes[0] != own_hashes[1], 'two processes hashed "a" alike')...
     ]
   )
   clean_check('the optimized runtime does not count objects', 'leak', true)
@@ -337,7 +337,7 @@ checks := [
       expected := "first\r\nsecond\r\nthird\r\n"
       reason :=
         "expected the terminal to end with #{encode_json(expected)}, got #{encode_json(shown)}"
-      reason_if not shown.ends_with(expected), reason
+      reason_unless shown.ends_with(expected), reason
   )
 ]
 

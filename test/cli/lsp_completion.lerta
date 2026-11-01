@@ -1,13 +1,13 @@
 # The language server completes names: after a dot, in scope, from imports, and keywords.
 import Check from '../lib/report'
-import compare_text, expect_status from '../lib/expect'
+import compare_text, expect_status, reason_unless from '../lib/expect'
 import read_text_or_throw, root_dir from '../lib/lerta'
 import new_cli_dir from '../lib/cli'
 import write_file from 'std:io'
 import decode_json from 'std:json'
 import
-  uri_of, frame, did_open, did_change, completion_request, session, check_reason, excludes,
-  response_body, response_ids
+  uri_of, frame, did_open, did_change, completion_request, session, excludes, response_body,
+  response_ids
 from '../lib/lsp'
 
 struct CompletionItem
@@ -99,7 +99,10 @@ completion_names_check := ->
       expect_status(0, ran.status)...
       compare_text('keywords', keywords.join(' '), words.join(' '))...
       ["missing completion name #{name}" for name in missing_names]...
-      check_reason('later' not in labels, 'completion exposed a local declared after the cursor')...
+      reason_unless(
+        'later' not in labels
+        'completion exposed a local declared after the cursor'
+      )...
       compare_text('response order', '0 1 end', response_ids(output).join(' '))...
     ]
 
@@ -504,7 +507,7 @@ completion_coverage_check := ->
         '{"jsonrpc":"2.0","id":99,"result":[]}'
         response_body(output, 99)
       )...
-      check_reason(preserved, "formatting after completion returned #{formatting_response}")...
+      reason_unless(preserved, "formatting after completion returned #{formatting_response}")...
       excludes(output, '__lerta_completion__', 'the probe name in published diagnostics')...
     ]
 

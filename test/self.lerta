@@ -2,7 +2,7 @@
 # tests/harness, most of which must fail, each as it should (see run.lerta), and must take its
 # arguments and keep the failed checks as main.lerta says.
 import at_once, Check, run_checks, select from './lib/report'
-import compare_text, expect_status, lines, reason_if from './lib/expect'
+import compare_text, expect_status, lines, reason_unless from './lib/expect'
 import host_triple from './lib/cli'
 import OUTPUT_LIMIT, read_text_or_throw, root_dir, suite_dir from './lib/lerta'
 import list_dir, write_file from 'std:io'
@@ -145,7 +145,7 @@ harness_check := Check
       "#{failed_names.length} failed in "
     [
       compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
-      reason_if(summary not in ran.stdout, "no summary `#{summary}...`")...
+      reason_unless(summary in ran.stdout, "no summary `#{summary}...`")...
       expect_status(1, ran.status)...
       compare_text(
         'failed checks'
@@ -171,8 +171,8 @@ usage_check := (args: String[], problem: String) ->
     ran := await run_driver(args, await new_failed_file([]))
     [
       expect_status(2, ran.status)...
-      reason_if(
-        not ran.stderr.starts_with("#{problem}\nusage: bin/test ")
+      reason_unless(
+        ran.stderr.starts_with("#{problem}\nusage: bin/test ")
         "no #{problem} and usage on stderr: #{ran.stderr}"
       )...
     ]
@@ -264,9 +264,9 @@ driver_checks :=
       expected := [result_line(name, [])]
       [
         compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
-        reason_if(not ran.stdout.contains("FAIL? #{name} "), "no `FAIL? #{name}`")...
-        reason_if(
-          'run tests: 2 passed, 0 failed, 1 flaky in ' not in ran.stdout
+        reason_unless(ran.stdout.contains("FAIL? #{name} "), "no `FAIL? #{name}`")...
+        reason_unless(
+          'run tests: 2 passed, 0 failed, 1 flaky in ' in ran.stdout
           'no summary with 1 flaky'
         )...
         expect_status(0, ran.status)...
@@ -281,9 +281,9 @@ driver_checks :=
     expected := [result_line(name, reasons), result_line("#{name} (-O)", reasons)]
     [
       compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
-      reason_if(not ran.stdout.contains("FAIL? #{name} "), "no `FAIL? #{name}`")...
-      reason_if(
-        'run tests: running the 2 that failed once more, one at a time' not in ran.stdout
+      reason_unless(ran.stdout.contains("FAIL? #{name} "), "no `FAIL? #{name}`")...
+      reason_unless(
+        'run tests: running the 2 that failed once more, one at a time' in ran.stdout
         'no retry of the 2 that failed'
       )...
       expect_status(1, ran.status)...
