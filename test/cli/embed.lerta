@@ -1,0 +1,37 @@
+# tools/embed.lerta, which make builds into build/embed, writes a module whose embedded_source gives
+# each file exactly, whatever its path and contents hold.
+import Check from '../lib/report'
+import compare_output, expect_status from '../lib/expect'
+import compiler, root_dir from '../lib/lerta'
+import executable_suffix, expect_success, new_cli_dir, run_command from '../lib/cli'
+import write_file from 'std:io'
+
+# A path with a quote and contents with what a literal escapes or interpolates, and control
+# characters.
+PATH := "it's.txt"
+CONTENTS := "\#{x} \"quoted\" back\\slash\ttab\r\u{1}\0end\n"
+
+PROGRAM := """
+  import embedded_source, EMBEDDED_PATHS from './embedded'
+  import read_file from 'std:io'
+
+  print EMBEDDED_PATHS
+  print embedded_source(EMBEDDED_PATHS[0]) == (await read_file(EMBEDDED_PATHS[0])).text()
+  """
+
+export checks := [Check(name: 'embed writes a module that gives each file exactly', run: ->
+  dir := new_cli_dir('embed')
+  await write_file("#{dir}/#{PATH}", CONTENTS.binary)
+  await write_file("#{dir}/main.lerta", PROGRAM.binary)
+  embedded := await run_command("#{root_dir}/build/embed", ['embedded.lerta', PATH], dir)
+  return expect_success('embed', embedded) if embedded.status != 0
+  executable := "#{dir}/main#{executable_suffix}"
+  built := await run_command(compiler, ['build', 'main.lerta', '-o', executable], dir)
+  return expect_success('build', built) if built.status != 0
+  ran := await run_command(executable, [], dir)
+  [
+    expect_status(0, ran.status)...
+    compare_output('stdout', "[\"it's.txt\"]\ntrue\n".binary, ran.stdout)...
+  ]
+)
+]
