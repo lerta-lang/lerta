@@ -32,8 +32,7 @@ UNSIGNED_PREDICATES := { '==': 'eq', '!=': 'ne', '<': 'ult', '<=': 'ule', '>': '
 
 export generate_unary := (g: Generator, unary: UnaryOperation) ->
   return generate(g, call) if call := g.facts.operator_calls[unary]
-  if unary.operator == 'not'
-    return g.ir.assign("xor i1 #{generate_condition(g, unary.operand)}, true")
+  return g.ir.negate(generate_condition(g, unary.operand)) if unary.operator == 'not'
   negate g, generate(g, unary.operand), type_of(g, unary)
 
 negate := (g: Generator, operand: String, type: Type) ->
@@ -181,7 +180,7 @@ emit_order_test := (ir: IrBuilder, operator: String, ordering: String) ->
 
 # `!=` is the negation of the equality.
 negate_if_unequal := (g: Generator, operator: String, equal: String) ->
-  operator == '!=' then g.ir.assign("xor i1 #{equal}, true") else equal
+  operator == '!=' then g.ir.negate(equal) else equal
 
 # Whether two optional values are both nil, or hold equal values; releases them. Strings and
 # Binaries, which are null for nil, are compared only where both are present.
@@ -219,14 +218,14 @@ generate_nil_test := (g: Generator, binary: BinaryOperation) ->
   (operand, is_owned) := generate_borrowed(g, value, [], true)
   present := emit_is_present(g.ir, operand, type_of(g, value))
   release_if_reference g, value, operand if is_owned
-  binary.operator == '!=' then present else g.ir.assign("xor i1 #{present}, true")
+  binary.operator == '!=' then present else g.ir.negate(present)
 
 # Short-circuit: the right operand is evaluated only when the left one does not decide.
 generate_logical := (g: Generator, binary: BinaryOperation) ->
   ir := g.ir
   left := generate_condition(g, binary.left)
   is_and := binary.operator == 'and'
-  undecided := is_and then left else ir.assign("xor i1 #{left}, true")
+  undecided := is_and then left else ir.negate(left)
   right := -> generate_condition(g, binary.right)
   emit_branch ir, 'i1', undecided, right, is_and then 'false' else 'true'
 

@@ -209,7 +209,7 @@ generate_cast := (g: Generator, cast: Cast) ->
   return emit_narrowed_cast(g, cast, object) if inner_of(value_type) is not UnionType
   holds := emit_member_test(g, object, cast.value, cast.type)
   if cast.throws
-    fails := ir.assign("xor i1 #{holds}, true")
+    fails := ir.negate(holds)
     while_holding g, object, value_type, -> throw_if(g, fails, FAILED_CAST)
     return object if not is_boxed(member)
     return emit_narrowed_owned(ir, object, value_type, member)
@@ -289,7 +289,7 @@ export read_any_field := (
 # The object that a `weak!` field's box holds, borrowed; it throws if the object is gone.
 weak_object := (g: Generator, box: String) ->
   object := emit_weak_object(g.ir, box)
-  throw_if g, g.ir.assign("icmp eq ptr #{object}, null"), DEAD_OBJECT
+  throw_if g, g.ir.is_null(object), DEAD_OBJECT
   object
 
 # `E.MEMBER` is a member of an enum.
@@ -455,7 +455,7 @@ export emit_narrowed := (ir: IrBuilder, value: String, declared: Type, type: Typ
   # A union value is a pointer, null for nil, whether optional or not.
   return emit_unbox(ir, value, type) if type is not OptionalType
   member := -> emit_wrap(ir, emit_unbox(ir, value, type.inner), type.inner)
-  emit_branch ir, ir_type(type), ir.assign("icmp ne ptr #{value}, null"), member, nil_constant(type)
+  emit_branch ir, ir_type(type), ir.is_not_null(value), member, nil_constant(type)
 
 # As emit_narrowed, of a value that is owned and given over.
 emit_narrowed_owned := (ir: IrBuilder, value: String, declared: Type, type: Type) ->

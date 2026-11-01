@@ -14,11 +14,12 @@ import
   constructor_symbol, emit_release, emit_release_value, ir_type, shared_string_constant
 from './lerta_ir'
 import emit_map_new, emit_map_set from './map'
-import emit_is_present, emit_unwrap, emit_wrap, nil_constant from './optional'
+import emit_is_nil, emit_unwrap, emit_wrap, nil_constant from './optional'
 import narrowed_from_word, scalar_of from './scalar'
 import
-  ArrayType, bool_type, EnumType, format_type, kind_of, MapType, ObjectType, OptionalType, int_type,
-  integer_range, is_boxed, RecordType, string_type, TupleType, Type, type_key, UnionType
+  ArrayType, bool_type, EnumType, format_type, kind_of, MapType, ObjectType, optional_type,
+  OptionalType, int_type, integer_range, is_boxed, RecordType, string_type, TupleType, Type,
+  type_key, UnionType
 from '../types'
 
 # The value read, owned; the caller checks for an exception after it.
@@ -59,7 +60,7 @@ emit_read := (ir: IrBuilder, reader: Coder, type: Type, unwind: () -> void): Str
   case type
     when OptionalType
       is_null := call_method(ir, reader, 'read_null', bool_type, [], unwind)
-      present := ir.assign("xor i1 #{is_null}, true")
+      present := ir.negate(is_null)
       read_inner := -> emit_wrap(ir, emit_read(ir, reader, type.inner, unwind), type.inner)
       emit_branch ir, ir_type(type), present, read_inner, nil_constant(type)
     when EnumType then emit_read_member(ir, reader, type, unwind)
@@ -89,11 +90,10 @@ emit_read_member := (ir: IrBuilder, reader: Coder, type: EnumType, unwind: () ->
     enum_name := shared_string_constant(ir, format_type(type))
     args := ["ptr #{enum_name}", "ptr #{text}"]
     call_void_method ir, reader, 'fail_member', args, release_text
-  emit_when ir, ir.assign("xor i1 #{emit_is_present(ir, member, optional_of(type))}, true"), fail
+  optional := optional_type(type)
+  emit_when ir, emit_is_nil(ir, member, optional), fail
   emit_release ir, text
-  emit_unwrap ir, member, optional_of(type)
-
-optional_of := (type: Type) -> OptionalType(type)
+  emit_unwrap ir, member, optional
 
 # The array, which the function holds while it reads the items.
 emit_read_array := (ir: IrBuilder, reader: Coder, type: ArrayType) ->
@@ -117,8 +117,8 @@ emit_read_map := (ir: IrBuilder, reader: Coder, type: MapType) ->
   call_void_method ir, reader, 'begin_object', [], unwind
   var key = ''
   more := ->
-    key = call_method(ir, reader, 'next_key', optional_of(string_type), [], unwind)
-    ir.assign "icmp ne ptr #{key}, null"
+    key = call_method(ir, reader, 'next_key', optional_type(string_type), [], unwind)
+    ir.is_not_null key
   read_entry := ->
     release_key := ->
       emit_release ir, key
@@ -213,8 +213,8 @@ emit_read_fields := (
   call_void_method ir, reader, 'begin_object', [], unwind
   var key = ''
   more := ->
-    key = call_method(ir, reader, 'next_key', optional_of(string_type), [], unwind)
-    ir.assign "icmp ne ptr #{key}, null"
+    key = call_method(ir, reader, 'next_key', optional_type(string_type), [], unwind)
+    ir.is_not_null key
   read_key := ->
     release_key := ->
       emit_release ir, key
@@ -225,7 +225,7 @@ emit_read_fields := (
   for field, i in fields
     continue if not is_required(field)
     fail := -> call_void_method(ir, reader, 'fail_missing', field_name_args(ir, field.name), unwind)
-    emit_when ir, ir.assign("xor i1 #{values.given(i)}, true"), fail
+    emit_when ir, ir.negate(values.given(i)), fail
   make values
 
 # Reads the value of the key into the field whose key it is (see JsonKeys), or skips it if no
