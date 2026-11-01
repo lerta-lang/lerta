@@ -32,7 +32,7 @@ export checks := (program: ProgramWide) ->
 
 # The imports of enums, and those of structs if `structs`, that are not used do not count in the
 # warnings (see is_unused_type).
-export result_of := (program: ProgramWide, structs: Bool) ->
+export result_of := (program: ProgramWide, flags: { structs: Bool }) ->
   node_types: Map<Node, String>
   node_modules: Map<Node, String>
   for shared in program.shared
@@ -44,29 +44,30 @@ export result_of := (program: ProgramWide, structs: Bool) ->
       conversion := converted then " => #{format_type(converted)}" else ''
       node_types[node] = format_type(type) + conversion
       node_modules[node] = module.key
-  counts := (warning: Located) -> not is_unused_type(warning, program, structs)
+  counts := (warning: Located) -> not is_unused_type(warning, program, flags)
   warnings := [each for each in all_warnings(program) when counts(each)]
   CheckResult node_types, node_modules, warnings, field_types: field_types(program)
 
 # A warning of an import of an enum or a struct that is not used, which the members of the enum
 # written alone, the constructions of the struct written as records or the types left out may make,
 # and which unused_type_imports then leaves out: one at the name of such an import.
-is_unused_type := (warning: Located, program: ProgramWide, structs: Bool) ->
+is_unused_type := (warning: Located, program: ProgramWide, flags: { structs: Bool }) ->
   at_import := (shared: Shared, imported: ImportedName) ->
     { position } := imported.name
     location := module_location(program.entry_path, program.modules[shared.index].display_path)
     placed := location == warning.location and position.line == warning.line
-    placed and position.column == warning.column and imports_type(program, imported, structs)
+    placed and position.column == warning.column and imports_type(program, imported, flags)
   unused := 'is imported but never used'
   return false if not warning.message.ends_with(unused)
   program.shared.any (shared) ->
     shared.imports.names.values().any((imported) -> at_import(shared, imported))
 
 # Whether the name imports an enum, or a struct if `structs`.
-export imports_type := (program: ProgramWide, imported: ImportedName, structs: Bool) ->
+export imports_type := (program: ProgramWide, imported: ImportedName, flags: { structs: Bool }) ->
   source := imported.source as ExportRef ? return false
   exported := program.shared[source.module_index].exported[source.name]
-  exported is EnumDeclaration or (structs and exported is TypeDeclaration and exported.is_struct)
+  exported is EnumDeclaration or
+    (flags.structs and exported is TypeDeclaration and exported.is_struct)
 
 # Whether the nodes that both results have have the same types. The checking makes nodes of its own,
 # such as the `iter()` call of a `for` over an object, new each time, so each result has some that

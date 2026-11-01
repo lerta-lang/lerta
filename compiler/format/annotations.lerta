@@ -112,50 +112,73 @@ candidates_of := (held: Module[], checked: ProgramWide) ->
 # kept, as they would no longer show it; an import of a struct that only they use does not count
 # then.
 accepted_among := (candidates: Placed[], checked: ProgramWide, program: () -> ProgramWide) ->
-  # The result of the program without the annotations, if it checks (see is_unused_type), and
-  # whether it is `alike` while they are left out of the tree.
-  tried_without := (left_out: Placed[], structs: Bool, alike: (CheckResult) -> Bool) ->
-    placed.annotation.remove() for placed in left_out
-    tried := program()
-    result := checks(tried) then result_of(tried, structs)
-    is_alike := result then alike(result) else false
-    placed.annotation.restore() for placed in left_out
-    { result, is_alike }
-  result_without := (left_out: Placed[], structs: Bool) ->
-    tried_without(left_out, structs, (_) -> true).result
-  # Where `merging`, the types in the bodies of the arms made one are compared apart (see
-  # in_shared_body and shares_types).
-  checks_the_same := (original: CheckResult, structs: Bool, merging: Bool) ->
-    (left_out: Placed[]) ->
-      subjects: Set<String>
-      for placed in left_out
-        subjects.add subject.name if subject := placed.annotation.shared_subject
-      shares := (result: CheckResult) ->
-        not merging or
-          left_out.all((placed) -> shares_types(placed.annotation, subjects, original, result))
-      { result, is_alike } := tried_without(left_out, structs, shares)
-      found := result ? return false
-      excused := (node: Node) -> merging and in_shared_body(left_out, found, node)
-      is_alike and same_result(found, original, excused)
   constructions := [placed for placed in candidates when placed.annotation.construction]
   arms := [placed for placed in candidates when placed.annotation.shared_arms]
   is_other := (placed: Placed) ->
     not placed.annotation.construction and not placed.annotation.shared_arms
   others := [placed for placed in candidates when is_other(placed)]
-  original := result_of(checked, true)
-  recorded := removable_among([], constructions, checks_the_same(original, true, false))
-  with_records := result_without(recorded, false)!
+  original := result_of(checked, structs: true)
+  recorded := removable_among
+    []
+    constructions
+    checks_the_same(program, original, structs: true, merging: false)
+  with_records := result_without(program, recorded)
   # Before the others, which are then checked against the program with the arms made one, as a cast
   # that only the first arm's narrowing makes redundant.
-  merged := removable_among(recorded, arms, checks_the_same(with_records, false, true))
-  with_arms := result_without(merged, false)!
+  merged := removable_among
+    recorded
+    arms
+    checks_the_same(program, with_records, structs: false, merging: true)
+  with_arms := result_without(program, merged)
   # Nor are those in the body of arms made one, which the checking decided with the narrowing of the
   # first arm alone, as a cast that only that narrowing makes redundant.
   is_outside := (placed: Placed) ->
     at := key_position(placed.annotation.key)
     not merged.any((arms) -> arms.key == placed.key and in_body(arms, at))
   outside := [placed for placed in others when is_outside(placed)]
-  removable_among merged, outside, checks_the_same(with_arms, false, false)
+  removable_among
+    merged
+    outside
+    checks_the_same(program, with_arms, structs: false, merging: false)
+
+type SameCheck = (Placed[]) -> Bool
+
+# Whether `program` checks the same as `original` without the annotations, its unused imports of
+# structs counted unless `structs` (see result_of). Where `merging`, the types in the bodies of the
+# arms made one are compared apart (see in_shared_body and shares_types).
+checks_the_same := (
+  program: () -> ProgramWide, original: CheckResult, flags: { structs: Bool, merging: Bool }
+): SameCheck ->
+  { structs, merging } := flags
+  (left_out) ->
+    subjects: Set<String>
+    for placed in left_out
+      subjects.add subject.name if subject := placed.annotation.shared_subject
+    shares := (result: CheckResult) ->
+      not merging or
+        left_out.all((placed) -> shares_types(placed.annotation, subjects, original, result))
+    { result, is_alike } := tried_without(program, left_out, { structs }, shares)
+    found := result ? return false
+    excused := (node: Node) -> merging and in_shared_body(left_out, found, node)
+    is_alike and same_result(found, original, excused)
+
+# The result of the program without the annotations, which checks once accepted, its unused imports
+# of structs counted.
+result_without := (program: () -> ProgramWide, left_out: Placed[]) ->
+  tried_without(program, left_out, { structs: false }, (_) -> true).result!
+
+# The result of the program without the annotations, if it checks (see is_unused_type), and
+# whether it is `alike` while they are left out of the tree.
+tried_without := (
+  program: () -> ProgramWide, left_out: Placed[], flags: { structs: Bool },
+  alike: (CheckResult) -> Bool
+) ->
+  placed.annotation.remove() for placed in left_out
+  tried := program()
+  result := checks(tried) then result_of(tried, flags)
+  is_alike := result then alike(result) else false
+  placed.annotation.restore() for placed in left_out
+  { result, is_alike }
 
 # The annotations accepted but the types of the parameters of a literal that keeps its return type,
 # as `(x): T -> x` does not parse. Keeping a type that could be left out changes no checking.
@@ -184,7 +207,9 @@ unused_type_imports := (
     after := tried.shared[module.index].imports.names
     left_unused := (imported: Identifier) ->
       name := imported.name
-      not after[name]!.used and before[name]!.used and imports_type(tried, after[name]!, true)
+      not after[name]!.used and
+        before[name]!.used and
+        imports_type(tried, after[name]!, structs: true)
     for annotation in import_names_of(module.program)
       found.push { annotation, key: module.key } if left_unused(annotation.imported!)
   placed.annotation.restore() for placed in accepted
@@ -195,9 +220,7 @@ unused_type_imports := (
 # checks once, and few times more for the few that cannot. Which of those that can be left out
 # alone but not together are left out depends on their order; those found are checked together, so
 # a second run finds no more.
-removable_among := (
-  accepted: Placed[], trying: Placed[], checks_the_same: (Placed[]) -> Bool
-): Placed[] ->
+removable_among := (accepted: Placed[], trying: Placed[], checks_the_same: SameCheck): Placed[] ->
   return accepted if trying.is_empty()
   all := [accepted..., trying...]
   return all if checks_the_same(all)
