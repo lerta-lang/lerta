@@ -39,8 +39,7 @@ export generate_case := (g: Generator, case_expression: Case) ->
   # An arm that ends with a jump gives no operand; it never reaches the end.
   generate_arm_value := (body: Statement[]) ->
     value := generate_block_value(g, body, no_locals)
-    operand := value.is_empty() then 'poison' else value
-    incoming.push "[ #{operand}, %#{ir.current_block} ]"
+    incoming.push phi_incoming(value, ir.current_block)
     ir.branch end_label
   for arm in case_expression.arms
     test := generate_test(g, arm, subject_type, subject_operand)
@@ -92,10 +91,14 @@ branch_values := (g: Generator, test: String, then_value: () -> String, else_val
     operand := value()
     from := ir.current_block
     ir.branch end_label
-    "[ #{operand == '' then 'poison' else operand}, %#{from} ]"
+    phi_incoming operand, from
   incoming := [branch(then_label, then_value), branch(else_label, else_value)]
   ir.start_block end_label
   incoming
+
+# An incoming value of a phi, from the block; an arm that gives no operand never comes, as poison.
+export phi_incoming := (operand: String, block: String) ->
+  "[ #{operand.is_empty() then 'poison' else operand}, %#{block} ]"
 
 # The value of the arms at their end block: none for void, and none that comes for never.
 export merge := (g: Generator, type: Type, incoming: String[]) ->
