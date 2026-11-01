@@ -21,6 +21,38 @@ static void close_file(uv_file file) {
   uv_fs_req_cleanup(&request);
 }
 
+// Reads a file to its end through `read`, which returns how many bytes it put in `buffer`, 0 at the
+// end, or -1 on failure, as lerta_os_read_file returns the bytes. It reads in chunks, so that files
+// whose size is not known in advance work too.
+static uint8_t *read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int64_t size), void *file,
+                            int64_t *length_read) {
+  int64_t capacity = 4096;
+  int64_t length = 0;
+  uint8_t *bytes = malloc((size_t)capacity);
+  for (;;) {
+    if (bytes != NULL && length == capacity) {
+      capacity *= 2;
+      uint8_t *grown = (uint64_t)capacity > SIZE_MAX ? NULL : realloc(bytes, (size_t)capacity);
+      if (grown == NULL) free(bytes);
+      bytes = grown;
+    }
+    if (bytes == NULL) {
+      *length_read = LERTA_OUT_OF_MEMORY;
+      return NULL;
+    }
+    int64_t count = read(file, bytes + length, capacity - length);
+    if (count == 0) break;
+    if (count < 0) {
+      free(bytes);
+      *length_read = 0;
+      return NULL;
+    }
+    length += count;
+  }
+  *length_read = length;
+  return bytes;
+}
+
 static int64_t read_file(void *file, uint8_t *buffer, int64_t size) {
   uv_buf_t chunk = uv_buf_init((char *)buffer, (unsigned int)lerta_io_chunk(size));
   uv_fs_t request;
@@ -32,7 +64,7 @@ static int64_t read_file(void *file, uint8_t *buffer, int64_t size) {
 uint8_t *lerta_os_read_file(const char *path, int64_t *length) {
   uv_file file = open_file(path, UV_FS_O_RDONLY, 0);
   if (file < 0) return NULL;
-  uint8_t *contents = lerta_read_chunks(read_file, (void *)(intptr_t)file, length);
+  uint8_t *contents = read_chunks(read_file, (void *)(intptr_t)file, length);
   close_file(file);
   return contents;
 }

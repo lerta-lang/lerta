@@ -79,12 +79,6 @@ LertaArray *lerta_list_dir_names(const LertaString *path) {
   return names;
 }
 
-void lerta_append_c_string(LertaArray *array, const char *text) {
-  LertaString *string = lerta_string_from_c(text);
-  lerta_array_append(array, &string);
-  lerta_release(string);
-}
-
 // Takes a C string that the platform allocated.
 static LertaString *string_from_os(char *text) {
   LertaString *result = lerta_string_from_c(text);
@@ -375,34 +369,4 @@ void lerta_rename(const LertaString *from, const LertaString *to) {
   free(from_name);
   free(to_name);
   if (!renamed) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_rename), from);
-}
-
-// Reads in chunks, so that files whose size is not known in advance work too.
-uint8_t *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int64_t size), void *file,
-                           int64_t *length_read) {
-  int64_t capacity = 4096;
-  int64_t length = 0;
-  uint8_t *bytes = malloc((size_t)capacity);
-  for (;;) {
-    if (bytes != NULL && length == capacity) {
-      capacity *= 2;
-      uint8_t *grown = (uint64_t)capacity > SIZE_MAX ? NULL : realloc(bytes, (size_t)capacity);
-      if (grown == NULL) free(bytes);
-      bytes = grown;
-    }
-    if (bytes == NULL) {
-      *length_read = LERTA_OUT_OF_MEMORY;
-      return NULL;
-    }
-    int64_t count = read(file, bytes + length, capacity - length);
-    if (count == 0) break;
-    if (count < 0) {
-      free(bytes);
-      *length_read = 0;
-      return NULL;
-    }
-    length += count;
-  }
-  *length_read = length;
-  return bytes;
 }

@@ -71,6 +71,8 @@ int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]);
 char *lerta_c_string(const LertaString *s);
 // The String of the C string's bytes, which end at its NUL.
 LertaString *lerta_string_from_c(const char *text);
+// Appends the C string to an array of strings, as a new string.
+void lerta_append_c_string(LertaArray *array, const char *text);
 
 // Items (array.c): the size of an item of the kind, and the counting of the reference it holds.
 int64_t lerta_item_size(LertaItemKind kind);
@@ -113,16 +115,6 @@ static inline int64_t lerta_io_chunk(int64_t length) {
 // Process (process.c): main's arguments, without the program name.
 void lerta_set_arguments(int argc, char **argv);
 
-// Files (file.c). Reads a file to its end through `read`, which returns how many bytes it put in
-// `buffer`, 0 at the end, or -1 on failure; returns the bytes, which the caller frees, and their
-// count in `length`, or NULL on failure, with LERTA_OUT_OF_MEMORY in `length` if memory ran out.
-// It allocates with malloc and does not panic, so a worker may call it; the caller panics.
-// Not -1, which a read gives on failure.
-enum { LERTA_OUT_OF_MEMORY = -2 };
-uint8_t *lerta_read_chunks(int64_t (*read)(void *file, uint8_t *buffer, int64_t size), void *file,
-                           int64_t *length);
-// Appends the C string to an array of strings, as a new string.
-void lerta_append_c_string(LertaArray *array, const char *text);
 
 // Output (output.c), buffered for stdout and stderr together (see docs/internals.md#output).
 enum { STDOUT_FD = 1, STDERR_FD = 2 };
@@ -204,8 +196,12 @@ _Noreturn void lerta_os_abort(void);
 void *lerta_os_map_region(int64_t size);
 void lerta_os_unmap_region(void *region, int64_t size);
 void lerta_os_discard_region(void *region, int64_t size);
-// As lerta_read_chunks returns them; `length` is left as it is if the file cannot be opened, so the
-// caller sets it first.
+// The bytes of the file, which the caller frees, and their count in `length`, or NULL on failure,
+// with LERTA_OUT_OF_MEMORY in `length` if memory ran out; `length` is left as it is if the file
+// cannot be opened, so the caller sets it first. It allocates with malloc and does not panic, so a
+// worker may call it; the caller panics.
+// Not -1, which a read gives on failure.
+enum { LERTA_OUT_OF_MEMORY = -2 };
 uint8_t *lerta_os_read_file(const char *path, int64_t *length);
 // Reads what stdin has, up to `size` bytes, waiting for some: their count, 0 at the end, or -1 on
 // failure. `size` is at least LERTA_STDIN_MIN_READ, which a read of a Windows console needs (see

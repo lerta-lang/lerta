@@ -34,6 +34,12 @@ LertaString *lerta_string_from_c(const char *text) {
   return lerta_string_from_bytes(text, (int64_t)strlen(text));
 }
 
+void lerta_append_c_string(LertaArray *array, const char *text) {
+  LertaString *string = lerta_string_from_c(text);
+  lerta_array_append(array, &string);
+  lerta_release(string);
+}
+
 // The concatenation of the `count` parts that `args` holds, which it takes if `taken`: then the
 // longest part that nothing else holds and whose place has room for the result is extended there,
 // its bytes moved to their place, rather than all copied into a new String. One without the room

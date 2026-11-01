@@ -112,7 +112,7 @@ Fix: walk with descriptor-relative calls in platform_posix.c (`openat` with `O_N
 
 Severity: Low.
 
-`lerta_os_read_file` (runtime/platform.c:38-44) opens anything, and `lerta_read_chunks` (runtime/file.c:381-408) doubles its buffer until `realloc` fails. `read_file('/dev/zero')` grows until the allocator fails and the program panics `out of memory`, not a catchable `IOError`; a FIFO without a writer blocks one of libuv's four pool threads forever. `copy_file` already refuses a source that is not a regular file. *Unverified* by running, since it would take all memory.
+`lerta_os_read_file` (runtime/platform.c) opens anything, and its `read_chunks` doubles its buffer until `realloc` fails. `read_file('/dev/zero')` grows until the allocator fails and the program panics `out of memory`, not a catchable `IOError`; a FIFO without a writer blocks one of libuv's four pool threads forever. `copy_file` already refuses a source that is not a regular file. *Unverified* by running, since it would take all memory.
 
 Fix: `fstat` after opening and fail with an `IOError` unless the file is regular, or document and enforce a size cap.
 

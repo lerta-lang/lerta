@@ -122,12 +122,6 @@ LertaArray *lerta_array_filled(LertaItemKind item_kind, int64_t length, const vo
 
 int64_t lerta_array_length(const LertaArray *array) { return array->length; }
 
-LERTA_STATIC_STRING(index_out_of_range, "index out of range");
-
-void lerta_raise_index_out_of_range(void) {
-  lerta_raise(LERTA_INDEX_ERROR, LERTA_STR(index_out_of_range));
-}
-
 uint8_t *lerta_array_checked_items(const LertaArray *array, int64_t index) {
   if ((uint64_t)index < (uint64_t)array->length) return array->items;
   lerta_raise_index_out_of_range();

@@ -29,6 +29,12 @@ void lerta_raise(LertaErrorKind kind, const LertaString *message) {
   registered_raise((int32_t)kind, message);
 }
 
+LERTA_STATIC_STRING(index_out_of_range, "index out of range");
+
+void lerta_raise_index_out_of_range(void) {
+  lerta_raise(LERTA_INDEX_ERROR, LERTA_STR(index_out_of_range));
+}
+
 void lerta_raise_with(LertaErrorKind kind, const LertaString *prefix, const LertaString *detail) {
   LertaString *message = lerta_string_concat(2, prefix, detail);
   lerta_raise(kind, message);
