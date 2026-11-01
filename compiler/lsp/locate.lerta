@@ -60,24 +60,38 @@ candidates_at := (program: ProgramWide, module_index: Int, source: String, at: P
   add := (candidate: Candidate) ->
     found.push candidate if spans(candidate.name, at) and is_written(lines, candidate.name)
   for facts in all_facts(shared)
-    for (node, type) in facts.types.entries()
-      if node is Identifier
-        add {
-          type
-          name: node
-          declaration: -> name_declaration(program, module_index, facts, node)
-        }
-      else if node is Member
-        add { type, name: node.name, declaration: -> member_declaration(program, facts, node) }
-        if enum_name := enum_name_of(node, facts)
-          add { type, name: enum_name, declaration: -> type_declaration(program, type) }
-    for (call, link) in facts.instances.entries()
-      callee := call.callee
-      continue if callee is not Identifier
-      instance := link.instance
-      generic := generic_of(program, instance.generic)
-      declared := Declared(module_index: generic.module_index, name: generic.name)
-      add { name: callee, type: instance.entry.type, declaration: -> declared }
+    add_fact_names add, program, module_index, facts
+    add_generic_callees add, program, facts
+  add_type_names add, program, module_index
+  add_imported_names add, program, module_index
+  add_reexported_names add, program, module_index
+  found
+
+type AddCandidate = (Candidate) -> void
+
+# The names that the facts give types: names, members, and the enums of members written with them.
+add_fact_names := (add: AddCandidate, program: ProgramWide, module_index: Int, facts: NodeFacts) ->
+  for (node, type) in facts.types.entries()
+    if node is Identifier
+      add { type, name: node, declaration: -> name_declaration(program, module_index, facts, node) }
+    else if node is Member
+      add { type, name: node.name, declaration: -> member_declaration(program, facts, node) }
+      if enum_name := enum_name_of(node, facts)
+        add { type, name: enum_name, declaration: -> type_declaration(program, type) }
+
+# The callees of generic functions, which lead to the generic functions.
+add_generic_callees := (add: AddCandidate, program: ProgramWide, facts: NodeFacts) ->
+  for (call, link) in facts.instances.entries()
+    callee := call.callee
+    continue if callee is not Identifier
+    instance := link.instance
+    generic := generic_of(program, instance.generic)
+    declared := Declared(module_index: generic.module_index, name: generic.name)
+    add { name: callee, type: instance.entry.type, declaration: -> declared }
+
+# The names of types that the module writes, which lead to their declarations or to their aliases.
+add_type_names := (add: AddCandidate, program: ProgramWide, module_index: Int) ->
+  shared := program.shared[module_index]
   for (type_name, types) in shared.type_names.entries()
     alias := shared.alias_names[type_name]
     for type in types
@@ -85,7 +99,10 @@ candidates_at := (program: ProgramWide, module_index: Int, source: String, at: P
         return Declared(module_index, name: alias) if alias
         type_declaration program, type
       add { type, name: written_name(type_name), declaration }
-  for imported in shared.imports.names.values()
+
+# The names that the module imports from other modules, which lead to their declarations.
+add_imported_names := (add: AddCandidate, program: ProgramWide, module_index: Int) ->
+  for imported in program.shared[module_index].imports.names.values()
     source := imported.source
     continue if source is not ExportRef
     ref := source
@@ -94,11 +111,9 @@ candidates_at := (program: ProgramWide, module_index: Int, source: String, at: P
       type: nil
       declaration: -> top_level_declaration(program, ref.module_index, ref.name)
     }
-  add_reexported_names add, program, module_index
-  found
 
 # The names that the module exports from other modules, which lead to their declarations.
-add_reexported_names := (add: (Candidate) -> void, program: ProgramWide, module_index: Int) ->
+add_reexported_names := (add: AddCandidate, program: ProgramWide, module_index: Int) ->
   module := program.modules[module_index]
   for statement in module.program
     continue if statement is not Import
@@ -149,8 +164,7 @@ top_level_declaration := (program: ProgramWide, module_index: Int, name: String)
 member_declaration := (program: ProgramWide, facts: NodeFacts, member: Member) ->
   name := member.name.name
   object_type := facts.types[member.object]
-  target := facts.members[member]
-  return object_type is ObjectType then declared_member(program, object_type, name) if target == nil
+  target := facts.members[member] ? return member_of_type(program, object_type, name)
   case target
     when Method
       source := target.source
@@ -159,9 +173,7 @@ member_declaration := (program: ProgramWide, facts: NodeFacts, member: Member) -
         when ExtensionSource
           Declared module_index: source.method.module_index, name: source.method.name
         else nil
-    when Property
-      return nil if target.kind != FIELD or object_type is not ObjectType
-      declared_member program, object_type, name
+    when Property then target.kind == FIELD then member_of_type(program, object_type, name)
     when EnumValue then enum_member_declaration(program, facts.types[member]!, name)
     else nil
 
@@ -219,6 +231,11 @@ interface_declaration := (program: ProgramWide, type: InterfaceType) ->
 written_name := (type_name: NamedType) ->
   Identifier name: type_name.name, position: type_name.position
 
+# The member of the type by its name, if the type is a class or a struct.
+member_of_type := (program: ProgramWide, type: Type?, name: String) ->
+  object_type := type as ObjectType ? return nil
+  declared_member program, object_type, name
+
 declared_member := (program: ProgramWide, type: ObjectType, name: String) ->
   info := info_of(program, type)
   member := info.declaration.members.find((each) -> each.name.name == name) ? return nil
@@ -231,8 +248,8 @@ declared_member := (program: ProgramWide, type: ObjectType, name: String) ->
 export is_written := (lines: String[], name: Identifier) ->
   { line, column } := name.position
   return false if line > lines.length
-  code_points := lines[line - 1].iter().to_array()
-  written := name.name.iter().to_array()
+  code_points := lines[line - 1].to_array()
+  written := name.name.to_array()
   return false if column - 1 + written.length > code_points.length
   for code, i in written
     return false if code_points[column - 1 + i] != code
