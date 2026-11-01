@@ -373,7 +373,11 @@ is_attached_name := (token: Token) -> token.kind == IDENTIFIER and not token.spa
 parse_command_call := (tokens: TokenStream) ->
   var callee = parse_primary(tokens)
   position := callee.position
-  callee = Member(position, object: callee, name: parse_identifier(tokens)) while tokens.accept('.')
+  nesting := tokens.nesting
+  while tokens.accept('.')
+    tokens.deepen()
+    callee = Member(position, object: callee, name: parse_identifier(tokens))
+  tokens.nesting = nesting
   call_of callee, parse_arguments(tokens), []
 
 # `for` and its loop header (see LoopHeader), followed by an indented block.
@@ -411,7 +415,7 @@ export parse_if := (tokens: TokenStream): If ->
   tokens.next()
   else_body: Statement[] =
     if tokens.peek().kind == 'if'
-      [parse_if(tokens)]
+      [tokens.nested(-> parse_if(tokens))]
     else
       parse_block tokens
   If condition, then_body, else_body, position

@@ -2,18 +2,6 @@
 
 Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## Three syntactic forms escape the nesting limit and overflow the compiler's stack
-
-Severity: Medium.
-
-[The syntax](reference/syntax.md) refuses nesting deeper than 500 so that the compiler does not overflow its stack, but three forms build a tree of arbitrary depth without counting it: an `else if` chain (`parse_if`, compiler/parser/statement.lerta:406-417, recurses for the `else` branch), the callee of a call without parentheses (`parse_command_call`, compiler/parser/statement.lerta:373-377, builds `Member` nodes in a loop) and the `[]` suffixes of a cast type (`parse_cast_type`, compiler/parser/type.lerta:104-114). The parser survives, and the passes after it, which walk the tree recursively, die with `stack overflow`, exit 134, instead of a diagnostic.
-
-- `if x == 1` followed by 20,000 `else if x == N` arms: `build`, `dump-ast`, `dump-checked` and `fmt` all die; 5,000 arms work.
-- `f` followed by `.a` 60,000 times and an argument: `dump-ast` dies.
-- `x := 1 as Int` followed by `[]` 60,000 times and `!`: `dump-ast` dies.
-
-Fix: parse the `else` branch of `parse_if` under `tokens.nested`, or build the chain in a loop and `deepen` per link; `deepen` per `.name` in `parse_command_call` and per `[]` in `parse_cast_type`, restoring the depth after.
-
 ## `run` of a `.bat` or `.cmd` file on Windows is a command injection
 
 Severity: Medium.
