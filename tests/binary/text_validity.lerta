@@ -31,3 +31,22 @@ print bytes.text(3)!
 print bytes.text(6)!.is_empty()
 print bytes.text()!
 print ''.binary.text()!.is_empty()
+# The runtime takes 8 ASCII bytes at a time: a byte that is no UTF-8 at the first or the last place
+# of such a run is still found, and so is a cut sequence after the runs, and a character between
+# them is read.
+eight := 'abcdefgh'.binary.to_array()
+for place in [0, 7, 8, 15]
+  run := [eight..., eight...]
+  run[place] = 0xFF
+  print text_of(run) == 'nil'
+print text_of([eight..., eight..., 0xC3])
+print text_of([eight..., 0xC3, 0xA9, eight...])
+# Past the runs, the bytes left are checked one at a time.
+tail := [eight..., 'x', 'y', 'z', 0xC3, 0xA9]
+print text_of(tail)
+tail[11] = 0xFF
+print text_of(tail)
+# A continuation is checked at each place: second, third and fourth.
+print text_of([0xC3, 0x41])
+print text_of([0xE2, 0x82, 0x41])
+print text_of([0xF0, 0x9F, 0x98, 0x41])

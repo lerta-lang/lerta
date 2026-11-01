@@ -1,8 +1,8 @@
 # The Chars of valid UTF-8, which a String always is, so its sequences need no checks, and the
 # UTF-8 of a String.
 
-# The same object as a String, for bytes that are valid UTF-8.
-export extern lerta_binary_as_string: (Binary) -> String
+# The same object as a String if the bytes are valid UTF-8, or nil.
+export extern lerta_binary_text: (Binary) -> String?
 
 # The text from the byte `start` up to the byte `end`, each the start of a Char or the end; else
 # it throws an IndexError.
@@ -18,28 +18,6 @@ export sequence_length := (lead: Byte) ->
     else 0
 
 export is_continuation := (byte: Byte) -> byte >= 0x80 and byte <= 0xBF
-
-# Whether the bytes are UTF-8. Overlong forms, surrogates and code points above U+10FFFF are not,
-# as the standard requires: the leads 0xE0, 0xED, 0xF0 and 0xF4 limit the byte after them.
-export is_utf8 := (bytes: Binary) ->
-  var i = 0
-  while i < bytes.length
-    lead := bytes[i]
-    length := sequence_length(lead)
-    return false if length == 0 or i + length > bytes.length
-    for k in 1...length
-      return false if not is_continuation(bytes[i + k])
-    return false if length > 1 and not may_follow(lead, bytes[i + 1])
-    i += length
-  true
-
-may_follow := (lead: Byte, second: Byte) ->
-  case lead
-    when 0xE0 then second >= 0xA0
-    when 0xED then second <= 0x9F
-    when 0xF0 then second >= 0x90
-    when 0xF4 then second <= 0x8F
-    else true
 
 # The bits of a lead byte that hold a code point, by the length of its sequence.
 LEAD_BITS: Byte[] = [0x7F, 0x1F, 0x0F, 0x07]
