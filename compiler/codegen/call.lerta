@@ -24,7 +24,7 @@ import
   generate, holding_all, read_any_field, release_if_reference, type_at_use, type_of
 from './expression'
 import function_reference_symbol from './references'
-import emit_exception_check, holding from './exceptions'
+import emit_exception_check, holding, unwind_from from './exceptions'
 import deferred_value, Generator from './generator'
 import emit_member_dispatch from './heap_object'
 import emit_interface_call from './interface'
@@ -288,6 +288,9 @@ export call_user_function := (ir: IrBuilder, symbol: String, type: Type, args: S
 # and released after the call; it is evaluated before the arguments, as a named function is known
 # before them.
 call_closure := (g: Generator, callee: Expression, args: Expression[]) ->
+  if call_in_place := in_place_call(g, callee)
+    unwind := unwind_from(g, g.position)
+    return with_arguments(g, args, (operands) -> call_in_place(operands, unwind))
   type := type_of(g, callee)
   (closure, is_owned) := generate_borrowed(g, callee, args)
   emit_call := (operands: String[]) -> emit_closure_call(g.ir, closure, type, operands)
@@ -296,6 +299,13 @@ call_closure := (g: Generator, callee: Expression, args: Expression[]) ->
   emit_release g.ir, closure if is_owned
   emit_exception_check g
   result
+
+# What generates the callee's function literal in place, if it is a parameter of a method generated
+# in place that is given one (see in_place_calls).
+in_place_call := (g: Generator, callee: Expression) ->
+  return nil if callee is not Identifier
+  declaration := g.facts.local_declarations[callee] ? return nil
+  g.in_place_calls[declaration]
 
 # Generates the arguments, which `emit_call` borrows (see borrowing_all).
 with_arguments := (g: Generator, args: Expression[], emit_call: (String[]) -> String) ->

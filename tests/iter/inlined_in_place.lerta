@@ -1,0 +1,52 @@
+# A function literal that a method generated in place calls in place: returning a parameter, which
+# its result then holds, returning from a catch, releasing its own objects as it returns, and
+# assigning a captured var a new object, which the var holds after the call; returning through a
+# finally, which runs once for each call, and out of a loop of its own; and capturing @ in a method.
+class Noisy
+  name: String
+  deinit = -> print("drop #{@name}")
+
+f := (n: Int) ->
+  numbers := [1, 2, 3]
+  kept := numbers.fold(Noisy('first'), (acc, x) ->
+    return acc if x < n
+    Noisy "n#{x}"
+  )
+  print kept.name
+  print numbers.any((x) ->
+    try
+      throw ValueError("#{x}") if x == n
+      false
+    catch e: ValueError
+      return e.message == "#{n}"
+  )
+  print numbers.all((x) ->
+    local := Noisy("local#{x}")
+    return false if x == n
+    not local.name.is_empty()
+  )
+  var held = Noisy('held')
+  print numbers.find((x) ->
+    held = Noisy("held#{x}")
+    x == n
+  ) ? -1
+  print held.name
+
+  print numbers.any((x) ->
+    try
+      return x == n
+    finally
+      print "finally #{x}"
+  )
+  print numbers.any((x) ->
+    for y in 0...x
+      return true if y * x == n
+    false
+  )
+
+class Limit
+  n: Int
+  reached = (numbers: Int[]) -> numbers.any((x) -> x >= @n)
+
+f 2
+print Limit(3).reached([1, 2, 3])

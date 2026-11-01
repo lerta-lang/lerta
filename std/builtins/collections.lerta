@@ -17,7 +17,7 @@ extend<T: Literal> T[]
 extend<T> T[]
   # The items, read as the Iter is.
   iter = (): Iter<T> -> (x for x in @)
-  # A loop rather than `@any`, which would allocate a closure, and an Iter of the array, per call.
+  # A loop rather than `@any`, whose result LLVM computes after the loop, at an extra move per item.
   contains = (item: T): Bool ->
     for each in @
       return true if each == item
@@ -90,7 +90,8 @@ extend<T> Iterable<T>
     for x in @
       return true if test(x)
     false
-  # A loop rather than `not @any`, which would allocate a closure per call.
+  # A loop rather than `not @any`, whose function would capture `test`, which is then called as a
+  # closure rather than generated in place (see docs/internals.md#inlined-methods).
   all = (test: (T) -> Bool): Bool ->
     for x in @
       return false if not test(x)

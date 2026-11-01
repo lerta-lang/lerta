@@ -18,10 +18,10 @@ import emit_traced_unwind, TRACE_PUSH from './exceptions'
 import generate, held_value, type_at_use, type_of from './expression'
 import nan_free_operations from './float_ranges'
 import
-  generate_block_with, generate_closure, generate_last_statement, generate_statements,
+  generate_block_with, generate_closure, generate_last_statement, is_awaiting, generate_statements,
   release_scope, store_in_slot
 from './function'
-import fused_call, fused_comprehension, is_builtins from './fusion'
+import fused_call, fused_comprehension, generate_in_place, is_builtins from './fusion'
 import
   CodegenLocal, deferred_value, Generator, locate, ModuleCode, SlotLocal, trace_name, ValueLocal
 from './generator'
@@ -165,6 +165,11 @@ export generate_inlined_method := (
   unwind := -> at_call(-> emit_traced_unwind(g, TRACE_PUSH))
   inner.fused_exit = { unwind, label: exit_label }
   # The method's generator is passed rather than captured, as it holds the function.
+  for arg, i in arguments_of(g.facts, call)
+    if is_taken_in_place(g, arg, literal.params.get(i), instance)
+      in_place := arg as FunctionLiteral!
+      inner.in_place_calls[literal.params[i].name] = (operands, unwind) ->
+        generate_in_place g, in_place, operands, unwind
   inner.iterates_this = (method, variable, body) ->
     go_through_receiver g, method, deferred_value(g, member.object), variable, body
   scope := inner.locals.push()
@@ -189,7 +194,19 @@ export generate_inlined_method := (
 # generate_closure).
 generate_argument := (g: Generator, arg: Expression, param: Parameter?, instance: Instance) ->
   return generate(g, arg) if arg is not FunctionLiteral or param == nil
-  generate_closure g, arg, param.name not in instance.facts.escaping_locals
+  generate_closure g, arg, is_only_called(param, instance)
+
+# Its calls generate a function literal that the method only calls in place, as a loop takes a
+# lazy comprehension's functions, unless it is weak, captures weakly, yields or awaits. The closure
+# is still made, unused, so that what it captures is checked where the literal is.
+is_taken_in_place := (g: Generator, arg: Expression, param: Parameter?, instance: Instance) ->
+  return false if arg is not FunctionLiteral or param == nil or not is_only_called(param, instance)
+  captures := g.facts.captures[arg] ? []
+  return false if arg.weak or captures.any((capture) -> capture.is_weak)
+  not arg.yields and not is_awaiting(g, arg)
+
+is_only_called := (param: Parameter, instance: Instance) ->
+  param.name not in instance.facts.escaping_locals
 
 # The generator of the method's body, named as its function is in traces, with the code of its
 # module.
