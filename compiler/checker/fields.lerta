@@ -97,13 +97,23 @@ find_common_fields := (body: Body, union: UnionType, name: Identifier) ->
     fields.push { member_type, info: field.info, type: field.type }
   first := fields[0]
   if differing := fields.find((each) -> each.type != first.type)
-    types := format_types(first.type, differing.type)
-    first_member := format_member(first.member_type, union)
-    differing_member := format_member(differing.member_type, union)
-    in_first := "#{types.first} in #{first_member}"
-    problem := "'#{name.name}' has type #{in_first} but #{types.second} in #{differing_member}"
+    problem := differing_member_types
+      name.name
+      union
+      { member: first.member_type, type: first.type }
+      { member: differing.member_type, type: differing.type }
     return CommonFields(fields, problem)
   CommonFields fields, problem: nil
+
+# Why a member of the name, a field or a method, cannot be used on the union: it has one type in a
+# member of it and another in another.
+export differing_member_types := (
+  name: String, union: UnionType, first: { member: Type, type: Type },
+  other: { member: Type, type: Type }
+) ->
+  types := format_types(first.type, other.type)
+  in_first := "#{types.first} in #{format_member(first.member, union)}"
+  "'#{name}' has type #{in_first} but #{types.second} in #{format_member(other.member, union)}"
 
 common_field_target := (body: Body, union: UnionType, member: Member) ->
   { name, position } := member.name

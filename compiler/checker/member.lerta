@@ -8,7 +8,10 @@ import warn_if_kept from './cycles'
 import fail from './diagnostics'
 import reject_type_arguments, set_type, type_of from './expression'
 import plain_method_type from './extensions'
-import common_field_type, common_field_type_by_name, field_type, field_type_by_name from './fields'
+import
+  common_field_type, common_field_type_by_name, differing_member_types, field_type,
+  field_type_by_name
+from './fields'
 import receiver_instance, type_of_generic_method_call from './generic_call'
 import interface_member from './interfaces'
 import
@@ -25,8 +28,7 @@ import find_interface_extension from './satisfaction'
 import Body from './shared'
 import record_taken_items from './taken_items'
 import
-  ArrayType, format_member, format_type, format_types, FunctionType, InterfaceType, OptionalType,
-  Type, UnionType
+  ArrayType, format_member, format_type, FunctionType, InterfaceType, OptionalType, Type, UnionType
 from '../types'
 
 # An array's `pop` takes out an item (see are_items_taken).
@@ -117,10 +119,8 @@ find_union_method := (body: Body, union: UnionType, name: Identifier): UnionMeth
     return failed(generic_problem(source, name.name, of_member)) if generic_method(source) != nil
     type := method_type(body, member, source, name, nil)!
     if first and first != type
-      first_name := format_member(members[0].member, union)
-      types := format_types(first, type)
-      differing := "#{types.first} in #{first_name} but #{types.second} in #{member_name}"
-      return failed("'#{name.name}' has type #{differing}")
+      first_typed := { member: members[0].member, type: first }
+      return failed(differing_member_types(name.name, union, first_typed, { member, type }))
     first = type
     members.push { member, source }
   { type: first, members, problem: nil }
