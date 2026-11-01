@@ -42,7 +42,7 @@ unqualified := (member: Member, place: Place) ->
   alone := Identifier(name: member.name.name, position: member.position)
   Annotation
     member
-    key: annotation_key('member', member.position)
+    key: annotation_key(MEMBER, member.position)
     remove: -> place(alone)
     restore: -> place(member)
 
@@ -51,7 +51,7 @@ uncast := (cast: Cast, place: Place) ->
   Annotation
     cast
     reported: { written: cast.value, rule: REDUNDANT_CASTS }
-    key: annotation_key('cast', cast.type.position)
+    key: annotation_key(CAST, cast.type.position)
     remove: -> place(cast.value)
     restore: -> place(cast)
 
@@ -113,7 +113,7 @@ emptied := (expression: Expression, test: EmptinessTest, place: Place) ->
   Annotation
     emptied: value
     reported: { written, rule: EMPTINESS_TESTS }
-    key: annotation_key('empty', expression.position)
+    key: annotation_key(EMPTY, expression.position)
     remove: -> place(written)
     restore: -> place(expression)
 
@@ -145,7 +145,7 @@ membership := (call: Call, place: Place) ->
   Annotation
     membership: call
     reported: { written, rule: MEMBERSHIP_TESTS }
-    key: annotation_key('in', member.name.position)
+    key: annotation_key(IN, member.name.position)
     remove: -> place(written)
     restore: -> place(call)
 
@@ -182,7 +182,7 @@ shared_arms := (case_value: Case, run: CaseArm[]) ->
     shared_arms: run
     shared_subject: case_value.subject as Identifier?
     reported: { written: patterns[first.patterns.length], rule: SHARED_ARM_BODIES }
-    key: annotation_key('arms', first.patterns[0].position)
+    key: annotation_key(ARMS, first.patterns[0].position)
     remove: ->
       case_value.arms =
         [each == first then arm else each for each in case_value.arms when each not in others]
@@ -249,7 +249,7 @@ spread_copy := (call: Call, source: Expression) ->
     spread_copy: call
     spread_source: source
     reported: { written: spread, rule: SPREADS }
-    key: annotation_key('spread', call.position)
+    key: annotation_key(SPREAD, call.position)
     remove: ->
       call.args = [spread, call.args...]
       call.named_args = kept
@@ -266,7 +266,7 @@ shorthand := (call: Call, named: NamedValue) ->
   Annotation
     shorthand: call
     shorthand_cast: named.value as Cast?
-    key: annotation_key('shorthand', named.name.position)
+    key: annotation_key(SHORTHAND, named.name.position)
     # By its name, as leaving out its cast puts another argument in its place.
     remove: ->
       call.named_args = [each for each in call.named_args when each.name.name != alone.name]
@@ -279,7 +279,7 @@ shorthand := (call: Call, named: NamedValue) ->
 # come before it (see rewrites_of), are written so by then, in their places among them.
 recorded := (call: Call, place: Place) -> Annotation(
   construction: call
-  key: annotation_key('record', call.position)
+  key: annotation_key(RECORD, call.position)
   remove: ->
     fields := construction_arguments(call)
     place RecordLiteral(fields, position: call.position, spread: construction_spread(call))

@@ -13,13 +13,31 @@ export struct Reported
   written: Expression
   rule: StyleRule
 
-# The checking and the printer find an annotation in syntax trees parsed apart, by what it annotates
-# (`return`, `parameter`, `variable` or `field`) and where that is: the function literal, or the
-# name; or by `member` and where the member is, by `record` and where the construction is, by
-# `shorthand` and where the name of the argument is, by `cast` and where the type of the cast is,
-# by `empty` and where the test is, or by `import` and where the import is, with the name it gives.
+# What an annotation annotates, which the checking and the printer find it by, with where that is
+# (see AnnotationKey): the return type of a function literal, the type of a parameter, a variable or
+# a field, at its name; a member, a construction to write as a record, a named argument to write as
+# its name alone, a redundant cast at its type, a test to write with is_empty(), a call of
+# `contains`, arms to make one at the first pattern, a construction to write with a spread, or a
+# name of an import, at the import.
+export enum AnnotationKind
+  RETURN
+  PARAMETER
+  VARIABLE
+  FIELD
+  MEMBER
+  RECORD
+  SHORTHAND
+  CAST
+  EMPTY
+  IN
+  ARMS
+  SPREAD
+  IMPORT
+
+# The checking and the printer find an annotation in syntax trees parsed apart, by its kind and
+# where it is, and, for a name of an import, by the name it gives.
 export struct AnnotationKey
-  kind: String
+  kind: AnnotationKind
   at: Position
   name: String? = default nil
 
@@ -73,11 +91,11 @@ export struct Placed
   key: String
   annotation: Annotation
 
-export annotation_key := (kind: String, at: Position) -> AnnotationKey(kind, at)
+export annotation_key := (kind: AnnotationKind, at: Position) -> AnnotationKey(kind, at)
 
 # A name left out of an import, by the import and the name it gives (see import_names_of).
 export import_key := (import_node: Import, name: String) ->
-  AnnotationKey name, kind: 'import', at: import_node.position
+  AnnotationKey name, kind: IMPORT, at: import_node.position
 
 # The annotations that may be left out, in the order of the source. Those in generic functions and
 # types are not: the checker checks their code only for each instance, which tells nothing of the
@@ -169,7 +187,7 @@ add_expression := (found: Annotation[], expression: Expression): void ->
 return_annotation := (literal: FunctionLiteral) ->
   type := literal.return_type
   Annotation
-    key: annotation_key('return', literal.position)
+    key: annotation_key(RETURN, literal.position)
     remove: -> literal.return_type = nil
     restore: -> literal.return_type = type
     value: last_value(literal.body)
@@ -187,7 +205,7 @@ parameter_annotation := (literal: FunctionLiteral, i: Int) ->
     param := literal.params[i]
     literal.params[i] = { param..., type: new_type }
   Annotation
-    key: annotation_key('parameter', name.position)
+    key: annotation_key(PARAMETER, name.position)
     remove: -> typed(nil)
     restore: -> typed(type)
     parameter: name
@@ -206,7 +224,7 @@ variable_annotation := (declaration: Declaration) ->
   Annotation
     remove
     restore
-    key: annotation_key('variable', declaration.name.position)
+    key: annotation_key(VARIABLE, declaration.name.position)
     name: declaration.name
     value: declaration.value
     moves_to_type_arguments: collection != nil
@@ -230,6 +248,6 @@ field_annotation := (members: MemberDeclaration[], i: Int) ->
   Annotation
     name
     value
-    key: annotation_key('field', name.position)
+    key: annotation_key(FIELD, name.position)
     remove: -> typed(nil)
     restore: -> typed(type)
