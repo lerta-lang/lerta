@@ -1,16 +1,14 @@
 # What std:json's generated code reads through (see std/json.lerta).
 import from_base64 from './base64'
-import field_key, is_finite, quoted from './json_text'
+import field_key, is_finite, Level, path_of, quoted from './json_text'
 import JsonError, JsonKeys from '../json'
 
 export class JsonReader
   bytes: Binary
   keys: JsonKeys
   at = 0
-  # The steps from the root to the value being read, as `[0]` or `.name`, which errors give.
-  path: String[] = []
-  # How many items or keys each array or object being read has given, the innermost last.
-  counts: Int[] = []
+  # Each array or object being read, the innermost last.
+  levels: Level[] = []
   # The keys that each object being read has given, the innermost last.
   seen_keys: Set<String>[] = []
 
@@ -89,9 +87,10 @@ export class JsonReader
 
   # Whether another item of the innermost array follows, which it then starts reading.
   next_item = ->
-    count := @counts.last()!
+    level := @levels.last()!
+    count := level.count
     return false if not @has_next(']')
-    @path[@path.length - 1] = "[#{count}]"
+    level.step = "[#{count}]"
     true
 
   # Reads `{` of an object, whose keys next_key then gives.
@@ -105,11 +104,11 @@ export class JsonReader
       @seen_keys.pop()
       return nil
     # An error before the key is read is the object's.
-    @path[@path.length - 1] = ''
+    @levels.last()!.step = ''
     @skip_space()
     @fail_expected 'a key' if @peek() != '"'
     key := @read_string()
-    @path[@path.length - 1] = ".#{key}"
+    @levels.last()!.step = ".#{key}"
     @skip_space()
     @fail_expected "':'" if @peek() != ':'
     @at += 1
@@ -167,25 +166,23 @@ export class JsonReader
   begin = (open: Byte, expected: String) ->
     @skip_space()
     @fail_expected expected if @peek() != open
-    @fail "nesting deeper than #{MAX_DEPTH}" if @counts.length == MAX_DEPTH
+    @fail "nesting deeper than #{MAX_DEPTH}" if @levels.length == MAX_DEPTH
     @at += 1
-    @path.push ''
-    @counts.push 0
+    @levels.push Level()
 
   # Whether another item or key of the innermost array or object follows, after the `,` that it
   # reads; at the end, it reads `close`.
   has_next = (close: Byte) ->
     @skip_space()
-    count := @counts.last()!
+    level := @levels.last()!
     if @peek() == close
       @at += 1
-      @path.pop()
-      @counts.pop()
+      @levels.pop()
       return false
-    if count > 0
+    if level.count > 0
       @fail_expected "',' or '#{byte_text(close)}'" if @peek() != ','
       @at += 1
-    @counts[@counts.length - 1] = count + 1
+    level.count += 1
     true
 
   # Nothing but whitespace follows the value.
@@ -255,7 +252,7 @@ export class JsonReader
 
   fail_expected = (expected: String): never -> @fail("expected #{expected}, found #{@found()}")
 
-  fail = (message: String): never -> throw JsonError(message: "$#{@path.join('')}: #{message}")
+  fail = (message: String): never -> throw JsonError(message: "#{path_of(@levels)}: #{message}")
 
   # What is where the reader is, as an error says it.
   found = ->

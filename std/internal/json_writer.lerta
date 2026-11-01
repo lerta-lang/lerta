@@ -1,18 +1,15 @@
 # What std:json's generated code writes through (see std/json.lerta).
 import base64 from './base64'
-import field_key, is_finite, quoted from './json_text'
+import field_key, is_finite, Level, path_of, quoted from './json_text'
 import JsonError, JsonKeys from '../json'
 
 export class JsonWriter
   keys: JsonKeys
   written = ''
-  # How many items or keys each array or object being written has, the innermost last.
-  counts: Int[] = []
-  # The steps from the root to the value being written, as `[0]` or `.name`, which errors give.
-  path: String[] = []
+  # Each array or object being written, the innermost last.
+  levels: Level[] = []
   # The objects being written that may hold themselves, by their addresses, with their paths.
-  entered: Int[] = []
-  entered_paths: String[] = []
+  entered: { address: Int, path: String }[] = []
 
   write_null = (): void -> @written += 'null'
   write_bool = (value: Bool): void -> @written += value.to_string()
@@ -31,7 +28,7 @@ export class JsonWriter
   begin_array = (): void -> @begin('[')
 
   # Starts an item of the innermost array.
-  next_item = (): void -> @next("[#{@counts.last()!}]")
+  next_item = (): void -> @next("[#{@levels.last()!.count}]")
 
   end_array = (): void -> @end(']')
 
@@ -54,36 +51,31 @@ export class JsonWriter
   # already: JSON cannot hold a cycle.
   enter = (address: Int): void ->
     path := @path_text()
-    if index := @entered.index_of(address)
-      throw JsonError(message: "#{path}: a cycle back to #{@entered_paths[index]}")
-    @entered.push address
-    @entered_paths.push path
+    if earlier := @entered.find((each) -> each.address == address)
+      throw JsonError(message: "#{path}: a cycle back to #{earlier.path}")
+    @entered.push { address, path }
 
   # JSON holds no infinity.
   check_finite = (value: Float): void ->
     return if is_finite(value)
     throw JsonError(message: "#{@path_text()}: #{value}, which JSON cannot hold")
 
-  leave = (): void ->
-    @entered.pop()
-    @entered_paths.pop()
+  leave = (): void -> @entered.pop()
 
   begin = (open: String) ->
     @written += open
-    @counts.push 0
-    @path.push ''
+    @levels.push Level()
 
   next = (step: String) ->
-    count := @counts.last()!
-    @written += ',' if count > 0
-    @counts[@counts.length - 1] = count + 1
-    @path[@path.length - 1] = step
+    level := @levels.last()!
+    @written += ',' if level.count > 0
+    level.count += 1
+    level.step = step
 
   end = (close: String) ->
-    @counts.pop()
-    @path.pop()
+    @levels.pop()
     @written += close
 
-  path_text = -> "$#{@path.join('')}"
+  path_text = -> path_of(@levels)
 
   text = -> @written
