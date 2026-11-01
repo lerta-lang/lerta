@@ -44,10 +44,14 @@ visit_statement := (visit: Visit, statement: Statement, place: Place) ->
     when Expression then visit_place(visit, statement, place)
     else pass
 
+# A member's value is replaced in the member that the removal of its type may have replaced (see
+# field_annotation).
 visit_members := (visit: Visit, members: MemberDeclaration[]) ->
   for member, i in members
     if value := member.value
-      visit_place visit, value, (new_value) -> members[i] = { member..., value: new_value }
+      visit_place visit, value, (new_value) ->
+        current := members[i]
+        members[i] = { current..., value: new_value }
 
 visit_condition := (visit: Visit, condition: Condition, place: Place) ->
   case condition
@@ -73,11 +77,15 @@ visit_entries := (visit: Visit, entries: MapEntry[]) ->
       current := entries[i]
       entries[i] = { current..., value }
 
+# A parameter's default is replaced in the parameter that the removal of its type may have replaced
+# (see parameter_annotation).
 visit_function := (visit: Visit, literal: FunctionLiteral) ->
   params := literal.params
   for param, i in params
     if default := param.default
-      visit_place visit, default, (value) -> params[i] = { param..., default: value }
+      visit_place visit, default, (value) ->
+        current := params[i]
+        params[i] = { current..., default: value }
   visit_statements visit, literal.body
 
 # The parts of an expression. The element and the guard of a comprehension are not places: its
