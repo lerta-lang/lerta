@@ -7,8 +7,8 @@
 # checked.
 import Check, run_checks, select from './lib/report'
 import FileRun, root_dir, run_file, SetupError from './lib/lerta'
-import is_file from 'std:io'
-import env, run from 'std:process'
+import is_dir, is_file, list_dir from 'std:io'
+import env from 'std:process'
 
 # LERTA_TEST_CHECKED_COMPILER names another, for the self checks (see self.lerta).
 checked_compiler := env('LERTA_TEST_CHECKED_COMPILER') ? "#{root_dir}/build/bootstrap/stage2"
@@ -16,21 +16,20 @@ checked_compiler := env('LERTA_TEST_CHECKED_COMPILER') ? "#{root_dir}/build/boot
 # What runtime/internal.h names LERTA_LEAK_EXIT_CODE.
 LEAK_EXIT_CODE := 23
 
-# The sources that git lists, those not added yet included.
-sources := ->
-  output: Byte[]
-  args :=
-    'ls-files'
-    '--cached'
-    '--others'
-    '--exclude-standard'
-    '--'
-    'tests/*.lerta'
-    'examples/*.lerta'
-  listed := await run('git', args..., cwd: root_dir, stdout: output)
-  throw SetupError('git ls-files failed') if listed.code != 0
-  text := output.to_binary().text()!
-  [path for path in text.split("\n") when not path.is_empty() and is_file("#{root_dir}/#{path}")]
+# Every .lerta file under `dir`, relative to the root, lib/ included, unlike directory_tree in
+# run.lerta. The files are walked rather than listed by git: the containers of test-cross lack git,
+# and a worktree's .git there names a place outside what they mount.
+sources_under := (dir: String): String[] ->
+  paths: String[]
+  for entry in list_dir("#{root_dir}/#{dir}")
+    path := "#{dir}/#{entry}"
+    if is_dir("#{root_dir}/#{path}")
+      paths.push source for source in sources_under(path)
+    else if entry.ends_with('.lerta')
+      paths.push path
+  paths
+
+sources := -> [sources_under('tests')..., sources_under('examples')...]
 
 # Why the run failed the check, if it did.
 reasons_of := (what: String, ran: FileRun): String[] ->
@@ -48,7 +47,7 @@ source_check := (path: String) -> Check(name: path, run: ->
 # The number of the checks that failed.
 export suite := ->
   title := 'leak checks'
-  checks := select(title, [source_check(path) for path in await sources()]) ? return 0
+  checks := select(title, [source_check(path) for path in sources()]) ? return 0
   if not is_file(checked_compiler)
     throw SetupError("#{checked_compiler} is missing: make test builds it")
   await run_checks(title, checks)
