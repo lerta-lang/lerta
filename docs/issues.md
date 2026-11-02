@@ -76,14 +76,6 @@ Severity: Low.
 
 Fix: `throw malformed() if status < 100`.
 
-## Non-ASCII characters in a URL are written raw into the request line
-
-Severity: Low.
-
-`parse_url` rejects only characters at or below 0x20 and 0x7F (std/internal/http_client.lerta:194), so `fetch("http://h/café")` sends `GET /café HTTP/1.1` with the raw UTF-8 bytes, which RFC 9112 forbids and many servers answer with 400; a `Location` with such characters is followed likewise (:230). No injection is possible, since CR, LF and space are rejected.
-
-Fix: percent-encode bytes at or above 0x80 in the path and query, or reject them.
-
 ## `encode_json` is quadratic in the depth of a self-referential structure
 
 Severity: Low.

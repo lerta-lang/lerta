@@ -1,0 +1,33 @@
+# fetch writes the characters of the path and the query that a request line cannot hold as they are
+# as %XX of each byte of their UTF-8, as the WHATWG URL Standard does: a space, a control character,
+# one that is not ASCII and some others, in the path and the query apart. A `%` is kept as it is.
+# A Location that a redirect follows is written so too.
+import fetch, Headers, Request, Response, serve from 'std:http'
+
+var base = ''
+
+handle := (request: Request) ->
+  if request.url.ends_with('/redirect')
+    headers := Headers()
+    headers.set 'location', '/to é'
+    return Response(headers, status: 302)
+  Response body: request.url.without_prefix(base) ? request.url
+
+server := serve(handle)
+base = "http://127.0.0.1:#{server.port()}"
+
+paths :=
+  '/café'
+  "/a b\"<>`{}|^'"
+  "/tab\tdel\u{7F}"
+  "/q?é a\"<>`{}'"
+  '/%20?%41'
+  "/😀?\t\u{7F}😀"
+  '/x#a b é'
+show := (path: String) ->
+  response := await fetch(base + path)
+  print await response.text()
+
+await show(path) for path in paths
+await show('/redirect')
+await server.close()

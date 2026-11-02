@@ -212,8 +212,6 @@ struct Target
 # that holds a user, which the client does not send.
 parse_url := (url: String) ->
   not_url := -> ValueError("not an http URL: #{url}")
-  # A space or a control character would break the request line.
-  throw not_url() if url.any((c) -> c == ' ' or is_control(c))
   (scheme, rest) := url.split_once('://') ? throw not_url()
   lower_scheme := scheme.to_lower()
   throw IOError("https is not supported so far: #{url}") if lower_scheme == 'https'
@@ -221,9 +219,37 @@ parse_url := (url: String) ->
   scanner := scan(rest)
   authority := scanner.take_while((c) -> c not in '/?#')
   (path, _fragment) := split_or_whole(scanner.rest(), '#')
-  throw not_url() if '@' in authority
+  throw not_url() if '@' in authority or not authority.all(is_host_char)
   (host, port) := host_and_port(authority) ? throw not_url()
-  Target authority, host, port, path: path.starts_with('/') then path else "/#{path}"
+  absolute := path.starts_with('/') then path else "/#{path}"
+  Target authority, host, port, path: percent_encoded(absolute)
+
+# The host is written as it is in the Host field, so it takes printable ASCII alone; a name that is
+# not ASCII would need IDNA.
+is_host_char := (c: Char) -> c.to_int() > 0x20 and c.to_int() < 0x7F
+
+# The path and the query with the characters that a request line cannot hold as they are written
+# as %XX of each byte of their UTF-8, as the WHATWG URL Standard does for http URLs. A `%` is kept,
+# as it may start an escape already written.
+percent_encoded := (target: String) ->
+  (path, query) := target.split_once('?') ? return encode_chars(target, PATH_ESCAPED)
+  "#{encode_chars(path, PATH_ESCAPED)}?#{encode_chars(query, QUERY_ESCAPED)}"
+
+# Those of the WHATWG URL Standard but `#`, which starts the fragment that is left out, and the `?`
+# of the path, which starts the query.
+QUERY_ESCAPED := " \"<>'"
+PATH_ESCAPED := ' "<>^`{}'
+
+encode_chars := (text: String, escaped: String) ->
+  needs_escape := (c: Char) -> c.to_int() >= 0x7F or is_control(c) or c in escaped
+  return text unless text.any(needs_escape)
+  var encoded = ''
+  for c in text
+    if needs_escape(c)
+      encoded += "%#{byte.to_int().to_hex(2).to_upper()}" for byte in c.to_string().binary
+    else
+      encoded += c.to_string()
+  encoded
 
 # The text before the first separator and the text after it, or the whole text and '' without one.
 split_or_whole := (text: String, separator: String) -> text.split_once(separator) ? (text, '')
