@@ -7,6 +7,7 @@ import fail from './diagnostics'
 import is_equatable, is_hashable from './equality'
 import expect_type, type_of from './expression'
 import has_function from './functions'
+import type_of_iterated from './loop'
 import float_first, is_contextual from './literals'
 import lookup, record_reference from './name'
 import CollectionMaker from './references'
@@ -161,36 +162,55 @@ export made_collection := (body: Body, call: Call, type: MapType | ArrayType) ->
   record_reference body, call.callee as Identifier!, CollectionMaker(type)
   type
 
-export type_of_empty_map := (body: Body, call: Call, expected: Type?) ->
+# `Map()`, of the expected type, or `Map(entries)`, of (key, value) tuples.
+export type_of_new_map := (body: Body, call: Call, expected: Type?) ->
   program := body.program
+  if call.args.length > 1 or not call.named_args.is_empty()
+    fail program, call.position, 'Map() takes its entries, as (key, value) tuples, or nothing'
   target := written_or_expected(body, call, 'Map', expected)
-  missing_type := ->
-    example := '`Map<String, Int>()`'
-    fail program, call.position, "the type of an empty map must be written, as in #{example}"
   if set := expected_set(target)
     fail program, call.position, "expected #{format_type(set)}, got a map; write Set()"
-  type := expected_map(target) ? missing_type()
-  if not call.args.is_empty() or not call.named_args.is_empty()
-    fail program, call.position, 'Map() takes no arguments'
-  type
+  map := expected_map(target)
+  if call.args.is_empty()
+    example := '`Map<String, Int>()`'
+    message := "the type of an empty map must be written, as in #{example}"
+    return map ? fail(program, call.position, message)
+  entries := call.args[0]
+  expected_entries := map then ArrayType(TupleType([map.key, map.value]))
+  entry := type_of_iterated(body, entries, "as Map()'s entries", expected_entries)
+  at := entries.position
+  reject_other_items program, entry, expected_entries?.element, at
+  pair := entry as TupleType?
+  if pair == nil or pair.items.length != 2
+    fail program, at, "expected (key, value) tuples as Map()'s entries, got #{format_type(entry)}"
+  key := pair.items[0]
+  value := pair.items[1]
+  check_map_types program, key, value, at, at
+  MapType key, value
 
-# `Set()`, of the expected type, or `Set(xs)`, of the items of an array.
+# `Set()`, of the expected type, or `Set(items)`, of the items of an Iterable.
 export type_of_new_set := (body: Body, call: Call, expected: Type?) ->
   program := body.program
   if call.args.length > 1 or not call.named_args.is_empty()
-    fail program, call.position, 'Set() takes an array of its items, or nothing'
+    fail program, call.position, 'Set() takes its items, or nothing'
   set := expected_set(written_or_expected(body, call, 'Set', expected))
   if call.args.is_empty()
     example := '`Set<String>()`'
     message := "the type of an empty set must be written, as in #{example}"
     return set ? fail(program, call.position, message)
   items := call.args[0]
-  array_type := set then ArrayType(set.key)
-  type := type_of(body, items, array_type)
-  not_array := "expected an array, got #{format_type(type)}"
-  array := type as ArrayType ? fail(program, items.position, not_array)
-  reject_map_key program, array.element, items.position, 'a set item'
-  set_of array.element
+  item := type_of_iterated(body, items, "as Set()'s items", set then ArrayType(set.key))
+  reject_other_items program, item, set?.key, items.position
+  reject_map_key program, item, items.position, 'a set item'
+  set_of item
+
+# The items of a map's entries or a set's must be of the type that it is to have, if it is known.
+reject_other_items := (program: ProgramWide, item: Type, expected: Type?, at: Position) ->
+  if expected and type_key(item) != type_key(expected)
+    fail
+      program
+      at
+      "expected items of exactly the type #{format_type(expected)}, got #{format_type(item)}"
 
 # `Array(n, value)`, an array of `n` copies of the value, of the items that the expected type
 # gives, or else of the value's type, which must not hold a value that changes and is shared,

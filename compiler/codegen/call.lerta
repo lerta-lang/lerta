@@ -24,9 +24,10 @@ import
   generate, holding_all, read_any_field, release_if_reference, type_at_use, type_of
 from './expression'
 import function_reference_symbol from './references'
-import emit_exception_check, holding, unwind_from from './exceptions'
+import emit_exception_check, holding, unwind_from, while_holding from './exceptions'
+import generate_each from './control_flow'
 import deferred_value, Generator from './generator'
-import emit_member_dispatch from './heap_object'
+import emit_borrowed_value, emit_member_dispatch from './heap_object'
 import emit_interface_call from './interface'
 import IrBuilder from './ir_builder'
 import emit_read_json from './json_read'
@@ -36,11 +37,11 @@ import
   ir_return_type, ir_type, method_symbol, returns_nothing
 from './lerta_ir'
 import generate_inlined_method, inlined_method from './inlined_methods'
-import emit_add_items, emit_map_new from './map'
+import emit_map_new, emit_map_set, emit_set_add from './map'
 import apply_operator_method from './operator'
 import nil_constant from './optional'
 import emit_runtime_call, emit_valueless_call from './runtime_calls'
-import ArrayType, MapType, ObjectType, Type from '../types'
+import ArrayType, is_set, MapType, ObjectType, TupleType, Type from '../types'
 
 export generate_call := (g: Generator, call: Call): String ->
   callee := call.callee
@@ -81,13 +82,20 @@ generate_new_collection := (g: Generator, call: Call, type: MapType | ArrayType)
     when MapType then generate_new_map(g, call, type)
     when ArrayType then generate_filled_array(g, call, type)
 
-# `Map()`, `Set()` or `Set(items)`.
+# `Map()` or `Set()`, empty or of what a loop goes through: `Set(items)`, or `Map(entries)` of
+# (key, value) tuples, the last of each key winning, as in a map literal.
 generate_new_map := (g: Generator, call: Call, map_type: MapType) ->
-  map := emit_map_new(g.ir, g.code.program, map_type)
+  ir := g.ir
+  map := emit_map_new(ir, g.code.program, map_type)
+  add := (item: String) ->
+    if is_set(map_type)
+      emit_set_add ir, map, item, map_type
+    else
+      entry := TupleType([map_type.key, map_type.value])
+      key := emit_borrowed_value(ir, item, entry, 0)
+      emit_map_set ir, map, key, emit_borrowed_value(ir, item, entry, 1), map_type
   if items := call.args.first()
-    array := generate(g, items)
-    emit_add_items g.ir, map, array, map_type
-    emit_release g.ir, array
+    while_holding g, map, map_type, -> generate_each(g, items, add)
   map
 
 # `Array(n, value)`.

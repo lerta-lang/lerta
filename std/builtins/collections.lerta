@@ -22,10 +22,6 @@ extend<T> T[]
     for each in @
       return true if each == item
     false
-  find_index = (test: (T) -> Bool): Int? ->
-    for item, i in @
-      return i if test(item)
-    nil
   # The index of the first item equal to `item`.
   index_of = (item: T): Int? ->
     for each, i in @
@@ -37,8 +33,10 @@ extend<T> T[]
   get = (index: Int): T? -> index >= 0 and index < @length then @[index]
   # The items in the order that `compare` gives (LESS when its first argument goes first), equal
   # items keeping their order.
+  # A default rather than a `sorted` of an extend of Comparable items, as two extends cannot give
+  # a method of one name for different bounds.
   # A merge sort: runs of `width` items, sorted, are merged in pairs, doubling it.
-  sorted = (compare: (T, T) -> Ordering): T[] ->
+  sorted = (compare: (T, T) -> Ordering = (a, b) -> a.compare(b)): T[] ->
     var runs = [item for item in @]
     var width = 1
     while width < runs.length
@@ -61,6 +59,13 @@ extend<T> T[]
     throw IndexError(message: 'slice out of range') if start < 0 or start > end or end > @length
     [@[i] for i in start...end]
   reversed = (): T[] -> [@[@length - 1 - i] for i in 0...@length]
+  # Removes the first item equal to `item`, if there is one, moving those after it down, and tells
+  # whether it did.
+  remove = (item: T): Bool ->
+    index := @index_of(item) ? return false
+    @[i] = @[i + 1] for i in index...(@length - 1)
+    @pop()
+    true
   # Removes the items after the first `length`, if it has more.
   truncate = (length: Int) ->
     throw IndexError(message: 'truncate to a negative length') if length < 0
@@ -91,6 +96,15 @@ extend<T> Iterable<T>
     for x in @
       return x if test(x)
     nil
+  find_index = (test: (T) -> Bool): Int? ->
+    for x, i in @
+      return i if test(x)
+    nil
+  # The first result of `f` that is not nil.
+  find_map = <U>(f: (T) -> U?): U? ->
+    for x in @
+      return found if found := f(x)
+    nil
   # The number of items, as `for` goes through them: the Chars of a String.
   count = (): Int ->
     var count = 0
@@ -114,6 +128,11 @@ extend<T> Iterable<T>
       left -= 1
       source.next()
     { has_next, next }
+  # The items before the first for which `keep` is false, which it reads but does not give.
+  take_while = (keep: (T) -> Bool): Iter<T> ->
+    for x in @
+      return unless keep(x)
+      yield x
   zip = <U>(other: Iterable<U>): Iter<(T, U)> ->
     left := @iter()
     right := other.iter()

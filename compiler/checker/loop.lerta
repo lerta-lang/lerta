@@ -98,16 +98,22 @@ check_loop_body := (body: Body, statements: Statement[], define: () -> void) ->
   check_block body, statements, define_hiding, nothing
   body.loop_depth -= 1
 
-# A value of a type that satisfies Iterable is gone through by the Iter
-# of its `iter()`, a call recorded in the facts, which codegen generates instead (see
-# iter_calls). `place` tells where the iterable is written, for messages.
-type_of_iterated := (body: Body, iterable: Expression, place: String): Type ->
+# The type of the items that a loop, a comprehension, `Set()` or `Map()` goes through. A value of a
+# type that satisfies Iterable is gone through by the Iter of its `iter()`, a call recorded in the
+# facts, which codegen generates instead (see iter_calls). `place` tells where the iterable is
+# written, for messages, and `expected` is the type that an array literal there takes.
+export type_of_iterated := (
+  body: Body
+  iterable: Expression
+  place: String
+  expected: Type? = nil
+): Type ->
   body.facts.consuming_reads.add iterable if iterable is Identifier
   if iterable is Range
     expect_type body, iterable.start, int_type
     expect_type body, iterable.end, int_type
     return int_type
-  type := type_of(body, iterable)
+  type := type_of(body, iterable, expected)
   return item if item := iterable_item(type)
   at := iterable.position
   if iterable_item_of(body, type, at) == nil
