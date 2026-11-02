@@ -1,8 +1,8 @@
 # Types unary and binary operators, nil tests and `?`.
 import all_but_last from '../arrays'
 import
-  Assignment, BinaryOperation, Coalesce, Expression, Identifier, is_equality_operator, is_nil_test,
-  is_order_operator, method_call, NilLiteral, StringLiteral, UnaryOperation
+  ArrayLiteral, Assignment, BinaryOperation, Coalesce, Expression, Identifier, is_equality_operator,
+  is_nil_test, is_order_operator, method_call, NilLiteral, StringLiteral, UnaryOperation
 from '../ast'
 import fail from './diagnostics'
 import compares_by_contents, is_equatable, own_equality from './equality'
@@ -13,8 +13,8 @@ import holds_float_literal, is_contextual from './literals'
 import where_right_operand from './narrowing'
 import Body from './shared'
 import
-  bool_type, FLOAT_KINDS, format_type, inner_of, inner_of_expected, INTEGER_KINDS, is_identity_type,
-  is_kind, is_one_of_kinds, members_of, NUMBER_KINDS, ObjectType, OptionalType,
+  ArrayType, bool_type, FLOAT_KINDS, format_type, inner_of, inner_of_expected, INTEGER_KINDS,
+  is_identity_type, is_kind, is_one_of_kinds, members_of, NUMBER_KINDS, ObjectType, OptionalType,
   SIGNED_INTEGER_KINDS, string_type, Type, TypeKind
 from '../types'
 
@@ -137,7 +137,7 @@ export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?):
 # one.
 type_of_in_test := (body: Body, binary: BinaryOperation) ->
   { left, right, position } := binary
-  container := type_of(body, right)
+  container := type_of(body, right, expected_container(body, binary))
   if member_type_by_name(body, container, Identifier(position, name: 'contains')) == nil
     message := "#{format_type(container)} has no contains, by which `in` applies"
     fail body.program, right.position, message
@@ -151,21 +151,38 @@ type_of_in_test := (body: Body, binary: BinaryOperation) ->
     fail body.program, position, "contains gives #{format_type(result)}, but `in` needs a Bool"
   bool_type
 
+# The type that `x in [...]` expects of an array literal whose items all take their type from the
+# context: the array of the type of `x` without nil, which an array does not hold, as the other
+# operand of `==` takes the type of the first. Nil if `x` takes its type from the context too, and
+# is then typed by the parameter of contains; nil for any other test.
+expected_container := (body: Body, binary: BinaryOperation) ->
+  { left, right } := binary
+  return nil if right is not ArrayLiteral or takes_context(body, left)
+  return nil unless right.elements.all((item) -> takes_context(body, item))
+  type := ArrayType(inner_of(type_of(body, left)))
+  body.in_test_arrays[right] = type
+  type
+
 # The call of `to_string()` of a Char that a String's contains takes, as `+` appends one: nil for
 # any other part.
 export char_as_text := (container: Type, part: Type, value: Expression) ->
   takes_char := is_kind(container, 'String') and is_kind(part, 'Char')
   takes_char then method_call(value, 'to_string', [], value.position)
 
+# Whether the operand takes its type from the context: a literal, or a name that may stand for a
+# member of an enum.
+takes_context := (body: Body, operand: Expression) ->
+  is_contextual(operand) or may_name_member(body, operand)
+
 type_of_operands := (
   body: Body, binary: BinaryOperation, expected: Type?, allowed_kinds: TypeKind[],
   reject: (Type) -> String
 ) ->
   { left, right } := binary
-  takes_context := (operand: Expression) -> is_contextual(operand) or may_name_member(body, operand)
   decides_more := (operand: Expression, than: Expression) ->
-    not takes_context(operand) or (holds_float_literal(operand) and not holds_float_literal(than))
-  right_first := takes_context(left) and decides_more(right, left)
+    not takes_context(body, operand) or
+      (holds_float_literal(operand) and not holds_float_literal(than))
+  right_first := takes_context(body, left) and decides_more(right, left)
   first := right_first then right else left
   second := right_first then left else right
   type := type_of(body, first, expected)
