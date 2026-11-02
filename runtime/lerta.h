@@ -330,8 +330,9 @@ bool lerta_is_running(int64_t id);
 // The value of an environment variable, as a Binary, or NULL if it is not set.
 LertaString *lerta_env(const LertaString *name);
 
-// Files (file.c). A failure gives false or NULL, of which std:io makes the error; one that runs on
-// the thread pool gives it through its promise, which only a cancel rejects. No path holds a NUL
+// Files (file.c). A failure gives false, NULL or, for lerta_open_file, 0, of which std:io makes the
+// error; one that runs on the thread pool gives it through its promise, which only a cancel
+// rejects, and an open file's writes through lerta_open_file_failed. No path holds a NUL
 // byte, nor is empty for lerta_make_one_dir and lerta_dir_names: std:io refuses those first.
 // The promise gives what was read, or NULL.
 LertaPromise *lerta_read_file(const LertaString *path);
