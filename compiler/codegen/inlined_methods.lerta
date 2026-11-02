@@ -40,7 +40,7 @@ export inlined_method := (g: Generator, call: Call, member: Member, source: Meth
   return nil if source is not ExtensionSource or not is_builtins(source.method.module_name)
   instance := g.facts.instances[call]?.instance ? return nil
   literal := instance.entry.literal
-  return nil if literal.yields or literal.awaits or literal in g.fused
+  return nil if literal.yields or literal.awaits or literal in g.fusion.literals
   return nil if not goes_through_this_once(literal.body)
   receiver := deferred_value(g, member.object)
   # Arguments without effects cannot assign a field that the receiver reads.
@@ -221,8 +221,7 @@ method_generator := (g: Generator, instance: Instance) ->
   name := trace_name(shared.generics[index].name.name, entry.this_type)
   inner :=
     Generator(extensions, facts, ir, code: method_code, function_name: name, top_level_code: false)
-  inner.fused = [g.fused..., entry.literal]
-  inner.fused_copies = g.fused_copies
+  inner.fusion = { g.fusion..., literals: [g.fusion.literals..., entry.literal] }
   inner.nan_free = nan_free_operations(facts, entry.literal.body, false)
   inner
 
@@ -276,7 +275,7 @@ go_through_receiver := (
     break_depth := inner_depth + loop.break_depth - iteration_depth
     { break_label, continue_label } := loop
     inner.loops.push { break_label, continue_label, scope_depth, break_depth }
-    inner.fused_copies = g.fused_copies
+    inner.fusion = { inner.fusion..., copies: g.fusion.copies }
     define := (scope: Map<String, CodegenLocal>) ->
       scope[variable.name] = ValueLocal(operand: item, type: item_type)
     generate_block_with inner, body, define

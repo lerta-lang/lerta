@@ -54,7 +54,7 @@ export fused_call := (g: Generator, iterable: Expression): FusedCall? ->
   literal := top_level_function(g, reference.name) ? return nil
   return nil if not literal.yields or not literal.type_params.is_empty()
   yields := yield_count(literal.body) ? return nil
-  return nil if literal in g.fused or g.fused_copies * yields > MOST_COPIES
+  return nil if literal in g.fusion.literals or g.fusion.copies * yields > MOST_COPIES
   args := arguments_of(g.facts, iterable)
   return nil if args.length != literal.params.length
   { literal, args, yields, name: reference.name }
@@ -89,11 +89,10 @@ export generate_fused_loop := (
     ir
     function_name: trace_name(name, nil)
     top_level_code: false
-  inner.fused = [g.fused..., literal]
   # The function's body is copied as many times as the loop; the loop's body, once more for each
   # yield.
-  inner.fused_copies = g.fused_copies
-  copies := g.fused_copies * fused.yields
+  inner.fusion = { g.fusion..., literals: [g.fusion.literals..., literal] }
+  copies := g.fusion.copies * fused.yields
   inner.nan_free = nan_free_operations(facts, literal.body, false)
   # The function's exception goes on from the loop, as from a call there.
   inner.fused_exit = { unwind: unwind_from(g, position), label: exit_label }
@@ -107,10 +106,10 @@ export generate_fused_loop := (
     define := (scope: Map<String, CodegenLocal>) ->
       scope[variable.name] = store_in_slot(g, value, item)
     # A loop in the body that takes a function in place copies what this one has copied.
-    outer_copies := g.fused_copies
-    g.fused_copies = copies
+    outer_fusion := g.fusion
+    g.fusion = { outer_fusion..., copies }
     generate_loop_body g, body, exit_label, resume_label, define, outer_depth
-    g.fused_copies = outer_copies
+    g.fusion = outer_fusion
     ir.branch resume_label
     ir.start_block resume_label
     g.locals.truncate outer_depth
@@ -286,8 +285,7 @@ export generate_in_place := (
   { code, extensions, facts, ir } := g
   name := "#{g.function_name}.<anonymous>"
   inner := Generator(code, extensions, facts, ir, function_name: name, top_level_code: false)
-  inner.fused = g.fused
-  inner.fused_copies = g.fused_copies
+  inner.fusion = g.fusion
   inner.unchecked_floats = g.unchecked_floats
   inner.nan_free = nan_free_operations(g.facts, literal.body, false)
   type := function_type_of(type_of(g, literal))
