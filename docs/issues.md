@@ -2,25 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `case` with value patterns is rejected on a local narrowed from a union
-
-Severity: Low.
-
-`check_patterns` (compiler/checker/case_patterns.lerta:41-43) chooses type patterns whenever the subject's *declared* type is a union, although after `if x is Int` the subject's type is `Int` and a `case` on an `Int` takes value patterns.
-
-```
-f := (x: Int | String) ->
-  if x is Int
-    case x
-      when 1 then print 'one'
-      else print 'other'
-f 1
-```
-
-Reported: `a pattern of a case on types names a type so far; test the others with 'is'`. Expected: prints `one`.
-
-Fix: choose type patterns from the subject's current type (`inner_of(subject_type) is UnionType`), and use the declared type only to validate which types the patterns may name.
-
 ## A compound index assignment leaks an owned array when the operator throws
 
 Severity: Low.

@@ -39,13 +39,16 @@ export check_patterns := (body: Body, case_expression: Case): CaseNarrowings ->
   type := inner_of(subject_type)
   # As `is` does, the patterns take the members of the type that the subject was declared with.
   declared := inner_of(unnarrowed_type(body, subject, subject_type))
-  if declared is UnionType
+  is_value := is_one_of_kinds(type, VALUE_KINDS)
+  if declared is UnionType and not is_value
     return check_type_patterns(body, case_expression, is_nil_arm, subject, declared, type, missing)
-  unless is_one_of_kinds(type, VALUE_KINDS)
+  unless is_value
     message := "cannot branch on a value of type #{format_type(subject_type)}"
     fail body.program, subject.position, message
   for patterns in (arm.patterns for arm in arms when not is_nil_arm(arm))
-    expect_type body, pattern, type for pattern in patterns
+    for pattern in patterns
+      fail_narrowed_type_pattern body, pattern, type if declared is UnionType
+      expect_type body, pattern, type
   if type is EnumType
     check_member_patterns body, case_expression, type, missing
   else if case_expression.otherwise == nil
@@ -133,6 +136,13 @@ type_pattern := (body: Body, pattern: Expression, union: UnionType) ->
   type := resolve(program, resolver, type_name)
   fail_pattern() if not is_assignable(type, union) or is_kind(type, 'never')
   set_type body, pattern, type
+
+# Explains the narrowing, where a type pattern would otherwise be reported as an undefined name.
+fail_narrowed_type_pattern := (body: Body, pattern: Expression, narrowed: Type) ->
+  names_type := pattern is Identifier and has_type(body.program, body.resolver, pattern.name)
+  return unless names_type
+  message := "the subject is narrowed to #{format_type(narrowed)} here, so its patterns are values"
+  fail body.program, pattern.position, message
 
 subject_narrowings := (body: Body, subject: Expression, type: Type): Narrowing[] ->
   value := narrowable(body, subject) ? return []
