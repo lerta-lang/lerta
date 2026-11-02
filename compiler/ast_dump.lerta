@@ -305,6 +305,9 @@ dump_call := (call: Call): Group ->
   node 'call', call, [
     field('args', expressions(call.args))
     field('callee', dump_node(call.callee))
+    # How it was written, as a position is: `m: Map<K, V>` and `m: Map<K, V> = Map()` are the same
+    # program where no local takes the name Map.
+    { name: 'makes_builtin', value: flag(call.makes_builtin), is_position: true }
     field('named_args', named_values(call.named_args))
     field('type_args', types(call.type_args))
   ]
@@ -393,14 +396,22 @@ dump_cast := (cast: Cast): Group ->
 
 dump_function := (function: FunctionLiteral): Group ->
   node 'function', function, [
+    field('awaits', flag(function.awaits))
     field('body', statements(function.body))
     field('params', List([dump_parameter(param) for param in function.params]))
     field('return_type', optional_node(function.return_type))
     field('type_params', type_parameters(function.type_params))
+    field('weak', flag(function.weak))
+    field('yields', flag(function.yields))
   ]
 
 dump_parameter := (param: Parameter) ->
-  group [field('name', dump_node(param.name)), field('type', optional_node(param.type))]
+  group [
+    field('default', optional_node(param.default))
+    field('name', dump_node(param.name))
+    field('type', optional_node(param.type))
+    field('variadic', flag(param.variadic))
+  ]
 
 type_parameters := (params: TypeParameter[]) ->
   List [dump_type_parameter(param) for param in params]
@@ -410,6 +421,7 @@ dump_type_parameter := (param: TypeParameter) ->
 
 dump_import := (statement: Import) ->
   node 'import', statement, [
+    field('alias', optional_node(statement.alias))
     field('exported', flag(statement.exported))
     field('module', text(statement.module))
     field('names', List([dump_import_name(name) for name in statement.names]))
@@ -435,6 +447,7 @@ members := (values: MemberDeclaration[]) ->
 dump_member_declaration := (member: MemberDeclaration) ->
   group [
     position_fields(member.position)...
+    field('has_default', flag(member.has_default))
     field('modifier', optional_text(member.modifier?.to_string()))
     field('name', dump_node(member.name))
     field('type', optional_node(member.type))
@@ -483,8 +496,11 @@ dump_declaration := (declaration: Declaration): Group ->
     field('exported', flag(declaration.exported))
     field('mutable', flag(declaration.mutable))
     field('name', dump_node(declaration.name))
+    # How it was written, as a position is: `var x: T?` and `var x: T? = nil` are the same program.
+    { name: 'omits_value', value: flag(declaration.omits_value), is_position: true }
     field('type', optional_node(declaration.type))
     field('value', dump_node(declaration.value))
+    field('weak', flag(declaration.weak))
   ]
 
 dump_assignment := (assignment: Assignment): Group ->
@@ -498,6 +514,7 @@ dump_if := (statement: If): Group ->
   node 'if', statement, [
     field('condition', dump_node(statement.condition))
     field('else_body', statements(statement.else_body))
+    field('nil_safe', flag(statement.nil_safe))
     field('then_body', statements(statement.then_body))
   ]
 

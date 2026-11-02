@@ -2,14 +2,6 @@
 
 Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `dump-ast` omits fields, so the formatter's self-check cannot see them change
-
-Severity: Medium.
-
-[The compiler's reference](reference/compiler.md) says a node is followed by its other fields, and `format_file` (compiler/format/format.lerta:108-111) compares the dump of the source with that of its output to guarantee the formatter changed nothing. compiler/ast_dump.lerta omits a parameter's `default` and `variadic` (:402-403), a function's `weak`, `yields` and `awaits` (:394-400), an import's `alias` (:411-416), a member's `has_default` (:435-442), a declaration's `weak` and `omits_value` (:481-488), an `if`'s `nil_safe` (:497-502) and a call's `makes_builtin` (:304-310). A formatter change that drops a default, a `...`, a `weak`, an `as name` or a `= default` passes the self-check.
-
-Fix: dump the missing fields (as `is_position: false`).
-
 ## `in` of an optional enum value emits malformed IR
 
 Severity: Medium.
