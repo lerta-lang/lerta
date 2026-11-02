@@ -16,7 +16,7 @@ import ScopedLocal from '../checker/references'
 import NodeFacts from '../checker/shared'
 import integer_float_text from '../float_literals'
 import is_kind from '../types'
-import INFINITY from 'std:math'
+import abs, INFINITY from 'std:math'
 
 # What is known of a Float: whether it is at least 0 or at most 0, and a bound of its magnitude,
 # INFINITY where none is known. A bound computed with the operation's own rounding holds, as
@@ -239,9 +239,7 @@ literal_found := (text: String) ->
   Found range: constant_range(value), nan_free: true
 
 constant_range := (value: Float) ->
-  FloatRange nonnegative: value >= 0.0, nonpositive: value <= 0.0, bound: magnitude(value)
-
-magnitude := (value: Float) -> value < 0.0 then -value else value
+  FloatRange nonnegative: value >= 0.0, nonpositive: value <= 0.0, bound: abs(value)
 
 # `a and b`, whose b is evaluated only where a holds, which narrows it.
 and_found := (analysis: Analysis, binary: BinaryOperation) ->
@@ -316,7 +314,7 @@ product_bound := (left: FloatRange, right: FloatRange) ->
 quotient := (left: FloatRange, divisor: Float?): (FloatRange, Bool)? ->
   constant := divisor ? return nil
   return nil if constant == 0.0
-  bound := finite(left) then left.bound / magnitude(constant) else INFINITY
+  bound := finite(left) then left.bound / abs(constant) else INFINITY
   range := product(left, constant_range(constant))
   ({ range..., bound }, true)
 
