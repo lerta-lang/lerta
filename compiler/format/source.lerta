@@ -140,18 +140,7 @@ export class SourceText
   # The index of the bracket that opens the one at `close`, past the pairs nested in it.
   opening = (close: Int) -> @matching(close, -1)
 
-  # The index of the bracket that pairs with the one at `start`, going from it by `step`. The
-  # brackets are balanced, as the parser has accepted the source.
-  matching = (start: Int, step: Int) ->
-    var depth = 0
-    var index = start
-    while true
-      kind := @tokens[index].kind
-      depth += 1 if is_opening(kind)
-      depth -= 1 if is_closing(kind)
-      return index if depth == 0
-      index += step
-    start
+  matching = (start: Int, step: Int) -> matching_in(@tokens, start, step)
 
   # The index of the first token of the kind from `start` up to `end`, if there is one.
   find = (kind: TokenKind, start: Int, end: Int) ->
@@ -233,13 +222,46 @@ stranded_comments := (lines: String[], tokens: Token[], comments: Comment[]) ->
 
 # A comment before `code[next]` that starts a function literal: its `weak`, as the comment would
 # go between the `weak` and the literal, or, were the `weak` placed, before it on the line of a
-# callee that the literal follows; or the `->` of one without parameters, as flushing it there
+# callee that the literal follows; the `->` of one without parameters, as flushing it there
 # leaves the literal written where it does not parse, as an argument, an item or a value in
-# parentheses (no other `->` follows a comment in a program that parses).
+# parentheses (no other `->` follows a comment in a program that parses); or its type parameters
+# or its parameters (see starts_parameters).
 before_literal := (code: Token[], next: Int) ->
   return false if next >= code.length
   weak := next + 1 < code.length and starts_weak_literal(code[next], code[next + 1])
-  weak or code[next].kind == '->'
+  weak or code[next].kind == '->' or starts_parameters(code, next)
+
+# Whether `code[next]` starts the type parameters or the parameters of a function literal, as the
+# parser tells them (see looks_like_parameters): flushed before the first parameter, the comment
+# would break the parameters apart from their brackets. A function type in parentheses is taken
+# for them too, as the comment would break its parameter types apart likewise.
+starts_parameters := (code: Token[], next: Int) ->
+  case code[next].kind
+    when '<' then true
+    when '(' then opens_parameters(code, next)
+    else false
+
+opens_parameters := (code: Token[], open: Int) ->
+  kind_at := (index: Int) -> index < code.length then code[index].kind else TokenKind.EOF
+  second := kind_at(open + 1)
+  third := kind_at(open + 2)
+  return third == ':' or third == '->' if second == ')'
+  return true if second == IDENTIFIER and (third == ':' or third == '=')
+  kind_at(matching_in(code, open, 1) + 1) == '->'
+
+# The index of the bracket that pairs with the one at `start`, going from it by `step`, or the index
+# just outside the tokens that way where none does, as in a source that does not parse, which
+# stranded_comments reads before the parser does.
+matching_in := (tokens: Token[], start: Int, step: Int) ->
+  var depth = 0
+  var index = start
+  while index >= 0 and index < tokens.length
+    kind := tokens[index].kind
+    depth += 1 if is_opening(kind)
+    depth -= 1 if is_closing(kind)
+    return index if depth == 0
+    index += step
+  index
 
 # A comment that ends a line whose last token, `code[next - 1]`, is `not`, `not in`, or a `(` or a
 # `-` that does not follow an operand, as the `(` of a call, written without a space, and an

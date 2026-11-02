@@ -145,26 +145,6 @@ print "c"
 
 Fix: name the rule of the place reported, here Multi-line literals.
 
-## `lerta fmt` moves the parameters of a function literal argument after a comment
-
-Severity: Low.
-
-A function literal argument with parameters after a comment on a line of its own is written apart from its parameters:
-
-```
-run := (f: (Int) -> void) -> f(1)
-f := ->
-  run(
-    # c
-    (n) -> print n
-  )
-f()
-```
-
-`lerta fmt --fix` writes `run (`, `# c`, `n`, `) -> print(n)`, which parses as the same program, and `lerta fmt` reports `Long lists` and `Function bodies` at columns that do not hold what they name. One before a parameterless `->` is reported instead (see stranded_comments in compiler/format/source.lerta).
-
-Fix: report such a comment as stranded too, or place it before the literal's `(`.
-
 ## The language server answers an internal error to a completion at a negative line
 
 Severity: Low.
