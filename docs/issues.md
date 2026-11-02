@@ -202,14 +202,6 @@ Severity: Low.
 
 Fix: widen to 64 bits and print 16 hex digits.
 
-## Linked files come after `-lm` and libuv's libraries on the link line
-
-Severity: Low.
-
-*Unverified*. compiler/build.lerta:98-108 puts the user's linked files after the `-l` libraries. ld64 does not care, but GNU ld with `--as-needed`, which Debian's and Ubuntu's toolchains pass, drops a library that nothing before it needs, so a linked `.c` or `.o` that calls libm gets an undefined reference.
-
-Fix: put the linked files before the libraries.
-
 ## The test driver leaves its work directory when a module's top level throws
 
 Severity: Low.
