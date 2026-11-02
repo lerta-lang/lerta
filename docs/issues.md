@@ -36,14 +36,6 @@ Severity: Low.
 
 Fix: `fstat` after opening and fail with an `IOError` unless the file is regular, or document and enforce a size cap.
 
-## The HTTP server accepts control characters in the method and the target
-
-Severity: Low.
-
-The request line is only split into three words (std/internal/http_request.lerta:40-43) and the method is not checked with `is_token`; `url_of` (:141-144) accepts any non-whitespace UTF-8 in the target. `GET /a\x01b HTTP/1.1` is answered 200 with `request.url` holding the control character, and `G\x7fT / HTTP/1.1` is answered 200 with that method; RFC 9112 requires 400 for both. The server reflects neither into its own response, but the handler and any log or proxy get them. `Host: hé` is accepted too, though a host must be ASCII.
-
-Fix: `throw bad_request()` when the method is not a token or the target holds a character at or below 0x20 or equal to 0x7F.
-
 ## A `Date` field pushed into `fields` with a capital letter gets a second `Date`
 
 Severity: Low.

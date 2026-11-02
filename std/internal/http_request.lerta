@@ -6,7 +6,7 @@ import LineTooLongError, Reader from 'std:io'
 import Socket from 'std:net'
 import Deadline from './deadline'
 import ChunkedBody, SizedBody from './http_chunks'
-import Headers, keeps_alive, Request from './http_message'
+import Headers, is_token, keeps_alive, Request from './http_message'
 
 # Where a server listens, at a free port if `port` is 0, and how much and how long it waits for of a
 # request: the bytes of its request line or of a field, its fields, and the bytes of its body; the
@@ -40,7 +40,8 @@ export read_rest_of_request := (
   parts := line.split(' ')
   throw bad_request() if parts.length != 3
   (method, target, version) := (parts[0], parts[1], parts[2])
-  throw bad_request() if method.is_empty() or target.is_empty()
+  throw bad_request() unless is_token(method)
+  throw bad_request() unless is_visible(target)
   throw RequestError(status: 505, message: 'http version not supported') unless version in VERSIONS
   headers :=
     try
@@ -135,9 +136,13 @@ content_length := (headers: Headers) ->
   text.parse_int() ? throw bad_request()
 
 # Whether a Host names a host and a port alone, so that it cannot change the path of the URL.
-is_host := (host: String) -> not host.is_empty() and not host.any((c) -> c in NOT_IN_HOST)
+is_host := (host: String) -> is_visible(host) and not host.any((c) -> c in NOT_IN_HOST)
 
-NOT_IN_HOST := "/\\?#@ \t"
+# Whether the text is printable ASCII alone, and not empty, as a target and a host are.
+is_visible := (text: String) ->
+  not text.is_empty() and text.all((c) -> c.to_int() > 0x20 and c.to_int() < 0x7F)
+
+NOT_IN_HOST := '/\?#@'
 
 # A target in absolute form is the URL itself, and one in origin form a path on the host; nil for
 # another, as `*`.
