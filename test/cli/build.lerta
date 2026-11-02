@@ -3,7 +3,7 @@ import Check from '../lib/report'
 import compare_output, compare_text, expect_status from '../lib/expect'
 import compiler, root_dir from '../lib/lerta'
 import
-  executable_suffix, expect_left, expect_success, hello_output, run_command, run_in_dir,
+  executable_suffix, expect_left, expect_success, succeed, hello_output, run_command, run_in_dir,
   run_in_new_dir, cli_work_dir, new_cli_dir, new_cli_dirs, runtime_flags, host_platform, posix_check
 from '../lib/cli'
 import is_file, list_dir, make_dir, make_link, read_file, write_file from 'std:io'
@@ -25,8 +25,7 @@ build_and_run := (flags: String[]) ->
         flags...
       ]
     )
-    reasons := expect_success('build', built.result)
-    return reasons if not reasons.is_empty()
+    succeed 'build', built.result
     executable := "#{cli_work_dir}/hello-#{flags.join('_')}#{executable_suffix}"
     ran := await run_command(executable, [], built.cwd)
     [compare_output('stdout', hello_output, ran.stdout)..., expect_success('run', ran)...]
@@ -123,8 +122,7 @@ symlink_output_check := ->
     make_dir "#{cwd}/under/below"
     make_link 'under/below', "#{cwd}/link"
     built := await run_in_dir(compiler, ['build', hello, '-o', 'link/../hello'], cwd, temp)
-    reasons := expect_success('build', built.result)
-    return reasons if not reasons.is_empty()
+    succeed 'build', built.result
     executable := "#{cwd}/under/hello#{executable_suffix}"
     ran := await run_command(executable, [], cwd)
     [
@@ -191,8 +189,7 @@ relative_temp_check := ->
     environment := { 'TMPDIR': 'temp', 'TEMP': 'temp', 'TMP': 'temp' }
     built :=
       await run_command(compiler, ['build', hello, '-o', 'hello'], cwd, ''.binary, environment)
-    reasons := expect_success('build', built)
-    return reasons if not reasons.is_empty()
+    succeed 'build', built
     ran := await run_command("#{cwd}/hello#{executable_suffix}", [], cwd)
     [
       expect_left('files left in the temporary directory', [], list_dir(temp))...
@@ -234,8 +231,7 @@ optimized_runtime_check := ->
     source := "#{root_dir}/tests/string/split.lerta"
     built :=
       await run_in_new_dir(compiler, ['build', source, '-o', "split#{executable_suffix}", '-O'])
-    reasons := expect_success('build', built.result)
-    return reasons if not reasons.is_empty()
+    succeed 'build', built.result
     executable := "#{built.cwd}/split#{executable_suffix}"
     disassembler := host_platform == 'macos' then 'otool' else 'objdump'
     # Without the bytes of each instruction, which the check does not read, objdump's output stays
@@ -639,8 +635,7 @@ source_lines_build_check := (flags: String[]) ->
         compiler
         ['build', source, '-o', "lines#{executable_suffix}", '--source-lines', flags...]
       )
-      reasons := expect_success('build', built.result)
-      return reasons if not reasons.is_empty()
+      succeed 'build', built.result
       output := "#{built.cwd}/lines#{executable_suffix}"
       ran := await run_command(output, [], built.cwd)
       rows := await line_table_rows(debug_file_of(output))
@@ -664,8 +659,7 @@ no_source_lines_check := ->
   Check name: 'lerta build without --source-lines omits debug information', run: ->
     source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
     built := await run_in_new_dir(compiler, ['build', source, '-o', "lines#{executable_suffix}"])
-    reasons := expect_success('build', built.result)
-    return reasons if not reasons.is_empty()
+    succeed 'build', built.result
     return no_reasons if host_platform == 'windows'
     output := "#{built.cwd}/lines#{executable_suffix}"
     has_debug := await has_debug_info(output)
@@ -677,8 +671,7 @@ no_trace_check := ->
     source := "#{root_dir}/tests/trace/rethrow.lerta"
     executable := "#{cli_work_dir}/rethrow#{executable_suffix}"
     built := await run_in_new_dir(compiler, ['build', source, '-o', executable, '-O', '--no-trace'])
-    reasons := expect_success('build', built.result)
-    return reasons if not reasons.is_empty()
+    succeed 'build', built.result
     ran := await run_command(executable, [], built.cwd)
     program := await read_file(executable)
     [

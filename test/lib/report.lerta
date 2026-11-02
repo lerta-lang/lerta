@@ -12,6 +12,11 @@ export struct Check
   run: () -> Promise<String[]?>
   wait: (() -> Promise)? = default nil
 
+# Ends a check with the reasons it failed, from a step that cannot return them.
+export struct CheckFailed: Error
+  reasons: String[]
+  message = @reasons.join("\n")
+
 # The run of a check whose reasons are known at once.
 export at_once := (reasons: String[]): Promise<String[]?> -> reasons
 
@@ -82,6 +87,8 @@ run_one := (check: Check) ->
   reasons :=
     try
       await check.run()
+    catch failed: CheckFailed
+      failed.reasons
     catch error
       ['threw:', ("  #{line}" for line in error.message.split("\n"))...]
   Result reasons, duration: milliseconds() - started
