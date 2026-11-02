@@ -16,7 +16,7 @@ import all_but_last from '../arrays'
 import function_type_of from './closure'
 import generate_iteration from './control_flow'
 import emit_traced_unwind, TRACE_PUSH from './exceptions'
-import generate, held_value, type_of from './expression'
+import generate, held_value, replaced, type_of from './expression'
 import nan_free_operations from './float_ranges'
 import
   generate_block_with, generate_closure, generate_last_statement, hold_arguments, is_awaiting,
@@ -44,8 +44,9 @@ export inlined_method := (g: Generator, call: Call, member: Member, source: Meth
   return nil unless goes_through_this_once(literal.body)
   receiver := deferred_value(g, member.object)
   # Arguments without effects cannot assign a field that the receiver reads.
-  reads_fields :=
-    arguments_of(g.facts, call).all((arg) -> arg is FunctionLiteral or is_plain(g, arg))
+  reads_fields := arguments_of(g.facts, call).all((arg) ->
+    replaced(g, arg) is FunctionLiteral or is_plain(g, arg)
+  )
   return instance if is_fused_source(g, receiver, reads_fields)
   type := type_of(g, receiver)
   is_sequence := type is ArrayType or is_kind(type, 'Binary')
@@ -165,7 +166,9 @@ export generate_inlined_method := (
   unwind := -> at_call(-> emit_traced_unwind(g, TRACE_PUSH))
   inner.fused_exit = { unwind, label: exit_label }
   # The method's generator is passed rather than captured, as it holds the function.
-  for arg, i in arguments_of(g.facts, call)
+  for written, i in arguments_of(g.facts, call)
+    # A method used as a value is the literal that the checker put in its place.
+    arg := replaced(g, written)
     if is_taken_in_place(g, arg, literal.params.get(i), instance)
       in_place := arg as FunctionLiteral!
       inner.in_place_calls[literal.params[i].name] = (operands, unwind) ->
