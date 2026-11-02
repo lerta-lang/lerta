@@ -1,0 +1,17 @@
+# A kill_after longer than an Int of milliseconds holds is the longest wait there is: a cancelled
+# program that ignores SIGTERM, once it has set that up, is not killed, and the wait ends once it
+# ends by itself.
+import INFINITY from 'std:math'
+import run from 'std:process'
+import sleep, time from 'std:time'
+
+for kill_after in [INFINITY, 1e300]
+  started := time()
+  kept := run('sh', '-c', 'trap "" TERM; sleep 1', kill_after: kill_after)
+  await sleep(0.3)
+  kept.cancel()
+  try
+    await kept
+  catch error: CancelledError
+    print error.message
+  print time() - started >= 1.0
