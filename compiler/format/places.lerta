@@ -12,17 +12,18 @@ from '../ast'
 export type Place = (Expression) -> void
 
 # What is done at an expression in its place, in the order of the source: before its parts are
-# visited, and after.
+# visited, and after; and at the condition of an `if` or a `while` that binds no name, after it.
 export struct Visit
-  before: (Expression, Place) -> void
-  after: (Expression, Place) -> void
+  before: ((Expression, Place) -> void)? = default nil
+  after: ((Expression, Place) -> void)? = default nil
+  condition: ((Expression, Place) -> void)? = default nil
 
 export places_of := (program: Statement[], visit: Visit) -> visit_statements(visit, program)
 
 visit_place := (visit: Visit, value: Expression, place: Place) ->
-  visit.before value, place
+  before value, place if before := visit.before
   visit_expression visit, value
-  visit.after value, place
+  after value, place if after := visit.after
 
 visit_statements := (visit: Visit, statements: Statement[]): void ->
   for statement, i in statements
@@ -56,7 +57,9 @@ visit_members := (visit: Visit, members: MemberDeclaration[]) ->
 visit_condition := (visit: Visit, condition: Condition, place: Place) ->
   case condition
     when Binding then visit_place(visit, condition.value, (value) -> condition.value = value)
-    else visit_place(visit, condition, place)
+    else
+      visit_place visit, condition, place
+      at_condition condition, place if at_condition := visit.condition
 
 visit_all := (visit: Visit, values: Expression[]) ->
   for value, i in values

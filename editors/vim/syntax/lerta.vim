@@ -21,7 +21,7 @@ syn match lertaControl "\%(\<for\s\+\h\w*\%(\s*,\s*\h\w*\)\=\s\+in\s.*\)\@<=\<wh
 syn match lertaControl "\%(^\s*\)\@<=when\>\ze\s"
 syn keyword lertaBoolean true false nil
 syn keyword lertaWordOperator and or not
-syn keyword lertaControl if else then while for break continue return case throw try catch finally yield await import export
+syn keyword lertaControl if else then while unless until for break continue return case throw try catch finally yield await import export
 syn keyword lertaStorage const var class struct extern extend enum interface
 
 syn match lertaInvalidNumber "\<\d\w*\>"

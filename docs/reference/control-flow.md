@@ -17,17 +17,23 @@ else
   print 'positive'
 while n > 0
   n -= 1
+unless done
+  print 'more'
+until n >= 10
+  n += 1
 ```
 
 - A condition is a `Bool`, or an optional value, which holds when it is not nil (a `Bool?` holds when it is `true`). The operands of `and`, `or` and `not` follow the same rule.
+- `unless x` is `if not x`, and `until x` is `while not x`, in their postfix forms too (`return unless found`). An `unless` takes no `else`, and neither binds a name: `'unless' cannot bind a name`.
 - `if name := value` and `while name := value` hold when the optional value is not nil; inside the body, `name` is the value without nil.
 - An `if` with an `else` gives a value, that of the branch taken, as a `case` does (see [case](#case-without-a-subject)): `label := if v := m[key]`, followed by the branches on the lines below. It is written where a block literal may be (see [bracketless blocks](syntax.md#bracketless-blocks)), on the same line or the next, and as the last statement of a block. If any branch gives no value, as a block ending with an assignment, the `if` gives none either and is a statement; an `if` without an `else` never gives one.
 - `break` leaves the innermost `while` or `for`, and `continue` goes on to its next round. Either is an error outside a loop.
 - `break`, `continue` and `return` are expressions of type `never`, like `throw` (see [errors](errors.md)): `age := ages[name] ? return -1`, `when 'stop' then break`. Unlike `throw`, they may only be written where nothing evaluated before them is still held: as a statement, as the value of a declaration or of an assignment to a variable, and, within those, as the fallback of `?` or a value of `then`/`else` or of a `case` arm. Elsewhere, as in `f(x ? return 0)`, they are an error; so is a `return` inside an arm of a `case` that is itself such an operand, or a `break` or `continue` there that leaves a loop outside the arm. As a statement, `x ? return` is a guard, whose value is not used. [`yield`](functions.md#functions-that-yield), which gives no value, may only be a statement where `return` may be.
-- **Postfix forms** `<statement> if <condition>` and `<statement> while <condition>` apply to one statement other than a declaration (`break if done`, `x *= 2 while x < 100`). The condition of a postfix `while` is evaluated first. A postfix condition may bind a name as those of `if` and `while` do, for the statement before it: `return local if local := lookup(name)`. A postfix form also follows a body on the same line as `->`, outside brackets (inside them, as in `[(x) -> x for x in xs]`, it belongs to the brackets' contents), and an arm's body on the same line.
+- **Postfix forms** `<statement> if <condition>` and `<statement> while <condition>`, and those of `unless` and `until`, apply to one statement other than a declaration (`break if done`, `x *= 2 while x < 100`). The condition of a postfix `while` is evaluated first. A postfix condition may bind a name as those of `if` and `while` do, for the statement before it: `return local if local := lookup(name)`. A postfix form also follows a body on the same line as `->`, outside brackets (inside them, as in `[(x) -> x for x in xs]`, it belongs to the brackets' contents), and an arm's body on the same line.
 - `and` and `or` evaluate their right operand only when the left one does not decide the result.
 - Why the condition rules: the Ruby approach, constrained by types. There is no hook like `is_true`, so a type that is always true, such as `Int`, `String` or an array, is rejected rather than true (0 and the empty string are not false).
-- Why there is no `unless`, no `&&`/`||`/`!`, no `then` statement and no `defer`: no forms that say the same thing two ways. `deinit` and `try`/`finally` replace `defer`; it may be considered if it becomes necessary.
+- Why `unless` and `until`: a negated condition reads better without `not`, `return unless found`. [`lerta fmt`](style.md) writes `if not x` as `unless x` where it can, and `unless` as `if` where its condition is negated itself or an `and` or an `or`, so that each condition is written one way. An `unless` with an `else` would read as a double negation, which `if` with the branches swapped avoids.
+- Why there is no `&&`/`||`/`!`, no `then` statement and no `defer`: no forms that say the same thing two ways. `deinit` and `try`/`finally` replace `defer`; it may be considered if it becomes necessary.
 
 ## Narrowing
 

@@ -16,8 +16,9 @@ import SourceText from './source'
 import type_doc from './print_type'
 import
   BRANCHES, CALLS_WITHOUT_PARENTHESES, EMPTY_INITIAL_VALUES, EXPECTED_TYPES, NIL_INITIAL_VALUES,
-  POSTFIX_FORMS
+  NEGATED_CONDITIONS, POSTFIX_FORMS
 from './rules'
+import negated_head from './negated_conditions'
 import arguments, call_doc, expression_doc, loop_header from './print_expression'
 import value_after from './print_literal'
 import function_doc from './print_block'
@@ -149,8 +150,8 @@ export statement_doc := (statement: Statement, context: Context): Doc ->
       if statement.nil_safe
         expression_doc statement, context
       else if body := statement_if_postfix(statement, context)
-        condition := condition_doc(statement.condition, context)
-        postfix := join([statement_doc(body, context), text(' if '), condition])
+        head := head_doc('if', statement.condition, true, text, context)
+        postfix := join([statement_doc(body, context), text(' '), head])
         rule POSTFIX_FORMS, choice(postfix, if_doc(statement, context))
       else
         if_doc statement, context
@@ -243,15 +244,34 @@ condition_doc := (condition: Condition, context: Context) ->
       join [name, text(' := '), expression_doc(condition.value, context)]
     else expression_doc(condition, context)
 
-# `if` and its block, and `else if` or `else` and its block (see Branches).
-export if_doc := (if_node: If, context: Context): Doc ->
-  condition := condition_doc(if_node.condition, context.unbroken())
-  head := join([keyword('if ', if_node.position), condition])
+# The word and the condition of an `if` or a `while`, the word as `spelled` makes it: `unless` or
+# `until` for a `not` where the statement takes it, `negatable` (see Negated conditions). The rule
+# covers a word that the source may have written otherwise: before a `not`, or before a condition
+# without its double negation, which `unless` or `until` may have had in the source.
+head_doc := (
+  word: String, condition: Condition, negatable: Bool, spelled: (String) -> Doc, context: Context
+) ->
+  if negated := negated_head(word, condition, negatable)
+    written := join([spelled("#{negated.word} "), expression_doc(negated.operand, context)])
+    return rule(NEGATED_CONDITIONS, written)
+  written := join([spelled("#{word} "), condition_doc(condition, context)])
+  return written if condition is Binding
+  negated_in_source := is_not(condition) or condition in context.reported
+  negated_in_source then rule(NEGATED_CONDITIONS, written) else written
+
+is_not := (expression: Expression) -> expression is UnaryOperation and expression.operator == 'not'
+
+# `if` and its block, and `else if` or `else` and its block (see Branches); `unless` for an `if`
+# without `else` that is not one of `else if`, `chained`.
+export if_doc := (if_node: If, context: Context, chained = false): Doc ->
+  negatable := if_node.else_body.is_empty() and not chained
+  spelled := (word: String) -> keyword(word, if_node.position)
+  head := head_doc('if', if_node.condition, negatable, spelled, context.unbroken())
   parts := [head, block_below(if_node.then_body, context)]
   else_body := if_node.else_body
   if is_else_if(else_body, context)
     word := word_before(else_body[0].position, 'else', context)
-    else_if := join([line_feed(), word, text(' '), if_doc(else_body[0] as If!, context)])
+    else_if := join([line_feed(), word, text(' '), if_doc(else_body[0] as If!, context, true)])
     parts.push rule(BRANCHES, else_if)
   else if not else_body.is_empty()
     word := word_before(else_body[0].position, 'else', context)
@@ -304,11 +324,13 @@ ends_open := (statement: Statement): Bool ->
     else false
 
 while_doc := (while_node: While, context: Context) ->
-  condition := condition_doc(while_node.condition, context.unbroken())
-  word := keyword('while ', while_node.position)
-  block := join([word, condition, block_below(while_node.body, context)])
+  { condition, position } := while_node
+  spelled := (word: String) -> keyword(word, position)
+  head := head_doc('while', condition, true, spelled, context.unbroken())
+  block := join([head, block_below(while_node.body, context)])
   body := while_postfix(while_node, context) ? return block
-  postfix := join([statement_doc(body, context), text(' while '), condition])
+  postfix := join
+    [statement_doc(body, context), text(' '), head_doc('while', condition, true, text, context)]
   rule POSTFIX_FORMS, choice(postfix, block)
 
 # The one statement of the `while`'s block, if it can be written in its postfix form.

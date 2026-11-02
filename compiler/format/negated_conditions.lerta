@@ -1,0 +1,54 @@
+# The conditions of `if` and `while` as the style writes them (see Negated conditions): without a
+# double negation, and with `unless` or `until` for `not` of a test that reads as well without it.
+import BinaryOperation, Condition, Expression, is_nil_test, Statement, UnaryOperation from '../ast'
+import places_of from './places'
+import NEGATED_CONDITIONS, StyleRule from './rules'
+
+# Writes each condition, but those on the lines kept as written, without its double negation, in the
+# syntax tree, and reports it.
+export take_out_double_negations := (
+  program: Statement[], reported: Map<Expression, StyleRule>, kept_lines: Set<Int>
+) ->
+  condition := (written: Expression, place: (Expression) -> void) ->
+    return if written.position.line in kept_lines
+    positive := without_double_negation(written) ? return
+    place positive
+    reported[positive] = NEGATED_CONDITIONS
+  places_of program, { condition }
+
+# `not not x` as `x`, `not (a != b)` as `a == b` and `not (x == nil)` as `x != nil`; nil if it has
+# no double negation.
+without_double_negation := (expression: Expression): Expression? ->
+  negation := expression as UnaryOperation ? return nil
+  return nil if negation.operator != 'not'
+  operand := negation.operand
+  case operand
+    when UnaryOperation
+      return nil if operand.operator != 'not'
+      without_double_negation(operand.operand) ? operand.operand
+    when BinaryOperation
+      inverse := inverse_equality(operand) ? return nil
+      BinaryOperation(operand..., operator: inverse)
+    else nil
+
+inverse_equality := (test: BinaryOperation) ->
+  case test.operator
+    when '!=' then '=='
+    when '==' then is_nil_test(test) then '!='
+    else nil
+
+# The word that an `if` or a `while` is written with, and its condition: `unless` or `until` and
+# the operand for `not` of one that is no `and` or `or`, whose negation reads better as a whole,
+# where the statement may take it, `negatable`, as it takes no `else`.
+export negated_head := (word: String, condition: Condition, negatable: Bool) ->
+  negation := condition as UnaryOperation ? return nil
+  return nil if negation.operator != 'not' or not negatable or is_junction(negation.operand)
+  negated_word := word == 'if' then 'unless' else 'until'
+  NegatedHead word: negated_word, operand: negation.operand
+
+export struct NegatedHead
+  word: String
+  operand: Expression
+
+is_junction := (expression: Expression) ->
+  expression is BinaryOperation and (expression.operator == 'and' or expression.operator == 'or')

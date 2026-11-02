@@ -3,7 +3,7 @@
 import
   ArrayLiteral, ArrayTypeName, Assignment, AssignmentTarget, Binding, Call, Condition,
   copy_identifier, Declaration, Expression, For, Identifier, If, Index, Jump, Member, NamedType,
-  NilLiteral, Return, Statement, Throw, TypeName, While, Yield
+  NilLiteral, Return, Statement, Throw, TypeName, UnaryOperation, While, Yield
 from '../ast'
 import starts_weak_function_literal from './compound'
 import
@@ -105,8 +105,9 @@ export parse_block := (tokens: TokenStream) ->
 export parse_statement := (tokens: TokenStream): Statement ->
   case tokens.peek().kind
     when 'for' then parse_for(tokens)
-    when 'while' then parse_while(tokens)
+    when 'while', 'until' then parse_while(tokens)
     when 'if' then parse_if(tokens)
+    when 'unless' then parse_unless(tokens)
     when 'class', 'struct' then parse_type_declaration(tokens)
     when 'enum' then parse_enum(tokens)
     when 'interface' then parse_interface(tokens)
@@ -199,11 +200,13 @@ export parse_line_statement := (tokens: TokenStream): Statement ->
   reject_postfix tokens
   statement
 
+POSTFIX_CONDITIONS: TokenKind[] = ['if', 'unless', 'while', 'until']
+
 # A declaration declares its names for the rest of the block, so no postfix `if` or `while` can
 # apply to it.
 reject_postfix := (tokens: TokenStream) ->
   kind := tokens.peek_continuation()
-  return if kind != 'if' and kind != 'while'
+  return if not is_one_of(kind, POSTFIX_CONDITIONS)
   tokens.fail_here "a declaration cannot have a postfix '#{kind}'"
 
 # `statement if condition`, `statement while condition` and `statement for x in xs when guard`,
@@ -221,11 +224,11 @@ parse_postfix_conditions := (tokens: TokenStream, statement: Statement) ->
 wrap_in_postfix_condition := (tokens: TokenStream, statement: Statement): Statement? ->
   kind := tokens.peek_continuation()
   return wrap_in_for(tokens, statement) if kind == 'for'
-  return nil if kind != 'if' and kind != 'while'
+  return nil if not is_one_of(kind, POSTFIX_CONDITIONS)
   tokens.next()
-  condition := parse_condition(tokens)
+  condition := parse_condition_after(tokens, kind)
   position := statement.position
-  if kind == 'if'
+  if kind == 'if' or kind == 'unless'
     If condition, position, then_body: [statement], else_body: []
   else
     While condition, position, body: [statement]
@@ -393,16 +396,35 @@ parse_for := (tokens: TokenStream) ->
 parse_condition := (tokens: TokenStream): Condition ->
   reject_const tokens
   token := tokens.peek()
-  binds_name := token.kind == IDENTIFIER and tokens.peek_at(1).kind == ':='
-  return parse_expression(tokens) if not binds_name
+  return parse_expression(tokens) if not at_binding(tokens)
   name := parse_identifier(tokens)
   tokens.next()
   Binding name, value: parse_expression(tokens), position: token.position()
 
+at_binding := (tokens: TokenStream) ->
+  tokens.peek().kind == IDENTIFIER and tokens.peek_at(1).kind == ':='
+
+# The condition after the keyword of an `if` or a `while`; that of `unless` or `until` is `not`
+# of what follows it, which binds no name, as the name would hold where the condition does not.
+parse_condition_after := (tokens: TokenStream, kind: TokenKind): Condition ->
+  return parse_condition(tokens) if kind == 'if' or kind == 'while'
+  reject_const tokens
+  tokens.fail_here "'#{kind}' cannot bind a name" if at_binding(tokens)
+  operand := parse_expression(tokens)
+  UnaryOperation operand, operator: 'not', position: operand.position
+
 parse_while := (tokens: TokenStream) ->
+  token := tokens.next()
+  condition := parse_condition_after(tokens, token.kind)
+  While condition, position: token.position(), body: parse_block(tokens)
+
+# `unless`, which takes no `else`: `if` reads better with one.
+parse_unless := (tokens: TokenStream) ->
   position := tokens.next().position()
-  condition := parse_condition(tokens)
-  While condition, position, body: parse_block(tokens)
+  condition := parse_condition_after(tokens, 'unless')
+  then_body := parse_block(tokens)
+  tokens.fail_here "an 'unless' cannot have an 'else'" if tokens.peek().kind == 'else'
+  If condition, then_body, position, else_body: []
 
 # `if` with an optional `else` block; `else if` chains further.
 export parse_if := (tokens: TokenStream): If ->
@@ -411,6 +433,7 @@ export parse_if := (tokens: TokenStream): If ->
   then_body := parse_block(tokens)
   return If(condition, then_body, position, else_body: []) if tokens.peek().kind != 'else'
   tokens.next()
+  tokens.fail_here "an 'unless' cannot follow 'else'" if tokens.peek().kind == 'unless'
   else_body: Statement[] =
     if tokens.peek().kind == 'if'
       [tokens.nested(-> parse_if(tokens))]
