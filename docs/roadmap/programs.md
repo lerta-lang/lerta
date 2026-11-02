@@ -4,7 +4,7 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## C ABI / FFI
 
-- An `Int?` parameter of an extern, a `LertaOptionalInt` of 16 bytes, passed as C takes it on Windows, by a pointer to a copy: now it is passed by value, which a C function there misreads, so std passes none: `run` applies its `output_limit` in Lerta. The x86-64 ABI of the other systems takes it by value, in two registers.
+- An `Int?` parameter of an extern, a `LertaOptionalInt` of 16 bytes, passed as C takes it on Windows, by a pointer to a copy: now it is passed by value, which a C function there misreads, so std passes none: `run` applies its `output_limit` in Lerta. The x86-64 ABI of the other systems takes it by value, in two registers. An `Int?` result is returned so on Windows and on 32-bit x86, through a pointer to a place that the caller gives, which the `{ i1, i64 }` that the IR returns does not match; so std has two externs where one would give `Int?`, as for `to_int`.
 - An `extern` declaration may also refer to a C variable.
 - Generic externs, `extern lerta_map_remove: <K, V>(Map<K, V>, K) -> void`, for C functions that take a value of any type as a pointer, as an array, a map or a String is. With them, the method `remove`, built into the compiler now (see [internals](../internals.md#builtins)), moves to `std/builtins/`, and so would the properties `length` and `s.binary` with extern properties (see [open questions](#open-questions)); `push`, `pop` and indexing stay built in, since their code depends on the items' kind. Using them in std needs a seed refresh.
 - An extern may return a tuple or an anonymous struct, which C writes through the runtime's header: `lerta_status_fields` fills an `Int[]` of three now, which `stat` reads by place.
