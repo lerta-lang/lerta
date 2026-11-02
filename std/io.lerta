@@ -133,10 +133,28 @@ export real_path := (path: String) ->
 export make_temp_dir := ->
   lerta_make_temp_dir() ? throw IOError('cannot make a temporary directory')
 
+# A path whose last part is `.` or `..` is refused before anything is removed, as the directory it
+# names cannot be removed by it, though what is in it could be.
 export remove_tree := (path: String) ->
   failure := 'cannot remove: '
   require_names failure, path
+  throw IOError("#{failure}#{path}") if ends_with_dots(path)
   throw IOError("#{failure}#{path}") unless await lerta_remove_tree(path)
+
+# Whether the last part of the path, past the separators at its end, is `.` or `..`. On Windows, a
+# drive's `:`, as in `C:..`, ends the part before it too.
+ends_with_dots := (path: String) ->
+  bytes := path.binary
+  var end = bytes.length
+  end -= 1 while end > 0 and is_separator(bytes[end - 1])
+  after_drive := lerta_platform() == 'windows' and bytes.length >= 2 and bytes[1] == ':'
+  part_starts := (i: Int) -> is_separator(bytes[i - 1]) or (after_drive and i == 2)
+  var start = end
+  start -= 1 while start > 0 and not part_starts(start)
+  last := bytes[start...end]
+  last == '.'.binary or last == '..'.binary
+
+is_separator := (byte: Byte) -> byte == '/' or (lerta_platform() == 'windows' and byte == '\')
 
 # An empty path names no directory. Each directory that ends before a separator is made first,
 # whether or not that succeeds, since a parent that cannot be made, such as a drive or a network
@@ -145,8 +163,6 @@ export make_dir := (path: String) ->
   failure := 'cannot make directory: '
   require_names failure, path
   throw IOError(failure) if path.is_empty()
-  on_windows := lerta_platform() == 'windows'
-  is_separator := (byte: Byte) -> byte == '/' or (on_windows and byte == '\')
   bytes := path.binary
   for i in 1...bytes.length
     lerta_make_one_dir bytes[0...i] if is_separator(bytes[i]) and not is_separator(bytes[i - 1])

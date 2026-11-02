@@ -385,3 +385,5 @@ void lerta_os_unmap_region(void *region, int64_t size) {
 void lerta_os_discard_region(void *region, int64_t size) {
   VirtualAlloc(region, (SIZE_T)size, MEM_RESET, PAGE_READWRITE);
 }
+
+bool lerta_os_remove_tree(const char *path) { return lerta_remove_tree_by_paths(path); }

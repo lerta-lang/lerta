@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -217,4 +218,224 @@ void lerta_os_discard_region(void *region, int64_t size) {
 #else
   madvise(region, (size_t)size, MADV_DONTNEED);
 #endif
+}
+
+// A count of names, and a block of them, each ended with a NUL; NULL for none.
+typedef struct {
+  size_t count;
+  char *names;
+} Names;
+
+static bool append_name(Names *names, size_t *size, size_t *capacity, const char *name) {
+  size_t length = strlen(name) + 1;
+  if (*size + length > *capacity) {
+    size_t grown = (*size + length) * 2;
+    char *names_grown = realloc(names->names, grown);
+    if (names_grown == NULL) return false;
+    names->names = names_grown;
+    *capacity = grown;
+  }
+  memcpy(names->names + *size, name, length);
+  *size += length;
+  names->count++;
+  return true;
+}
+
+// The names in the directory open at `dir` but `.` and `..`, read at once so that no descriptor
+// stays open for it while its entries are removed; false on failure. It runs on a worker, so it
+// takes memory from malloc and fails rather than panics without it.
+static bool list_names(int dir, Names *names) {
+  *names = (Names){ 0, NULL };
+  int copy = dup(dir);
+  DIR *listing = copy >= 0 ? fdopendir(copy) : NULL;
+  if (listing == NULL) {
+    if (copy >= 0) close(copy);
+    return false;
+  }
+  // The copy shares its offset with `dir`, which an earlier listing left at the end.
+  rewinddir(listing);
+  size_t size = 0;
+  size_t capacity = 0;
+  bool listed = true;
+  for (;;) {
+    errno = 0;
+    struct dirent *entry = readdir(listing);
+    if (entry == NULL) {
+      listed = errno == 0;
+      break;
+    }
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) continue;
+    listed = append_name(names, &size, &capacity, entry->d_name);
+    if (!listed) break;
+  }
+  closedir(listing);
+  if (!listed) free(names->names);
+  return listed;
+}
+
+static bool same_file(const struct stat *a, const struct stat *b) {
+  return a->st_dev == b->st_dev && a->st_ino == b->st_ino;
+}
+
+// Whether `name` in the directory open at `dir` is still the file found, rather than one put there
+// meanwhile.
+static bool is_named(int dir, const char *name, const struct stat *file) {
+  struct stat found;
+  return fstatat(dir, name, &found, AT_SYMLINK_NOFOLLOW) == 0 && same_file(&found, file);
+}
+
+// The parent of a tree is opened only to find its entries in, which takes no permission to read
+// it, as removing one by its path takes none: a directory that others may only write and search,
+// as a drop box, holds trees that can be removed.
+#if defined(O_SEARCH)
+#define SEARCH_ONLY O_SEARCH
+#elif defined(O_PATH)
+#define SEARCH_ONLY O_PATH
+#else
+#define SEARCH_ONLY O_RDONLY
+#endif
+
+// The directory that holds the one open at `child`, opened to be read, as one whose entries are
+// removed is, or else, as the parent of the tree, to be searched alone.
+static int open_parent(int child) {
+  int parent = openat(child, "..", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  if (parent >= 0 || errno != EACCES) return parent;
+  return openat(child, "..", SEARCH_ONLY | O_DIRECTORY | O_CLOEXEC);
+}
+
+// A directory that the walk is in: the names left to remove in it, the one of the directory below
+// that the walk went into, and what it was found to be, which its `..` must still be once that one
+// is empty. The walk keeps one per level on the heap, as no depth must overflow a worker's stack.
+typedef struct {
+  Names names;
+  const char *next;
+  size_t left;
+  const char *below;
+  struct stat found;
+  // The directory that holds the tree, of which it has the tree's name alone, not listed again.
+  bool is_holder;
+} Level;
+
+typedef struct {
+  Level *levels;
+  size_t count;
+  size_t capacity;
+} Walk;
+
+// Adds the level of the directory open at `dir`, whose names it takes, to free with it.
+static bool enter_level(Walk *walk, int dir, Names names, bool is_holder) {
+  if (walk->count == walk->capacity) {
+    size_t capacity = walk->capacity == 0 ? 16 : walk->capacity * 2;
+    Level *levels = realloc(walk->levels, capacity * sizeof *levels);
+    if (levels == NULL) {
+      free(names.names);
+      return false;
+    }
+    walk->levels = levels;
+    walk->capacity = capacity;
+  }
+  Level *level = &walk->levels[walk->count];
+  *level = (Level){ names, names.names, names.count, NULL, { 0 }, is_holder };
+  walk->count++;
+  return fstat(dir, &level->found) == 0;
+}
+
+// Removes the entry `name` of the directory open at `*dir`: a file at once, and a directory by
+// going into it, which leaves it alone open.
+static bool remove_entry(Walk *walk, int *dir, const char *name) {
+  struct stat found;
+  if (fstatat(*dir, name, &found, AT_SYMLINK_NOFOLLOW) != 0) return false;
+  if (!S_ISDIR(found.st_mode)) return unlinkat(*dir, name, 0) == 0;
+  int child = openat(*dir, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  if (child < 0) return false;
+  Names names;
+  if (!list_names(child, &names)) {
+    close(child);
+    return false;
+  }
+  walk->levels[walk->count - 1].below = name;
+  close(*dir);
+  *dir = child;
+  return enter_level(walk, child, names, false);
+}
+
+// Leaves the directory open at `*dir`, which is empty, for the one above, which must be the one it
+// was entered from, and removes it there.
+static bool leave_level(Walk *walk, int *dir) {
+  Level *emptied = &walk->levels[walk->count - 1];
+  struct stat found_emptied = emptied->found;
+  free(emptied->names.names);
+  walk->count--;
+  Level *above = &walk->levels[walk->count - 1];
+  int back = open_parent(*dir);
+  close(*dir);
+  *dir = back;
+  struct stat found;
+  return back >= 0 && fstat(back, &found) == 0 && same_file(&found, &above->found) &&
+         is_named(back, above->below, &found_emptied) &&
+         unlinkat(back, above->below, AT_REMOVEDIR) == 0;
+}
+
+// Removes the file or the tree `name` in the directory open at `*dir`, by descriptors, so that a
+// directory replaced by a link after it is found fails to open rather than be followed to remove
+// what the link names, as it could be in a directory that others write, such as a shared temporary
+// one. The walk keeps the directory it is in alone open, and goes back up by `..`. The entries of a
+// directory are listed again until a listing finds none, as it may change while they are removed.
+// `*dir` is opened again, as another directory, or closed, where it fails.
+static bool remove_at(int *dir, const char *name) {
+  Names holder = { 1, strdup(name) };
+  if (holder.names == NULL) return false;
+  Walk walk = { NULL, 0, 0 };
+  bool removed = enter_level(&walk, *dir, holder, true);
+  while (removed) {
+    Level *level = &walk.levels[walk.count - 1];
+    if (level->left > 0) {
+      const char *entry = level->next;
+      level->next += strlen(entry) + 1;
+      level->left--;
+      removed = remove_entry(&walk, dir, entry);
+    } else if (level->is_holder) {
+      break;
+    } else {
+      free(level->names.names);
+      level->names = (Names){ 0, NULL };
+      removed = list_names(*dir, &level->names);
+      level->next = level->names.names;
+      level->left = level->names.count;
+      if (removed && level->left == 0) removed = leave_level(&walk, dir);
+    }
+  }
+  for (size_t i = 0; i < walk.count; i++) free(walk.levels[i].names.names);
+  free(walk.levels);
+  return removed;
+}
+
+// Whether `name` in the directory open at `dir` is a directory or a link, which alone a path may
+// name with a slash after it.
+static bool names_dir_or_link(int dir, const char *name) {
+  struct stat found;
+  return fstatat(dir, name, &found, AT_SYMLINK_NOFOLLOW) == 0 &&
+         (S_ISDIR(found.st_mode) || S_ISLNK(found.st_mode));
+}
+
+// The links on the way to the path are followed, as its last part alone is the tree, removed in
+// the directory that holds it as its entries are; slashes at its end are left out, as they would
+// have that part followed too.
+bool lerta_os_remove_tree(const char *path) {
+  size_t length = strlen(path);
+  while (length > 1 && path[length - 1] == '/') length--;
+  char *trimmed = strndup(path, length);
+  if (trimmed == NULL) return false;
+  char *slash = strrchr(trimmed, '/');
+  // The slash stays with the directory, so that `/` names the root.
+  char *dir_path = slash == NULL ? strdup(".") : strndup(trimmed, (size_t)(slash - trimmed) + 1);
+  const char *name = slash == NULL ? trimmed : slash + 1;
+  int parent = dir_path == NULL ? -1 : open(dir_path, SEARCH_ONLY | O_DIRECTORY | O_CLOEXEC);
+  bool slashed = length < strlen(path);
+  bool removed = parent >= 0 && (!slashed || names_dir_or_link(parent, name)) &&
+                 remove_at(&parent, name);
+  if (parent >= 0) close(parent);
+  free(dir_path);
+  free(trimmed);
+  return removed;
 }

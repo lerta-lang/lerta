@@ -20,14 +20,6 @@ With the debug runtime: `integer overflow`, then `leak: 1 object(s)`, exit 23. A
 
 Fix: pop the temporaries after `combine`.
 
-## `remove_tree` follows a directory replaced by a symlink mid-walk
-
-Severity: Low.
-
-`lerta_os_remove_tree` (runtime/platform.c:204-224) decides the kind with `uv_fs_lstat` (:206), then resolves the path with `lerta_os_real_path` (:216) and descends by path; each child repeats the pair. A directory swapped for a symlink between the two calls is followed, and the target's entries are removed. *Unverified* race; it needs an attacker who can write to the tree being removed, such as a shared temporary directory.
-
-Fix: walk with descriptor-relative calls in platform_posix.c (`openat` with `O_NOFOLLOW | O_DIRECTORY`, `fdopendir`, `unlinkat`), or at least `fstat` the opened directory and compare `st_dev` and `st_ino` with the `lstat` before descending.
-
 ## `read_file` reads special files without limit
 
 Severity: Low.

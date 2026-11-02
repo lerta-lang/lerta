@@ -1,0 +1,55 @@
+# remove_tree removes a tree deeper than the descriptors a program may open and than a path may
+# be long, as it keeps a few open whatever the depth; a link named with a slash after it is removed,
+# not what it links to, while a file named so is not removed; and a tree in a directory that cannot
+# be read is removed.
+import is_dir, is_file, make_dir, make_link, remove_tree, write_file from 'std:io'
+import run from 'std:process'
+
+# 400 levels at a time, as a path a shell takes is shorter than the tree.
+levels := 'x/'.repeat(400)
+make := "mkdir deep && cd deep && for i in 1 2 3; do mkdir -p #{levels} && cd #{levels}; done"
+await run('sh', '-c', make)
+await remove_tree('deep')
+print is_dir('deep')
+
+# More names in one directory than the first block for them holds.
+make_dir 'wide/inner'
+await write_file("wide/#{i}.txt", ''.binary) for i in 0...500
+await remove_tree('wide')
+print is_dir('wide')
+
+make_dir 'real/sub'
+await write_file('real/sub/f.txt', 'f'.binary)
+make_link 'real', 'link'
+await remove_tree('link/')
+print is_dir('link')
+print is_dir('real/sub')
+
+# In a directory that can be written and searched but not read.
+make_dir 'drop/tree/inner'
+await run('chmod', '300', 'drop')
+await remove_tree('drop/tree')
+await run('chmod', '700', 'drop')
+print is_dir('drop/tree')
+
+# A file named with a slash after it is none, and one named without a directory is removed.
+await write_file('plain.txt', ''.binary)
+try
+  await remove_tree('plain.txt/')
+catch error: IOError
+  print error.message
+await remove_tree('plain.txt')
+print is_file('plain.txt')
+
+# A directory named with slashes after it, and links named with several or none.
+make_dir 'slashed/inner'
+await remove_tree('slashed//')
+print is_dir('slashed')
+make_dir 'target/inner'
+make_link 'target', 'twice'
+make_link 'target', 'bare'
+await remove_tree('twice//')
+await remove_tree('bare')
+print is_dir('twice')
+print is_dir('bare')
+print is_dir('target/inner')

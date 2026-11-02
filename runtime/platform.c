@@ -228,8 +228,10 @@ bool lerta_os_list_dir(const char *path, LertaArray *names) {
 }
 
 // The entries are listed again until a listing finds none, as the directory may change while its
-// entries are removed. It runs on a worker, so it keeps the names in libuv's listing, not in an
-// array of the runtime's.
+// entries are removed. Each is found again by its path, so a directory replaced by a link while
+// the tree is removed is followed: it serves Windows, where only the owner of a tree may change it
+// by default; POSIX systems remove one by descriptors (see platform_posix.c). It runs on a worker,
+// so it keeps the names in libuv's listing, not in an array of the runtime's.
 static bool remove_entries(const char *path) {
   for (;;) {
     uv_fs_t request;
@@ -238,7 +240,7 @@ static bool remove_entries(const char *path) {
     uv_dirent_t entry;
     while (removed && uv_fs_scandir_next(&request, &entry) == 0) {
       char *child = join_path(path, entry.name);
-      removed = lerta_os_remove_tree(child);
+      removed = lerta_remove_tree_by_paths(child);
       free(child);
     }
     uv_fs_req_cleanup(&request);
@@ -246,7 +248,7 @@ static bool remove_entries(const char *path) {
   }
 }
 
-bool lerta_os_remove_tree(const char *path) {
+bool lerta_remove_tree_by_paths(const char *path) {
   uv_fs_t request;
   int error = uv_fs_lstat(NULL, &request, path, NULL);
   bool is_dir = error == 0 && is_dir_mode(request.statbuf.st_mode);
