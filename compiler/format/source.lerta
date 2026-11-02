@@ -217,16 +217,8 @@ lines_marked := (lines: String[], tokens: Token[], comments: Comment[], stranded
   mark off + 1, lines.length if off := off_line
   marked
 
-# The comments that the formatter cannot place, as it flushes a comment before the next token: one
-# that ends a line whose last token is `not`, `not in`, or a `(` or a `-` that does not follow an
-# operand, as the `(` of a call, written without a space, and an operator between operands do,
-# which would leave the operand at the start of a line of its own, where it does not parse; and one
-# before the `weak` of a function literal, which would go between the `weak` and the literal, or,
-# were the `weak` placed, before it on the line of a callee that the literal follows; and one before
-# the `->` that starts a function literal without parameters, as flushing it there leaves the
-# literal written where it does not parse, as an argument, an item or a value in parentheses (no
-# other `->` follows a comment in a program that parses). A `# fmt:` comment is left out, as
-# lines_marked keeps its line anyway.
+# The comments that the formatter cannot place, as it flushes a comment before the next token. A
+# `# fmt:` comment is left out, as lines_marked keeps its line anyway.
 stranded_comments := (lines: String[], tokens: Token[], comments: Comment[]) ->
   code := [token for token in tokens when token.kind not in LAYOUT_KINDS]
   # The index in `code` of the first token after the comment, which comes after those before it.
@@ -234,17 +226,32 @@ stranded_comments := (lines: String[], tokens: Token[], comments: Comment[]) ->
   is_stranded := (comment: Comment) ->
     next += 1 while next < code.length and code[next].line <= comment.line
     return false if text_of(comment, lines).starts_with('# fmt: ')
-    return true if next + 1 < code.length and starts_weak_literal(code[next], code[next + 1])
-    return true if next < code.length and code[next].kind == '->'
-    return false if comment.own_line or next < 1
-    last := code[next - 1]
-    before := next >= 2 then code[next - 2].kind else TokenKind.NEWLINE
-    follows_operand := before in OPERAND_ENDS
-    call := last.kind == '(' and not last.spaced and follows_operand
-    opens := (last.kind == '(' and not call) or (last.kind == '-' and not follows_operand)
-    not_in := before == 'not' and is_word(last, 'in')
-    opens or last.kind == 'not' or not_in
+    before_literal(code, next) or (not comment.own_line and ends_opening_line(code, next))
   [comment for comment in comments when is_stranded(comment)]
+
+# A comment before `code[next]` that starts a function literal: its `weak`, as the comment would
+# go between the `weak` and the literal, or, were the `weak` placed, before it on the line of a
+# callee that the literal follows; or the `->` of one without parameters, as flushing it there
+# leaves the literal written where it does not parse, as an argument, an item or a value in
+# parentheses (no other `->` follows a comment in a program that parses).
+before_literal := (code: Token[], next: Int) ->
+  return false if next >= code.length
+  weak := next + 1 < code.length and starts_weak_literal(code[next], code[next + 1])
+  weak or code[next].kind == '->'
+
+# A comment that ends a line whose last token, `code[next - 1]`, is `not`, `not in`, or a `(` or a
+# `-` that does not follow an operand, as the `(` of a call, written without a space, and an
+# operator between operands do, which would leave the operand at the start of a line of its own,
+# where it does not parse.
+ends_opening_line := (code: Token[], next: Int) ->
+  return false if next < 1
+  last := code[next - 1]
+  before := next >= 2 then code[next - 2].kind else TokenKind.NEWLINE
+  follows_operand := before in OPERAND_ENDS
+  call := last.kind == '(' and not last.spaced and follows_operand
+  opens := (last.kind == '(' and not call) or (last.kind == '-' and not follows_operand)
+  not_in := before == 'not' and is_word(last, 'in')
+  opens or last.kind == 'not' or not_in
 
 # A `weak` before the type parameters, the parameters or the `->` of a function literal, after a
 # space, rather than the name of a weak declaration or of a function named `weak` called with
