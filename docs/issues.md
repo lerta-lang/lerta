@@ -165,24 +165,6 @@ f()
 
 Fix: report such a comment as stranded too, or place it before the literal's `(`.
 
-## `lerta fmt` breaks a multi-line `case` inside an index
-
-Severity: Low.
-
-An index whose position is a `case` on lines of its own compiles and runs, but `lerta fmt` prints it as code that does not parse, and reports that instead of formatting the file:
-
-```
-print boxes[
-  case
-    when replacing
-      boxes = [Box('second')]
-      0
-    else 0
-].name
-```
-
-`lerta fmt` reports `expected end of line, found ']'`. `tests/call/borrowed_values.lerta` keeps such an index with `# fmt: skip`.
-
 ## The language server answers an internal error to a completion at a negative line
 
 Severity: Low.
