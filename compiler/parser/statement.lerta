@@ -18,7 +18,7 @@ from './expression'
 import compile_errors, CompileError, Located from '../errors'
 import Token, TokenKind from '../lexer/tokens'
 import parse_primary from './primary'
-import is_one_of, TokenStream from './token_stream'
+import TokenStream from './token_stream'
 import parse_type_annotation from './type'
 
 ASSIGNMENT_OPERATORS: TokenKind[] = ['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=']
@@ -136,10 +136,10 @@ at_weak_declaration := (tokens: TokenStream) ->
 # `name := value`, `name: Type = value` or `name: Type`, at `offset`.
 at_named_declaration := (tokens: TokenStream, offset: Int) ->
   name_follows := tokens.peek_at(offset).kind == IDENTIFIER
-  name_follows and is_one_of(tokens.peek_at(offset + 1).kind, [':=', ':'])
+  name_follows and tokens.peek_at(offset + 1).kind in [':=', ':']
 
 export at_destructuring := (tokens: TokenStream) ->
-  after_var := tokens.peek().kind == 'var' and is_one_of(tokens.peek_at(1).kind, ['{', '('])
+  after_var := tokens.peek().kind == 'var' and tokens.peek_at(1).kind in ['{', '(']
   after_var or at_bare_destructuring(tokens, 0)
 
 # `const` where a declaration would start, which a const does without, as a field of a class or
@@ -153,13 +153,13 @@ reject_const := (tokens: TokenStream) ->
 # expression.
 at_bare_destructuring := (tokens: TokenStream, offset: Int) ->
   open := tokens.peek_at(offset).kind
-  return false unless is_one_of(open, ['{', '('])
+  return false unless open in ['{', '(']
   close: TokenKind = open == '{' then '}' else ')'
   closing := tokens.closing_offset(open, close, is_name_list_token, offset) ? return false
   tokens.peek_at(closing + 1).kind == ':='
 
 is_name_list_token := (kind: TokenKind) ->
-  is_one_of kind, [IDENTIFIER, ',', NEWLINE, INDENT, DEDENT, '{', '}', '(', ')']
+  kind in [IDENTIFIER, ',', NEWLINE, INDENT, DEDENT, '{', '}', '(', ')']
 
 # A statement that fits on one line, which postfix `if` and `while` can follow, unless it is a
 # declaration.
@@ -206,7 +206,7 @@ POSTFIX_CONDITIONS: TokenKind[] = ['if', 'unless', 'while', 'until']
 # apply to it.
 reject_postfix := (tokens: TokenStream) ->
   kind := tokens.peek_continuation()
-  return unless is_one_of(kind, POSTFIX_CONDITIONS)
+  return unless kind in POSTFIX_CONDITIONS
   tokens.fail_here "a declaration cannot have a postfix '#{kind}'"
 
 # `statement if condition`, `statement while condition` and `statement for x in xs when guard`,
@@ -224,7 +224,7 @@ parse_postfix_conditions := (tokens: TokenStream, statement: Statement) ->
 wrap_in_postfix_condition := (tokens: TokenStream, statement: Statement): Statement? ->
   kind := tokens.peek_continuation()
   return wrap_in_for(tokens, statement) if kind == 'for'
-  return nil unless is_one_of(kind, POSTFIX_CONDITIONS)
+  return nil unless kind in POSTFIX_CONDITIONS
   tokens.next()
   condition := parse_condition_after(tokens, kind)
   position := statement.position
@@ -250,7 +250,7 @@ parse_declaration := (tokens: TokenStream) ->
   position := tokens.peek().position()
   weak := at_weak_declaration(tokens) and tokens.accept_word('weak')
   mutable := tokens.accept('var')
-  if weak and is_one_of(tokens.peek().kind, ['{', '('])
+  if weak and tokens.peek().kind in ['{', '(']
     tokens.fail position, 'a destructuring declaration cannot be weak'
   name := parse_identifier(tokens)
   type := parse_type_annotation(tokens)
