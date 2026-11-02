@@ -38,7 +38,7 @@ export class Client
 
   fetch_body = (url: String, options: FetchOptions, body: Binary | Reader) ->
     { method } := options
-    throw ValueError("not a method: #{method}") if not is_token(method)
+    throw ValueError("not a method: #{method}") unless is_token(method)
     check_field name, value for (name, value) in options.headers.fields
     var request = Outgoing(method, body, target: parse_url(url), headers: options.headers)
     var response = await @exchange(request)
@@ -67,7 +67,7 @@ export class Client
       try
         return await @send(socket, request)
       catch error: NoAnswer
-        throw IOError(error.message) if request.method not in RESENDABLE
+        throw IOError(error.message) unless request.method in RESENDABLE
     try
       await @send(await connect_tcp(target.host, target.port), request)
     catch error: NoAnswer
@@ -146,7 +146,7 @@ MAX_DRAINED := 1024 * 1024
 
 # Reads a redirect's body to its end, dropping it, so that its connection is kept, or closes it.
 drain := (body: Body) ->
-  return if body is not Reader
+  return unless body is Reader
   var drained = 0
   while chunk := await body.read(CHUNK_SIZE)
     drained += chunk.length
@@ -182,9 +182,9 @@ class SentBody
 
   send = ->
     try
-      return if not await @written(request_bytes(@request))
+      return unless await @written(request_bytes(@request))
       while chunk := await @body.read(CHUNK_SIZE)
-        return if not await @written(chunk_bytes(chunk))
+        return unless await @written(chunk_bytes(chunk))
       @whole = await @written(LAST_CHUNK.binary)
     catch error: CancelledError
       throw error
@@ -233,7 +233,7 @@ host_and_port := (authority: String) ->
   (host, port_text) := split_authority(authority) ? return nil
   return nil if host.is_empty()
   return (host, 80) if port_text.is_empty()
-  return nil if not port_text.is_digits()
+  return nil unless port_text.is_digits()
   port := port_text.parse_int() ? return nil
   port <= 65535 then (host, port)
 
@@ -249,7 +249,7 @@ request_bytes := (request: Outgoing) ->
   { target, method, body } := request
   var head = "#{method} #{target.path} HTTP/1.1\r\nhost: #{target.authority}\r\n"
   for (name, value) in request.headers.fields
-    head += "#{name}: #{value}\r\n" if not FRAMING_FIELDS.contains(name.to_lower())
+    head += "#{name}: #{value}\r\n" unless FRAMING_FIELDS.contains(name.to_lower())
   return (head + "transfer-encoding: chunked\r\n\r\n").binary if body is Reader
   head += "content-length: #{body.length}\r\n" if not body.is_empty() or method in SENDING_BODY
   (head + "\r\n").binary + body
@@ -340,7 +340,7 @@ framing := (head: Head, method: String) ->
     throw IOError("a transfer coding not supported: #{coding}") if coding.to_lower() != 'chunked'
     return Framing(left: 0, chunked: true)
   text := headers.get('content-length') ? return Framing(left: nil)
-  throw malformed() if not text.is_digits()
+  throw malformed() unless text.is_digits()
   Framing left: text.parse_int() ? throw malformed()
 
 # The chunks of a body as they come, after which the connection is finished with.
@@ -377,7 +377,7 @@ class BodyChunks
 # leaves out the credentials, which were meant for the first.
 redirected := (request: Outgoing, response: Response) ->
   { status } := response
-  return nil if status not in REDIRECTS
+  return nil unless status in REDIRECTS
   location := response.headers.get('location') ? return nil
   target :=
     try
@@ -391,7 +391,7 @@ redirected := (request: Outgoing, response: Response) ->
   see_other := status == 303 and request.method != 'HEAD'
   moved_post := (status == 301 or status == 302) and request.method == 'POST'
   as_get := see_other or moved_post
-  if not as_get
+  unless as_get
     # A body that is a Reader has been read as it was sent.
     return request.body is Reader then nil else Outgoing(request..., target, headers)
   headers.delete 'content-type'

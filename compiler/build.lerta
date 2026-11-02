@@ -56,11 +56,11 @@ build_then := (request: BuildRequest, run_args: String[]?) ->
 # whose key is its real path, or a linked file.
 reject_input_as_output := (request: BuildRequest, program: ProgramWide) ->
   output := request.output ? return
-  return if not is_file(output)
+  return unless is_file(output)
   real_output := real_path_text(output)
   linked := [real_path_text(file) for file in request.linked_files when is_file(file)]
   inputs := [[module.key for module in program.modules]..., linked...]
-  return if not inputs.any((input) -> input == real_output)
+  return unless inputs.any((input) -> input == real_output)
   throw CompileError("the output '#{output}' is an input of the build")
 
 # What build_then exits with: 1 if clang fails.
@@ -138,5 +138,5 @@ compile_modules := (modules: String[][], flags: String[], dir: String) ->
   # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
   job := (path: String) -> ['-Wno-override-module', '-c', "#{path}.ll", flags..., '-o', "#{path}.o"]
   jobs := [job(path) for path in paths]
-  return nil if not await run_clang_jobs(jobs)
+  return nil unless await run_clang_jobs(jobs)
   ["#{path}.o" for path in paths]

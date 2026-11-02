@@ -74,10 +74,10 @@ export generate := (g: Generator, expression: Expression) ->
   if settles_into(source, target)
     closure := emit_settling_closure(g, operand, source, inner_of(target))
     return target is OptionalType then emit_wrap(g.ir, closure, inner_of(target)) else closure
-  return emit_wrap(g.ir, operand, type_of(g, expression)) if not itab
+  return emit_wrap(g.ir, operand, type_of(g, expression)) unless itab
   value := emit_interface_value(g, operand, itab)
   converted := inner_of(target)
-  return value if converted is not IterType
+  return value unless converted is IterType
   emit_adapter_iter g.ir, value, itab.target, converted.item
 
 # The type of the operand that `generate` returns: the type the expression is converted to, if
@@ -90,10 +90,10 @@ export type_at_use := (g: Generator, expression: Expression) ->
 export generate_condition := (g: Generator, expression: Expression) ->
   operand := generate(g, expression)
   type := type_of(g, expression)
-  return operand if type is not OptionalType
+  return operand unless type is OptionalType
   present := emit_is_present(g.ir, operand, type)
   release_if_reference g, expression, operand
-  return present if not is_kind(type.inner, 'Bool')
+  return present unless is_kind(type.inner, 'Bool')
   value := emit_unwrap(g.ir, operand, type)
   g.ir.assign "and i1 #{present}, #{value}"
 
@@ -183,9 +183,9 @@ emit_narrowed_cast := (g: Generator, cast: Cast, object: String) ->
   member := type_of(g, cast.type)
   value_type := type_of(g, cast.value)
   narrowed := inner_of(value_type)
-  if not is_assignable(narrowed, member)
+  unless is_assignable(narrowed, member)
     emit_release_value ir, object, value_type
-    return nil_constant(optional_type(member)) if not cast.throws
+    return nil_constant(optional_type(member)) unless cast.throws
     throw_if g, 'true', FAILED_CAST
     return 'undef'
   if cast.throws and value_type is OptionalType
@@ -194,7 +194,7 @@ emit_narrowed_cast := (g: Generator, cast: Cast, object: String) ->
   # A union's value, a pointer, is null for nil, so it needs no unwrapping or wrapping.
   if inner_of(member) is UnionType
     return is_boxed(narrowed) then emit_box_value(ir, object, value_type) else object
-  if value_type is not OptionalType
+  unless value_type is OptionalType
     return cast.throws then object else emit_wrap(ir, object, member)
   cast.throws then emit_unwrap(ir, object, value_type) else object
 
@@ -204,12 +204,12 @@ generate_cast := (g: Generator, cast: Cast) ->
   object := generate(g, cast.value)
   member := type_of(g, cast.type)
   value_type := type_of(g, cast.value)
-  return emit_narrowed_cast(g, cast, object) if inner_of(value_type) is not UnionType
+  return emit_narrowed_cast(g, cast, object) unless inner_of(value_type) is UnionType
   holds := emit_member_test(g, object, cast.value, cast.type)
   if cast.throws
     fails := ir.negate(holds)
     while_holding g, object, value_type, -> throw_if(g, fails, FAILED_CAST)
-    return object if not is_boxed(member)
+    return object unless is_boxed(member)
     return emit_narrowed_owned(ir, object, value_type, member)
   if is_boxed(member)
     optional := optional_type(member)
@@ -231,11 +231,11 @@ emit_member_test := (g: Generator, object: String, value: Expression, type_name:
   # A value narrowed to one member is held as the member itself, not boxed in the union, so there is
   # no header to test, and whether it holds the type is known.
   held := inner_of(value_type)
-  if held is not UnionType
-    return 'false' if not is_assignable(held, type)
+  unless held is UnionType
+    return 'false' unless is_assignable(held, type)
     return value_type is OptionalType then emit_is_present(g.ir, object, value_type) else 'true'
   test_of := (each: String) -> emit_type_test(g.ir, each, type)
-  return test_of(object) if value_type is not OptionalType
+  return test_of(object) unless value_type is OptionalType
   emit_present_test g.ir, object, value_type, test_of
 
 # A field's value, of a class, a struct or an anonymous struct; the object is released if it is
@@ -280,7 +280,7 @@ export read_any_field := (
   field_type: Type
   is_owned = true
 ) ->
-  return read_field(g, object, object_type, name, is_owned) if object_type is not UnionType
+  return read_field(g, object, object_type, name, is_owned) unless object_type is UnionType
   of_member := (type: Type) -> read_field(g, object, type, name, is_owned)
   emit_member_dispatch g.ir, object, object_type.members, ir_type(field_type), of_member
 
@@ -337,7 +337,7 @@ export read_property := (
   case kind
     when FIELD then read_any_field(g, object, object_type, name, type, is_owned)
     when STRING_BINARY
-      emit_retain ir, object if not is_owned
+      emit_retain ir, object unless is_owned
       object
     when ARRAY_LENGTH then released(emit_length(ir, object))
     when MAP_LENGTH then released(emit_map_length(ir, object))
@@ -443,17 +443,17 @@ export held_value := (g: Generator, local: CodegenLocal) ->
 # The value of the declared type as the narrower one where it is narrowed: without nil, or as one
 # member of its union, out of its box if the union holds one; borrowed as `value` is.
 export emit_narrowed := (ir: IrBuilder, value: String, declared: Type, type: Type) ->
-  if not is_boxed_narrowing(declared, type)
+  unless is_boxed_narrowing(declared, type)
     present := declared is OptionalType and type is not OptionalType
     return present then emit_unwrap(ir, value, declared) else value
   # A union value is a pointer, null for nil, whether optional or not.
-  return emit_unbox(ir, value, type) if type is not OptionalType
+  return emit_unbox(ir, value, type) unless type is OptionalType
   member := -> emit_wrap(ir, emit_unbox(ir, value, type.inner), type.inner)
   emit_branch ir, ir_type(type), ir.is_not_null(value), member, nil_constant(type)
 
 # As emit_narrowed, of a value that is owned and given over.
 emit_narrowed_owned := (ir: IrBuilder, value: String, declared: Type, type: Type) ->
-  return emit_narrowed(ir, value, declared, type) if not is_boxed_narrowing(declared, type)
+  return emit_narrowed(ir, value, declared, type) unless is_boxed_narrowing(declared, type)
   narrowed := emit_narrowed(ir, value, declared, type)
   emit_retain_value ir, narrowed, type
   emit_release ir, value
@@ -465,7 +465,7 @@ export is_boxed_narrowing := (declared: Type, type: Type) ->
 
 # A box of the value, owned, for a union, and of a T? a box or null.
 emit_box_value := (ir: IrBuilder, value: String, type: Type) ->
-  return emit_box(ir, value, type) if type is not OptionalType
+  return emit_box(ir, value, type) unless type is OptionalType
   box := -> emit_box(ir, emit_unwrap(ir, value, type), type.inner)
   emit_branch ir, 'ptr', emit_is_present(ir, value, type), box, 'null'
 

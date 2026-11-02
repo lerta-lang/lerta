@@ -41,7 +41,7 @@ export read_rest_of_request := (
   throw bad_request() if parts.length != 3
   (method, target, version) := (parts[0], parts[1], parts[2])
   throw bad_request() if method.is_empty() or target.is_empty()
-  throw RequestError(status: 505, message: 'http version not supported') if version not in VERSIONS
+  throw RequestError(status: 505, message: 'http version not supported') unless version in VERSIONS
   headers :=
     try
       await deadline.within(read_headers(reader, options), options.head_timeout)
@@ -52,7 +52,7 @@ export read_rest_of_request := (
   # HTTP/1.0 came before Host, which HTTP/1.1 requires.
   throw bad_request() if hosts.length > 1 or (hosts.is_empty() and version == 'HTTP/1.1')
   host := hosts.first() ? address
-  throw bad_request() if not is_host(host)
+  throw bad_request() unless is_host(host)
   length := content_length(headers)
   throw RequestError(status: 413, message: 'content too large') if length > options.max_body
   { max_body, body_timeout } := options
@@ -122,7 +122,7 @@ is_chunked := (headers: Headers, version: String) ->
   # An empty element of a list is no element.
   codings := [name for name in names when not name.is_empty()]
   throw bad_request() if codings.is_empty()
-  if not codings.all((each) -> each == 'chunked')
+  unless codings.all((each) -> each == 'chunked')
     throw RequestError(status: 501, message: 'transfer-encoding not implemented')
   # Chunks are not put in chunks again.
   throw bad_request() if codings.length > 1
@@ -131,7 +131,7 @@ is_chunked := (headers: Headers, version: String) ->
 content_length := (headers: Headers) ->
   text := headers.get('content-length') ? return 0
   # Digits alone, as parse_int would also take a sign.
-  throw bad_request() if not text.is_digits()
+  throw bad_request() unless text.is_digits()
   text.parse_int() ? throw bad_request()
 
 # Whether a Host names a host and a port alone, so that it cannot change the path of the URL.

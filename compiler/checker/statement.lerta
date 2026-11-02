@@ -159,7 +159,7 @@ export check_statement := (body: Body, statement: Statement): void ->
   if is_exported(statement) and not is_top_level
     fail body.program, statement.position, 'export can only be at the top level'
   require_top_level := (message: String) ->
-    fail body.program, statement.position, message if not is_top_level
+    fail body.program, statement.position, message unless is_top_level
   case statement
     when For then check_for(body, statement)
     when While then check_while(body, statement)
@@ -256,7 +256,7 @@ weak_local_type := (body: Body, declaration: Declaration, value_type: Type) ->
     fail program, at, "a weak const or var may hold nil: write its type as #{written}"
   object := inner_of(value_type) as ObjectType?
   holds_class := object?.is_struct == false
-  fail program, at, 'a weak const or var holds an object of a class' if not holds_class
+  fail program, at, 'a weak const or var holds an object of a class' unless holds_class
   optional_type value_type
 
 reject_if_not_storable := (body: Body, type: Type, value: Expression) ->
@@ -269,7 +269,7 @@ export define_local := (body: Body, local: Local) ->
   is_top_level := body.is_top_level()
   is_taken := has_function(shared, name) or names_type_or_import(shared, name)
   fail_already_defined program, local.identifier if is_top_level and is_taken
-  if not body.scopes.define(name, local)
+  unless body.scopes.define(name, local)
     fail program, position, "'#{name}' is already defined in this scope"
   define_top_level shared.top_level, local if is_top_level
   body.facts.types[local.identifier] = local.type
@@ -296,7 +296,7 @@ reject_unconsumed := (body: Body, value: Expression, type: Type): void ->
   at := value.position
   fail body.program, at, 'an Iter does nothing until it is consumed' if type is IterType
   fail body.program, at, 'a Promise must be awaited' if type is PromiseType
-  return if not is_kind(type, 'void')
+  return unless is_kind(type, 'void')
   arms := arm_bodies(value) ? return
   for arm in arms
     last := arm.last() as Expression?

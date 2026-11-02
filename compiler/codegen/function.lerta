@@ -72,7 +72,7 @@ export generate_main := (
         g.ir.emit "call void #{first.symbol}()"
         emit_exception_check g
     generate_block g, statements
-  if not code.awaits
+  unless code.awaits
     run()
     emit_loop_run g.ir if is_program
     emit_release_globals g.ir, releases
@@ -127,19 +127,19 @@ export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = f
   on_stack := is_local and not is_coroutine and not literal.weak and not captures.any(is_weak)
   # A float that holds a NaN throws before any capture is retained, so that none is left held.
   for capture in captures
-    emit_deferred_check g, local_of(capture) if not capture.is_var
+    emit_deferred_check g, local_of(capture) unless capture.is_var
   slots: HeapField[]
   operands: String[]
   for capture in captures
     local := local_of(capture)
-    if not capture.is_var
+    unless capture.is_var
       slots.push fixed(value_field(capture.type))
       borrowed := -> read_borrowed(g, local, capture.type)
       operands.push on_stack then borrowed() else captured_value(g, local, capture)
       continue
     cell := local is SlotLocal then local.cell
     owned := cell ? panic("the captured var '#{capture.name}' has no cell")
-    emit_retain g.ir, owned.cell if not on_stack
+    emit_retain g.ir, owned.cell unless on_stack
     slots.push CELL_SLOT
     operands.push owned.cell
   return emit_local_closure(g.ir, symbol, slots, operands) if on_stack
@@ -176,7 +176,7 @@ captured_value := (g: Generator, local: CodegenLocal, capture: Capture) ->
     emit_retain g.ir, box
     return box
   value := read_local(g, local, type)
-  return value if not capture.is_weak
+  return value unless capture.is_weak
   box := weak_box_of(g, value, type)
   emit_release g.ir, value
   box
@@ -251,7 +251,7 @@ generate_function_body := (
   holds := g.coroutine != nil
   scope := g.locals.push()
   bind := (name: String, operand: String, local_type: Type) ->
-    if not holds
+    unless holds
       scope[name] = ValueLocal(operand, type: local_type)
       return
     emit_retain_value ir, operand, local_type
@@ -517,7 +517,7 @@ export generate_block_with := (
 export release_scope := (g: Generator, scope: Map<String, CodegenLocal>) ->
   ir := g.ir
   for local in scope.values()
-    continue if local is not SlotLocal
+    continue unless local is SlotLocal
     continue if local.top_level != nil or local.is_borrowed
     if cell := local.cell
       emit_release ir, cell.cell if cell.is_owned
@@ -587,7 +587,7 @@ generate_local_declaration := (g: Generator, declaration: Declaration) ->
 
 # What the declared name holds of the value generated for it: the value, or its weak box.
 held_value_of := (g: Generator, declaration: Declaration, generated: String, type: Type) ->
-  return generated if not declaration.weak
+  return generated unless declaration.weak
   box := weak_box_of(g, generated, type)
   emit_release g.ir, generated
   box

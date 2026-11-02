@@ -44,7 +44,7 @@ export reject_map_key := (program: ProgramWide, key: Type, at: Position, role = 
   got := format_type(key)
   if key is OptionalType or not is_equatable(program, key, at)
     fail program, at, "#{role} must be a value that == compares, not optional, got #{got}"
-  if not is_hashable(program, key, at)
+  unless is_hashable(program, key, at)
     reason := 'a class or struct that compares by its own equals or compare needs a hash too'
     fail program, at, "#{role} must hash as it compares, got #{got}: #{reason}"
 
@@ -145,7 +145,7 @@ map_type_of_anchors := (body: Body, key: Expression, value: Expression) ->
 
 # A call of the builtin `Map` or `Set`, unless the name is taken in the program.
 is_builtin_call := (body: Body, callee: Expression, name: String) ->
-  return false if callee is not Identifier
+  return false unless callee is Identifier
   is_taken := has_function(body.shared, name) or names_type_or_import(body.shared, name)
   callee.name == name and lookup(body, name) == nil and not is_taken
 
@@ -216,12 +216,12 @@ export type_of_filled_array := (body: Body, call: Call, expected: Type?) ->
 # class object, an array, a map or an Iter is; `seen` has the types already looked into, as a
 # struct may hold itself.
 holds_changing := (program: ProgramWide, type: Type, at: Position, seen: Set<String>): Bool ->
-  return false if not seen.add(type_key(type))
+  return false unless seen.add(type_key(type))
   holds := (part: Type) -> holds_changing(program, part, at, seen)
   case type
     when ArrayType, MapType, IterType, InterfaceType then true
     when ObjectType
-      return true if not type.is_struct
+      return true unless type.is_struct
       info := info_of(program, type)
       info.fields.any (field) -> holds(field_type(program, info, field, at))
     when TupleType then type.items.any(holds)
@@ -260,7 +260,7 @@ export type_of_index := (body: Body, index: Index): Type ->
 
 # `b[start...end]`, the bytes of a Binary from `start` up to `end`, which no other type takes.
 type_of_slice := (body: Body, range: Range, object_type: Type) ->
-  if not is_kind(object_type, 'Binary')
+  unless is_kind(object_type, 'Binary')
     message := "only a Binary takes a range as its index, not #{format_type(object_type)}"
     fail body.program, range.position, message
   expect_type body, range.start, int_type
@@ -268,6 +268,6 @@ type_of_slice := (body: Body, range: Range, object_type: Type) ->
   binary_type
 
 reject_set_index := (body: Body, index: Index, type: MapType) ->
-  return if not is_set(type)
+  return unless is_set(type)
   message := "cannot index a value of type #{format_type(type)}; use has"
   fail body.program, index.object.position, message

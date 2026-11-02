@@ -78,7 +78,7 @@ extending_modules := (program: ProgramWide, imported: Int) ->
     for statement in module.program
       if statement is Import and statement.exported
         passed := module.imported[statement]!
-        found.push passed if passed not in found
+        found.push passed unless passed in found
   found
 
 # A class, struct, enum, interface or type alias cannot have the name of an import; the error points
@@ -94,17 +94,17 @@ reject_types_named_like_imports := (shared: Shared, statements: Statement[]) ->
 add_top_level_functions := (shared: Shared, statements: Statement[]) ->
   program := shared.program
   for statement in statements
-    continue if statement is not Declaration
+    continue unless statement is Declaration
     literal := statement.value
-    continue if literal is not FunctionLiteral
+    continue unless literal is FunctionLiteral
     fail program, statement.position, 'a function must be declared with const' if statement.mutable
     name := statement.name
     fail_already_defined program, name if names_type_or_import(shared, name.name)
     if type_name := statement.type
-      if not literal.type_params.is_empty()
+      unless literal.type_params.is_empty()
         fail program, type_name.position, 'a generic function cannot have its type declared'
       declared := resolve(program, module_resolver(shared.index), type_name)
-      if declared is not FunctionType
+      unless declared is FunctionType
         message := "the type of a function is a function type, not #{format_type(declared)}"
         fail program, type_name.position, message
       add_declared_function shared, name, literal, declared

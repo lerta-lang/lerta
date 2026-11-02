@@ -52,7 +52,7 @@ shift := (g: Generator, operator: String, left: String, right: String, type: Typ
   if operator == '>>'
     return ir.assign("#{signed then 'ashr' else 'lshr'} #{width} #{left}, #{right}")
   shifted := ir.assign("shl #{width} #{left}, #{right}")
-  return shifted if not signed
+  return shifted unless signed
   back := ir.assign("ashr #{width} #{shifted}, #{right}")
   throw_if g, ir.assign("icmp ne #{width} #{back}, #{left}"), OVERFLOW
   shifted
@@ -64,7 +64,7 @@ division := (g: Generator, operator: String, left: String, right: String, type: 
   width := ir_type(type)
   throw_if g, ir.assign("icmp eq #{width} #{right}, 0"), DIVISION_BY_ZERO
   is_quotient := operator == '/'
-  if not is_signed(type)
+  unless is_signed(type)
     return ir.assign("#{is_quotient then 'udiv' else 'urem'} #{width} #{left}, #{right}")
   is_min := ir.assign("icmp eq #{width} #{left}, #{integer_range(type).least}")
   is_minus_one := ir.assign("icmp eq #{width} #{right}, -1")
@@ -88,7 +88,7 @@ export emit_conversion := (ir: IrBuilder, value: String, from: Type, result: Typ
       char_conversion ir, value, from
     else
       integer_conversion ir, value, from, to
-  return conversion.value if result is not OptionalType
+  return conversion.value unless result is OptionalType
   flagged := ir.assign("insertvalue #{ir_type(result)} undef, i1 #{conversion.fits}, 0")
   ir.assign "insertvalue #{ir_type(result)} #{flagged}, #{ir_type(to)} #{conversion.value}, 1"
 

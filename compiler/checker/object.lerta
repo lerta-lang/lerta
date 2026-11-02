@@ -23,7 +23,7 @@ from '../types'
 
 # A call to the name of a class or struct, not shadowed by a local or a function, constructs one.
 export constructed_type := (body: Body, callee: Expression) ->
-  return nil if callee is not Identifier
+  return nil unless callee is Identifier
   name := callee.name
   return nil if lookup(body, name) != nil or has_function(body.shared, name)
   type := object_type(body.shared, name) ? return nil
@@ -71,7 +71,7 @@ export type_of_construction := (
   given: Set<String>
   for arg in named_args
     { name, position } := arg.name
-    fail program, position, "the argument '#{name}' is given twice" if not given.add(name)
+    fail program, position, "the argument '#{name}' is given twice" unless given.add(name)
     field_type := argument_type(body, info, arg)
     value := arg.value
     if value_type := typed[value]
@@ -80,7 +80,7 @@ export type_of_construction := (
       expect_type body, value, field_type
   for field in required_fields(info)
     name := field.name.name
-    fail program, call.position, "missing argument '#{name}'" if name not in given
+    fail program, call.position, "missing argument '#{name}'" unless name in given
   is_given := (field: FieldInfo) -> not is_argument(field) or field.name.name in given
   body.facts.full_constructions.add call if info.fields.all(is_given)
   type
@@ -121,7 +121,7 @@ argument_field := (body: Body, info: ObjectInfo, arg: NamedValue) ->
   type := format_type(info.type)
   no_field := -> fail(body.program, position, "#{type} has no field '#{name}'")
   field := info.field_named(name) ? no_field()
-  fail body.program, position, "#{type} computes its field '#{name}'" if not is_argument(field)
+  fail body.program, position, "#{type} computes its field '#{name}'" unless is_argument(field)
   field
 
 # The type of the field that a named argument gives, which its default alone may give.
@@ -141,13 +141,13 @@ constructed_instance := (
     reject_type_arguments body, call
     return declared
   info := info_of(program, declared)
-  if not call.type_args.is_empty()
+  unless call.type_args.is_empty()
     type_name := NamedType(name: declared.name, args: call.type_args, position: call.position)
     return instantiate_object(program, body.resolver, declared, type_name)
   type_bindings: Map<String, Type>
   bind := (name: String, type: Type) ->
     return if is_one_of_kinds(type, ['nil', 'never'])
-    type_bindings[name] = type if name not in type_bindings
+    type_bindings[name] = type unless name in type_bindings
   infer declared, inner_of(expected), bind if expected
   infer_from := (arg: NamedValue, expected_type: Type?) ->
     type := type_of(body, arg.value, expected_type)
@@ -155,12 +155,12 @@ constructed_instance := (
     infer argument_type(body, info, arg), type, bind
   is_literal := (arg: NamedValue) -> needs_context(body, arg.value)
   for arg in named_args
-    infer_from arg, nil if not is_literal(arg)
+    infer_from arg, nil unless is_literal(arg)
   # A literal whose field's type is still unknown gives its own type, as `1` an Int.
   literals := [arg for arg in named_args when is_literal(arg)]
   for arg in float_first(literals, (arg) -> arg.value)
     pattern := substitute(argument_type(body, info, arg), type_bindings)
-    continue if not has_type_parameters(pattern)
+    continue unless has_type_parameters(pattern)
     infer_from arg, arg.value is FunctionLiteral then pattern
   args: Type[]
   type_name := declared.name
@@ -174,7 +174,7 @@ constructed_instance := (
 
 # The class or struct of the type, if it has a method of the name.
 export method_owner := (body: Body, object_type: Type, name: String) ->
-  return nil if object_type is not ObjectType
+  return nil unless object_type is ObjectType
   info_of(body.program, object_type).methods.contains(name) then object_type
 
 # The type of the method `name` of an object, or nil if the type is no class or struct with that
@@ -204,7 +204,7 @@ spread_construction := (body: Body, call: Call, declared: ObjectType): Call? ->
   type := type_of(body, source)
   object := type as ObjectType?
   is_same := object != nil and object.name == declared.name and object.module == declared.module
-  if not is_same
+  unless is_same
     message := "a spread of #{format_type(declared)} must be one, not #{format_type(type)}"
     fail body.program, source.position, message
   rest := [arg for arg in call.args when arg != spread]
@@ -232,7 +232,7 @@ spread_argument := (body: Body, items: Expression[], holder: String) ->
   if spreads.length > 1 or items[0] != first
     fail body.program, first.position, "a spread comes first in #{holder}, once"
   spread := first as Comprehension!
-  if not is_path(spread.iterable)
+  unless is_path(spread.iterable)
     message := 'a spread of a struct is of a name, `@` or a path of fields from one, so far'
     fail body.program, spread.iterable.position, message
   spread
@@ -254,7 +254,7 @@ export type_of_record := (body: Body, record: RecordLiteral, expected: Type?): T
   names: Set<String>
   for field in record.fields
     { name, position } := field.name
-    fail program, position, "'#{name}' is already a field" if not names.add(name)
+    fail program, position, "'#{name}' is already a field" unless names.add(name)
   expected_fields := expected_record_fields(expected)
   type_of_field := (field: NamedValue) ->
     name := field.name.name
@@ -274,7 +274,7 @@ spread_record := (body: Body, record: RecordLiteral, spread: Comprehension) ->
   spread_argument body, [spread], 'an anonymous struct'
   source := spread.iterable
   type := type_of(body, source)
-  if type is not RecordType
+  unless type is RecordType
     message := "a spread of an anonymous struct must be one, not #{format_type(type)}"
     fail body.program, source.position, message
   names := Set([field.name.name for field in record.fields])

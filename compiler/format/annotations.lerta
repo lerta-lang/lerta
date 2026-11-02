@@ -23,7 +23,7 @@ export removable_annotations := (paths: String[]) ->
   wanted.add module_key(path) for path in paths
   removable: Map<String, AnnotationKey[]>
   for entry in [await not_imported(paths)..., paths...]
-    await add_removable(removable, entry, wanted) if not removable.contains(module_key(entry))
+    await add_removable(removable, entry, wanted) unless removable.contains(module_key(entry))
   removable
 
 # Those of the files that none of them imports; all of them that do not parse.
@@ -49,12 +49,12 @@ can_leave_out := (annotation: Annotation, shared: Shared, program: ProgramWide) 
   return member in shared.facts.unqualifiable if member := annotation.member
   return call in shared.facts.recordable if call := annotation.construction
   if call := annotation.shorthand
-    return false if call not in shared.facts.object_constructions
+    return false unless call in shared.facts.object_constructions
     left_out_cast := annotation.shorthand_cast ? return true
     return left_out_cast in shared.facts.redundant_casts
   return cast in shared.facts.redundant_casts if cast := annotation.cast
   if call := annotation.spread_copy
-    return false if call not in shared.facts.full_constructions
+    return false unless call in shared.facts.full_constructions
     { types } := shared.facts
     source_type := types[annotation.spread_source!] ? return false
     constructed := types[call] ? return false
@@ -83,7 +83,7 @@ add_removable := (removable: Map<String, AnnotationKey[]>, entry: String, wanted
       removable[module_key(entry)] = []
       return
   checked := quiet_program(entry, modules)
-  if not checks(checked)
+  unless checks(checked)
     removable[module_key(entry)] = []
     return
   held := [module for module in modules when module.key in wanted and module.key not in removable]

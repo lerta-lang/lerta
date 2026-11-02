@@ -55,7 +55,7 @@ export cached_runtime := (kind: BuildKind, temp_dir: String) ->
     catch error
       await remove_tree(staging_dir)
       throw error
-  if not compiled
+  unless compiled
     await remove_tree(staging_dir)
     return nil
   await move_into_place(staging_dir, dir, files)
@@ -109,10 +109,10 @@ export cache_dir := ->
 # `$LERTA_CACHE_DIR` names goes. The paths removed, in the order of their names.
 export clean_cache := (): Promise<String[]> ->
   dir := cache_path()
-  return [] if not is_dir(dir)
+  return [] unless is_dir(dir)
   removed: String[]
   for name in list_dir(dir)
-    continue if not is_made_by_builds(name)
+    continue unless is_made_by_builds(name)
     path := join(dir, name)
     try
       await remove_tree(path)
@@ -152,7 +152,7 @@ cached_runtime_name := (kind: BuildKind, clang_version: String, libuv: LibuvBuil
   "runtime-#{kind_name}-#{target_name}-#{clang_name}-#{hash}"
 
 runtime_kind_name := (kind: BuildKind) ->
-  return 'debug' if not kind.optimize
+  return 'debug' unless kind.optimize
   kind.memory_checks then 'release-checked' else 'release'
 
 # A target names a directory of the cache, so it cannot be a path.
@@ -228,7 +228,7 @@ compile_runtime := (kind: BuildKind, libuv: LibuvBuild, staging_dir: String, tem
     [runtime_job(path) for path in c_paths(libuv.system)]...
     [libuv_job(path) for path in libuv.sources]...
   ]
-  return false if not await run_clang_jobs(jobs)
+  return false unless await run_clang_jobs(jobs)
   ir := await clang_probe_ir(flags, temp_dir) ? return false
   await write_file(join(staging_dir, ATTRIBUTES_FILE), function_attributes(ir).binary)
   await write_file(join(staging_dir, CORO_END_FILE), coro_end_type(ir).binary)
@@ -279,5 +279,5 @@ move_into_place := (staging_dir: String, dir: String, files: String[]) ->
     rename staging_dir, dir
   catch _
     await remove_tree(staging_dir)
-    if not is_complete(files)
+    unless is_complete(files)
       throw CompileError("cannot move the compiled runtime into the cache: #{dir}")

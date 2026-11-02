@@ -268,7 +268,7 @@ dump_llvm_check := -> Check(name: 'lerta dump-llvm prints the IR and leaves no f
   dumped := await run_in_new_dir(compiler, ['dump-llvm', hello])
   ir := dumped.result.stdout_text()
   ir_reasons: String[]
-  ir_reasons.push 'no lerta_main in the IR' if 'define external void @lerta_main()' not in ir
+  ir_reasons.push 'no lerta_main in the IR' unless 'define external void @lerta_main()' in ir
   ir_reasons.push 'target attributes in the IR' if 'attributes #' in ir
   [
     expect_status(0, dumped.result.status)...
@@ -321,7 +321,7 @@ dump_joined_literals_check := ->
     joined_text :=
       'a text too long for a line of its own, which is split over lines, with an escape\09' +
         'and joined by the compiler'
-    reasons.push 'no joined literal' if joined_text not in ir
+    reasons.push 'no joined literal' unless joined_text in ir
     reasons
 
 UNCHECKED_METHODS := "#{root_dir}/tests/operator/unchecked_methods.lerta"
@@ -429,7 +429,7 @@ dump_batched_writes_check := ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
     reasons := expect_status(0, dumped.result.status)
     body := function_body(dumped.result.stdout_text().split("\n"), 'grow')
-    return [reasons..., 'no function grow'] if not body
+    return [reasons..., 'no function grow'] unless body
     batches := body.filter((line) -> line.starts_with('nan.one.by.one.')).count()
     reasons.push "grow has #{batches} batches, not one" if batches != 1
     reasons
@@ -441,7 +441,7 @@ dump_compound_tree_check := ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
     reasons := expect_status(0, dumped.result.status)
     body := function_body(dumped.result.stdout_text().split("\n"), 'shrink')
-    return [reasons..., 'no function shrink'] if not body
+    return [reasons..., 'no function shrink'] unless body
     count := body.filter((line) -> ' = fcmp uno ' in line).count()
     reasons.push "shrink checks for NaN #{count} times, not twice" if count != 2
     reasons
@@ -466,7 +466,7 @@ dump_fixed_captures_check := ->
     stack := [line.trim().split(' = ')[0] for line in body when ' = alloca {' in line]
     is_laundered := (place: String) ->
       body.any (line) -> "@llvm.launder.invariant.group.p0(ptr #{place})" in line
-    reasons.push 'no stack closure laundered' if not stack.any(is_laundered)
+    reasons.push 'no stack closure laundered' unless stack.any(is_laundered)
     is_fixed_store := (line: String) ->
       line.trim().starts_with('store i64 ') and '!invariant.group' in line
     reasons.push 'no capture written as fixed' if body.filter(is_fixed_store).count() < 2
@@ -482,7 +482,7 @@ dump_item_tag_check := -> Check(name: 'lerta dump-llvm tags the loads and stores
   tagged := alias_tag_of(lines, 'lerta item') ? return ['the tag of items is not defined once']
   root := await clang_tbaa_root(dumped.cwd)
   has_root := lines.any((line) -> line.ends_with(" = #{root}"))
-  return ["no node of clang's root of type-based alias analysis, #{root}"] if not has_root
+  return ["no node of clang's root of type-based alias analysis, #{root}"] unless has_root
   types := ['i8', 'i32', 'float', 'i64', '{ ptr, ptr }']
   accesses := [["load #{type}, ptr" for type in types]..., ["store #{type} " for type in types]...]
   is_tagged := (access: String) -> lines.any((line) -> access in line and line.ends_with(tagged))
@@ -531,17 +531,17 @@ dump_field_tag_check := ->
       body.any (line) -> access in line and line.ends_with(tagged)
     reasons := expect_status(0, dumped.result.status)
     for expected in accesses
-      if not is_tagged(expected.access, expected.tagged)
+      unless is_tagged(expected.access, expected.tagged)
         reasons.push "no #{expected.access} with its tag"
     for flag in ['true', 'false']
       store := "store i1 #{flag}, #{value('points')}.set\""
-      if not lines.any((line) -> store in line and line.ends_with(top_level))
+      unless lines.any((line) -> store in line and line.ends_with(top_level))
         reasons.push "no #{store} with its tag"
     # id, the Int field, comes first after the header's two fields.
     id := body.find((line) -> 'Point", ptr %' in line and line.ends_with(', i32 0, i32 2'))
     id_load :=
       id and body.find((line) -> line.ends_with(" = load i64, ptr #{id.split(' = ')[0].trim()}"))
-    reasons.push 'no load of the Int field without a tag' if not id_load
+    reasons.push 'no load of the Int field without a tag' unless id_load
     reasons
 
 # The root node of the alias analysis that clang gives the runtime's C, without its number, so that
@@ -595,7 +595,7 @@ debug_file_of := (executable: String) ->
 
 has_debug_info := (executable: String) ->
   debug_file := debug_file_of(executable)
-  return false if not is_file(debug_file)
+  return false unless is_file(debug_file)
   marker := host_platform == 'macos' then '__debug_line' else '.debug_line'
   (await read_file(debug_file)).index_of(marker.binary) != nil
 

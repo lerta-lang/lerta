@@ -182,7 +182,7 @@ class Server
   set_text = (uri: String, text: String) ->
     path := path_of_uri(uri) ? return
     open_texts[text_key(path)] = text
-    if not is_file(path)
+    unless is_file(path)
       @programs.remove path
       await @check(doc) for doc in @importers(path)
       return
@@ -218,7 +218,7 @@ class Server
     declared := definition_of(program, module_index, await read_source(path), at) ? return nil
     location := location_of(program, declared.module_index)
     return nil if is_standard_name(location)
-    return nil if not is_written((await read_source(location)).split("\n"), declared.name)
+    return nil unless is_written((await read_source(location)).split("\n"), declared.name)
     range := await name_range(location, declared.name, @encoding)
     Location range, uri: uri_of_path(location)
 
@@ -228,7 +228,7 @@ class Server
     path := path_of_uri(params.text_document.uri) ? return []
     key := text_key(path)
     text := open_texts[key] ? return []
-    return [] if not is_file(path)
+    return [] unless is_file(path)
     at := await source_position(path, params.position, @encoding)
     lines := text.split("\n")
     return [] if at.line > lines.length
@@ -293,9 +293,9 @@ formatting_edits := (uri: String, encoding: PositionEncoding) ->
 # The annotations that `lerta fmt --fix` leaves out of the file, which the checker tells; none for
 # a document that is no file yet, which no program holds.
 removable_types := (path: String): Promise<AnnotationKey[]> ->
-  return [] if not is_file(path)
+  return [] unless is_file(path)
   (await removable_annotations([path]))[module_key(path)] ? []
 
 export lsp_command := (args: String[]) ->
-  throw CompileError('lerta lsp takes no arguments') if not args.is_empty()
+  throw CompileError('lerta lsp takes no arguments') unless args.is_empty()
   await Server().run()

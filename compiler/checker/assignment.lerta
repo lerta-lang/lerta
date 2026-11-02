@@ -31,7 +31,7 @@ export check_assignment := (body: Body, assignment: Assignment) ->
       when Identifier then check_variable_target(body, target)
   if operator != '='
     kinds := operand_kinds(combining_operator(operator))
-    if not is_one_of_kinds(target_type, kinds)
+    unless is_one_of_kinds(target_type, kinds)
       if check_operator_assignment(body, assignment, target_type)
         forget_narrowing body, target if target is Identifier
         return
@@ -39,7 +39,7 @@ export check_assignment := (body: Body, assignment: Assignment) ->
       fail body.program, target.position, message
   value_type := type_of(body, assignment.value, target_type)
   is_unit := operator == '+=' and appends_unit(target_type, value_type)
-  if not is_unit
+  unless is_unit
     reject_text_and_bytes body, assignment.value, target_type, value_type if operator == '+='
     require_type body, assignment.value, value_type, target_type
   # The value is read where the variable is still narrowed, as it is evaluated first.
@@ -57,7 +57,7 @@ check_operator_assignment := (body: Body, assignment: Assignment, target_type: T
     type_of_operator_call body, assignment, operator, target, target_type, name, args
   result := call_method() ? return false
   call := body.facts.operator_calls[assignment]!
-  if not is_plain_place(body, target)
+  unless is_plain_place(body, target)
     reads := "the target of '#{operator}' through '#{name}' is read and then assigned"
     message := "#{reads}, so it may only be a name, a field, an index or arithmetic"
     fail body.program, target.position, message
@@ -109,7 +109,7 @@ check_variable_target := (body: Body, target: Identifier) ->
     reject_pending body.program, body.shared.top_level, target if body.sees_top_level
     reject 'is not a variable'
   variable := lookup(body, target.name) ? not_a_variable()
-  reject 'is not a var' if not variable.mutable
+  reject 'is not a var' unless variable.mutable
   body.facts.local_declarations[target] = variable.original().identifier
   record_reference body, target, local_reference(body, target.name, variable)
   # A write is not a use: the target's type is found without reading it. It is the declared one,

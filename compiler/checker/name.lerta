@@ -29,13 +29,13 @@ export lookup := (body: Body, name: String) ->
 # The declaration of the top-level function written in Lerta that the callee names, if it does, as
 # type_of_identifier finds it.
 export named_function_literal := (body: Body, callee: Expression): FunctionLiteral? ->
-  return nil if callee is not Identifier
+  return nil unless callee is Identifier
   { program, shared } := body
   name := callee.name
   return nil if lookup(body, name) != nil
   return entry.literal if entry := shared.functions.entries[name]
   exported := export_named(shared, name)
-  return nil if exported is not FunctionExport
+  return nil unless exported is FunctionExport
   program.shared[exported.module_index].functions.entries[exported.name]!.literal
 
 export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Bool) ->
@@ -96,7 +96,7 @@ export qualified_name := (body: Body, member: Member): Identifier? ->
 # The generic function that the callee names: one of the module, an imported one or a builtin,
 # unless a local or another name of the module takes the name.
 export generic_callee := (body: Body, callee: Expression) ->
-  return nil if callee is not Identifier
+  return nil unless callee is Identifier
   shared := body.shared
   name := callee.name
   return nil if lookup(body, name) != nil
@@ -104,7 +104,7 @@ export generic_callee := (body: Body, callee: Expression) ->
   return nil if has_declared_type(shared, name) or has_alias(shared, name)
   return generic_function(shared, name) if has_function(shared, name)
   exported := export_named(shared, name)
-  return nil if exported is not GenericExport
+  return nil unless exported is GenericExport
   use_import shared, name
   exported.generic
 
@@ -122,7 +122,7 @@ type_of_export := (body: Body, exported: Export, identifier: Identifier, is_call
     when InterfaceExport then fail(body.program, position, "'#{name}' is an interface")
     when GenericExport then fail_only_called(body, identifier)
     when ExternExport
-      fail_only_called body, identifier if not is_callee
+      fail_only_called body, identifier unless is_callee
       { symbol, module_index } := exported
       record_reference body, identifier, ExternReference(symbol, module_index, name: exported.name)
       exported.type

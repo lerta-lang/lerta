@@ -51,7 +51,7 @@ export type_of := (body: Body, expression: Expression, expected: Type? = nil) ->
 # the union's one integer member, or one float member, if it has only one.
 literal_hint := (expression: Expression, expected: Type?) ->
   type := inner_of_expected(expected) ? return nil
-  return type if type is not UnionType
+  return type unless type is UnionType
   of_kind := (is_kind_of: (Type) -> Bool) ->
     members := [member for member in type.members when is_kind_of(member)]
     members.length == 1 then members[0]
@@ -185,9 +185,9 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
 # `s.contains(c)` of a String and a Char, as `s.contains(c.to_string())` (see char_as_text).
 contains_of_char := (body: Body, call: Call, callee: Member): Call? ->
   return nil if callee.name.name != 'contains' or call.args.length != 1
-  return nil if not call.named_args.is_empty()
+  return nil unless call.named_args.is_empty()
   container := type_of(body, callee.object)
-  return nil if not is_kind(container, 'String')
+  return nil unless is_kind(container, 'String')
   part := call.args[0]
   text := char_as_text(container, type_of(body, part), part) ? return nil
   Call(call..., args: [text])
@@ -215,11 +215,11 @@ check_member_type := (body: Body, value: Expression, type_name: TypeName, type: 
   program := body.program
   value_type := unnarrowed_type(body, value, type_of(body, value))
   union := inner_of(value_type)
-  if union is not UnionType
+  unless union is UnionType
     message := "expected a value of a union type, got #{format_type(value_type)}"
     fail program, value.position, message
   body.facts.types[type_name] = type
-  if not is_assignable(type, union)
+  unless is_assignable(type, union)
     types := "the types #{format_type(union)} or a union of them"
     message := "#{format_type(type)} is not one of #{types}"
     fail program, type_name.position, message
@@ -260,7 +260,7 @@ export require_type := (body: Body, expression: Expression, type: Type, expected
 
 export expect_condition := (body: Body, expression: Expression) ->
   type := type_of(body, expression)
-  if not is_one_of_kinds(type, ['Bool', OPTIONAL, 'never'])
+  unless is_one_of_kinds(type, ['Bool', OPTIONAL, 'never'])
     message := "expected Bool or an optional value, got #{format_type(type)}"
     fail body.program, expression.position, message
   type
@@ -268,6 +268,6 @@ export expect_condition := (body: Body, expression: Expression) ->
 # The type of an optional value without nil.
 export expect_optional := (body: Body, expression: Expression) ->
   type := type_of(body, expression)
-  if type is not OptionalType
+  unless type is OptionalType
     fail body.program, expression.position, "expected an optional value, got #{format_type(type)}"
   type.inner

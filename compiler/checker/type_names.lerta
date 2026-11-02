@@ -146,7 +146,7 @@ resolve_type := (program: ProgramWide, resolver: Resolver, type_name: TypeName, 
   optional_if program, type, type_name.position, type_name.optional
 
 optional_if := (program: ProgramWide, type: Type, at: Position, optional: Bool) ->
-  return type if not optional
+  return type unless optional
   if is_one_of_kinds(type, ['void', 'never'])
     fail program, at, "#{format_type(type)} cannot be optional"
   if type is OptionalType
@@ -157,7 +157,7 @@ resolve_record := (program: ProgramWide, resolver: Resolver, type_name: RecordTy
   names: Set<String>
   for field in type_name.fields
     { name, position } := field.name
-    fail program, position, "'#{name}' is already a field" if not names.add(name)
+    fail program, position, "'#{name}' is already a field" unless names.add(name)
   resolve_field := (field: RecordTypeField) ->
     RecordField name: field.name.name, type: resolve(program, resolver, field.type)
   record_type [resolve_field(field) for field in type_name.fields]
@@ -191,7 +191,7 @@ resolve_alias := (program: ProgramWide, resolver: Resolver, name: String, at: Po
   shared := resolver_shared(program, resolver)
   entry := shared.aliases[name] ? return nil
   return type if type := entry.type
-  fail program, at, "the type '#{name}' refers to itself" if not shared.resolving.add(name)
+  fail program, at, "the type '#{name}' refers to itself" unless shared.resolving.add(name)
   type := resolve(program, resolver, entry.alias.type)
   entry.type = type
   shared.resolving.remove name
@@ -205,7 +205,7 @@ resolve_name := (
   shared := resolver_shared(program, resolver)
   import_qualified_type shared, type_name
   if parameter := resolver.type_parameters[name]
-    fail_here "'#{name}' takes no type arguments" if not args.is_empty()
+    fail_here "'#{name}' takes no type arguments" unless args.is_empty()
     return parameter
   fail_here "'#{name}' is a value, not a type" if names_value(shared, name)
   if not names_type_or_import(shared, name) and is_core_type_name(name)
@@ -251,7 +251,7 @@ resolve_core_type := (
       fail_here 'Set takes one type argument' if args.length != 1
       return set_of(resolve_key(program, resolver, args[0], 'a set item'))
     else pass
-  fail_here "'#{name}' takes no type arguments" if not args.is_empty()
+  fail_here "'#{name}' takes no type arguments" unless args.is_empty()
   return void_type if is_result and name == 'void'
   return never_type if is_result and name == 'never'
   simple_type(name) ? fail_here("unknown type '#{name}'")
@@ -277,7 +277,7 @@ resolve_key := (
   role = 'a map key'
 ) ->
   type := resolve(program, resolver, type_name)
-  reject_map_key program, type, type_name.position, role if not is_kind(type, TYPE_PARAMETER)
+  reject_map_key program, type, type_name.position, role unless is_kind(type, TYPE_PARAMETER)
   type
 
 resolve_map_value := (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->

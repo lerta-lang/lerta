@@ -41,7 +41,7 @@ export inlined_method := (g: Generator, call: Call, member: Member, source: Meth
   instance := g.facts.instances[call]?.instance ? return nil
   literal := instance.entry.literal
   return nil if literal.yields or literal.awaits or literal in g.fusion.literals
-  return nil if not goes_through_this_once(literal.body)
+  return nil unless goes_through_this_once(literal.body)
   receiver := deferred_value(g, member.object)
   # Arguments without effects cannot assign a field that the receiver reads.
   reads_fields :=
@@ -65,7 +65,7 @@ is_stable := (g: Generator, expression: Expression, reads_fields: Bool): Bool ->
   return is_plain(g, expression) if expression is not Member or not reads_fields
   property := g.facts.members[expression] as Property ? return false
   return false if property.kind != FIELD and property.kind != STRING_BINARY
-  return false if not is_unchanging_type(type_of(g, expression))
+  return false unless is_unchanging_type(type_of(g, expression))
   is_stable g, expression.object, reads_fields
 
 # A literal, or a value that no code changes and whose read cannot throw: a local or a top-level
@@ -79,7 +79,7 @@ is_plain := (g: Generator, expression: Expression) ->
     when Identifier
       reference := g.facts.references[expression]
       return false if reference is not ScopedLocal and reference is not TopLevelValue
-      return false if not is_unchanging_type(type_of(g, expression))
+      return false unless is_unchanging_type(type_of(g, expression))
       local := local_of(g, expression)
       case local
         when ValueLocal then true

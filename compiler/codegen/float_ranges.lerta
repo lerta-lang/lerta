@@ -173,8 +173,8 @@ follow := (analysis: Analysis, name: Identifier, range: FloatRange) ->
 # The declaration of the followed local that the target names, if it is one: a local of the
 # function, as a top-level value is not, which a call may assign.
 followed_local := (analysis: Analysis, target: Expression) ->
-  return nil if target is not Identifier
-  return nil if analysis.facts.references[target] is not ScopedLocal
+  return nil unless target is Identifier
+  return nil unless analysis.facts.references[target] is ScopedLocal
   local := analysis.facts.local_declarations[target] ? return nil
   followed := local not in analysis.facts.shared_vars and local not in analysis.top_level_values
   followed then local
@@ -192,7 +192,7 @@ found_of := (analysis: Analysis, expression: Expression): Found ->
   case expression
     when FloatLiteral then literal_found(expression.text)
     when IntegerLiteral
-      return unknown_found(analysis, expression) if not is_float_node(analysis, expression)
+      return unknown_found(analysis, expression) unless is_float_node(analysis, expression)
       literal_found integer_float_text(expression)
     when Identifier
       local := followed_local(analysis, expression)
@@ -211,7 +211,7 @@ found_of := (analysis: Analysis, expression: Expression): Found ->
       return and_found(analysis, expression) if expression.operator == 'and'
       binary_found analysis, expression
     when Call
-      return unknown_found(analysis, expression) if not is_integer_to_float(analysis, expression)
+      return unknown_found(analysis, expression) unless is_integer_to_float(analysis, expression)
       visit analysis, (expression.callee as Member!).object
       # Every integer type's values are of magnitude at most 2^64, which the largest UInt64,
       # 2^64 less 1, is nearest as a Float.
@@ -254,7 +254,7 @@ binary_found := (analysis: Analysis, binary: BinaryOperation): Found ->
   left := found_of(analysis, binary.left)
   right := found_of(analysis, binary.right)
   is_float := is_float_node(analysis, binary) and binary not in analysis.facts.operator_calls
-  return { range: UNKNOWN, nan_free: true } if not is_float
+  return { range: UNKNOWN, nan_free: true } unless is_float
   # An operation whose range is not followed may give a NaN.
   square := is_square(analysis, binary)
   outcome :=
@@ -329,7 +329,7 @@ is_square := (analysis: Analysis, binary: BinaryOperation) ->
 # Narrows the ranges of the locals by the condition, which holds: each comparison that `and` joins
 # of an expression with a constant.
 narrow := (analysis: Analysis, condition: Condition): void ->
-  return if condition is not BinaryOperation
+  return unless condition is BinaryOperation
   if condition.operator == 'and'
     narrow analysis, condition.left
     narrow analysis, condition.right
@@ -354,7 +354,7 @@ constant_of := (expression: Expression) ->
 narrow_comparison := (
   analysis: Analysis, operator: String, expression: Expression, constant: Float
 ) ->
-  return if not is_float_node(analysis, expression)
+  return unless is_float_node(analysis, expression)
   if operator == '<=' or operator == '<'
     bound_by analysis, expression, constant
   else if (operator == '>=' or operator == '>') and constant >= 0.0
@@ -371,7 +371,7 @@ bound_by := (analysis: Analysis, expression: Expression, constant: Float): void 
     when Identifier
       local := followed_local(analysis, expression) ? return
       range := analysis.ranges[local] ? UNKNOWN
-      return if not range.nonnegative
+      return unless range.nonnegative
       analysis.ranges[local] = { range..., bound: min(range.bound, constant) }
     when BinaryOperation
       { left, right } := expression

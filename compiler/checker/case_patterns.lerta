@@ -41,7 +41,7 @@ export check_patterns := (body: Body, case_expression: Case): CaseNarrowings ->
   declared := inner_of(unnarrowed_type(body, subject, subject_type))
   if declared is UnionType
     return check_type_patterns(body, case_expression, is_nil_arm, subject, declared, type, missing)
-  if not is_one_of_kinds(type, VALUE_KINDS)
+  unless is_one_of_kinds(type, VALUE_KINDS)
     message := "cannot branch on a value of type #{format_type(subject_type)}"
     fail body.program, subject.position, message
   for patterns in (arm.patterns for arm in arms when not is_nil_arm(arm))
@@ -61,7 +61,7 @@ check_nil_arms := (body: Body, arms: CaseArm[]) ->
   var handled = false
   for arm in arms
     for pattern in arm.patterns
-      continue if not is_nil_pattern(pattern)
+      continue unless is_nil_pattern(pattern)
       if arm.patterns.length > 1
         fail body.program, pattern.position, 'nil must be the only pattern of its arm'
       fail_handled_twice body, pattern, 'nil' if handled
@@ -82,7 +82,7 @@ check_type_patterns := (
     types := [type_pattern(body, pattern, union) for pattern in arm.patterns]
     for (pattern_type, pattern) in types.zip(arm.patterns)
       for member in members_of(pattern_type)
-        fail_handled_twice body, pattern, format_member(member, union) if not handled.add(member)
+        fail_handled_twice body, pattern, format_member(member, union) unless handled.add(member)
     arm_narrowings.push subject_narrowings(body, subject, union_of(types)!)
   is_unhandled := (member: Type) -> member not in handled
   unhandled_members := members_of(narrowed).filter(is_unhandled)
@@ -124,11 +124,11 @@ type_pattern := (body: Body, pattern: Expression, union: UnionType) ->
     types := "the types #{format_type(union)} or a union of them"
     fail body.program, pattern.position, "expected one of #{types}"
   { program, resolver } := body
-  if pattern is not Identifier
+  unless pattern is Identifier
     message := 'a pattern of a case on types names a type so far; test the others with `is`'
     fail program, pattern.position, message
   name := pattern.name
-  fail_pattern() if not has_type(program, resolver, name)
+  fail_pattern() unless has_type(program, resolver, name)
   type_name := NamedType(name, args: [], position: pattern.position)
   type := resolve(program, resolver, type_name)
   fail_pattern() if not is_assignable(type, union) or is_kind(type, 'never')
