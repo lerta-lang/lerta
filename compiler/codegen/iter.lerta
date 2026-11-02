@@ -62,7 +62,8 @@ export emit_adapter_iter := (ir: IrBuilder, source: String, source_type: Type, i
   emit_iter ir, kind, [source]
 
 # The Ints from start up to, but not including, end.
-export emit_range_iter := (ir: IrBuilder, start: String, end: String) ->
+export emit_range_iter := (ir: IrBuilder, start: String, end: String, inclusive: Bool) ->
+  return emit_inclusive_range_iter(ir, start, end) if inclusive
   has_next := (body: IrBuilder, kind: IterKind) ->
     current := load_state(body, kind, 0)
     last := load_state(body, kind, 1)
@@ -75,6 +76,25 @@ export emit_range_iter := (ir: IrBuilder, start: String, end: String) ->
     body.emit "ret i64 #{current}"
   state := [value_field(int_type), fixed(value_field(int_type))]
   emit_iter ir, define_kind(ir, 'range', state, int_type, has_next, next), [start, end]
+
+# The Ints of `a..b`, whose state tells when the end has been given, so that the Int after it,
+# which the largest Int has not, is never made.
+emit_inclusive_range_iter := (ir: IrBuilder, start: String, end: String) ->
+  has_next := (body: IrBuilder, kind: IterKind) ->
+    current := load_state(body, kind, 0)
+    is_within := body.assign("icmp sle i64 #{current}, #{load_state(body, kind, 1)}")
+    is_left := body.assign("xor i1 #{load_state(body, kind, 2)}, true")
+    body.emit "ret i1 #{body.assign("and i1 #{is_within}, #{is_left}")}"
+  next := (body: IrBuilder, kind: IterKind) ->
+    current := load_state(body, kind, 0)
+    is_end := body.assign("icmp eq i64 #{current}, #{load_state(body, kind, 1)}")
+    store_state body, kind, 2, is_end
+    following := body.assign("add i64 #{current}, 1")
+    store_state body, kind, 0, body.assign("select i1 #{is_end}, i64 #{current}, i64 #{following}")
+    body.emit "ret i64 #{current}"
+  state := [value_field(int_type), fixed(value_field(int_type)), value_field(bool_type)]
+  kind := define_kind(ir, 'inclusive range', state, int_type, has_next, next)
+  emit_iter ir, kind, [start, end, 'false']
 
 # The results of a function of one item, a closure of the type, for each item of the source.
 emit_map_iter := (ir: IrBuilder, source: String, mapper: String, type: Type) ->

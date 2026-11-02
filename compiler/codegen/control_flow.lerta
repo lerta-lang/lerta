@@ -109,7 +109,8 @@ export iterated := (g: Generator, iterable: Expression) ->
 generate_iter_comprehension := (g: Generator, iterable: Expression, lazy: LazyFunctions) ->
   ir := g.ir
   if iterable is Range
-    range := emit_range_iter(ir, generate(g, iterable.start), generate(g, iterable.end))
+    start := generate(g, iterable.start)
+    range := emit_range_iter(ir, start, generate(g, iterable.end), iterable.inclusive)
     return generate_lazy_iter(g, range, int_type, lazy)
   type := type_of(g, iterable)
   value := generate(g, iterable)
@@ -146,7 +147,7 @@ export generate_iteration := (
     define := (scope: Map<String, CodegenLocal>, current: String) ->
       scope[variable.name] = ValueLocal(operand: current, type: int_type)
       define_index scope, g.ir.assign("sub i64 #{current}, #{start}") if index
-    generate_counting_loop g, start, -> end, body, define
+    generate_counting_loop g, start, -> end, body, define, iterable.inclusive
     return
   type := type_of(g, iterable)
   if index == nil
@@ -199,12 +200,17 @@ generate_iter_loop := (
   emit_iter_loop g.ir, iter, item, loop_body, -> emit_exception_check(g)
   release()
 
-# Counts from start while the counter is below the end, which is evaluated in the header. The
-# counter is a phi in the header, incremented in the latch block; it cannot overflow there, since
-# it is below the end.
+# Counts from start while the counter is below the end, or up to it if `inclusive`, which is
+# evaluated in the header. The counter is a phi in the header, incremented in the latch block; it
+# cannot overflow there, since it is below the end: an inclusive loop leaves at the end first, so
+# that an end of the largest Int is counted to.
 generate_counting_loop := (
-  g: Generator, start: String, end: () -> String, body: () -> void,
+  g: Generator
+  start: String
+  end: () -> String
+  body: () -> void
   define: (Map<String, CodegenLocal>, String) -> void
+  inclusive = false
 ) ->
   ir := g.ir
   preheader_label := ir.current_block
@@ -212,13 +218,15 @@ generate_counting_loop := (
   body_label := ir.fresh_label('for.body')
   latch_label := ir.fresh_label('for.latch')
   exit_label := ir.fresh_label('for.exit')
+  increment_label := inclusive then ir.fresh_label('for.increment') else latch_label
   next := ir.fresh_register()
   ir.branch header_label
 
   ir.start_block header_label
-  incoming := [phi_incoming(start, preheader_label), phi_incoming(next, latch_label)].join(', ')
+  incoming := [phi_incoming(start, preheader_label), phi_incoming(next, increment_label)].join(', ')
   current := ir.assign("phi i64 #{incoming}")
-  in_range := ir.assign("icmp slt i64 #{current}, #{end()}")
+  comparison := inclusive then 'sle' else 'slt'
+  in_range := ir.assign("icmp #{comparison} i64 #{current}, #{end()}")
   ir.branch_if in_range, body_label, exit_label
 
   ir.start_block body_label
@@ -227,6 +235,9 @@ generate_counting_loop := (
   ir.branch latch_label
 
   ir.start_block latch_label
+  if inclusive
+    ir.branch_if ir.assign("icmp eq i64 #{current}, #{end()}"), exit_label, increment_label
+    ir.start_block increment_label
   ir.assign_to next, "add nsw i64 #{current}, 1"
   ir.branch header_label
 

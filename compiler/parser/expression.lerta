@@ -247,14 +247,16 @@ parse_coalesce := (tokens: TokenStream): Expression ->
 
 parse_range := (tokens: TokenStream): Expression ->
   start := parse_arithmetic(tokens, 0)
-  return start if tokens.peek_continuation() != '...'
+  return start unless tokens.peek_continuation() in RANGE_OPERATORS
   if at_spread(tokens)
     tokens.spread = tokens.peek().position()
     return start
-  tokens.next()
+  inclusive := tokens.next().kind == '..'
   end := parse_arithmetic(tokens, 0)
-  tokens.fail_here 'ranges cannot be chained' if tokens.peek_continuation() == '...'
-  Range start, end, position: start.position
+  tokens.fail_here 'ranges cannot be chained' if tokens.peek_continuation() in RANGE_OPERATORS
+  Range start, end, inclusive, position: start.position
+
+RANGE_OPERATORS: TokenKind[] = ['...', '..']
 
 # `xs...` with nothing after it that could end a range, which spreads it rather than a range. An
 # array's item takes it (see parse_array_literal); where nothing does, it is rejected as found

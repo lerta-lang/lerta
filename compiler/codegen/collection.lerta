@@ -12,7 +12,7 @@ import borrowing_all, generate_borrowed from './borrowing'
 import generate, release_if_reference, type_at_use, type_of from './expression'
 import Generator from './generator'
 import INDEX_OUT_OF_RANGE, throw_if from './runtime_errors'
-import emit_branch from './ir_builder'
+import emit_branch, IrBuilder from './ir_builder'
 import emit_release, ir_type from './lerta_ir'
 import
   are_keys_plain, emit_find, emit_held_at, emit_map_get, emit_map_new, emit_map_set, emit_place,
@@ -68,10 +68,21 @@ generate_put_default := (
 
 # `b[start...end]`: the runtime copies the bytes, and throws where the range is not the Binary's.
 generate_slice := (g: Generator, object: Expression, range: Range) ->
-  slice := (operands: String[]) -> emit_binary_slice(g.ir, operands[0], operands[1], operands[2])
+  slice := (operands: String[]) ->
+    end := range.inclusive then past_end(g.ir, operands[2]) else operands[2]
+    emit_binary_slice g.ir, operands[0], operands[1], end
   result := borrowing_all(g, [object, range.start, range.end], slice)
   emit_exception_check g
   result
+
+# The end that `a..end` stops before, `end + 1`, or for the largest Int that Int itself, which no
+# Binary reaches, so that the slice throws as one out of range does.
+past_end := (ir: IrBuilder, end: String) ->
+  following := ir.assign("add i64 #{end}, 1")
+  is_largest := ir.assign("icmp eq i64 #{end}, #{MAX_INT}")
+  ir.assign "select i1 #{is_largest}, i64 #{end}, i64 #{following}"
+
+MAX_INT := 9223372036854775807
 
 # Whether the index runs no code of the program between its object and the item, so that it may
 # borrow a field as its object: its position is a name or a literal, it puts no default, and a

@@ -114,7 +114,7 @@ total := sum
 
 ## Operators
 
-From weakest: `then`/`else` < `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=`, `is`, `as` and `in`) < `?` (nil coalescing) < range `...` < `+` `-` `|` `^` < `*` `/` `%` `&` `<<` `>>` < prefix `-`.
+From weakest: `then`/`else` < `or` < `and` < prefix `not` < comparisons (`==` `!=` `<` `<=` `>` `>=`, `is`, `as` and `in`) < `?` (nil coalescing) < ranges `...` and `..` < `+` `-` `|` `^` < `*` `/` `%` `&` `<<` `>>` < prefix `-`.
 
 - `x!` unwraps an optional value; no space is allowed before `!`. `x?.name` reads a member of an optional value (see [optional values](types.md#optional-values)); no space is allowed before `?` or `.`.
 - Arithmetic and bitwise operators are left-associative (`10 - 4 - 3` is `3`). As they bind tighter than comparisons, `x & 0xF == 0` compares `x & 0xF`. `<<` and `>>` are each two `<` or `>` with no space between them, so that `Map<String, Set<Int>>` ends with two closing brackets. `then`/`else` and `?` are right-associative: `a then x else b then y else z` is `a then x else (b then y else z)`.
