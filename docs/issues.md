@@ -2,26 +2,6 @@
 
 Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `lerta fmt` breaks a call at the start of a statement whose function literal argument follows a comment
-
-Severity: Medium.
-
-`call_statement` (compiler/format/print_statement.lerta) writes a call at the start of a statement without parentheses, a function literal last on the line of the callee; a comment before that literal is flushed before its first positioned token, which ends the line that the literal would follow.
-
-```
-run := (f: () -> void) -> f()
-f := ->
-  run(
-    # c
-    -> print 1
-  )
-f()
-```
-
-`lerta fmt` reports `the formatter would write a program that does not parse, which is a bug`. With a body in a block, the comment is moved into it silently. One before a `weak` literal is reported instead (see stranded_comments in compiler/format/source.lerta).
-
-Fix: report such a comment as stranded too, as for `weak`; or keep the parentheses when an argument follows a comment, which takes care for a literal whose body is a block.
-
 ## `case` with value patterns is rejected on a local narrowed from a union
 
 Severity: Low.
