@@ -2,7 +2,7 @@
 # kept has the types of the body of each arm.
 import Identifier, Node, Position from '../ast'
 import dump_annotated_without_positions from '../ast_dump'
-import Annotation, Placed from './annotated'
+import Annotation, Placed, SharedArms from './annotated'
 import CheckResult from './check_result'
 
 # Whether the node is in the body that the arms left out of the tree share with the arm kept, whose
@@ -20,7 +20,8 @@ export in_shared_body := (left_out: Placed[], result: CheckResult, node: Node) -
 export shares_types := (
   annotation: Annotation, subjects: Set<String>, separate: CheckResult, merged: CheckResult
 ) ->
-  run := annotation.shared_arms ? return true
+  shared := annotation.target as SharedArms ? return true
+  run := shared.arms
   # Arms in an arm that others are made one with are left out with it: their patterns, which the
   # checker gives types as it does not each statement, had them before.
   first_pattern := run[0].patterns[0]
@@ -37,7 +38,8 @@ export shares_types := (
 # holds the nodes that the source has from its first statement up to the next arm, as the checker
 # makes its own nodes at the places of those it stands for.
 export in_body := (placed: Placed, at: Position) ->
-  run := placed.annotation.shared_arms ? return false
+  shared := placed.annotation.target as SharedArms ? return false
+  run := shared.arms
   start := run[0].body[0].position
   end := run[1].patterns[0].position
   start <= at and at < end

@@ -7,7 +7,11 @@ import ProgramWide, Shared from '../checker/shared'
 import CompileError from '../errors'
 import imported_files, load_modules, Module, module_key from '../loader'
 import ArrayType, bool_type, MapType, SimpleType, Type from '../types'
-import Annotation, AnnotationKey, annotations_of, Placed from './annotated'
+import
+  Annotation, AnnotationKey, annotations_of, DeclaredType, EmptinessTest, ImportedName,
+  MembershipCall, ParameterType, Placed, QualifiedMember, RecordConstruction, RedundantCast,
+  ReturnType, SharedArms, ShorthandArgument, SpreadCopy
+from './annotated'
 import
   CheckResult, checks, imports_type, quiet_program, result_of, same_result
 from './check_result'
@@ -45,25 +49,27 @@ export left_out_candidates := (program: Statement[]) ->
 
 # The imports are left out after the others, once these leave them unused (see unused_type_imports).
 can_leave_out := (annotation: Annotation, shared: Shared, program: ProgramWide) ->
-  return false if annotation.imported
-  return member in shared.facts.unqualifiable if member := annotation.member
-  return call in shared.facts.recordable if call := annotation.construction
-  if call := annotation.shorthand
-    return false unless call in shared.facts.object_constructions
-    left_out_cast := annotation.shorthand_cast ? return true
-    return left_out_cast in shared.facts.redundant_casts
-  return cast in shared.facts.redundant_casts if cast := annotation.cast
-  if call := annotation.spread_copy
-    return false unless call in shared.facts.full_constructions
-    { types } := shared.facts
-    source_type := types[annotation.spread_source!] ? return false
-    constructed := types[call] ? return false
-    return source_type == constructed
-  return has_is_empty(shared.facts.types[emptied]) if emptied := annotation.emptied
-  # These two, not in the body of a generic function, whose types are those of its instances.
-  return shared.facts.types[call] == bool_type if call := annotation.membership
-  return shared.facts.types.contains(run[0].patterns[0]) if run := annotation.shared_arms
-  inferable annotation, shared, program
+  { facts } := shared
+  target := annotation.target
+  case target
+    when ImportedName then false
+    when QualifiedMember then target.member in facts.unqualifiable
+    when RecordConstruction then target.call in facts.recordable
+    when ShorthandArgument
+      return false unless target.call in facts.object_constructions
+      left_out_cast := target.cast ? return true
+      left_out_cast in facts.redundant_casts
+    when RedundantCast then target.cast in facts.redundant_casts
+    when SpreadCopy
+      return false unless target.call in facts.full_constructions
+      source_type := facts.types[target.source] ? return false
+      constructed := facts.types[target.call] ? return false
+      source_type == constructed
+    when EmptinessTest then has_is_empty(facts.types[target.value])
+    # These two, not in the body of a generic function, whose types are those of its instances.
+    when MembershipCall then facts.types[target.call] == bool_type
+    when SharedArms then facts.types.contains(target.arms[0].patterns[0])
+    when ReturnType, ParameterType, DeclaredType then inferable(target, shared, program)
 
 # Whether std gives the type `is_empty` (see EMPTINESS_TESTS). One test serves the tests of a length
 # and the comparisons with '': a `String` has no `length`, and nothing else compares with ''.
@@ -112,10 +118,12 @@ candidates_of := (held: Module[], checked: ProgramWide) ->
 # kept, as they would no longer show it; an import of a struct that only they use does not count
 # then.
 accepted_among := (candidates: Placed[], checked: ProgramWide, program: () -> ProgramWide) ->
-  constructions := [placed for placed in candidates when placed.annotation.construction]
-  arms := [placed for placed in candidates when placed.annotation.shared_arms]
+  constructions :=
+    [placed for placed in candidates when placed.annotation.target is RecordConstruction]
+  arms := [placed for placed in candidates when placed.annotation.target is SharedArms]
   is_other := (placed: Placed) ->
-    not placed.annotation.construction and not placed.annotation.shared_arms
+    target := placed.annotation.target
+    target is not RecordConstruction and target is not SharedArms
   others := [placed for placed in candidates when is_other(placed)]
   original := result_of(checked, structs: true)
   recorded := removable_among
@@ -153,7 +161,8 @@ checks_the_same := (
   (left_out) ->
     subjects: Set<String>
     for placed in left_out
-      subjects.add subject.name if subject := placed.annotation.shared_subject
+      arms := placed.annotation.target as SharedArms ? continue
+      subjects.add subject.name if subject := arms.subject
     shares := (result: CheckResult) ->
       not merging or
         left_out.all((placed) -> shares_types(placed.annotation, subjects, original, result))
@@ -185,9 +194,10 @@ tried_without := (
 writable := (accepted: Placed[]) ->
   returns_left_out: Set<FunctionLiteral>
   for placed in accepted
-    returns_left_out.add function if function := placed.annotation.function
+    returns_left_out.add target.function if target := placed.annotation.target as ReturnType?
   is_writable := (placed: Placed) ->
-    literal := placed.annotation.parameter_of ? return true
+    parameter := placed.annotation.target as ParameterType ? return true
+    literal := parameter.function
     literal.return_type == nil or literal in returns_left_out
   [placed for placed in accepted when is_writable(placed)]
 
@@ -211,7 +221,8 @@ unused_type_imports := (
         before[name]!.used and
         imports_type(tried, after[name]!, structs: true)
     for annotation in import_names_of(module.program)
-      found.push { annotation, key: module.key } if left_unused(annotation.imported!)
+      imported := annotation.target as ImportedName ? continue
+      found.push { annotation, key: module.key } if left_unused(imported.name)
   placed.annotation.restore() for placed in accepted
   found
 

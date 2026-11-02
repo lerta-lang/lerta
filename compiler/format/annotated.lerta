@@ -48,43 +48,79 @@ export struct Annotation
   key: AnnotationKey
   remove: () -> void
   restore: () -> void
-  # What the type is given to, which tells whether it can be inferred (see inferable): the name of a
-  # variable or a field, with its value; the function, with its last value, for its return type; or
-  # the name of a parameter, with its function. Or the member, which tells whether it can be written
-  # alone, or the construction, whether it can be written as a record.
-  name: Identifier? = default nil
-  value: Expression? = default nil
-  function: FunctionLiteral? = default nil
-  parameter: Identifier? = default nil
-  parameter_of: FunctionLiteral? = default nil
-  member: Member? = default nil
-  construction: Call? = default nil
-  # The construction whose named argument may be written as its name alone, with the cast of the
-  # name that it leaves out, if any; and the cast that may be left out. The checking shows them.
-  shorthand: Call? = default nil
-  shorthand_cast: Cast? = default nil
-  cast: Cast? = default nil
-  # The value whose test of length, or comparison with '', may be written as `is_empty()`, which
-  # its type shows.
-  emptied: Expression? = default nil
-  # The call of `contains` that may be written with `in`, which gives a Bool (see Membership tests).
-  membership: Call? = default nil
-  # The arms next to each other, of one body, that may be one arm (see Shared arm bodies).
-  shared_arms: CaseArm[]? = default nil
-  # The subject of their case, if it is a name, which the arms narrow.
-  shared_subject: Identifier? = default nil
-  # The construction whose arguments copied from the fields of a value may be its spread, and that
-  # value (see Spreads), which the checking shows gives every argument and is of its type.
-  spread_copy: Call? = default nil
-  spread_source: Expression? = default nil
+  target: AnnotationTarget
   # The expression written in place of what is left out, which reports the rule: what is left out
   # leaves no other trace for the printer to report it at.
   reported: Reported? = default nil
+
+# What an annotation is written for, which tells whether the checking shows that it can be left out
+# (see can_leave_out).
+export type AnnotationTarget =
+  ReturnType | ParameterType | DeclaredType | QualifiedMember | RecordConstruction
+  ShorthandArgument | RedundantCast | EmptinessTest | MembershipCall | SharedArms | SpreadCopy
+  ImportedName
+
+# The return type of a function, with its last value, which tell whether it can be inferred (see
+# inferable).
+export struct ReturnType
+  function: FunctionLiteral
+  value: Expression?
+
+# The type of the parameter of the name, of the function.
+export struct ParameterType
+  name: Identifier
+  function: FunctionLiteral
+
+# The type of a variable or a field of the name, with its value.
+export struct DeclaredType
+  name: Identifier
+  value: Expression
   # Whether the type of a variable moves to the type arguments of its Map() or Set(), which then
   # give the type.
   moves_to_type_arguments = default false
-  # The name that an import gives, which is left out once nothing uses it.
-  imported: Identifier? = default nil
+
+# A member, which tells whether it can be written alone.
+export struct QualifiedMember
+  member: Member
+
+# A construction, which tells whether it can be written as a record.
+export struct RecordConstruction
+  call: Call
+
+# The construction whose named argument may be written as its name alone, with the cast of the
+# name that it leaves out, if any. The checking shows them.
+export struct ShorthandArgument
+  call: Call
+  cast: Cast?
+
+# A cast that may be left out, which the checking shows.
+export struct RedundantCast
+  cast: Cast
+
+# The value whose test of length, or comparison with '', may be written as `is_empty()`, which
+# its type shows.
+export struct EmptinessTest
+  value: Expression
+
+# The call of `contains` that may be written with `in`, which gives a Bool (see Membership tests).
+export struct MembershipCall
+  call: Call
+
+# The arms next to each other, of one body, that may be one arm (see Shared arm bodies), with the
+# subject of their case, if it is a name, which the arms narrow.
+export struct SharedArms
+  arms: CaseArm[]
+  subject: Identifier?
+
+# The construction whose arguments copied from the fields of a value may be its spread, and that
+# value (see Spreads), which the checking shows gives every argument and is of its type.
+export struct SpreadCopy
+  call: Call
+  source: Expression
+
+# The name that an import gives, which is left out once nothing uses it.
+export struct ImportedName
+  name: Identifier
 
 # A written type, the enum of a member or the name of a construction, of the module of `key`.
 export struct Placed
@@ -132,7 +168,8 @@ add_statement := (found: Annotation[], statement: Statement): void ->
 add_members := (found: Annotation[], members: MemberDeclaration[]) ->
   for member, i in members
     value := member.value ? continue
-    found.push field_annotation(members, i) if member.type != nil and value is not FunctionLiteral
+    if member.type != nil and value is not FunctionLiteral
+      found.push field_annotation(members, i, value)
     add_value found, value, false
 
 # A value where a type is `expected` or not, which tells whether a function literal there can leave
@@ -188,8 +225,7 @@ return_annotation := (literal: FunctionLiteral) ->
     key: { kind: RETURN, at: literal.position }
     remove: -> literal.return_type = nil
     restore: -> literal.return_type = type
-    value: last_value(literal.body)
-    function: literal
+    target: ReturnType(function: literal, value: last_value(literal.body))
 
 last_value := (body: Statement[]) ->
   last := body.last() ? return nil
@@ -206,8 +242,7 @@ parameter_annotation := (literal: FunctionLiteral, i: Int) ->
     key: { kind: PARAMETER, at: name.position }
     remove: -> typed(nil)
     restore: -> typed(type)
-    parameter: name
-    parameter_of: literal
+    target: ParameterType(name, function: literal)
 
 # The type of `Map()` or `Set()` moves to its type arguments: `s := Set<String>()`.
 variable_annotation := (declaration: Declaration) ->
@@ -223,9 +258,11 @@ variable_annotation := (declaration: Declaration) ->
     remove
     restore
     key: { kind: VARIABLE, at: declaration.name.position }
-    name: declaration.name
-    value: declaration.value
-    moves_to_type_arguments: collection != nil
+    target: DeclaredType(
+      name: declaration.name
+      value: declaration.value
+      moves_to_type_arguments: collection != nil
+    )
 
 # A call of Map or Set without type arguments, with those of the type that the declaration writes.
 collection_call := (declaration: Declaration) ->
@@ -238,14 +275,13 @@ collection_call := (declaration: Declaration) ->
 
 # The field's type is put in a MemberDeclaration of the value it has then, which may be a member
 # written alone (see rewrites_of).
-field_annotation := (members: MemberDeclaration[], i: Int) ->
-  { name, type, value } := members[i]
+field_annotation := (members: MemberDeclaration[], i: Int, value: Expression) ->
+  { name, type } := members[i]
   typed := (new_type: TypeName?) ->
     member := members[i]
     members[i] = { member..., type: new_type }
   Annotation
-    name
-    value
     key: { kind: FIELD, at: name.position }
     remove: -> typed(nil)
     restore: -> typed(type)
+    target: DeclaredType(name, value)

@@ -12,7 +12,10 @@ import
   UnaryOperation
 from '../ast'
 import dump_ast_without_positions from '../ast_dump'
-import Annotation from './annotated'
+import
+  Annotation, EmptinessTest, MembershipCall, QualifiedMember, RecordConstruction, RedundantCast,
+  SharedArms, ShorthandArgument, SpreadCopy
+from './annotated'
 import EMPTINESS_TESTS, MEMBERSHIP_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES, SPREADS from './rules'
 import Place, places_of from './places'
 
@@ -41,7 +44,7 @@ export rewrites_of := (program: Statement[]) ->
 unqualified := (member: Member, place: Place) ->
   alone := Identifier(name: member.name.name, position: member.position)
   Annotation
-    member
+    target: QualifiedMember(member)
     key: { kind: MEMBER, at: member.position }
     remove: -> place(alone)
     restore: -> place(member)
@@ -49,7 +52,7 @@ unqualified := (member: Member, place: Place) ->
 # The cast left out, as its value at its place.
 uncast := (cast: Cast, place: Place) ->
   Annotation
-    cast
+    target: RedundantCast(cast)
     reported: { written: cast.value, rule: REDUNDANT_CASTS }
     key: { kind: CAST, at: cast.type.position }
     remove: -> place(cast.value)
@@ -58,14 +61,14 @@ uncast := (cast: Cast, place: Place) ->
 # A test that a value is empty, or that it is not, by its length or by comparing it with '': at the
 # `length` or the '', which the `is_empty()` written for it takes, as the position of the test may
 # be that of a `(` before the value, which would make it look written in parentheses.
-struct EmptinessTest
+struct EmptinessComparison
   value: Expression
   negated: Bool
   at: Position
 
 # `x.length == 0` and `0 == x.length`, `x.length != 0` and `x.length > 0`, and `s == ''`, `'' == s`
 # and `s != ''`.
-emptiness_test := (expression: Expression): EmptinessTest? ->
+emptiness_test := (expression: Expression): EmptinessComparison? ->
   if expression is UnaryOperation and expression.operator == 'not'
     # `not (xs.length != 0)` is `xs.is_empty()`, not `not not xs.is_empty()`.
     inner := emptiness_test(expression.operand) ? return nil
@@ -75,7 +78,7 @@ emptiness_test := (expression: Expression): EmptinessTest? ->
   return measured(left, right, true) if operator == '>'
   return nil if operator != '==' and operator != '!='
   negated := operator == '!='
-  either_way := (test: (Expression, Expression, Bool) -> EmptinessTest?) ->
+  either_way := (test: (Expression, Expression, Bool) -> EmptinessComparison?) ->
     return found if found := test(left, right, negated)
     test right, left, negated
   return found if found := either_way(measured)
@@ -84,21 +87,21 @@ emptiness_test := (expression: Expression): EmptinessTest? ->
 measured := (length: Expression, zero: Expression, negated: Bool) ->
   return nil if zero is not IntegerLiteral or zero.value != 0
   member := length as Member ? return nil
-  member.name.name == 'length' then EmptinessTest(
+  member.name.name == 'length' then EmptinessComparison(
     negated
     value: member.object
     at: member.name.position
   )
 
 compared := (value: Expression, empty: Expression, negated: Bool) ->
-  empty is StringLiteral and empty.value.is_empty() then EmptinessTest(
+  empty is StringLiteral and empty.value.is_empty() then EmptinessComparison(
     value
     negated
     at: empty.position
   )
 
 # The test written as `is_empty()`, `not` before it if it is negated, at its place.
-emptied := (expression: Expression, test: EmptinessTest, place: Place) ->
+emptied := (expression: Expression, test: EmptinessComparison, place: Place) ->
   { value, negated } := test
   position := test.at
   name := Identifier(position, name: 'is_empty')
@@ -111,7 +114,7 @@ emptied := (expression: Expression, test: EmptinessTest, place: Place) ->
   written: Expression =
     negated then UnaryOperation(position, operator: 'not', operand: call) else call
   Annotation
-    emptied: value
+    target: EmptinessTest(value)
     reported: { written, rule: EMPTINESS_TESTS }
     key: { kind: EMPTY, at: expression.position }
     remove: -> place(written)
@@ -143,7 +146,7 @@ membership := (call: Call, place: Place) ->
     right: member.object
     position: call.args[0].position
   Annotation
-    membership: call
+    target: MembershipCall(call)
     reported: { written, rule: MEMBERSHIP_TESTS }
     key: { kind: IN, at: member.name.position }
     remove: -> place(written)
@@ -179,8 +182,7 @@ shared_arms := (case_value: Case, run: CaseArm[]) ->
   arm := CaseArm(first..., patterns)
   others := [each for each in run when each != first]
   Annotation
-    shared_arms: run
-    shared_subject: case_value.subject as Identifier?
+    target: SharedArms(arms: run, subject: case_value.subject as Identifier?)
     reported: { written: patterns[first.patterns.length], rule: SHARED_ARM_BODIES }
     key: { kind: ARMS, at: first.patterns[0].position }
     remove: ->
@@ -246,8 +248,7 @@ spread_copy := (call: Call, source: Expression) ->
   spread := spread_of_value(source)
   kept := [named for named in named_args when copied_field(named) == nil]
   Annotation
-    spread_copy: call
-    spread_source: source
+    target: SpreadCopy(call, source)
     reported: { written: spread, rule: SPREADS }
     key: { kind: SPREAD, at: call.position }
     remove: ->
@@ -264,8 +265,7 @@ shorthand := (call: Call, named: NamedValue) ->
   { args, named_args } := call
   alone := Identifier(named.name...)
   Annotation
-    shorthand: call
-    shorthand_cast: named.value as Cast?
+    target: ShorthandArgument(call, cast: named.value as Cast?)
     key: { kind: SHORTHAND, at: named.name.position }
     # By its name, as leaving out its cast puts another argument in its place.
     remove: ->
@@ -278,7 +278,7 @@ shorthand := (call: Call, named: NamedValue) ->
 # The construction written as a record of its arguments as they are then: those inside it, which
 # come before it (see rewrites_of), are written so by then, in their places among them.
 recorded := (call: Call, place: Place) -> Annotation(
-  construction: call
+  target: RecordConstruction(call)
   key: { kind: RECORD, at: call.position }
   remove: ->
     fields := construction_arguments(call)

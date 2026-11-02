@@ -13,20 +13,27 @@ import
   ArrayType, FunctionType, is_kind, MapType, ObjectType, PromiseType, TupleType, Type, TypeKind,
   unify
 from '../types'
-import Annotation from './annotated'
+import DeclaredType, ParameterType, ReturnType from './annotated'
 
-# The annotation of the module of `shared`, in the program checked with it.
-export inferable := (annotation: Annotation, shared: Shared, program: ProgramWide) ->
+# Whether the type written for the target, of the module of `shared`, can be inferred in the
+# program checked with it.
+export inferable := (
+  target: ReturnType | ParameterType | DeclaredType, shared: Shared, program: ProgramWide
+) ->
   { facts } := shared
-  if function := annotation.function
-    return not is_recursive(function, program) and gives_its_type(function, annotation.value, facts)
-  return program.inferable_parameters[parameter] ? false if parameter := annotation.parameter
-  name := annotation.name!
-  value := annotation.value!
+  case target
+    when ReturnType
+      { function, value } := target
+      not is_recursive(function, program) and gives_its_type(function, value, facts)
+    when ParameterType then program.inferable_parameters[target.name] ? false
+    when DeclaredType then declared_inferable(target, facts, program)
+
+declared_inferable := (target: DeclaredType, facts: NodeFacts, program: ProgramWide) ->
+  { name, value } := target
   declared := facts.types[name] ? field_type(program, name) ? return false
   type := facts.types[value] ? return false
   # A type that moves to the type arguments of a Map() or Set() is given there.
-  is_given := annotation.moves_to_type_arguments or given_as_is(value, facts)
+  is_given := target.moves_to_type_arguments or given_as_is(value, facts)
   is_given and type == declared
 
 # The type of the field of a class or struct that `name` declares.
