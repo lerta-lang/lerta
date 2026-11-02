@@ -1,7 +1,7 @@
 # Self checks: the driver, bin/test, run as a program of its own, must report the tests of
 # tests/harness, most of which must fail, each as it should (see run.lerta), and must take its
 # arguments and keep the failed checks as main.lerta says.
-import at_once, Check, run_checks, select from './lib/report'
+import at_once, Check, CheckFailed, run_checks, run_one, select from './lib/report'
 import compare_text, expect_status, lines, reason_unless from './lib/expect'
 import host_triple from './lib/cli'
 import OUTPUT_LIMIT, read_text_or_throw, root_dir, shown_text, suite_dir from './lib/lerta'
@@ -163,6 +163,17 @@ harness_listed_check := Check(name: 'every test of tests/harness has its expecte
       not listed.contains("tests/harness/#{file.without_suffix('.lerta')!}")
   ]
 )
+
+# A check that throws CheckFailed fails with its reasons; one that throws another error, with what
+# it threw.
+thrown_check := (thrown: Error, expected: String[]) ->
+  Check name: "a check that throws #{thrown.message} fails with #{expected}", run: ->
+    result := await run_one({ name: 'thrower', run: -> throw thrown })
+    compare_text 'reasons', lines(expected), lines(result.reasons ? [])
+
+thrown_checks :=
+  thrown_check(CheckFailed(['x']), ['x'])
+  thrown_check(ValueError('y'), ['threw:', '  y'])
 
 # The problem is the line that the usage follows.
 usage_check := (args: String[], problem: String) ->
@@ -327,6 +338,6 @@ export suite := ->
   title := 'self checks'
   checks := select(
     title
-    [harness_check, harness_listed_check, driver_checks..., leak_checks...]
+    [harness_check, harness_listed_check, thrown_checks..., driver_checks..., leak_checks...]
   ) ? return 0
   await run_checks(title, checks)
