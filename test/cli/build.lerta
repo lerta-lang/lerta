@@ -3,8 +3,9 @@ import Check from '../lib/report'
 import compare_output, compare_text, expect_status from '../lib/expect'
 import compiler, root_dir from '../lib/lerta'
 import
-  executable_suffix, expect_left, expect_success, succeed, hello_output, run_command, run_in_dir,
-  run_in_new_dir, cli_work_dir, new_cli_dir, new_cli_dirs, runtime_flags, host_platform, posix_check
+  host_executable_suffix, expect_left, expect_success, succeed, hello_output, run_command,
+  run_in_dir, run_in_new_dir, cli_work_dir, new_cli_dir, new_cli_dirs, runtime_flags, host_platform,
+  posix_check
 from '../lib/cli'
 import is_file, list_dir, make_dir, make_link, read_file, write_file from 'std:io'
 import env from 'std:process'
@@ -21,12 +22,12 @@ build_and_run := (flags: String[]) ->
         'build'
         hello
         '-o'
-        "#{cli_work_dir}/hello-#{flags.join('_')}#{executable_suffix}"
+        "#{cli_work_dir}/hello-#{flags.join('_')}#{host_executable_suffix}"
         flags...
       ]
     )
     succeed 'build', built.result
-    executable := "#{cli_work_dir}/hello-#{flags.join('_')}#{executable_suffix}"
+    executable := "#{cli_work_dir}/hello-#{flags.join('_')}#{host_executable_suffix}"
     ran := await run_command(executable, [], built.cwd)
     [compare_output('stdout', hello_output, ran.stdout)..., expect_success('run', ran)...]
 
@@ -34,10 +35,10 @@ default_output_check := ->
   Check name: 'lerta build examples/hello.lerta writes hello to the current directory', run: ->
     built := await run_in_new_dir(compiler, ['build', hello])
     return expect_success('build', built.result) if built.result.status != 0
-    executable := "#{built.cwd}/hello#{executable_suffix}"
+    executable := "#{built.cwd}/hello#{host_executable_suffix}"
     ran := await run_command(executable, [], built.cwd)
     [
-      expect_left('files left', ["hello#{executable_suffix}"], built.left)...
+      expect_left('files left', ["hello#{host_executable_suffix}"], built.left)...
       expect_left('files left in the temporary directory', [], built.left_in_temp)...
       compare_output('stdout', hello_output, ran.stdout)...
       expect_success('run', ran)...
@@ -49,10 +50,10 @@ leading_dash_check := ->
     await write_file("#{cwd}/-hi.lerta", await read_file(hello))
     built := await run_in_dir(compiler, ['build', './-hi.lerta', '-o', '-hi'], cwd, temp)
     return expect_success('build', built.result) if built.result.status != 0
-    executable := "#{cwd}/-hi#{executable_suffix}"
+    executable := "#{cwd}/-hi#{host_executable_suffix}"
     ran := await run_command(executable, [], cwd)
     [
-      expect_left('files left', ["-hi#{executable_suffix}", '-hi.lerta'], built.left)...
+      expect_left('files left', ["-hi#{host_executable_suffix}", '-hi.lerta'], built.left)...
       expect_left('files left in the temporary directory', [], built.left_in_temp)...
       compare_output('stdout', hello_output, ran.stdout)...
       expect_success('run', ran)...
@@ -123,7 +124,7 @@ symlink_output_check := ->
     make_link 'under/below', "#{cwd}/link"
     built := await run_in_dir(compiler, ['build', hello, '-o', 'link/../hello'], cwd, temp)
     succeed 'build', built.result
-    executable := "#{cwd}/under/hello#{executable_suffix}"
+    executable := "#{cwd}/under/hello#{host_executable_suffix}"
     ran := await run_command(executable, [], cwd)
     [
       expect_left('files left', ['link', 'under'], built.left)...
@@ -190,7 +191,7 @@ relative_temp_check := ->
     built :=
       await run_command(compiler, ['build', hello, '-o', 'hello'], cwd, ''.binary, environment)
     succeed 'build', built
-    ran := await run_command("#{cwd}/hello#{executable_suffix}", [], cwd)
+    ran := await run_command("#{cwd}/hello#{host_executable_suffix}", [], cwd)
     [
       expect_left('files left in the temporary directory', [], list_dir(temp))...
       compare_output('stdout', hello_output, ran.stdout)...
@@ -229,10 +230,12 @@ failed_target_check := ->
 optimized_runtime_check := ->
   Check name: 'lerta build -O inlines the runtime into the program', run: ->
     source := "#{root_dir}/tests/string/split.lerta"
-    built :=
-      await run_in_new_dir(compiler, ['build', source, '-o', "split#{executable_suffix}", '-O'])
+    built := await run_in_new_dir(
+      compiler
+      ['build', source, '-o', "split#{host_executable_suffix}", '-O']
+    )
     succeed 'build', built.result
-    executable := "#{built.cwd}/split#{executable_suffix}"
+    executable := "#{built.cwd}/split#{host_executable_suffix}"
     disassembler := host_platform == 'macos' then 'otool' else 'objdump'
     # Without the bytes of each instruction, which the check does not read, objdump's output stays
     # under the limit that the tests put on a command's output.
@@ -602,7 +605,7 @@ tool_on_path := (name: String) ->
   path := env('PATH') ? return nil
   separator := host_platform == 'windows' then ';' else ':'
   for directory in path.split(separator)
-    candidate := "#{directory}/#{name}#{executable_suffix}"
+    candidate := "#{directory}/#{name}#{host_executable_suffix}"
     return candidate if not directory.is_empty() and is_file(candidate)
   nil
 
@@ -633,10 +636,10 @@ source_lines_build_check := (flags: String[]) ->
       source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
       built := await run_in_new_dir(
         compiler
-        ['build', source, '-o', "lines#{executable_suffix}", '--source-lines', flags...]
+        ['build', source, '-o', "lines#{host_executable_suffix}", '--source-lines', flags...]
       )
       succeed 'build', built.result
-      output := "#{built.cwd}/lines#{executable_suffix}"
+      output := "#{built.cwd}/lines#{host_executable_suffix}"
       ran := await run_command(output, [], built.cwd)
       rows := await line_table_rows(debug_file_of(output))
       expected_lines: Int[] = flags.is_empty() then [12, 5, 16] else []
@@ -658,10 +661,11 @@ source_lines_build_check := (flags: String[]) ->
 no_source_lines_check := ->
   Check name: 'lerta build without --source-lines omits debug information', run: ->
     source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
-    built := await run_in_new_dir(compiler, ['build', source, '-o', "lines#{executable_suffix}"])
+    built :=
+      await run_in_new_dir(compiler, ['build', source, '-o', "lines#{host_executable_suffix}"])
     succeed 'build', built.result
     return no_reasons if host_platform == 'windows'
-    output := "#{built.cwd}/lines#{executable_suffix}"
+    output := "#{built.cwd}/lines#{host_executable_suffix}"
     has_debug := await has_debug_info(output)
     return ['debug information without --source-lines'] if has_debug
     no_reasons
@@ -669,7 +673,7 @@ no_source_lines_check := ->
 no_trace_check := ->
   Check name: 'lerta build --no-trace prints an uncaught exception without its trace', run: ->
     source := "#{root_dir}/tests/trace/rethrow.lerta"
-    executable := "#{cli_work_dir}/rethrow#{executable_suffix}"
+    executable := "#{cli_work_dir}/rethrow#{host_executable_suffix}"
     built := await run_in_new_dir(compiler, ['build', source, '-o', executable, '-O', '--no-trace'])
     succeed 'build', built.result
     ran := await run_command(executable, [], built.cwd)
