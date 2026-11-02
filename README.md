@@ -61,7 +61,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `test/` | The test scripts (see [Tests](#tests)) |
 | `tests/` | Run tests: Lerta sources and their expected output; also the files of the CLI checks (`tests/cli/`) and the formatter cases (`tests/format/`) |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
-| `bench/` | Benchmarks, each in Lerta, C, Swift, Go and JavaScript, and `run.lerta`, which builds them and prints their times next to each other and the geometric mean of each language (`make bench`); `bench/http/`: an HTTP server in Lerta, Go and JavaScript; its `run.lerta` loads each with `load.lerta` and prints their requests per second (`make bench-http`); `shared.lerta`, what both runners use |
+| `bench/` | Benchmarks, each in Lerta, Swift, Go, JavaScript and C, the reference, and `run.lerta`, which builds them and prints the version of each language, their times next to each other and the geometric mean of each language, the fastest but C in bold where stdout is colored (`make bench`); `bench/http/`: an HTTP server in Lerta, Go and JavaScript; its `run.lerta` loads each with `load.lerta` and prints their requests per second (`make bench-http`); `shared.lerta`, what both runners use |
 | `editors/` | Editor support for VS Code and Vim; see the README in each subdirectory to install it |
 
 ### Building and testing
@@ -76,7 +76,7 @@ make seed              # rewrites the seed, only when needed (see the bootstrap)
 make test              # builds bin/lerta, then runs the tests and test-bootstrap, on the host only
 make test-cross        # the tests for every environment but the host's own (see below)
 make check             # the code in the style (lerta fmt)
-make bench             # the benchmarks' times in Lerta, C, Swift, Go and JavaScript (see bench/)
+make bench             # the benchmarks' times in Lerta, Swift, Go, JavaScript and C (see bench/)
 make bench-http        # the HTTP server's requests per second in Lerta, Go and JavaScript
 make clean
 ```

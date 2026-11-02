@@ -1,19 +1,22 @@
-# Builds each benchmark in Lerta, C, Swift, Go and JavaScript (Node.js), runs each 3 times, checks
-# that every run of every language prints the same, and prints the best wall-clock time of each in
-# seconds, and last the geometric mean of those of each language. C is built with clang, or else
-# cc; Swift only where swiftc is, Go only where go is; Node.js, 22 or later, must be there.
+# Builds each benchmark in Lerta, Swift, Go, JavaScript (Node.js) and C, runs each 3 times, checks
+# that every run of every language prints the same, and prints the version of each language, the
+# best wall-clock time of each in seconds, and last the geometric mean of those of each language.
+# In each row, the least time of the languages but C is in bold where stdout is colored. C is built
+# with cc; Swift only where swiftc is, Go only where go is; Node.js, 22 or later, must be there.
 # Run it from the repository's root, as `make bench` does after building bin/lerta; the programs go
 # to build/bench/.
-import is_dir, list_dir, make_dir from 'std:io'
+import is_dir, list_dir, make_dir, stdout from 'std:io'
 import pow from 'std:math'
 import exit from 'std:process'
 import time from 'std:time'
-import Command, is_found, OUT, print_row, run_failure from './shared'
+import Command, is_found, OUT, print_row, print_rule, run_failure from './shared'
 
 # The directories of bench/, one for each benchmark, in order; http/ has a runner of its own.
 BENCHMARKS := [name for name in list_dir('bench') when is_dir("bench/#{name}") and name != 'http']
-# The languages, in the order of the columns, and the extensions of their sources.
-EXTENSIONS := { 'lerta': 'lerta', 'c': 'c', 'swift': 'swift', 'go': 'go', 'node': 'js' }
+# The languages, in the order of the columns, and the extensions of their sources. C, the
+# reference, is last, and never in bold.
+EXTENSIONS := { 'lerta': 'lerta', 'swift': 'swift', 'go': 'go', 'node': 'js', 'c': 'c' }
+LANGUAGES := EXTENSIONS.keys().to_array()
 RUNS := 3
 COLUMN := 8
 
@@ -21,18 +24,33 @@ fail := (message: String) ->
   print_error message
   exit 1
 
-find_c_compiler := ->
-  return 'clang' if await is_found('clang')
-  return 'cc' if await is_found('cc')
-  fail 'no C compiler: neither clang nor cc is found'
-
-c_compiler := await find_c_compiler()
+fail 'no C compiler: cc is not found' unless await is_found('cc')
 has_swift := await is_found('swiftc')
 has_go := await is_found('go')
 
 # Runs the command, which must succeed (see run_failure).
 run_checked := (label: String, command: Command, output: Byte[]? = nil) ->
   fail failure if failure := await run_failure(label, command, output)
+
+# The first line that the shell command prints, to stdout or stderr.
+first_line := (label: String, command: String) ->
+  bytes: Byte[]
+  await run_checked(label, { program: 'sh', args: ['-c', "#{command} 2>&1"] }, bytes)
+  text := bytes.to_binary().text() ? fail("#{label} printed what is not UTF-8")
+  text.split("\n")[0]
+
+# The version of the language, the commit for Lerta.
+version := (language: String) ->
+  return 'no swiftc' if language == 'swift' and not has_swift
+  return 'no go' if language == 'go' and not has_go
+  command :=
+    case language
+      when 'lerta' then 'git describe --always --dirty'
+      when 'swift' then 'swiftc --version'
+      when 'go' then 'go version'
+      when 'node' then 'node --version'
+      else 'cc --version'
+  await first_line("the version of #{language}", command)
 
 # The command that runs the benchmark in the language, built first if it is compiled; nil where the
 # language's compiler is missing.
@@ -46,7 +64,7 @@ build := (name: String, language: String) ->
   compile :=
     case language
       when 'lerta' then Command(program: 'bin/lerta', args: ['build', source, '-O', output...])
-      when 'c' then Command(program: c_compiler, args: ['-O2', source, '-lm', output...])
+      when 'c' then Command(program: 'cc', args: ['-O2', source, '-lm', output...])
       when 'go' then Command(program: 'go', args: ['build', output..., source])
       else Command(program: 'swiftc', args: ['-O', source, '-lm', output...])
   await run_checked("building #{name} in #{language}", compile)
@@ -66,22 +84,32 @@ measure := (label: String, command: Command) ->
     printed = output
   (times.min()!, printed)
 
+# The column of the least time of a row, by language, but C's; nil where stdout is not colored.
+fastest := (row: Map<String, Float>) ->
+  return nil unless stdout.uses_color()
+  timed := [language for language in LANGUAGES when language != 'c' and row[language] != nil]
+  best := timed.min_by((language) -> row[language]!) ? return nil
+  LANGUAGES.index_of best
+
+# A row of times, by language, '-' for a language with none.
+print_times := (name: String, row: Map<String, Float>) ->
+  cells := [row[language]?.to_fixed(2) ? '-' for language in LANGUAGES]
+  print_row name, cells, COLUMN, fastest(row)
+
 make_dir OUT
-no_swift := has_swift then '' else '; no swiftc, so no Swift'
-no_go := has_go then '' else '; no go, so no Go'
-print "C: #{c_compiler}#{no_swift}#{no_go}"
-print_row 'benchmark', EXTENSIONS.keys().to_array(), COLUMN
+print "#{language}: #{await version(language)}" for language in LANGUAGES
+print ''
+print_row 'benchmark', LANGUAGES, COLUMN
+print_rule LANGUAGES.length, COLUMN
 # The times of each language, one for each benchmark; none for a language whose compiler is missing.
 times: Map<String, Float[]>
 for name in BENCHMARKS
   # What the first language that ran printed, which every other must print.
   var expected: { language: String, output: String }?
-  cells: String[]
-  for language in EXTENSIONS.keys()
+  row: Map<String, Float>
+  for language in LANGUAGES
     command := await build(name, language)
-    if command == nil
-      cells.push '-'
-      continue
+    continue if command == nil
     label := "#{name} in #{language}"
     (seconds, output) := await measure(label, command)
     if first := expected
@@ -90,15 +118,15 @@ for name in BENCHMARKS
     else
       expected = { language, output }
     times[language, default: []].push(seconds)
-    cells.push seconds.to_fixed(2)
-  print_row name, cells, COLUMN
+    row[language] = seconds
+  print_times name, row
 
 geometric_mean := (xs: Float[]) ->
   product := xs.fold(1.0, (product, x) -> product * x)
   pow product, 1.0 / xs.length.to_float()
 
-mean_cell := (language: String) ->
-  xs := times[language]
-  xs == nil then '-' else geometric_mean(xs).to_fixed(2)
-
-print_row 'geomean', [mean_cell(language) for language in EXTENSIONS.keys()], COLUMN
+means: Map<String, Float>
+for language in LANGUAGES
+  means[language] = geometric_mean(xs) if xs := times[language]
+print_rule LANGUAGES.length, COLUMN
+print_times 'geomean', means
