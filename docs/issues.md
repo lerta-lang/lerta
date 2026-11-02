@@ -20,14 +20,6 @@ With the debug runtime: `integer overflow`, then `leak: 1 object(s)`, exit 23. A
 
 Fix: pop the temporaries after `combine`.
 
-## `copy_file` opens its files without `O_CLOEXEC`
-
-Severity: Low.
-
-runtime/platform_posix.c:134 and :138 open the source and the destination with raw `open()` and no `O_CLOEXEC`; everything else the runtime opens is close-on-exec. libuv's child setup on Linux closes no descriptors above 2, so a `run` that overlaps a `copy_file` gives the child a readable descriptor on the source and a writable one on the destination. macOS spawns with `POSIX_SPAWN_CLOEXEC_DEFAULT`, which hides it. *Unverified* on Linux.
-
-Fix: add `O_CLOEXEC` to both `open` calls.
-
 ## `remove_tree` follows a directory replaced by a symlink mid-walk
 
 Severity: Low.

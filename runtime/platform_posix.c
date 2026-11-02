@@ -135,11 +135,12 @@ static bool narrow_mode(int out, mode_t own, mode_t from) {
 // is changed, so that a copy found wrong before it starts, as one onto the file itself, through a
 // link too, which would empty it, leaves it as it was.
 bool lerta_os_copy_file(const char *from, const char *to) {
-  int in = open(from, O_RDONLY | O_NONBLOCK);
+  int in = open(from, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
   if (in < 0) return false;
   struct stat found;
   bool is_file = fstat(in, &found) == 0 && S_ISREG(found.st_mode);
-  int out = is_file ? open(to, O_WRONLY | O_CREAT | O_NONBLOCK, found.st_mode & 0777) : -1;
+  int flags = O_WRONLY | O_CREAT | O_NONBLOCK | O_CLOEXEC;
+  int out = is_file ? open(to, flags, found.st_mode & 0777) : -1;
   struct stat existing;
   bool is_other_file = out >= 0 && fstat(out, &existing) == 0 && S_ISREG(existing.st_mode) &&
                        (existing.st_dev != found.st_dev || existing.st_ino != found.st_ino);
