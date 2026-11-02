@@ -137,7 +137,10 @@ export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?):
 # one.
 type_of_in_test := (body: Body, binary: BinaryOperation) ->
   { left, right, position } := binary
-  container := type_of(body, right, expected_container(body, binary))
+  expected := expected_container(body, binary)
+  # The call of contains types the literal again, and takes its type from here.
+  body.in_test_arrays[right] = expected if expected and right is ArrayLiteral
+  container := type_of(body, right, expected)
   if member_type_by_name(body, container, Identifier(position, name: 'contains')) == nil
     message := "#{format_type(container)} has no contains, by which `in` applies"
     fail body.program, right.position, message
@@ -162,9 +165,7 @@ expected_container := (body: Body, binary: BinaryOperation) ->
   item := inner_of(type_of(body, left))
   # One that does not compare is typed as before, so that the error is not reported in contains.
   return nil unless is_equatable(body.program, item, nil)
-  type := ArrayType(item)
-  body.in_test_arrays[right] = type
-  type
+  ArrayType item
 
 # The call of `to_string()` of a Char that a String's contains takes, as `+` appends one: nil for
 # any other part.
