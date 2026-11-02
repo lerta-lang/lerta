@@ -84,7 +84,6 @@ typedef struct {
 static void read_work(void *data) {
   FileTask *task = data;
   task->bytes = lerta_os_read_file(task->name, &task->length);
-  task->succeeded = task->bytes != NULL;
 }
 
 static void write_work(void *data) {
@@ -138,7 +137,7 @@ static LertaPromise *start_task(LertaItemKind kind, const LertaString *path, con
   char *to_name = to == NULL ? NULL : lerta_c_string(to);
   FileTask *task = lerta_checked_calloc(1, sizeof(FileTask));
   *task = (FileTask){.promise = promise, .name = name, .to_name = to_name,
-                     .data = (LertaString *)data, .reads = kind == LERTA_REFERENCE_ITEMS};
+                     .data = (LertaString *)data, .reads = work == read_work};
   lerta_retain(promise);
   if (data != NULL) lerta_retain((void *)data);
   lerta_loop_work(task, work, end_task);
