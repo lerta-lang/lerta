@@ -21,6 +21,7 @@ The planned syntax, control flow, types and operators.
 - Only a range of an integer type is [Iterable](../reference/builtins.md#iterable), as only it has a next item. Its `iter` is the compiler's, as no bound names the integer types and a generic body cannot take `1` as a `T` (see [objects](objects.md#open-questions)).
 - `by` and `reversed` after the end, which need no parentheses, make a `Stride<T>` of the range rather than a `Range<T>`, as Swift's `stride` makes no `Range`: a step matters only to traversal, and its type may differ from `T`, as a duration for dates, which a second type parameter of `Stride` alone would give later, so that `Range<T>` stays as it is. A `Stride` is Iterable, with no `contains`. `0...n by 2` is `0, 2, 4, ...` below `n`, and `0...n reversed` is the same items in the other order, `n - 1` down to `0`, so the last item need not be worked out as with Python's `range(n - 1, -1, -1)`. Both may follow, `0...10 by 3 reversed` being `9, 6, 3, 0`. A step is positive. Like `in` and `when`, they are not keywords. A method could not do it: `0...n.reversed()` reads as `n.reversed()`.
 - An array takes a range as its index, as a `Binary` does (see [the reference](../reference/types.md#binary)), so that `xs[start...end]` and `xs.slice(start, end)` are not two spellings of one operation, of which one goes.
+- A range may leave out its end, `20..`, or its start, `...n` and `..n`, as SQL's `>= 20`, `< n` and `<= n` (Rust and Swift have them), so that `xs[i..]` takes the place of `xs.slice(i)`. Whether such a range includes its end means nothing, so it is written `a..` alone: `a...` before `)`, `]` or `,` would read as a spread, `f(a...)`, which takes its place in a call and an array literal.
 - A `for` over a range written in it counts as it does now, making no value.
 
 ### Iterables
@@ -59,7 +60,6 @@ Interfaces and generics are in [objects](objects.md).
 - Renaming in destructuring (`{ a: x } := value`).
 - Notation for writing an array inside an array without brackets (CoffeeScript can).
 - `Binary` literals (`'...'.binary` can substitute).
-- Ranges without an end or a start, `20..` and `...n`, as SQL's `>= 20` and `< n` (Rust and Swift have them).
 - An index in an Iter comprehension, `(f(x, i) for x, i in xs)`.
 - How an Iter gives an item in one call rather than two, `has_next` and `next`, which each item takes now through a pointer to code (see [internals](../internals.md#iter)): `next` giving the item with whether there was one, as Rust's `Option` and Swift's optional, which its `{ i1, T }` in IR can be for the Iters the compiler generates, while an Iter written in Lerta, `{ has_next, next }`, cannot write `next: () -> T?` for an `Iter<T?>`; or the end signalled as an exception, as Python's `StopIteration`, which the check after each call that Lerta has anyway would carry.
 - Whether `as` also widens a value to a type that it fits, as Swift's `nil as String?` or `x as Shape` does, for a value in the middle of an expression; a `const` with a type annotation does it now. It would sit beside the casts that may fail, `as T?` and `as T!`, which `as T` alone is not allowed to be.
