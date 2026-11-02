@@ -123,7 +123,7 @@ Fix: scan with a local index and `index_after`, as `closing_offset` does.
 
 Severity: Low.
 
-`if_doc` (compiler/format/print_statement.lerta:256-268) recurses per arm, and `statement_if_postfix` calls `block_has_comments` (compiler/format/source.lerta:38-63), which scans to the end of the whole chain, at every level. A chain of 2,000 arms formats in 0.6 s, 5,000 in 5 s, 10,000 in 23 s; 5,000 separate `if`s take 0.2 s.
+`if_doc` (compiler/format/print_control.lerta:67-80) recurses per arm, and `statement_if_postfix` calls `block_has_comments` (compiler/format/source.lerta:38-63), which scans to the end of the whole chain, at every level. A chain of 2,000 arms formats in 0.6 s, 5,000 in 5 s, 10,000 in 23 s; 5,000 separate `if`s take 0.2 s.
 
 Fix: compute the comment lines of each block once, such as a sorted array of comment lines and a table of block ends per indent.
 
