@@ -1,6 +1,6 @@
 # Issues
 
-Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
+Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
 ## `case` with value patterns is rejected on a local narrowed from a union
 
