@@ -120,21 +120,31 @@ bool lerta_os_make_link(const char *target, const char *path) {
   return symlink(target, path) == 0;
 }
 
-// The copy takes the permissions of the file, as CopyFileW takes its attributes on Windows. Both
-// files are opened without waiting, so that a FIFO with nothing at its other end fails rather than
-// blocks, and the destination is checked before it is changed, so that a copy found wrong before it
-// starts, as one onto the file itself, through a link too, which would empty it, leaves it as it was.
+// Gives the file `out` the permissions that both `own` and `from` have. A change only, which takes
+// owning the file, so that one that the user may write but does not own is replaced as it is.
+static bool narrow_mode(int out, mode_t own, mode_t from) {
+  mode_t narrowed = own & from & 0777;
+  return narrowed == (own & 07777) || fchmod(out, narrowed) == 0;
+}
+
+// A new copy takes the permissions of the file less the umask, without the setuid, setgid and
+// sticky bits, which would make a copy of an attacker's file into a trusted place run as root; a
+// file that the copy replaces keeps those of its own that the file has, so that a private file is
+// not copied into one that others read. Both files are opened without waiting, so that a FIFO
+// with nothing at its other end fails rather than blocks, and the destination is checked before it
+// is changed, so that a copy found wrong before it starts, as one onto the file itself, through a
+// link too, which would empty it, leaves it as it was.
 bool lerta_os_copy_file(const char *from, const char *to) {
   int in = open(from, O_RDONLY | O_NONBLOCK);
   if (in < 0) return false;
   struct stat found;
   bool is_file = fstat(in, &found) == 0 && S_ISREG(found.st_mode);
-  int out = is_file ? open(to, O_WRONLY | O_CREAT | O_NONBLOCK, 0600) : -1;
+  int out = is_file ? open(to, O_WRONLY | O_CREAT | O_NONBLOCK, found.st_mode & 0777) : -1;
   struct stat existing;
   bool is_other_file = out >= 0 && fstat(out, &existing) == 0 && S_ISREG(existing.st_mode) &&
                        (existing.st_dev != found.st_dev || existing.st_ino != found.st_ino);
-  bool copied =
-    is_other_file && fchmod(out, found.st_mode & 07777) == 0 && ftruncate(out, 0) == 0;
+  bool copied = is_other_file && narrow_mode(out, existing.st_mode, found.st_mode) &&
+                ftruncate(out, 0) == 0;
   uint8_t buffer[65536];
   while (copied) {
     ssize_t count = read(in, buffer, sizeof buffer);

@@ -28,14 +28,6 @@ runtime/platform_posix.c:134 and :138 open the source and the destination with r
 
 Fix: add `O_CLOEXEC` to both `open` calls.
 
-## `copy_file` copies the setuid, setgid and sticky bits and ignores the umask
-
-Severity: Low.
-
-runtime/platform_posix.c:143 does `fchmod(out, found.st_mode & 07777)`. As an ordinary user the kernel strips the setuid and setgid bits on write (observed: a `6755` source gives a `755` copy), but as root they persist, so copying a file whose mode an attacker controls into a trusted place makes a setuid root file; `cp` clears them. The umask is not applied either: a `0666` source gives a `0666` copy. [std](reference/std.md) says only that the copy takes the permissions of the file.
-
-Fix: `found.st_mode & 0777`, and say so in std.md.
-
 ## `remove_tree` follows a directory replaced by a symlink mid-walk
 
 Severity: Low.
