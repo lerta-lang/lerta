@@ -55,7 +55,11 @@ export infer_type_arguments := (
 ) ->
   bindings := written_bindings(body, call, generic)
   inferrer := Inferrer(body, args, generic, bindings)
-  inferrer.bind_from generic.receiver!.type, receiver.type, receiver.at if receiver
+  if receiver
+    inferrer.bind_from generic.receiver!.type, receiver.type, receiver.at
+    # An argument cannot widen the type arguments the receiver gives, as `T` of `Int[]` to `Int?`,
+    # which the receiver does not hold.
+    inferrer.fixed.add name for name in inferrer.bindings.keys()
   is_function := (i: Int) -> args[i] is FunctionLiteral
   is_literal := (i: Int) -> needs_context(body, args[i]) and not is_function(i)
   for arg, i in args
@@ -75,8 +79,9 @@ class Inferrer
   args: Expression[]
   generic: GenericFunction
   bindings: Map<String, TypeBinding>
-  # The names of the type arguments written, which nothing inferred replaces.
-  written = Set(@bindings.keys().to_array())
+  # The names of the type arguments written or given by the receiver, which nothing inferred
+  # replaces.
+  fixed = Set(@bindings.keys().to_array())
   inferred: InferredArgument[] = []
 
   bind_at = (at: Position) ->
@@ -84,7 +89,7 @@ class Inferrer
       # nil and never tell nothing about the type.
       return if is_one_of_kinds(bound_type, ['nil', 'never'])
       if bound := @bindings[name]
-        return if name in @written or not widens(bound.type, bound_type)
+        return if name in @fixed or not widens(bound.type, bound_type)
       @bindings[name] = { at, type: bound_type }
 
   # A value converts to an interface type, whose type arguments its members may give.

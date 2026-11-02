@@ -2,24 +2,6 @@
 
 Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `in` of an optional enum value emits malformed IR
-
-Severity: Medium.
-
-An optional enum value tested with `in` against an array of the enum gives a `phi` of `{ i1, i64 }` whose incoming value is a `ptr`, which clang refuses; the same test of an optional String works.
-
-```
-enum Kind
-  'a'
-  'b'
-m: Map<Int, Kind> = Map()
-m[1] = 'a'
-kinds: Kind[] = ['a']
-print m[1] in kinds
-```
-
-`bin/lerta build` fails at the clang step with `'%r9' defined with type 'ptr' but expected '{ i1, i64 }'`. Expected: prints `true`. Unwrapping first, `kind := m[1] ? ...`, works.
-
 ## `lerta fmt` breaks a call at the start of a statement whose function literal argument follows a comment
 
 Severity: Medium.
