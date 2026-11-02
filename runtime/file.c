@@ -3,18 +3,6 @@
 
 #include "internal.h"
 
-LERTA_STATIC_STRING(cannot_read, "cannot read file: ");
-LERTA_STATIC_STRING(cannot_write, "cannot write file: ");
-LERTA_STATIC_STRING(cannot_resolve, "cannot resolve path: ");
-LERTA_STATIC_STRING(cannot_remove, "cannot remove: ");
-LERTA_STATIC_STRING(cannot_make_dir, "cannot make directory: ");
-LERTA_STATIC_STRING(cannot_rename, "cannot rename: ");
-LERTA_STATIC_STRING(cannot_list, "cannot list directory: ");
-LERTA_STATIC_STRING(cannot_stat, "cannot read the status of: ");
-LERTA_STATIC_STRING(cannot_make_link, "cannot make link: ");
-LERTA_STATIC_STRING(cannot_copy, "cannot copy file: ");
-LERTA_STATIC_STRING(cannot_open, "cannot open file: ");
-
 // Takes the bytes, which may be NULL.
 static LertaString *string_of_bytes(uint8_t *bytes, int64_t length) {
   if (bytes == NULL) return NULL;
@@ -77,15 +65,12 @@ LertaString *lerta_make_temp_dir(void) {
 }
 
 // A read, write, copy or removal on libuv's thread pool (see docs/internals.md#files), whose promise
-// gives what was read, or NULL, or whether it succeeded. It holds the promise, the path and the
-// data until it is done; the worker touches only `name`, the data's bytes, which stay as they are,
+// gives what was read, or NULL, or whether it succeeded. It holds the promise and the data until
+// it is done; the worker touches only `name`, the data's bytes, which stay as they are,
 // as a String or a Binary is immutable and the task keeps it alive, and what it reads, allocated
 // with malloc.
 typedef struct {
   LertaPromise *promise;
-  LertaString *path;
-  // The message that rejects the promise on failure, for the old functions that the seed calls.
-  const LertaString *failure;
   char *name;
   char *to_name;
   LertaString *data;
@@ -130,8 +115,6 @@ static void end_task(void *data) {
   if (task->length == LERTA_OUT_OF_MEMORY) lerta_panic("out of memory");
   if (task->cancelled) {
     free(task->bytes);
-  } else if (!task->succeeded && task->failure != NULL) {
-    lerta_promise_reject_io(task->promise, task->failure, task->path);
   } else {
     void *slot = lerta_promise_slot(task->promise);
     if (task->reads) {
@@ -142,25 +125,21 @@ static void end_task(void *data) {
     lerta_promise_resolve(task->promise);
   }
   lerta_release(task->promise);
-  lerta_release(task->path);
   if (task->data != NULL) lerta_release(task->data);
   free(task->name);
   free(task->to_name);
   free(task);
 }
 
-static LertaPromise *start_task(LertaItemKind kind, const LertaString *path,
-                                const LertaString *failure, const LertaString *data,
+static LertaPromise *start_task(LertaItemKind kind, const LertaString *path, const LertaString *data,
                                 const LertaString *to, void (*work)(void *data)) {
   LertaPromise *promise = lerta_promise_new(kind);
   char *name = lerta_c_string(path);
   char *to_name = to == NULL ? NULL : lerta_c_string(to);
   FileTask *task = lerta_checked_calloc(1, sizeof(FileTask));
-  *task = (FileTask){.promise = promise, .path = (LertaString *)path, .failure = failure,
-                     .name = name, .to_name = to_name, .data = (LertaString *)data,
-                     .reads = work == read_work};
+  *task = (FileTask){.promise = promise, .name = name, .to_name = to_name,
+                     .data = (LertaString *)data, .reads = kind == LERTA_REFERENCE_ITEMS};
   lerta_retain(promise);
-  lerta_retain((void *)path);
   if (data != NULL) lerta_retain((void *)data);
   lerta_loop_work(task, work, end_task);
   lerta_promise_on_cancel(promise, cancel_task, task);
@@ -168,19 +147,19 @@ static LertaPromise *start_task(LertaItemKind kind, const LertaString *path,
 }
 
 LertaPromise *lerta_read_file(const LertaString *path) {
-  return start_task(LERTA_REFERENCE_ITEMS, path, NULL, NULL, NULL, read_work);
+  return start_task(LERTA_REFERENCE_ITEMS, path, NULL, NULL, read_work);
 }
 
 LertaPromise *lerta_write_file(const LertaString *path, const LertaString *data) {
-  return start_task(LERTA_PLAIN_ITEMS, path, NULL, data, NULL, write_work);
+  return start_task(LERTA_PLAIN_ITEMS, path, data, NULL, write_work);
 }
 
 LertaPromise *lerta_remove_tree(const LertaString *path) {
-  return start_task(LERTA_PLAIN_ITEMS, path, NULL, NULL, NULL, remove_work);
+  return start_task(LERTA_PLAIN_ITEMS, path, NULL, NULL, remove_work);
 }
 
 LertaPromise *lerta_copy_file(const LertaString *from, const LertaString *to) {
-  return start_task(LERTA_PLAIN_ITEMS, from, NULL, NULL, to, copy_work);
+  return start_task(LERTA_PLAIN_ITEMS, from, NULL, to, copy_work);
 }
 
 // A file of std:io's open, which Lerta holds by its address, in a FileWriter, and frees. Each write
@@ -189,7 +168,6 @@ LertaPromise *lerta_copy_file(const LertaString *from, const LertaString *to) {
 // on the thread pool have ended; once freed, the OpenFile is freed then too.
 typedef struct {
   int64_t file;
-  LertaString *path;
   int64_t end;
   int writes;
   // Set by a write that fails, so that the later ones fail too rather than leave a hole at its
@@ -198,8 +176,6 @@ typedef struct {
   bool ended;
   bool closed;
   bool freed;
-  // Whether a failure throws, for the old functions that the seed calls.
-  bool throws;
 } OpenFile;
 
 // The promise is NULL for the rest that an end writes, which nothing awaits. It has no cancel hook:
@@ -223,9 +199,7 @@ static void finish_if_done(OpenFile *open) {
     lerta_os_close(open->file);
     open->closed = true;
   }
-  if (!open->freed) return;
-  lerta_release(open->path);
-  free(open);
+  if (open->freed) free(open);
 }
 
 // 0 if the file cannot be opened.
@@ -235,8 +209,7 @@ int64_t lerta_open_file(const LertaString *path) {
   free(name);
   if (file < 0) return 0;
   OpenFile *open = lerta_checked_calloc(1, sizeof(OpenFile));
-  *open = (OpenFile){.file = file, .path = (LertaString *)path};
-  lerta_retain((void *)path);
+  open->file = file;
   return (int64_t)(intptr_t)open;
 }
 
@@ -263,11 +236,7 @@ static void end_file_write(void *data) {
   OpenFile *open = write->open;
   if (!write->succeeded) open->failed = true;
   if (write->promise != NULL) {
-    if (write->succeeded || !open->throws) {
-      lerta_promise_resolve(write->promise);
-    } else {
-      lerta_promise_reject_io(write->promise, LERTA_STR(cannot_write), open->path);
-    }
+    lerta_promise_resolve(write->promise);
     lerta_release(write->promise);
   }
   lerta_release(write->data);
@@ -324,98 +293,4 @@ bool lerta_make_one_dir(const LertaString *path) {
 
 bool lerta_rename_path(const LertaString *from, const LertaString *to) {
   return lerta_with_c_strings(from, to, lerta_os_rename);
-}
-
-// The old functions that the seed calls, which throw where the new ones above report a failure,
-// until the seed is refreshed.
-
-bool lerta_is_file(const LertaString *path) {
-  LertaFileStatus status;
-  return stat_of(path, &status) == 1 && status.kind == LERTA_FILE_KIND;
-}
-
-bool lerta_is_dir(const LertaString *path) {
-  LertaFileStatus status;
-  return stat_of(path, &status) == 1 && status.kind == LERTA_DIR_KIND;
-}
-
-bool lerta_stat_fields(const LertaString *path, LertaArray *fields) {
-  if (!lerta_status_fields(path, fields)) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_stat), path);
-  return fields->length > 0;
-}
-
-void lerta_make_link(const LertaString *target, const LertaString *path) {
-  if (!lerta_symlink(target, path)) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_make_link), path);
-}
-
-LertaArray *lerta_list_dir_names(const LertaString *path) {
-  LertaArray *names = lerta_dir_names(path);
-  if (names == NULL) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_list), path);
-  return names;
-}
-
-LertaString *lerta_real_path(const LertaString *path) {
-  LertaString *resolved = lerta_resolve_path(path);
-  if (resolved == NULL) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_resolve), path);
-  return resolved;
-}
-
-LertaPromise *lerta_read_file_async(const LertaString *path) {
-  return start_task(LERTA_REFERENCE_ITEMS, path, LERTA_STR(cannot_read), NULL, NULL, read_work);
-}
-
-LertaPromise *lerta_write_file_async(const LertaString *path, const LertaString *data) {
-  return start_task(LERTA_PLAIN_ITEMS, path, LERTA_STR(cannot_write), data, NULL, write_work);
-}
-
-LertaPromise *lerta_remove_tree_async(const LertaString *path) {
-  return start_task(LERTA_PLAIN_ITEMS, path, LERTA_STR(cannot_remove), NULL, NULL, remove_work);
-}
-
-LertaPromise *lerta_copy_file_async(const LertaString *from, const LertaString *to) {
-  return start_task(LERTA_PLAIN_ITEMS, from, LERTA_STR(cannot_copy), NULL, to, copy_work);
-}
-
-int64_t lerta_open_for_writing(const LertaString *path) {
-  int64_t pointer = lerta_open_file(path);
-  if (pointer == 0) {
-    lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_open), path);
-  } else {
-    open_file_of(pointer)->throws = true;
-  }
-  return pointer;
-}
-
-void lerta_open_file_check(int64_t pointer) {
-  OpenFile *open = open_file_of(pointer);
-  if (open->failed) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_write), open->path);
-}
-
-LertaPromise *lerta_open_file_write(int64_t pointer, const LertaString *data) {
-  return lerta_open_file_append(pointer, data);
-}
-
-// Each directory that ends before a separator is made first; only whether the whole path is a
-// directory at the end decides, since a parent that cannot be made, such as a drive or a network
-// share on Windows, may be there.
-static bool make_dir_and_parents(char *path) {
-  for (size_t i = 1; path[i] != '\0'; i++) {
-    if (!lerta_os_is_separator(path[i]) || lerta_os_is_separator(path[i - 1])) continue;
-    char separator = path[i];
-    path[i] = '\0';
-    lerta_os_make_dir(path);
-    path[i] = separator;
-  }
-  return lerta_os_make_dir(path);
-}
-
-void lerta_make_dir(const LertaString *path) {
-  char *name = lerta_c_string(path);
-  bool made = make_dir_and_parents(name);
-  free(name);
-  if (!made) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_make_dir), path);
-}
-
-void lerta_rename(const LertaString *from, const LertaString *to) {
-  if (!lerta_rename_path(from, to)) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_rename), from);
 }

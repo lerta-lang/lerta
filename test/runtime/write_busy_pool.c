@@ -23,7 +23,7 @@ void lerta_main(void) {
   snprintf(path, sizeof path, "%s/fifo", dir);
   if (mkfifo(path, 0600) != 0) abort();
   LertaString *name = lerta_string_from_bytes((const uint8_t *)path, (int64_t)strlen(path));
-  for (int i = 0; i < READS; i++) lerta_release(lerta_read_file_async(name));
+  for (int i = 0; i < READS; i++) lerta_release(lerta_read_file(name));
   LERTA_STATIC_STRING(flushed, "flushed\n");
   LERTA_STATIC_STRING(printed, "printed\n");
   lerta_release(lerta_stream_write(1, LERTA_STR(flushed)));

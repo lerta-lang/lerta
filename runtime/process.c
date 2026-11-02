@@ -1,4 +1,3 @@
-#include <math.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,7 +6,6 @@
 
 #include "internal.h"
 
-LERTA_STATIC_STRING(cannot_run, "cannot run: ");
 LERTA_STATIC_STRING(cannot_make_pipe, "cannot make a pipe");
 
 static int argument_count = 0;
@@ -226,25 +224,6 @@ int64_t lerta_program_run(const LertaArray *args, const LertaString *cwd, const 
   program->freed = true;
   free_program_if_done(program);
   return 0;
-}
-
-// The old function that the seed calls, until the seed is refreshed.
-int64_t lerta_program_start(const LertaString *command, const LertaArray *args,
-                            const LertaString *cwd, const LertaArray *env,
-                            const LertaArray *streams, double kill_after) {
-  LertaArray *command_and_args = lerta_array_create(LERTA_REFERENCE_ITEMS);
-  lerta_array_append(command_and_args, &command);
-  for (int64_t i = 0; i < args->length; i++) {
-    int64_t arg = lerta_word_item(args, i);
-    lerta_array_append(command_and_args, &arg);
-  }
-  double milliseconds = ceil(kill_after * 1000);
-  int64_t kill_milliseconds = milliseconds < 0x1p63 ? (int64_t)milliseconds : INT64_MAX;
-  int64_t program =
-      lerta_program_run(command_and_args, cwd, env, streams, kill_milliseconds);
-  lerta_release(command_and_args);
-  if (program == 0) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_run), command);
-  return program;
 }
 
 void lerta_system_pipe(LertaArray *files) {

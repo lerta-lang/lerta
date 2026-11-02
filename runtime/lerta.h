@@ -176,11 +176,9 @@ double lerta_float_from_bits(int64_t bits);
 // A Float32's likewise, of the digits that read back as it as a float.
 LertaString *lerta_float_to_string(double value);
 LertaString *lerta_float32_to_string(float value);
-// The nearest float, an infinity beyond the largest.
-float lerta_float_to_float32(double value);
+
+// The seed's to_literal of a Float32 calls it, until the seed is refreshed again.
 double lerta_float32_to_float(float value);
-// The positive infinity, which std:builtins names INFINITY.
-double lerta_float_infinity(void);
 
 // Whether the value truncated toward zero fits in an Int, which only then is it converted to.
 bool lerta_float_fits_int(double value);
@@ -287,8 +285,6 @@ void lerta_finish_top_level(LertaPromise *promise);
 // Time (time.c). A promise resolved once the milliseconds, which std:time checks are not negative,
 // have passed.
 LertaPromise *lerta_sleep_milliseconds(int64_t milliseconds);
-// The old function that the seed calls, until the seed is refreshed.
-LertaPromise *lerta_sleep(double seconds);
 // Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
 double lerta_unix_time(void);
 // Seconds since an unspecified time, which only go forward.
@@ -309,10 +305,6 @@ void lerta_exit(int64_t code);
 // NUL byte, which std:process refuses first. 0 if the program cannot start.
 int64_t lerta_program_run(const LertaArray *args, const LertaString *cwd, const LertaArray *env,
                           const LertaArray *streams, int64_t kill_after);
-// The old function that the seed calls, which throws, until the seed is refreshed.
-int64_t lerta_program_start(const LertaString *command, const LertaArray *args,
-                            const LertaString *cwd, const LertaArray *env,
-                            const LertaArray *streams, double kill_after);
 // A promise of its exit code, or minus the signal that ended it, settled once it ends; one wait at
 // most. A cancel stops the program and rejects the promise once it ends.
 LertaPromise *lerta_program_wait(int64_t pointer);
@@ -341,9 +333,9 @@ LertaString *lerta_env(const LertaString *name);
 // Files (file.c). A failure gives false or NULL, of which std:io makes the error; one that runs on
 // the thread pool gives it through its promise, which only a cancel rejects. No path holds a NUL
 // byte, nor is empty for lerta_make_one_dir and lerta_dir_names: std:io refuses those first.
-// What was read, or NULL.
+// The promise gives what was read, or NULL.
 LertaPromise *lerta_read_file(const LertaString *path);
-// Whether it succeeded, as a bool, as do those after it.
+// The promises of these three give whether they succeeded, as a bool.
 LertaPromise *lerta_write_file(const LertaString *path, const LertaString *data);
 LertaPromise *lerta_remove_tree(const LertaString *path);
 LertaPromise *lerta_copy_file(const LertaString *from, const LertaString *to);
@@ -368,22 +360,6 @@ LertaString *lerta_make_temp_dir(void);
 // Makes the directory, or finds one there; not its parents.
 bool lerta_make_one_dir(const LertaString *path);
 bool lerta_rename_path(const LertaString *from, const LertaString *to);
-// The old functions that the seed calls, which throw on failure, until the seed is refreshed.
-LertaPromise *lerta_read_file_async(const LertaString *path);
-LertaPromise *lerta_write_file_async(const LertaString *path, const LertaString *data);
-LertaPromise *lerta_remove_tree_async(const LertaString *path);
-LertaPromise *lerta_copy_file_async(const LertaString *from, const LertaString *to);
-int64_t lerta_open_for_writing(const LertaString *path);
-void lerta_open_file_check(int64_t pointer);
-LertaPromise *lerta_open_file_write(int64_t pointer, const LertaString *data);
-bool lerta_is_file(const LertaString *path);
-bool lerta_is_dir(const LertaString *path);
-bool lerta_stat_fields(const LertaString *path, LertaArray *fields);
-void lerta_make_link(const LertaString *target, const LertaString *path);
-LertaArray *lerta_list_dir_names(const LertaString *path);
-LertaString *lerta_real_path(const LertaString *path);
-void lerta_make_dir(const LertaString *path);
-void lerta_rename(const LertaString *from, const LertaString *to);
 
 // Handles (handle.c), each of a libuv stream, for std:net: one from lerta_tcp_new is a socket or a
 // listener, which lerta_handle_free frees, closing it if lerta_handle_close has not. A failure

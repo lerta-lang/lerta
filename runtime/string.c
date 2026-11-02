@@ -311,10 +311,7 @@ LertaString *lerta_float_to_string(double value) { return shortest_text(value, f
 
 LertaString *lerta_float32_to_string(float value) { return shortest_text(value, true); }
 
-float lerta_float_to_float32(double value) { return (float)value; }
-
-double lerta_float_infinity(void) { return INFINITY; }
-
+// The seed's to_literal of a Float32 calls it, until the seed is refreshed again.
 double lerta_float32_to_float(float value) { return value; }
 
 bool lerta_float_fits_int(double value) {

@@ -51,24 +51,6 @@ LertaPromise *lerta_sleep_milliseconds(int64_t milliseconds) {
   return promise;
 }
 
-// The old function that the seed calls, until the seed is refreshed.
-LertaPromise *lerta_sleep(double seconds) {
-  // Rounded up, and one more, so as not to end early: libuv's time is in whole milliseconds, so a
-  // timer may fire up to one before its time. A sleep of 0 only lets others go first. A time past
-  // what milliseconds hold is the longest they do.
-  double exact = seconds * 1000;
-  uint64_t milliseconds = UINT64_MAX;
-  // The largest double below 2^64 is 2^64 - 2048, so the two added below cannot overflow.
-  if (exact < 0x1p64) {
-    milliseconds = (uint64_t)exact;
-    if ((double)milliseconds < exact) milliseconds++;
-    if (milliseconds > 0) milliseconds++;
-  }
-  LertaPromise *promise = lerta_promise_new(LERTA_PLAIN_ITEMS);
-  resolve_after(milliseconds, promise);
-  return promise;
-}
-
 // std:time's clock, read from the system.
 double lerta_unix_time(void) {
   return lerta_os_unix_time();
