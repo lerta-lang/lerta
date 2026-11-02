@@ -116,6 +116,23 @@ Severity: Low.
 
 Fix: accept `?` after a parenthesized type where `[]` is accepted, or document that an optional union is written `A | B?`.
 
+## `lerta fmt` reports a list it would join under the rule of another place
+
+Severity: Low.
+
+A literal written on lines of its own that fits on one line is reported where it starts, but under the name and the message of a rule that some other place in the file breaks, or of Layout when none does:
+
+```
+xs :=
+  'a'
+  'b'
+print "c"
+```
+
+`lerta fmt` reports ``1:6: call without parentheses at the start of a statement, with them after `then` or `->` (Calls without parentheses)``; without the last line, `1:6: indent by two spaces for each level, and end the lines with LF (Layout)`. `lerta fmt --fix` joins the list as expected.
+
+Fix: name the rule of the place reported, here Multi-line literals.
+
 ## `lerta fmt` moves the parameters of a function literal argument after a comment
 
 Severity: Low.
