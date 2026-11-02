@@ -246,15 +246,30 @@ parse_coalesce := (tokens: TokenStream): Expression ->
   Coalesce value, fallback, position: value.position
 
 parse_range := (tokens: TokenStream): Expression ->
+  return parse_range_without_start(tokens) if tokens.peek().kind in RANGE_OPERATORS
   start := parse_arithmetic(tokens, 0)
   return start unless tokens.peek_continuation() in RANGE_OPERATORS
   if at_spread(tokens)
     tokens.spread = tokens.peek().position()
     return start
   inclusive := tokens.next().kind == '..'
+  # `a..`, which has no end: whether it includes it would mean nothing, and `a...` is a spread.
+  return Range(start, inclusive, end: nil, position: start.position) if at_range_end(tokens)
   end := parse_arithmetic(tokens, 0)
-  tokens.fail_here 'ranges cannot be chained' if tokens.peek_continuation() in RANGE_OPERATORS
+  reject_chained_range tokens
   Range start, end, inclusive, position: start.position
+
+# `...b` or `..b`.
+parse_range_without_start := (tokens: TokenStream) ->
+  operator := tokens.next()
+  end := parse_arithmetic(tokens, 0)
+  reject_chained_range tokens
+  Range end, start: nil, inclusive: operator.kind == '..', position: operator.position()
+
+reject_chained_range := (tokens: TokenStream) ->
+  tokens.fail_here 'ranges cannot be chained' if tokens.peek_continuation() in RANGE_OPERATORS
+
+at_range_end := (tokens: TokenStream) -> tokens.peek().kind in SPREAD_FOLLOWERS
 
 RANGE_OPERATORS: TokenKind[] = ['...', '..']
 
@@ -386,6 +401,9 @@ extend_by_postfix := (tokens: TokenStream, expression: Expression): Expression? 
 parse_index := (tokens: TokenStream, object: Expression, position: Position) ->
   parse_contents := ->
     index := parse_expression(tokens)
+    # `xs[a...]`, which reads as a spread.
+    if tokens.spread == tokens.peek().position()
+      tokens.fail_here 'a range without an end is written `a..`'
     default_value := parse_index_default(tokens)
     tokens.expect_close ']'
     Index position, object, index, default_value

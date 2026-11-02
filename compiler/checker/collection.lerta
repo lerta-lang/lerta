@@ -15,8 +15,8 @@ import Body, ProgramWide from './shared'
 import field_type, info_of from './object_types'
 import names_type_or_import, resolve from './type_names'
 import
-  ArrayType, binary_type, byte_type, format_type, inner_of_expected, int_type, InterfaceType,
-  is_kind, is_one_of_kinds, is_reference_type, is_set, IterType, MapType, ObjectType, optional_type,
+  ArrayType, byte_type, format_type, inner_of_expected, int_type, InterfaceType, is_kind,
+  is_one_of_kinds, is_reference_type, is_set, IterType, MapType, ObjectType, optional_type,
   OptionalType, RecordType, set_of, TupleType, Type, type_key, UnionType
 from '../types'
 
@@ -278,14 +278,16 @@ export type_of_index := (body: Body, index: Index): Type ->
   expect_type body, index.index, int_type
   object_type is ArrayType then object_type.element else byte_type
 
-# `b[start...end]`, the bytes of a Binary from `start` up to `end`, which no other type takes.
+# `xs[start...end]` and `b[start...end]`, the items of an array or the bytes of a Binary from
+# `start` up to `end`, of the same type, which no other type takes.
 type_of_slice := (body: Body, range: Range, object_type: Type) ->
-  unless is_kind(object_type, 'Binary')
-    message := "only a Binary takes a range as its index, not #{format_type(object_type)}"
+  if not (object_type is ArrayType or is_kind(object_type, 'Binary'))
+    message :=
+      "only an array or a Binary takes a range as its index, not #{format_type(object_type)}"
     fail body.program, range.position, message
-  expect_type body, range.start, int_type
-  expect_type body, range.end, int_type
-  binary_type
+  expect_type body, start, int_type if start := range.start
+  expect_type body, end, int_type if end := range.end
+  object_type
 
 reject_set_index := (body: Body, index: Index, type: MapType) ->
   return unless is_set(type)

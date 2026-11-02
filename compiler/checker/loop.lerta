@@ -98,6 +98,10 @@ check_loop_body := (body: Body, statements: Statement[], define: () -> void) ->
   check_block body, statements, define_hiding, nothing
   body.loop_depth -= 1
 
+# A range without a start or an end only takes the place of an index, so far.
+range_part := (body: Body, range: Range, part: Expression?) ->
+  part ? fail(body.program, range.position, 'only an index takes a range without a start or an end')
+
 # The type of the items that a loop, a comprehension, `Set()` or `Map()` goes through. A value of a
 # type that satisfies Iterable is gone through by the Iter of its `iter()`, a call recorded in the
 # facts, which codegen generates instead (see iter_calls). `place` tells where the iterable is
@@ -110,8 +114,8 @@ export type_of_iterated := (
 ): Type ->
   body.facts.consuming_reads.add iterable if iterable is Identifier
   if iterable is Range
-    expect_type body, iterable.start, int_type
-    expect_type body, iterable.end, int_type
+    expect_type body, range_part(body, iterable, iterable.start), int_type
+    expect_type body, range_part(body, iterable, iterable.end), int_type
     return int_type
   type := type_of(body, iterable, expected)
   return item if item := iterable_item(type)

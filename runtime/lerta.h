@@ -215,6 +215,9 @@ LertaArray *lerta_array_create(LertaItemKind item_kind);
 // An array of `length` copies of the item, borrowed, each retained; a negative length throws.
 LertaArray *lerta_array_filled(LertaItemKind item_kind, int64_t length, const void *item);
 int64_t lerta_array_length(const LertaArray *array);
+// A new array of the items from `start` up to `end`, each retained; throws unless
+// 0 <= start <= end <= length.
+LertaArray *lerta_array_slice(const LertaArray *array, int64_t start, int64_t end);
 void lerta_array_take_last(LertaArray *array, void *item);
 // These two give all the items, not the one at hand, whose place the generated code computes, as
 // only it knows the item size without a branch on the kind (see compiler/codegen/array.lerta).

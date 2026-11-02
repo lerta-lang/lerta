@@ -122,6 +122,27 @@ LertaArray *lerta_array_filled(LertaItemKind item_kind, int64_t length, const vo
 
 int64_t lerta_array_length(const LertaArray *array) { return array->length; }
 
+LERTA_STATIC_STRING(slice_out_of_range, "slice out of range");
+
+LertaArray *lerta_array_slice(const LertaArray *array, int64_t start, int64_t end) {
+  if (start < 0 || start > end || end > array->length) {
+    lerta_raise(LERTA_INDEX_ERROR, LERTA_STR(slice_out_of_range));
+    return NULL;
+  }
+  LertaItemKind kind = array->item_kind;
+  LertaArray *slice = lerta_array_create(kind);
+  int64_t length = end - start;
+  if (length == 0) return slice;
+  int64_t size = lerta_item_size(kind);
+  uint8_t *items = lerta_mem_alloc(length * size);
+  memcpy(items, item_at(array, start), (size_t)(length * size));
+  for (int64_t i = 0; i < length; i++) lerta_retain_item(kind, items + i * size);
+  slice->items = items;
+  slice->length = length;
+  slice->capacity = length;
+  return slice;
+}
+
 uint8_t *lerta_array_checked_items(const LertaArray *array, int64_t index) {
   if ((uint64_t)index < (uint64_t)array->length) return array->items;
   lerta_raise_index_out_of_range();
