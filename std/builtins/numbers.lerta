@@ -3,16 +3,17 @@ import is_continuation from '../internal/utf8'
 extern lerta_float_to_string: (Float) -> String
 extern lerta_float_fits_int: (Float) -> Bool
 extern lerta_float_to_int: (Float) -> Int
-extern lerta_float_to_float32: (Float) -> Float32
 extern lerta_float32_to_string: (Float32) -> String
+extern lerta_float_from_bits: (Int) -> Float
+# Until the seed is refreshed, as the seed's compiler has no builtin to_float of a Float32.
 extern lerta_float32_to_float: (Float32) -> Float
-extern lerta_float_infinity: () -> Float
 
 # The least and the greatest Int.
 export INT_MIN := -9223372036854775808
 export INT_MAX := 9223372036854775807
-# The positive infinity, which std:builtins' own modules use and std:math exports.
-export INFINITY := lerta_float_infinity()
+# The positive infinity, which std:builtins' own modules use and std:math exports, made of its bits,
+# as std is built by the seed too, whose code throws for `1.0 / 0.0`.
+export INFINITY := lerta_float_from_bits(0x7FF0000000000000)
 
 extend Float
   to_string = -> lerta_float_to_string(@)
@@ -23,8 +24,6 @@ extend Float
     @to_string()
   # The Int of the value truncated toward zero, or nil where it is beyond an Int.
   to_int = (): Int? -> lerta_float_fits_int(@) then lerta_float_to_int(@)
-  # The nearest Float32, an infinity beyond the largest.
-  to_float32 = -> lerta_float_to_float32(@)
   # The text with `digits` digits after the point: the whole part exactly, and the fraction times
   # 10 to the `digits` rounded half away from zero, carried into the whole part if it rounds up to
   # it. The product may round, so a fraction just below a half may round up; the rest after
@@ -45,10 +44,9 @@ extend Float32
   to_string = -> lerta_float32_to_string(@)
   # An infinity is written as the value that names it, made a Float32.
   to_literal = ->
-    value := @to_float()
+    value := lerta_float32_to_float(@)
     return "#{value.to_literal()}.to_float32()" if value == INFINITY or value == -INFINITY
     @to_string()
-  to_float = -> lerta_float32_to_float(@)
 
 extend Bool
   to_string = -> @ then 'true' else 'false'

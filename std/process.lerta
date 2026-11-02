@@ -1,11 +1,14 @@
 # The running program: its arguments, how it ends, and the programs it runs (see runtime/process.c).
 
 import Pipe, Reader, Writer from 'std:io'
+import ceil from 'std:math'
 import close_handle, Handle, reader_of, write_handle from './internal/handle'
 
 extern lerta_exit: (Int) -> never
 extern lerta_pipe_new: (String) -> Int
-extern lerta_program_start: (String, String[], String?, Binary[]?, Int[], Float) -> Int
+# The command and its arguments, and the milliseconds that a stop waits before it kills; 0 if the
+# program cannot start.
+extern lerta_program_run: (String[], String?, Binary[]?, Int[], Int) -> Int
 extern lerta_program_wait: (Int) -> Promise<Int>
 extern lerta_program_stop: (Int) -> void
 extern lerta_program_free: (Int) -> void
@@ -66,7 +69,11 @@ export run := (command: String, args: String..., options: RunOptions) ->
     stream_of(input.pipe, input.file)
     stream_of(output.pipe, output.file)
     stream_of(errors.pipe, errors.file)
-  program := Program(lerta_program_start(command, args, cwd, program_env, streams, kill_after))
+  # Rounded up, so as not to kill early.
+  kill_milliseconds := ceil(kill_after * 1000.0).to_int() ? INT_MAX
+  pointer := lerta_program_run([command, args...], cwd, program_env, streams, kill_milliseconds)
+  throw IOError("cannot run: #{command}") if pointer == 0
+  program := Program(pointer)
   give options.stdin, true
   give options.stdout, false
   give options.stderr, false
@@ -145,7 +152,7 @@ output_of := (output: Byte[] | Writer | Pipe?, stream: String, command: String) 
   sink: Byte[] | Writer? = not file then (output is Pipe then output.writer else output)
   { file, sink, pipe: sink != nil then pipe_of(stream, command) }
 
-# As lerta_program_start takes them: a file as -1 minus it, a pipe by its handle, or 0 for the
+# As lerta_program_run takes them: a file as -1 minus it, a pipe by its handle, or 0 for the
 # program's own stream, which the program shares.
 stream_of := (pipe: Handle?, file: Int?) ->
   return -1 - file if file

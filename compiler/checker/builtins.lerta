@@ -6,10 +6,10 @@ import info_of from './object_types'
 import operand_kinds, operator_of_method, SIGNED_KINDS from './operator'
 import ProgramWide from './shared'
 import
-  ArrayType, bool_type, EnumType, float_type, FunctionType, int_type, integer_bits, is_integer,
-  is_kind, is_one_of_kinds, is_set, is_signed, IterType, MapType, NUMBER_KINDS, ObjectType,
-  optional_type, OptionalType, PromiseType, SimpleType, string_type, TupleType, Type, TypeKind,
-  void_type
+  ArrayType, bool_type, EnumType, float32_type, float_type, FunctionType, int_type, integer_bits,
+  is_integer, is_kind, is_one_of_kinds, is_set, is_signed, IterType, MapType, NUMBER_KINDS,
+  ObjectType, optional_type, OptionalType, PromiseType, SimpleType, string_type, TupleType, Type,
+  TypeKind, void_type
 from '../types'
 
 # The builtin methods, which the checker resolves a name to once, so that codegen generates each
@@ -36,6 +36,8 @@ export enum BuiltinMember
   HASH
   NUMBER_COMPARE
   INTEGER_TO_FLOAT
+  # A Float's to_float32 and a Float32's to_float.
+  FLOAT_CONVERSION
   # A conversion to the integer type that the method's type gives (see integer_method).
   INTEGER_CONVERSION
   # The method that an operator calls, which applies it (see operator_method).
@@ -88,6 +90,7 @@ value_method := (program: ProgramWide, receiver: Type, name: String) ->
         return method(ENUM_TO_LITERAL, [], string_type) if name == 'to_literal'
       return operator if operator := operator_method(receiver, name)
       return char_method(name) if is_kind(receiver, 'Char')
+      return conversion if conversion := float_conversion(receiver, name)
       is_integer(receiver) then integer_method(receiver, name)
 
 # The method that an operator calls, `add` for `+` and so on, of a type that the operator applies
@@ -116,6 +119,16 @@ integer_method := (receiver: Type, name: String) ->
   kind := CONVERSIONS[name] ? return nil
   target := SimpleType(kind)
   method INTEGER_CONVERSION, [], holds_all(target, receiver) then target else optional_type(target)
+
+# A Float's `to_float32`, the nearest Float32, an infinity beyond the largest, and a Float32's
+# `to_float`, the same value.
+float_conversion := (receiver: Type, name: String) ->
+  case
+    when is_kind(receiver, 'Float') and name == 'to_float32'
+      method FLOAT_CONVERSION, [], float32_type
+    when is_kind(receiver, 'Float32') and name == 'to_float'
+      method FLOAT_CONVERSION, [], float_type
+    else nil
 
 # Whether every value of the integer type `from` is one of `to`, which converting to it gives,
 # where it gives nil for a value that it does not hold: a type of no fewer bits and of no other

@@ -3,23 +3,25 @@
 import Signal from 'std:async'
 import bytes_of from './internal/utf8'
 
-extern lerta_read_file_async: (String) -> Promise<Binary>
-extern lerta_write_file_async: (String, Binary) -> Promise
-extern lerta_is_file: (String) -> Bool
-extern lerta_is_dir: (String) -> Bool
-extern lerta_real_path: (String) -> Binary
-export extern lerta_make_temp_dir as make_temp_dir: () -> Binary
-extern lerta_remove_tree_async: (String) -> Promise
-extern lerta_make_dir: (String) -> void
-extern lerta_rename: (String, String) -> void
-extern lerta_make_link: (String, String) -> void
-extern lerta_copy_file_async: (String, String) -> Promise
-extern lerta_stat_fields: (String, Int[]) -> Bool
-extern lerta_open_for_writing: (String) -> Int
-extern lerta_open_file_check: (Int) -> void
-extern lerta_open_file_write: (Int, Binary) -> Promise
+# A failure gives false or nil, of which the functions below make the error.
+extern lerta_read_file: (String) -> Promise<Binary?>
+extern lerta_write_file: (String, Binary) -> Promise<Bool>
+extern lerta_resolve_path: (String) -> Binary?
+extern lerta_make_temp_dir: () -> Binary?
+extern lerta_remove_tree: (String) -> Promise<Bool>
+extern lerta_make_one_dir: (Binary) -> Bool
+extern lerta_rename_path: (String, String) -> Bool
+extern lerta_symlink: (String, String) -> Bool
+extern lerta_copy_file: (String, String) -> Promise<Bool>
+extern lerta_status_fields: (String, Int[]) -> Bool
+extern lerta_open_file: (String) -> Int
+extern lerta_open_file_failed: (Int) -> Bool
+extern lerta_open_file_append: (Int, Binary) -> Promise
 extern lerta_open_file_end: (Int, Binary) -> void
 extern lerta_open_file_free: (Int, Binary) -> void
+# std:process imports std:io, so std:io reads the platform and the environment itself.
+extern lerta_platform: () -> String
+extern lerta_env: (String) -> Binary?
 
 # A path that holds a NUL byte names nothing, as the system reads a path only up to its first; the
 # runtime takes none.
@@ -31,15 +33,17 @@ require_names := (failure: String, paths: String...) ->
   throw IOError("#{failure}#{paths[0]}") if paths.any(names_nothing)
 
 export read_file := (path: String) ->
-  require_names 'cannot read file: ', path
-  await lerta_read_file_async(path)
+  failure := 'cannot read file: '
+  require_names failure, path
+  await lerta_read_file(path) ? throw IOError("#{failure}#{path}")
 
 # The contents of a file as text, or nil if they are not valid UTF-8.
 export read_text := (path: String) -> (await read_file(path)).text()
 
 export write_file := (path: String, data: Binary) ->
-  require_names 'cannot write file: ', path
-  await lerta_write_file_async(path, data)
+  failure := 'cannot write file: '
+  require_names failure, path
+  throw IOError("#{failure}#{path}") unless await lerta_write_file(path, data)
 
 # How open opens a file: so far only for writing, emptied or made.
 export enum OpenMode
@@ -51,9 +55,13 @@ export struct File
 
 # Opening is one system call, so it does not await (see docs/roadmap/runtime.md#concurrency).
 export open := (path: String, mode: OpenMode) ->
-  require_names 'cannot open file: ', path
+  failure := 'cannot open file: '
+  require_names failure, path
   case mode
-    when WRITE then File(writer: FileWriter(pointer: lerta_open_for_writing(path)))
+    when WRITE
+      pointer := lerta_open_file(path)
+      throw IOError("#{failure}#{path}") if pointer == 0
+      File writer: FileWriter(pointer, path)
 
 # As much as stdout's buffer holds before a write waits (see runtime/output.c).
 FILE_BUFFER_SIZE := 65536
@@ -61,12 +69,14 @@ FILE_BUFFER_SIZE := 65536
 # A file's Writer, which gathers what is written and writes it out on the event loop once it holds
 # FILE_BUFFER_SIZE bytes, or when flushed. Its end writes out the rest on the event loop and closes
 # the file after; what is left when it is freed, it writes out at once. A write out that fails fails
-# every later write and flush (see lerta_open_file_check).
+# every later write and flush (see lerta_open_file_failed).
 class FileWriter
   pointer: Int
+  path: String
   var buffer = ''.binary
   ended = false
-  # The write out on the event loop, one at a time, which a flush waits for before its own.
+  # The write out on the event loop, one at a time, which a flush waits for before its own, and
+  # after which it finds whether it failed.
   writing: Promise? = nil
 
   write = (data: String | Binary) ->
@@ -85,11 +95,11 @@ class FileWriter
     @check_open()
     while true
       await writing while writing := @writing
-      lerta_open_file_check @pointer
+      throw @write_failure() if lerta_open_file_failed(@pointer)
       return if @buffer.is_empty()
       bytes := @buffer
       @buffer = ''.binary
-      @writing = lerta_open_file_write(@pointer, bytes)
+      @writing = lerta_open_file_append(@pointer, bytes)
       try
         await @writing!
       finally
@@ -97,40 +107,64 @@ class FileWriter
 
   check_open = ->
     throw IOError(message: 'cannot write to a file that has ended') if @ended
-    lerta_open_file_check @pointer
+    throw @write_failure() if lerta_open_file_failed(@pointer)
+
+  write_failure = -> IOError("cannot write file: #{@path}")
 
   deinit = -> lerta_open_file_free(@pointer, @buffer)
 
-export is_file := (path: String) -> not names_nothing(path) and lerta_is_file(path)
+export is_file := (path: String) -> kind_at(path) == FILE
 
-export is_dir := (path: String) -> not names_nothing(path) and lerta_is_dir(path)
+export is_dir := (path: String) -> kind_at(path) == DIR
+
+# The kind of what the path names, or nil if nothing is there or its status cannot be read.
+kind_at := (path: String): FileKind? ->
+  try
+    return stat(path)?.kind
+  catch _: IOError
+    return nil
 
 export real_path := (path: String) ->
-  require_names 'cannot resolve path: ', path
-  lerta_real_path path
+  failure := 'cannot resolve path: '
+  require_names failure, path
+  lerta_resolve_path(path) ? throw IOError("#{failure}#{path}")
+
+export make_temp_dir := ->
+  lerta_make_temp_dir() ? throw IOError('cannot make a temporary directory')
 
 export remove_tree := (path: String) ->
-  require_names 'cannot remove: ', path
-  await lerta_remove_tree_async(path)
+  failure := 'cannot remove: '
+  require_names failure, path
+  throw IOError("#{failure}#{path}") unless await lerta_remove_tree(path)
 
-# An empty path names no directory.
+# An empty path names no directory. Each directory that ends before a separator is made first; only
+# whether the whole path is a directory at the end decides, since a parent that cannot be made,
+# such as a drive or a network share on Windows, may be there.
 export make_dir := (path: String) ->
   failure := 'cannot make directory: '
   require_names failure, path
   throw IOError(failure) if path.is_empty()
-  lerta_make_dir path
+  on_windows := lerta_platform() == 'windows'
+  is_separator := (byte: Byte) -> byte == '/' or (on_windows and byte == '\')
+  bytes := path.binary
+  for i in 1...bytes.length
+    lerta_make_one_dir bytes[0...i] if is_separator(bytes[i]) and not is_separator(bytes[i - 1])
+  throw IOError("#{failure}#{path}") unless lerta_make_one_dir(bytes)
 
 export rename := (from: String, to: String) ->
-  require_names 'cannot rename: ', from, to
-  lerta_rename from, to
+  failure := 'cannot rename: '
+  require_names failure, from, to
+  throw IOError("#{failure}#{from}") unless lerta_rename_path(from, to)
 
 export make_link := (target: String, path: String) ->
-  require_names 'cannot make link: ', path, target
-  lerta_make_link target, path
+  failure := 'cannot make link: '
+  require_names failure, path, target
+  throw IOError("#{failure}#{path}") unless lerta_symlink(target, path)
 
 export copy_file := (from: String, to: String) ->
-  require_names 'cannot copy file: ', from, to
-  await lerta_copy_file_async(from, to)
+  failure := 'cannot copy file: '
+  require_names failure, from, to
+  throw IOError("#{failure}#{from}") unless await lerta_copy_file(from, to)
 
 export enum FileKind
   FILE
@@ -146,8 +180,10 @@ export struct FileStatus
 
 # The status of what the path names, through symbolic links, or nil if nothing is there.
 export stat := (path: String) ->
+  return nil if names_nothing(path)
   fields: Int[]
-  return nil if names_nothing(path) or not lerta_stat_fields(path, fields)
+  throw IOError("cannot read the status of: #{path}") unless lerta_status_fields(path, fields)
+  return nil if fields.is_empty()
   # In the order of the kinds that the runtime gives.
   kinds := [FileKind.FILE, DIR, OTHER]
   modified_time := fields[2].to_float() / 1000000000.0
@@ -156,8 +192,6 @@ export stat := (path: String) ->
 extern lerta_stream_write: (Int, Binary) -> Promise
 extern lerta_stream_flush: (Int) -> Promise
 extern lerta_stream_is_terminal: (Int) -> Bool
-# std:process imports std:io, so std:io reads the environment itself.
-extern lerta_env: (String) -> Binary?
 
 # What data is written to, as a stream: `end` closes it, which its reader reads as its end.
 export interface Writer
@@ -415,16 +449,17 @@ class PipeChunk
   taken = Signal()
   was_taken = false
 
-extern lerta_list_dir_names: (String) -> Binary[]
+extern lerta_dir_names: (String) -> Binary[]?
 
 # An empty path is refused, as Windows would read `\*` in it as the root of the drive.
 export list_dir := (path: String) ->
   failure := 'cannot list directory: '
   require_names failure, path
   throw IOError(failure) if path.is_empty()
+  listed := lerta_dir_names(path) ? throw IOError("#{failure}#{path}")
   names := [
     name.text() ? throw ValueError("a name is not valid UTF-8 in the directory: #{path}")
-    for name in lerta_list_dir_names(path)
+    for name in listed
   ]
   names.sorted (a, b) -> a.compare(b)
 

@@ -40,17 +40,6 @@ static char *c_string_item(const LertaArray *strings, int64_t index) {
   return lerta_c_string((const LertaString *)(intptr_t)lerta_word_item(strings, index));
 }
 
-// The command and the arguments as C strings, ending with NULL, which free_c_strings frees.
-static char **c_args_of(const LertaString *command, const LertaArray *args) {
-  int64_t count = args->length + 1;
-  char **c_args = lerta_checked_calloc((size_t)count + 1, sizeof(char *));
-  c_args[0] = lerta_c_string(command);
-  for (int64_t i = 1; i < count; i++) {
-    c_args[i] = c_string_item(args, i - 1);
-  }
-  return c_args;
-}
-
 static void free_c_strings(char **c_strings) {
   for (char **string = c_strings; *string != NULL; string++) free(*string);
   free(c_strings);
@@ -215,17 +204,14 @@ static bool spawn(Program *program, char *file, char **args, char **env, const c
   return false;
 }
 
-int64_t lerta_program_start(const LertaString *command, const LertaArray *args,
-                            const LertaString *cwd, const LertaArray *env,
-                            const LertaArray *streams, double kill_after) {
-  char **c_args = c_args_of(command, args);
+int64_t lerta_program_run(const LertaArray *args, const LertaString *cwd, const LertaArray *env,
+                          const LertaArray *streams, int64_t kill_after) {
+  char **c_args = c_strings_of(args);
   char *file = lerta_os_program_file(c_args[0]);
   char **c_env = env == NULL ? NULL : c_strings_of(env);
   char *c_cwd = cwd == NULL ? NULL : lerta_c_string(cwd);
   Program *program = lerta_checked_calloc(1, sizeof(Program));
-  // Rounded up, so as not to kill early; std:process checks that the time is not negative.
-  double milliseconds = ceil(kill_after * 1000);
-  program->kill_after = milliseconds < 0x1p63 ? (uint64_t)milliseconds : UINT64_MAX;
+  program->kill_after = (uint64_t)kill_after;
   // Without this, the child's output could come before what this program printed first. A failed
   // flush is remembered and reported by the exit code, as for any other write to stdout.
   lerta_output_flush();
@@ -239,8 +225,26 @@ int64_t lerta_program_start(const LertaString *command, const LertaArray *args,
   if (spawned) return (int64_t)(intptr_t)program;
   program->freed = true;
   free_program_if_done(program);
-  lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_run), command);
   return 0;
+}
+
+// The old function that the seed calls, until the seed is refreshed.
+int64_t lerta_program_start(const LertaString *command, const LertaArray *args,
+                            const LertaString *cwd, const LertaArray *env,
+                            const LertaArray *streams, double kill_after) {
+  LertaArray *command_and_args = lerta_array_create(LERTA_REFERENCE_ITEMS);
+  lerta_array_append(command_and_args, &command);
+  for (int64_t i = 0; i < args->length; i++) {
+    int64_t arg = lerta_word_item(args, i);
+    lerta_array_append(command_and_args, &arg);
+  }
+  double milliseconds = ceil(kill_after * 1000);
+  int64_t kill_milliseconds = milliseconds < 0x1p63 ? (int64_t)milliseconds : INT64_MAX;
+  int64_t program =
+      lerta_program_run(command_and_args, cwd, env, streams, kill_milliseconds);
+  lerta_release(command_and_args);
+  if (program == 0) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_run), command);
+  return program;
 }
 
 void lerta_system_pipe(LertaArray *files) {

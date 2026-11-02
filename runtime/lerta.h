@@ -284,8 +284,10 @@ void lerta_watch_top_level(LertaPromise *promise);
 // After the loop, the end of that code: an error if it still waits.
 void lerta_finish_top_level(LertaPromise *promise);
 
-// Time (time.c). A promise resolved once the seconds have passed, which std:time checks are not
-// negative.
+// Time (time.c). A promise resolved once the milliseconds, which std:time checks are not negative,
+// have passed.
+LertaPromise *lerta_sleep_milliseconds(int64_t milliseconds);
+// The old function that the seed calls, until the seed is refreshed.
 LertaPromise *lerta_sleep(double seconds);
 // Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
 double lerta_unix_time(void);
@@ -303,15 +305,18 @@ void lerta_exit(int64_t code);
 // with the variables of `env`, as NAME=VALUE, if given, and otherwise this program's, in `cwd`, if
 // given; its standard input, output and error are the streams of the three handles of `streams`,
 // from lerta_pipe_new, or this program's, for 0, or, for -1 minus a file of lerta_system_pipe, that
-// file, which it inherits and the caller closes. No text holds a NUL byte, which std:process
-// refuses first. A program that cannot start throws.
+// file, which it inherits and the caller closes. `args` starts with the command. No text holds a
+// NUL byte, which std:process refuses first. 0 if the program cannot start.
+int64_t lerta_program_run(const LertaArray *args, const LertaString *cwd, const LertaArray *env,
+                          const LertaArray *streams, int64_t kill_after);
+// The old function that the seed calls, which throws, until the seed is refreshed.
 int64_t lerta_program_start(const LertaString *command, const LertaArray *args,
                             const LertaString *cwd, const LertaArray *env,
                             const LertaArray *streams, double kill_after);
 // A promise of its exit code, or minus the signal that ended it, settled once it ends; one wait at
 // most. A cancel stops the program and rejects the promise once it ends.
 LertaPromise *lerta_program_wait(int64_t pointer);
-// Asks the program to end, then kills it if it has not ended after `kill_after` seconds.
+// Asks the program to end, then kills it if it has not ended after `kill_after` milliseconds.
 void lerta_program_stop(int64_t pointer);
 void lerta_program_free(int64_t pointer);
 // Appends the reading and the writing file of a new pipe of the system, both blocking, as the
@@ -333,30 +338,50 @@ bool lerta_is_running(int64_t id);
 // The value of an environment variable, as a Binary, or NULL if it is not set.
 LertaString *lerta_env(const LertaString *name);
 
-// Files (file.c). A failure throws, or rejects the promise of one that runs on the thread pool. No
-// path holds a NUL byte, nor is empty for lerta_make_dir and lerta_list_dir_names: std:io refuses
-// those first.
+// Files (file.c). A failure gives false or NULL, of which std:io makes the error; one that runs on
+// the thread pool gives it through its promise, which only a cancel rejects. No path holds a NUL
+// byte, nor is empty for lerta_make_one_dir and lerta_dir_names: std:io refuses those first.
+// What was read, or NULL.
+LertaPromise *lerta_read_file(const LertaString *path);
+// Whether it succeeded, as a bool, as do those after it.
+LertaPromise *lerta_write_file(const LertaString *path, const LertaString *data);
+LertaPromise *lerta_remove_tree(const LertaString *path);
+LertaPromise *lerta_copy_file(const LertaString *from, const LertaString *to);
+// A file that std:io's open opens for writing, by its address, or 0 (see runtime/file.c).
+int64_t lerta_open_file(const LertaString *path);
+// Whether a write has failed, after which the later ones fail too.
+bool lerta_open_file_failed(int64_t pointer);
+// Resolved once written, or once it has failed.
+LertaPromise *lerta_open_file_append(int64_t pointer, const LertaString *data);
+void lerta_open_file_end(int64_t pointer, const LertaString *rest);
+void lerta_open_file_free(int64_t pointer, const LertaString *rest);
+// Whether the status of what the path names, through symbolic links, could be read; if the path
+// names something, its kind (0 a file, 1 a directory, 2 another), its size and the time it was
+// last modified, in nanoseconds since the Unix epoch, are appended to the array of Ints, which
+// std:io makes a FileStatus of.
+bool lerta_status_fields(const LertaString *path, LertaArray *fields);
+bool lerta_symlink(const LertaString *target, const LertaString *path);
+// The names of the entries, unchecked and in no order (std:io checks and sorts them).
+LertaArray *lerta_dir_names(const LertaString *path);
+LertaString *lerta_resolve_path(const LertaString *path);
+LertaString *lerta_make_temp_dir(void);
+// Makes the directory, or finds one there; not its parents.
+bool lerta_make_one_dir(const LertaString *path);
+bool lerta_rename_path(const LertaString *from, const LertaString *to);
+// The old functions that the seed calls, which throw on failure, until the seed is refreshed.
 LertaPromise *lerta_read_file_async(const LertaString *path);
 LertaPromise *lerta_write_file_async(const LertaString *path, const LertaString *data);
 LertaPromise *lerta_remove_tree_async(const LertaString *path);
 LertaPromise *lerta_copy_file_async(const LertaString *from, const LertaString *to);
-// A file that std:io's open opens for writing, by its address (see runtime/file.c).
 int64_t lerta_open_for_writing(const LertaString *path);
 void lerta_open_file_check(int64_t pointer);
 LertaPromise *lerta_open_file_write(int64_t pointer, const LertaString *data);
-void lerta_open_file_end(int64_t pointer, const LertaString *rest);
-void lerta_open_file_free(int64_t pointer, const LertaString *rest);
 bool lerta_is_file(const LertaString *path);
 bool lerta_is_dir(const LertaString *path);
-// Whether the path names something, through symbolic links; if it does, its kind (0 a file, 1 a
-// directory, 2 another), its size and the time it was last modified, in nanoseconds since the Unix
-// epoch, are appended to the array of Ints, which std:io makes a FileStatus of.
 bool lerta_stat_fields(const LertaString *path, LertaArray *fields);
 void lerta_make_link(const LertaString *target, const LertaString *path);
-// The names of the entries, unchecked and in no order (std:io checks and sorts them).
 LertaArray *lerta_list_dir_names(const LertaString *path);
 LertaString *lerta_real_path(const LertaString *path);
-LertaString *lerta_make_temp_dir(void);
 void lerta_make_dir(const LertaString *path);
 void lerta_rename(const LertaString *from, const LertaString *to);
 
