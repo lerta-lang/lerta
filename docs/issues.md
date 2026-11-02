@@ -127,14 +127,6 @@ Severity: Low.
 
 Fix: compute the comment lines of each block once, such as a sorted array of comment lines and a table of block ends per indent.
 
-## A `#` inside an interpolation silently starts a comment
-
-Severity: Low.
-
-`find_interpolation_end` (compiler/lexer/string_literal.lerta:166-194) treats a `#` not followed by `{` as code, and `tokenize_fragment` (compiler/lexer/tokens.lerta:171-179) ignores the scanner's `comment_index`. `print "#{x # }"` compiles and prints `x`; the rest of the interpolation is dropped without a diagnostic, and `fmt` keeps it.
-
-Fix: fail in `tokenize_fragment` when `comment_index` is set, such as `a comment cannot be in an interpolation`.
-
 ## `a<b, c>(d)` in an argument list is read as a call with type arguments
 
 Severity: Low.
