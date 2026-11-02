@@ -2,25 +2,6 @@
 
 Known defects, most severe first. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `lerta fmt` prints a comment between `weak` and what it qualifies
-
-Severity: Medium.
-
-`weak` is printed as unpositioned text (compiler/format/print_statement.lerta:204, compiler/format/print_block.lerta:19 and :49), and comments are flushed before the first positioned token, which is the name after it.
-
-```
-class A
-  x = 1
-a := A()
-# c
-weak w := a
-print w?.x
-```
-
-`lerta fmt --fix` prints `weak`, the comment and `w := a` on three lines, which makes `weak` a bare statement and `w` strong, and reports `the formatter would change the program, which is a bug`. For a weak function literal in a call's arguments the output does not parse; in an array the comment is moved into the function's body silently.
-
-Fix: print `weak` as a positioned token, `keyword('weak ', declaration.position)` (the declaration's position is already the `weak` token) and `token('weak ', function.position)` for a literal.
-
 ## `dump-ast` omits fields, so the formatter's self-check cannot see them change
 
 Severity: Medium.
@@ -46,6 +27,26 @@ print m[1] in kinds
 ```
 
 `bin/lerta build` fails at the clang step with `'%r9' defined with type 'ptr' but expected '{ i1, i64 }'`. Expected: prints `true`. Unwrapping first, `kind := m[1] ? ...`, works.
+
+## `lerta fmt` breaks a call at the start of a statement whose function literal argument follows a comment
+
+Severity: Medium.
+
+`call_statement` (compiler/format/print_statement.lerta) writes a call at the start of a statement without parentheses, a function literal last on the line of the callee; a comment before that literal is flushed before its first positioned token, which ends the line that the literal would follow.
+
+```
+run := (f: () -> void) -> f()
+f := ->
+  run(
+    # c
+    -> print 1
+  )
+f()
+```
+
+`lerta fmt` reports `the formatter would write a program that does not parse, which is a bug`. With a body in a block, the comment is moved into it silently. One before a `weak` literal is reported instead (see stranded_comments in compiler/format/source.lerta).
+
+Fix: report such a comment as stranded too, as for `weak`; or keep the parentheses when an argument follows a comment, which takes care for a literal whose body is a block.
 
 ## `case` with value patterns is rejected on a local narrowed from a union
 

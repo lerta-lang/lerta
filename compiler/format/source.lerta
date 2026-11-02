@@ -15,8 +15,7 @@ export class SourceText
   token_indexes = index_tokens(@tokens)
   # Whether the comment on each line that holds one is on a line of its own.
   comment_lines = lines_of(@comments)
-  # The comments that end the line of a `(`, a prefix operator or a `not in`, which the formatter
-  # cannot put its operand after (see stranded_comments).
+  # The comments that the formatter cannot place (see stranded_comments).
   stranded = stranded_comments(@lines, @tokens, @comments)
   # The lines that hold tokens that `# fmt: skip` and `# fmt: off` mark (see lines_marked), and
   # those of the stranded comments, which are kept as written.
@@ -218,32 +217,41 @@ lines_marked := (lines: String[], tokens: Token[], comments: Comment[], stranded
   mark off + 1, lines.length if off := off_line
   marked
 
-# The comments that end a line whose last token is `not`, `not in`, or a `(` or a `-` that does not
-# follow an operand, as the `(` of a call, written without a space, and an operator between
-# operands do: the formatter flushes a comment before the next token, which would then start a line
-# of its own, where it does not parse as the operand. A `# fmt:` comment is left out, as
-# lines_marked keeps its line anyway.
+# The comments that the formatter cannot place, as it flushes a comment before the next token: one
+# that ends a line whose last token is `not`, `not in`, or a `(` or a `-` that does not follow an
+# operand, as the `(` of a call, written without a space, and an operator between operands do,
+# which would leave the operand at the start of a line of its own, where it does not parse; and one
+# before the `weak` of a function literal, which would go between the `weak` and the literal, or,
+# were the `weak` placed, before it on the line of a callee that the literal follows. A `# fmt:`
+# comment is left out, as lines_marked keeps its line anyway.
 stranded_comments := (lines: String[], tokens: Token[], comments: Comment[]) ->
-  # The last token of each line, and the kind of the one before it.
-  last_tokens: Map<Int, Token>
-  kinds_before: Map<Int, TokenKind>
-  var previous: TokenKind?
-  for token in tokens
-    continue if token.kind in LAYOUT_KINDS
-    last_tokens[token.line] = token
-    kinds_before[token.line] = previous ? NEWLINE
-    previous = token.kind
+  code := [token for token in tokens when token.kind not in LAYOUT_KINDS]
+  # The index in `code` of the first token after the comment, which comes after those before it.
+  var next = 0
   is_stranded := (comment: Comment) ->
-    last := last_tokens[comment.line] ? return false
-    before := kinds_before[comment.line]!
+    next += 1 while next < code.length and code[next].line <= comment.line
+    return false if text_of(comment, lines).starts_with('# fmt: ')
+    return true if next + 1 < code.length and starts_weak_literal(code[next], code[next + 1])
+    return false if comment.own_line or next < 1
+    last := code[next - 1]
+    before := next >= 2 then code[next - 2].kind else TokenKind.NEWLINE
     follows_operand := before in OPERAND_ENDS
     call := last.kind == '(' and not last.spaced and follows_operand
     opens := (last.kind == '(' and not call) or (last.kind == '-' and not follows_operand)
-    not_in := before == 'not' and last.kind == IDENTIFIER and last.text == 'in'
-    stranded := opens or last.kind == 'not' or not_in
-    is_directive := text_of(comment, lines).starts_with('# fmt: ')
-    not comment.own_line and stranded and not is_directive
+    not_in := before == 'not' and is_word(last, 'in')
+    opens or last.kind == 'not' or not_in
   [comment for comment in comments when is_stranded(comment)]
+
+# A `weak` before the type parameters, the parameters or the `->` of a function literal, after a
+# space, rather than the name of a weak declaration or of a function named `weak` called with
+# parentheses. A call of one without them, `weak (2) + 1`, is taken for a literal too, which only
+# keeps its statement as written.
+starts_weak_literal := (token: Token, after: Token) ->
+  is_word(token, 'weak') and after.spaced and after.kind in WEAK_LITERAL_STARTS
+
+WEAK_LITERAL_STARTS: TokenKind[] = ['<', '(', '->']
+
+is_word := (token: Token, word: String) -> token.kind == IDENTIFIER and token.text == word
 
 # The kinds of the tokens that end an operand, after which a `-` is the operator between two, and a
 # `(` without a space before it opens the arguments of a call.
