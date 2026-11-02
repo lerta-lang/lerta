@@ -2,7 +2,7 @@
 
 Type names: `Int`, the [sized integers](#sized-integers) such as `Int32`, `Byte`, `Char`, `Float`, `Float32`, `Bool`, `String`, `Binary`, `T[]`, `Map<K, V>`, `Set<T>`, `Iter<T>`, `Promise<T>` and `Promise`, `T?`, unions `A | B`, function types, anonymous struct types such as `{ x: Int }`, tuple types such as `(Int, String)`, the names of classes, structs, enums, interfaces and `type` aliases, `Self` in an [interface](objects.md#interfaces) or an extend of one, the type parameters of a generic function, class, struct or extend in it, and `void` and `never` as a return type. How they are written is in [the syntax](syntax.md#types).
 
-The methods of the builtin types are listed in [builtins](builtins.md#methods-of-the-builtin-types). Methods can only be called (see [function values](functions.md#function-values)).
+The methods of the builtin types are listed in [builtins](builtins.md#methods-of-the-builtin-types). Methods are called, or are function values where a function type is expected (see [function values](functions.md#function-values)).
 
 ## Int
 

@@ -6,6 +6,7 @@ import
 from '../ast'
 import keep_constructions from './collection'
 import fail from './diagnostics'
+import is_function_reference from './function_references'
 import may_name_member from './enums'
 import expect_type, type_of from './expression'
 import GenericFunction from './generics'
@@ -60,7 +61,7 @@ export infer_type_arguments := (
     # An argument cannot widen the type arguments the receiver gives, as `T` of `Int[]` to `Int?`,
     # which the receiver does not hold.
     inferrer.fixed.add name for name in inferrer.bindings.keys()
-  is_function := (i: Int) -> args[i] is FunctionLiteral
+  is_function := (i: Int) -> takes_function_type(body, args[i])
   is_literal := (i: Int) -> needs_context(body, args[i]) and not is_function(i)
   for arg, i in args
     inferrer.check_argument i unless needs_context(body, arg)
@@ -113,7 +114,7 @@ class Inferrer
       keep_constructions body, [arg] unless declared_alone
       return
     # A function literal's parameters may take the types that are known already.
-    type := type_of(body, arg, arg is FunctionLiteral then param)
+    type := type_of(body, arg, takes_function_type(body, arg) then param)
     fail body.program, arg.position, 'expected a value, got void' if is_kind(type, 'void')
     @bind_from declared, type, arg.position
     @inferred.push { arg, type, index }
@@ -151,7 +152,11 @@ export needs_context := (body: Body, arg: Expression) ->
       FunctionLiteral, NilLiteral, IntegerLiteral, FloatLiteral, StringLiteral, ArrayLiteral,
       MapLiteral, RecordLiteral, TupleLiteral
     then true
-    else may_name_member(body, arg)
+    else may_name_member(body, arg) or is_function_reference(body, arg)
+
+# A function literal and a function reference take the parameters' types that are known already.
+export takes_function_type := (body: Body, arg: Expression) ->
+  arg is FunctionLiteral or is_function_reference(body, arg)
 
 types_of := (bindings: Map<String, TypeBinding>) ->
   types: Map<String, Type>

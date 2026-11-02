@@ -6,6 +6,7 @@ import BuiltinMethod from './builtins'
 import COMPLETION_NAME, probe_member from './completion_probe'
 import warn_if_kept from './cycles'
 import fail from './diagnostics'
+import type_of_bound_method from './function_references'
 import reject_type_arguments, set_type, type_of from './expression'
 import plain_method_type from './extensions'
 import
@@ -169,6 +170,17 @@ export find_member := (body: Body, type: Type, name: Identifier, call: Call? = n
   return { target: Property(FIELD), type: field } if field := field_type_by_name(body, type, name)
   property_of body, type, name.name
 
+# Whether the member names a method of its object, rather than a field or a property.
+export names_method := (body: Body, member: Member) ->
+  object_type := type_of_object(body, member)
+  name := member.name
+  has_field := field_type_by_name(body, object_type, name) != nil
+  return false if has_field or property_of(body, object_type, name.name) != nil
+  has_method body, object_type, name
+
+export has_method := (body: Body, type: Type, name: Identifier) ->
+  find(body, type, name) != nil or find_interface_extension(body, type, name) != nil
+
 # A property of a builtin type, or of an interface value, by the name.
 property_of := (body: Body, type: Type, name: String): FoundMember? ->
   return property if property := builtin_property(type, name)
@@ -201,12 +213,15 @@ reject_deinit := (body: Body, object_type: Type, member: Member) ->
   message := 'deinit runs when the object is released; it cannot be called or used'
   fail body.program, position, message
 
-export type_of_property := (body: Body, member: Member): Type ->
+export type_of_property := (body: Body, member: Member, expected: Type?): Type ->
   object_type := type_of_object(body, member)
   { name, position } := member.name
   probe_member body, object_type if name == COMPLETION_NAME
   reject_deinit body, object_type, member
   if object_type is UnionType
+    if find(body, object_type, member.name) != nil
+      bound := type_of_bound_method(body, member, expected)
+      return bound if bound
     record_member body, member, Property(FIELD)
     return common_field_type(body, object_type, member)
   if field := field_type(body, object_type, member)
@@ -217,6 +232,8 @@ export type_of_property := (body: Body, member: Member): Type ->
     return property.type
   extended := find_interface_extension(body, object_type, member.name)
   if find(body, object_type, member.name) != nil or extended != nil
+    bound := type_of_bound_method(body, member, expected)
+    return bound if bound
     fail body.program, position, "a method must be called: write `#{name}()`"
   fail_missing
     body

@@ -1,0 +1,139 @@
+# Methods, C functions and generic functions where a function is expected, each the function
+# literal that calls it, which is checked and generated in its place (see NodeFacts.replacements).
+import
+  Call, copy_identifier, Expression, FunctionLiteral, Identifier, Member, method_call, NamedType,
+  Parameter, This
+from '../ast'
+import fail from './diagnostics'
+import type_of from './expression'
+import has_method, names_method from './member'
+import extern_named, generic_callee, lookup, qualified_name from './name'
+import Body from './shared'
+import names_plain_type, resolve from './type_names'
+import Position from '../position'
+import format_type, FunctionType, inner_of_expected, Type from '../types'
+
+# A C function or a generic function by its name, or a method by its type's name, `Char.is_digit`,
+# which takes the receiver as its first argument; nil for any other expression.
+export type_of_function_reference := (body: Body, expression: Expression, expected: Type?) ->
+  case expression
+    when Identifier
+      count := expected_param_count(expected) ? return nil
+      return nil unless names_function(body, expression)
+      names := arguments(count, expression.position)
+      callee := copy_identifier(expression)
+      call :=
+        Call(callee, args: reads(names), position: callee.position, named_args: [], type_args: [])
+      type_of_calling_literal body, expression, expected, names, call
+    when Member
+      object := expression.object
+      return nil unless object is Identifier
+      return nil unless names_type(body, object)
+      { name, position } := expression.name
+      count := expected_param_count(expected) ? 0
+      reject_without_receiver body, object, expression.name, expected if count == 0
+      names := arguments(count, position)
+      receiver := names[0]
+      call := method_call(copy_identifier(receiver), name, reads(names.slice(1)), position)
+      type_of_calling_literal body, expression, expected, names, call, object
+    else nil
+
+# A method by its type takes its receiver as its first argument, which no function type of no
+# parameters, and no place where no function is expected, gives it.
+reject_without_receiver := (body: Body, type_name: Identifier, name: Identifier, expected: Type?) ->
+  { program } := body
+  written := NamedType(name: type_name.name, args: [], position: type_name.position)
+  type := resolve(program, body.resolver, written)
+  unless has_method(body, type, name)
+    fail program, name.position, "type #{format_type(type)} has no method '#{name.name}'"
+  message :=
+    if expected_param_count(expected) == 0
+      'a method by its type takes its receiver as its first argument'
+    else
+      'a method by its type is a value only where a function is expected'
+  fail program, name.position, message
+
+# The method of the member's object, which the literal captures, as it captures any name: so the
+# object is `@` or a name that cannot be assigned, which then holds that object for good.
+export type_of_bound_method := (body: Body, member: Member, expected: Type?) ->
+  count := expected_param_count(expected) ? return nil
+  object := member.object
+  unless holds_for_good(body, object)
+    message := 'a method used as a value is of `@` or of a name that cannot be assigned, so far'
+    fail body.program, object.position, message
+  { name, position } := member.name
+  names := arguments(count, position)
+  call := method_call(object, name, reads(names), position)
+  type_of_calling_literal body, member, expected, names, call
+
+# Whether the expression is one of those above, which takes its type from the function type
+# expected, as a function literal does.
+export is_function_reference := (body: Body, expression: Expression): Bool ->
+  case expression
+    when Identifier then names_function(body, expression)
+    when Member
+      return is_function_reference(body, name) if name := qualified_name(body, expression)
+      object := expression.object
+      return true if object is Identifier and names_type(body, object)
+      is_path_of_local(body, object) and names_method(body, expression)
+    else false
+
+# `@`, a local, or a field of one, which can be typed again at no cost, as the literal does.
+is_path_of_local := (body: Body, value: Expression): Bool ->
+  case value
+    when This then true
+    when Identifier then lookup(body, value.name) != nil
+    when Member then is_path_of_local(body, value.object)
+    else false
+
+names_function := (body: Body, name: Identifier) ->
+  generic_callee(body, name) != nil or extern_named(body, name) != nil
+
+holds_for_good := (body: Body, object: Expression) ->
+  case object
+    when This then true
+    when Identifier
+      local := lookup(body, object.name) ? return false
+      not local.mutable
+    else false
+
+expected_param_count := (expected: Type?) ->
+  function_type := inner_of_expected(expected)
+  function_type is FunctionType then function_type.params.length
+
+# A generic type's name is no type alone, and an enum's names its members, as `E.x`, so far.
+names_type := (body: Body, name: Identifier) ->
+  lookup(body, name.name) == nil and names_plain_type(body.shared.program, body.resolver, name.name)
+
+# The parameters take their types from the function type expected, by names that the source cannot
+# write, so that none hides a name that the call reads.
+arguments := (count: Int, at: Position) ->
+  [Identifier(name: "(argument #{index})", position: at) for index in 0...count]
+
+reads := (names: Identifier[]): Expression[] -> [copy_identifier(name) for name in names]
+
+# The first parameter is of the type named `receiver_type`, if given.
+type_of_calling_literal := (
+  body: Body
+  expression: Expression
+  expected: Type?
+  names: Identifier[]
+  call: Call
+  receiver_type: Identifier? = nil
+) ->
+  param_type := (index: Int) ->
+    return nil if index > 0
+    type := receiver_type ? return nil
+    NamedType name: type.name, args: [], position: type.position
+  params := [Parameter(name, type: param_type(index)) for name, index in names]
+  literal := FunctionLiteral
+    params
+    type_params: []
+    return_type: nil
+    body: [call]
+    position: expression.position
+    yields: false
+    awaits: false
+    weak: false
+  body.facts.replacements[expression] = literal
+  type_of body, literal, expected

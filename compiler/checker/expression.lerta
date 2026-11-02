@@ -24,6 +24,7 @@ import converts_through_itab from './interface_values'
 import std_interface from './interfaces'
 import float_literal, int_literal, integer_literal from './literals'
 import check_loop_jump, type_of_comprehension from './loop'
+import type_of_function_reference from './function_references'
 import type_of_method_call, type_of_property from './member'
 import json_direction, type_of_json_call from './json'
 import generic_callee, named_function_literal, qualified_name, type_of_identifier from './name'
@@ -110,8 +111,9 @@ compute_type := (body: Body, expression: Expression, expected: Type?): Type ->
     when Coalesce then type_of_coalesce(body, expression)
     when BooleanLiteral then bool_type
     when Identifier
-      member := type_of_elided_member(body, expression, expected)
-      member ? type_of_identifier(body, expression, false)
+      return member if member := type_of_elided_member(body, expression, expected)
+      return reference if reference := type_of_function_reference(body, expression, expected)
+      type_of_identifier body, expression, false
     when Call then type_of_call(body, expression, expected)
     when UnaryOperation then type_of_unary(body, expression, expected)
     when BinaryOperation then type_of_binary(body, expression, expected)
@@ -120,8 +122,10 @@ compute_type := (body: Body, expression: Expression, expected: Type?): Type ->
     when If then type_of_if(body, expression, expected)
     when Conditional then type_of_conditional(body, expression, expected)
     when Member
-      return type_of(body, name) if name := qualified_name(body, expression)
-      type_of_qualified_member(body, expression, expected) ? type_of_property(body, expression)
+      return type_of(body, name, expected) if name := qualified_name(body, expression)
+      return member if member := type_of_qualified_member(body, expression, expected)
+      return reference if reference := type_of_function_reference(body, expression, expected)
+      type_of_property body, expression, expected
     when ArrayLiteral
       in_test := body.in_test_arrays[expression]
       type_of_array body, expression, in_test then in_test else expected
