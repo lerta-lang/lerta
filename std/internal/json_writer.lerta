@@ -8,8 +8,10 @@ export class JsonWriter
   var written = ''
   # Each array or object being written, the innermost last.
   levels: Level[] = []
-  # The objects being written that may hold themselves, by their addresses, with their paths.
-  entered: { address: Int, path: String }[] = []
+  # Each object being written that may hold itself, by its address, the innermost last, and the
+  # count of levels when it was entered: the steps of those levels give its path.
+  entered: Int[] = []
+  depths: Map<Int, Int> = Map()
 
   write_null := (): void -> @written += 'null'
   write_bool := (value: Bool): void -> @written += value.to_string()
@@ -50,17 +52,17 @@ export class JsonWriter
   # Starts writing an object that may hold itself, by its address, which must not be written
   # already: JSON cannot hold a cycle.
   enter := (address: Int): void ->
-    path := @path_text()
-    if earlier := @entered.find((each) -> each.address == address)
-      throw JsonError(message: "#{path}: a cycle back to #{earlier.path}")
-    @entered.push { address, path }
+    if depth := @depths[address]
+      throw JsonError(message: "#{@path_text()}: a cycle back to #{path_of(@levels[...depth])}")
+    @depths[address] = @levels.length
+    @entered.push address
 
   # JSON holds no infinity.
   check_finite := (value: Float): void ->
     return if is_finite(value)
     throw JsonError(message: "#{@path_text()}: #{value}, which JSON cannot hold")
 
-  leave := (): void -> @entered.pop()
+  leave := (): void -> @depths.remove(@entered.pop())
 
   begin := (open: String) ->
     @written += open

@@ -2,14 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `encode_json` is quadratic in the depth of a self-referential structure
-
-Severity: Low.
-
-`enter` (std/internal/json_writer.lerta:55-60) searches `@entered` linearly and builds the whole path text for every object entered. Encoding a chain of `class Node` with `next: Node?` takes 2 s for 10,000 nodes, 7.8 s for 20,000 and 31 s for 40,000.
-
-Fix: keep `entered` as a `Set<Int>`, and build the path text only when a cycle is found.
-
 ## `lerta fmt` is quadratic in the length of an `else if` chain
 
 Severity: Low.
