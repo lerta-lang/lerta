@@ -2,7 +2,7 @@
 import all_but_last from '../arrays'
 import
   ArrayLiteral, Assignment, BinaryOperation, Coalesce, Expression, Identifier, is_equality_operator,
-  is_nil_test, is_order_operator, method_call, NilLiteral, StringLiteral, UnaryOperation
+  is_nil_test, is_order_operator, method_call, NilLiteral, Range, StringLiteral, UnaryOperation
 from '../ast'
 import fail from './diagnostics'
 import compares_by_contents, is_equatable, own_equality from './equality'
@@ -10,6 +10,7 @@ import may_name_member from './enums'
 import expect_condition, expect_optional, expect_type, require_type, type_of from './expression'
 import member_type_by_name from './member'
 import holds_float_literal, is_contextual from './literals'
+import range_part from './loop'
 import where_right_operand from './narrowing'
 import Body from './shared'
 import
@@ -119,6 +120,8 @@ export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?):
     where_right_operand body, binary, -> expect_condition(body, binary.right)
     return bool_type
   return type_of_nil_test(body, binary) if is_nil_test(binary)
+  range := binary.right
+  return type_of_range_test(body, binary, range) if operator == 'in' and range is Range
   return type_of_in_test(body, binary) if operator == 'in'
   if is_equality_operator(operator)
     reject := (type: Type) -> "cannot compare values of type #{format_type(type)}"
@@ -131,6 +134,23 @@ export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?):
     order_by_compare body, binary if is_kind(type, 'String')
     return bool_type
   type_of_operands body, binary, hint_of(expected, allowed), allowed, reject
+
+# `x in a..b` compares `x` with the ends in place, making no range. The parts take the type of the
+# first that has its own, or else of the first float literal, as the operands of `<=` do. Only the
+# types that compare by themselves take one, as `x` is compared twice, by the comparisons of values
+# alone, with no call of compare and no object to hold for the second.
+type_of_range_test := (body: Body, binary: BinaryOperation, range: Range) ->
+  parts := [binary.left, range_part(body, range, range.start), range_part(body, range, range.end)]
+  own := parts.find((part) -> not takes_context(body, part))
+  deciding := own ? parts.find(holds_float_literal) ? binary.left
+  type := type_of(body, deciding)
+  allowed: TypeKind[] = [NUMBER_KINDS..., 'Char']
+  unless is_one_of_kinds(type, allowed)
+    message := "a range after `in` takes #{describe_kinds(allowed)}, got #{format_type(type)}"
+    fail body.program, deciding.position, message
+  for part in parts
+    expect_type body, part, type if part != deciding
+  bool_type
 
 # `x in xs` tests the call of `xs.contains(x)`, of the Contains interface, the facts record for
 # codegen to make (see in_tests). A String also takes a Char, as the String of it, as `+` appends

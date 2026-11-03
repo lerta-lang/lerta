@@ -1,7 +1,8 @@
 # Generates operators: arithmetic, comparisons, `and`/`or`, nil tests, `!` and `?`.
 import
   BinaryOperation, Call, Coalesce, Expression, FloatLiteral, Identifier, IntegerLiteral,
-  is_nil_test, is_order_operator, Member, NilLiteral, StringLiteral, This, UnaryOperation, Unwrap
+  is_nil_test, is_order_operator, Member, NilLiteral, Range, StringLiteral, This, UnaryOperation,
+  Unwrap
 from '../ast'
 import ScopedLocal from '../checker/references'
 import compares_by_contents, own_equality from '../checker/equality'
@@ -55,6 +56,8 @@ export apply_operator_method := (
 export generate_binary := (g: Generator, binary: BinaryOperation) ->
   return generate(g, call) if call := g.facts.operator_calls[binary]
   return generate_in_test(g, call) if call := g.facts.in_tests[binary]
+  range := binary.right
+  return generate_range_test(g, binary, range) if range is Range
   if call := g.facts.order_calls[binary]
     return emit_order_test(g.ir, binary.operator, generate(g, call))
   operator := binary.operator
@@ -84,6 +87,17 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
   unchecked := not g.defers_float_checks and binary in safe and not reads_unchecked
   apply := -> apply_binary(g, operator, left, right, operand_type)
   with_deferred_checks g, g.defers_float_checks or unchecked, apply
+
+# `x in a..b`, of a type that compares by itself (see type_of_range_test), as `a <= x and x <= b`
+# with `x` evaluated once, and the ends after it, as written.
+generate_range_test := (g: Generator, binary: BinaryOperation, range: Range) ->
+  type := type_at_use(g, binary.left)
+  item := generate(g, binary.left)
+  start := generate(g, range.start!)
+  end := generate(g, range.end!)
+  from_start := apply_binary(g, '<=', start, item, type)
+  to_end := apply_binary(g, range.inclusive then '<=' else '<', item, end, type)
+  g.ir.assign "and i1 #{from_start}, #{to_end}"
 
 # The text of a String that literals joined by `+` make, which the compiler joins, so that a long
 # literal can be split over lines at no cost.
