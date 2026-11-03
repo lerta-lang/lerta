@@ -505,18 +505,16 @@ export class Reader
     await @exclusive(-> await @line(max))
 
   # The bytes there are to read, at most `max`, waiting for some only if there are none; nil at the
-  # end.
+  # end. A `max` of 0 takes none, and tells only whether the end has come.
   read := (max: Int) ->
-    throw ValueError("read a count of bytes below 1: #{max}") if max < 1
+    throw ValueError("read a negative count of bytes: #{max}") if max < 0
     await @exclusive(-> await @some(max))
 
   # `count` bytes, or nil at the end. An IOError if the end comes after some of them.
   read_exactly := (count: Int) ->
-    throw ValueError("read a count of bytes below 1: #{count}") if count < 1
+    throw ValueError("read a negative count of bytes: #{count}") if count < 0
     await @exclusive(->
       bytes := await @part(count) ? return nil
-      # Chunks that were empty, before the end.
-      return nil if bytes.is_empty()
       if bytes.length < count
         # Left for the next read, as a read that throws leaves what it has taken.
         @taken = bytes
@@ -570,15 +568,16 @@ export class Reader
     return nil if @taken.is_empty()
     utf8_line @taken_out()
 
-  some := (max: Int) ->
+  # Whether there are bytes to read, past the empty chunks that come before them; false at the end.
+  has_bytes := ->
     while await @fill()
-      bytes := @take(max)
-      # A chunk may be empty.
-      return bytes unless bytes.is_empty()
-    nil
+      return true if @start < @chunk.length
+    false
+
+  some := (max: Int) -> await @has_bytes() then @take(max)
 
   part := (count: Int) ->
-    return nil unless await @fill()
+    return nil unless await @has_bytes()
     @taken += @take(count)
     @taken += @take(count - @taken.length) while @taken.length < count and await @fill()
     @taken_out()
