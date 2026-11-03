@@ -1,13 +1,14 @@
 # Function values in the generated code (see docs/internals.md#objects).
 import
   define_type, emit_heap_allocate, emit_heap_field_pointer, emit_laundered, heap_object_type,
-  access_tag, fixed, HeapField, plain_field
+  access_tag, fixed, HeapField, plain_field, value_field
 from './heap_object'
 import IrBuilder, IrModule from './ir_builder'
 import
   ir_return_type, ir_type, LERTA_IMMORTAL, prefixed_symbol, suffixed_symbol, typed_params
 from './lerta_ir'
 import emit_valueless_call from './runtime_calls'
+import Capture from '../checker/shared'
 import FunctionType, Type from '../types'
 
 # The code pointer comes after the header; it is fixed (see invariant).
@@ -59,7 +60,10 @@ export emit_closure_call := (ir: IrBuilder, closure: String, type: Type, args: S
 
 # What a closure holds for each capture is a field (see HeapField): a value, or the cell of a
 # captured var (see heap_object), which is an owned reference.
-export CELL_SLOT := fixed({ ir_type: 'ptr', owned: REFERENCE })
+CELL_SLOT := fixed({ ir_type: 'ptr', owned: REFERENCE })
+
+export capture_slot := (capture: Capture) ->
+  capture.is_var then CELL_SLOT else fixed(value_field(capture.type))
 
 # The IR type of a closure that holds these captures.
 closure_ir_type := (slots: HeapField[]) -> heap_object_type([CODE, slots...])

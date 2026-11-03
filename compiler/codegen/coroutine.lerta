@@ -1,7 +1,7 @@
 # Bodies that suspend, as LLVM coroutines (see docs/internals.md#functions-that-yield).
 import release_held from './exceptions'
 import Coroutine, Generator from './generator'
-import IrBuilder from './ir_builder'
+import IrBuilder, IrModule from './ir_builder'
 import call_runtime, call_void_runtime from './runtime_calls'
 
 # The function `symbol`, of the parameters, as in `i64 %p0`, whose body `generate_body` generates
@@ -17,6 +17,18 @@ export generate_coroutine := (
   end()
   finish_coroutine g.ir, coroutine
   g.ir.finish "private void #{symbol}(#{params.join(', ')}) presplitcoroutine"
+
+# The function `symbol`, of the linkage and the parameters, which makes a handle with
+# `make_handle`, runs the body `body_symbol` with it first and returns it.
+export emit_ramp := (
+  module: IrModule, linkage: String, symbol: String, body_symbol: String, params: String[],
+  make_handle: (IrBuilder) -> String
+) ->
+  ir := IrBuilder(module)
+  handle := make_handle(ir)
+  ir.emit "call void #{body_symbol}(#{["ptr #{handle}", params...].join(', ')})"
+  ir.emit "ret ptr #{handle}"
+  ir.finish "#{linkage}ptr #{symbol}(#{params.join(', ')})"
 
 # Makes the coroutine's frame.
 start_coroutine := (ir: IrBuilder) ->

@@ -1,6 +1,6 @@
 # Functions that yield (see docs/internals.md#functions-that-yield).
 import Yield from '../ast'
-import emit_final_suspension, emit_suspend, generate_coroutine from './coroutine'
+import emit_final_suspension, emit_ramp, emit_suspend, generate_coroutine from './coroutine'
 import emit_check_or_return_thrown, emit_return_thrown from './exceptions'
 import generate from './expression'
 import Generator from './generator'
@@ -39,11 +39,8 @@ export generate_yielding_function := (
   params_with_iter := ['ptr %iter', params...]
   generate_coroutine g, body_symbol, params_with_iter, generate_with_handle, ->
     emit_final_suspension g
-  ir := IrBuilder(g.ir.module)
-  iter := emit_iter(ir, kind, ['null', 'false', 'false', 'zeroinitializer'])
-  ir.emit "call void #{body_symbol}(#{["ptr #{iter}", params...].join(', ')})"
-  ir.emit "ret ptr #{iter}"
-  ir.finish "#{linkage}ptr #{symbol}(#{params.join(', ')})"
+  emit_ramp g.ir.module, linkage, symbol, body_symbol, params, (ir) ->
+    emit_iter ir, kind, ['null', 'false', 'false', 'zeroinitializer']
 
 # The value becomes the Iter's next item, which has_next finds held once the body suspends.
 export generate_yield := (g: Generator, yield_expression: Yield) ->
