@@ -2,7 +2,8 @@
 # written, its variadic arguments packed into an array and its named arguments gathered into an
 # argument of its last parameter (see NodeFacts.arguments).
 import
-  ArrayLiteral, Call, Expression, FunctionLiteral, is_spread, NamedValue, Parameter, RecordLiteral
+  ArrayLiteral, Call, Expression, FunctionLiteral, Identifier, is_spread, NamedType, NamedValue,
+  Parameter, RecordLiteral
 from '../ast'
 import fail from './diagnostics'
 import expect_type, require_type from './expression'
@@ -39,8 +40,21 @@ export check_argument_count := (
   required := declaration then required_params(declaration) else params
   return if given in required..params
   range := required == params then '' else "#{required} to "
-  expected := "#{range}#{params}"
-  fail body.program, call.position, "expected #{expected} argument(s), got #{given}"
+  message := "expected #{range}#{params} argument(s), got #{given}"
+  var split = given
+  split += comparisons_more(arg) for arg in call.args
+  hint := '; `a<b, c>(d)` is a call with type arguments: write spaces around `<` and `>` to compare'
+  fail body.program, call.position, split in required..params then message + hint else message
+
+# How many arguments more the argument would be as the comparisons that it may have been meant
+# for: `a<b, c>(d)`, without spaces, is one call with type arguments, while `a < b, c > d` is two
+# comparisons.
+comparisons_more := (arg: Expression) ->
+  call := arg as Call ? return 0
+  { callee, args, type_args } := call
+  names := type_args.all((type) -> type is NamedType and type.args.is_empty() and not type.optional)
+  may_be := callee is Identifier and args.length == 1 and type_args.length > 1 and names
+  may_be then type_args.length - 1 else 0
 
 # The arguments with those from the place of the declaration's variadic parameter on packed into
 # one, an array literal of them, `f(a, [b, c])` of `f(a, b, c)` for `f = (x: Int, rest: Int...)`, as
