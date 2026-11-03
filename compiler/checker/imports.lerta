@@ -4,6 +4,7 @@ import
   Declaration, EnumDeclaration, Exportable, exported_declaration, Extern, FunctionLiteral,
   Identifier, Import, InterfaceDeclaration, NamedType, Statement, TypeAlias, TypeDeclaration
 from '../ast'
+import Constant from './constants'
 import fail, fail_already_defined from './diagnostics'
 import generic_function from './functions'
 import GenericRef from './generics'
@@ -35,6 +36,7 @@ export struct GenericExport
 # A `const` of another module; its type is nil until that module's top-level code is checked.
 export struct ValueExport
   type: Type?
+  constant: Constant?
   module_index: Int
   name: String
 
@@ -123,7 +125,8 @@ export export_of := (program: ProgramWide, module_index: Int, name: String): Exp
   case statement
     when Declaration
       return FunctionExport(module_index, name) if statement.value is FunctionLiteral
-      ValueExport module_index, name, type: shared.facts.types[statement.name]
+      type := shared.facts.types[statement.name]
+      ValueExport module_index, name, type, constant: shared.top_level.locals[name]?.constant
     # An extern's name is its own import, since add_extern rejects an import of the same name.
     when Extern
       source := shared.imports.names[name]!.source
@@ -258,7 +261,7 @@ export value_local := (shared: Shared, name: String) ->
   exported := imported_export(shared.program, imported) as ValueExport ? return nil
   type := exported.type ? return nil
   imported.used = true
-  local := Local(type, identifier: imported.name, used: true)
+  local := Local(type, identifier: imported.name, used: true, constant: exported.constant)
   imported.local = local
   local
 

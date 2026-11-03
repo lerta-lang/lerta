@@ -3,6 +3,7 @@
 import Expression, FunctionLiteral, Identifier, Member from '../ast'
 import captured from './closure'
 import COMPLETION_NAME, probe_locals, probe_module from './completion_probe'
+import Constant from './constants'
 import fail from './diagnostics'
 import function_type_of, generic_function, has_function from './functions'
 import
@@ -53,6 +54,7 @@ export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Boo
     origin.read_in_inner_scope = true if is_inner
     body.facts.escaping_locals.add origin.identifier if not is_callee or not is_own
     record_reference body, identifier, local_reference(body, name, local)
+    record_name_constant body, identifier, origin.constant
     return local.type
   if function_type := function_type_of(program, shared.index, name, position)
     record_reference body, identifier, FunctionReference(name, module_index: shared.index)
@@ -143,6 +145,7 @@ type_of_export := (body: Body, exported: Export, identifier: Identifier, is_call
     when ValueExport
       { module_index } := exported
       record_reference body, identifier, TopLevelValue(module_index, name: exported.name)
+      record_name_constant body, identifier, exported.constant
       exported.type ? panic('the type of an imported value is not known')
 
 fail_only_called := (body: Body, identifier: Identifier) ->
@@ -166,3 +169,11 @@ export local_reference := (body: Body, name: String, local: Local): Reference ->
 
 export record_reference := (body: Body, identifier: Identifier, reference: Reference) ->
   body.facts.references[identifier] = reference
+
+# A name may be typed again, as another local, so a value recorded before goes.
+record_name_constant := (body: Body, identifier: Identifier, constant: Constant?) ->
+  constants := body.facts.constants
+  if constant
+    constants[identifier] = constant
+  else
+    constants.remove identifier

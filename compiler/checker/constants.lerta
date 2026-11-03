@@ -1,0 +1,108 @@
+# The values of constant expressions, which the checker evaluates as the program would, so that one
+# that would throw is an error, and codegen writes the value in its place: integer literals, string
+# literals that are Strings, the top-level consts of such values, and the arithmetic and bitwise
+# operators of integers, and `+` of Strings, on constant expressions (see
+# docs/reference/types.md#constant-expressions).
+import
+  BinaryOperation, Expression, Identifier, IntegerLiteral, StringLiteral, UnaryOperation
+from '../ast'
+import fail from './diagnostics'
+import is_numeric_operator from './operator'
+import Body from './shared'
+import format_type, is_kind, kind_of, Type from '../types'
+
+export type Constant = Int | Byte | Int8 | Int16 | Int32 | UInt16 | UInt32 | UInt64 | String
+
+# Records the value of the expression, of the type, if it is a constant expression other than a
+# name, which name records; an expression may be typed again, so a value recorded before goes.
+export record_constant := (body: Body, expression: Expression, type: Type) ->
+  return if expression is Identifier
+  constants := body.facts.constants
+  if constant := constant_value(body, expression, type)
+    constants[expression] = constant
+  else
+    constants.remove expression
+
+# The value of a const declared with the value, if it is a constant expression of the const's type,
+# rather than one that converts to it, as an Int to an Int?.
+export declared_constant := (body: Body, value: Expression, type: Type) ->
+  constant := body.facts.constants[value] ? return nil
+  format_type(body.facts.types[value]!) == format_type(type) then constant
+
+constant_value := (body: Body, expression: Expression, type: Type): Constant? ->
+  constants := body.facts.constants
+  # An operator that calls a method is no operation of numbers.
+  return nil if expression in body.facts.operator_calls
+  case expression
+    when IntegerLiteral
+      value := expression.value ? return nil
+      integer_constant value, type
+    when StringLiteral then is_kind(type, 'String') then expression.value
+    when UnaryOperation
+      return nil if expression.operator != '-'
+      operand := constants[expression.operand] ? return nil
+      evaluated body, expression, -> negated(operand)
+    when BinaryOperation
+      { operator } := expression
+      return nil unless is_numeric_operator(operator)
+      left := constants[expression.left] ? return nil
+      right := constants[expression.right] ? return nil
+      evaluated body, expression, -> applied(operator, left, right)
+    else nil
+
+# An operation that would throw as the program runs is an error.
+evaluated := (body: Body, operation: Expression, evaluate: () -> Constant) ->
+  try
+    evaluate()
+  catch thrown: ArithmeticError
+    fail body.program, operation.position, "#{thrown.message} in a constant expression"
+
+# An integer literal's value as the type, which the checker has found it to fit in; nil for a type
+# of no constants, as a Float.
+integer_constant := (value: Int, type: Type): Constant? ->
+  case kind_of(type)
+    when 'Int' then value
+    when 'Byte' then value.to_byte()!
+    when 'Int8' then value.to_int8()!
+    when 'Int16' then value.to_int16()!
+    when 'Int32' then value.to_int32()!
+    when 'UInt16' then value.to_uint16()!
+    when 'UInt32' then value.to_uint32()!
+    when 'UInt64' then value.to_uint64()!
+    else nil
+
+# Prefix `-` applies to the signed types alone.
+negated := (operand: Constant): Constant ->
+  case operand
+    when Int then -operand
+    when Int8 then -operand
+    when Int16 then -operand
+    when Int32 then -operand
+    else panic('no constant to negate')
+
+# The operands are of one type, as the checker requires.
+applied := (operator: String, left: Constant, right: Constant): Constant ->
+  case left
+    when Int then integer_operation(operator, left, right as Int!)
+    when Byte then integer_operation(operator, left, right as Byte!)
+    when Int8 then integer_operation(operator, left, right as Int8!)
+    when Int16 then integer_operation(operator, left, right as Int16!)
+    when Int32 then integer_operation(operator, left, right as Int32!)
+    when UInt16 then integer_operation(operator, left, right as UInt16!)
+    when UInt32 then integer_operation(operator, left, right as UInt32!)
+    when UInt64 then integer_operation(operator, left, right as UInt64!)
+    when String then left + (right as String!)
+
+integer_operation := <T>(operator: String, left: T, right: T): T ->
+  case operator
+    when '+' then left + right
+    when '-' then left - right
+    when '*' then left * right
+    when '/' then left / right
+    when '%' then left % right
+    when '&' then left & right
+    when '|' then left | right
+    when '^' then left ^ right
+    when '<<' then left << right
+    when '>>' then left >> right
+    else panic("no integer operator #{operator}")

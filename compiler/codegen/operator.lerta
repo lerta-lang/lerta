@@ -1,8 +1,7 @@
 # Generates operators: arithmetic, comparisons, `and`/`or`, nil tests, `!` and `?`.
 import
   BinaryOperation, Call, Coalesce, Expression, FloatLiteral, Identifier, IntegerLiteral,
-  is_nil_test, is_order_operator, Member, NilLiteral, Range, StringLiteral, This, UnaryOperation,
-  Unwrap
+  is_nil_test, is_order_operator, Member, NilLiteral, Range, This, UnaryOperation, Unwrap
 from '../ast'
 import ScopedLocal from '../checker/references'
 import compares_by_contents, own_equality from '../checker/equality'
@@ -17,13 +16,13 @@ import emit_own_compare, GREATER, LESS from './comparison_methods'
 import emit_equals_by_contents, emit_value_equals from './equality'
 import Generator, with_deferred_checks from './generator'
 import emit_branch, IrBuilder from './ir_builder'
-import emit_release, emit_retain, ir_type, string_constant from './lerta_ir'
+import emit_release, emit_retain, ir_type from './lerta_ir'
 import emit_is_nil, emit_is_present, emit_unwrap from './optional'
 import emit_concat, emit_equals, emit_extend, emit_string_equals from './string'
 import throw_if, UNWRAPPED_NIL from './runtime_errors'
 import
-  inner_of, is_float, is_identity_type, is_integer, is_kind, is_one_of_kinds, is_reference_type,
-  is_signed, OptionalType, Type
+  inner_of, is_float, is_identity_type, is_integer, is_one_of_kinds, is_reference_type, is_signed,
+  OptionalType, Type
 from '../types'
 
 # The predicates of `icmp` for the comparisons of signed integers; unsigned ones, as Byte, are
@@ -63,7 +62,6 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
   operator := binary.operator
   return generate_logical(g, binary) if operator == 'and' or operator == 'or'
   return generate_nil_test(g, binary) if is_nil_test(binary)
-  return string_constant(g.ir, text) if text := constant_text(g, binary)
   # The root of a tree of float arithmetic alone checks its result, which its operands leave
   # unchecked.
   is_root := not g.defers_float_checks and float_tree(g, binary)
@@ -98,19 +96,6 @@ generate_range_test := (g: Generator, binary: BinaryOperation, range: Range) ->
   from_start := apply_binary(g, '<=', start, item, type)
   to_end := apply_binary(g, range.inclusive then '<=' else '<', item, end, type)
   g.ir.assign "and i1 #{from_start}, #{to_end}"
-
-# The text of a String that literals joined by `+` make, which the compiler joins, so that a long
-# literal can be split over lines at no cost.
-constant_text := (g: Generator, expression: Expression): String? ->
-  return nil unless is_kind(type_of(g, expression), 'String')
-  case expression
-    when StringLiteral then expression.value
-    when BinaryOperation
-      return nil if expression.operator != '+' or expression in g.facts.operator_calls
-      left := constant_text(g, expression.left) ? return nil
-      right := constant_text(g, expression.right) ? return nil
-      left + right
-    else nil
 
 is_bytes := (type: Type) -> is_one_of_kinds(type, ['String', 'Binary'])
 

@@ -82,7 +82,7 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 ## String
 
 - A `String` is immutable text in UTF-8.
-- `+` concatenates two `String`s into a new one, and `s + c` of a [Char](#char) `c` appends its UTF-8: a string literal there is a `String`, as `+` expects one. `+=` appends to a variable. String literals joined by `+`, as `'a long ' +` and `'text'` on the next line, are joined by the compiler, into one literal, at no cost when the program runs.
+- `+` concatenates two `String`s into a new one, and `s + c` of a [Char](#char) `c` appends its UTF-8: a string literal there is a `String`, as `+` expects one. `+=` appends to a variable. String literals joined by `+`, as `'a long ' +` and `'text'` on the next line, are joined by the compiler, into one literal, at no cost when the program runs, as any [constant expression](#constant-expressions) is.
   - `+=` appends in place to a `String` that nothing else holds, so that a loop of `+=` is O(n) in all. One that something else holds, as another variable, an array, a closure or a `for` going through it, is copied first, once: the copy is held by the variable alone. A loop that shares the `String` again at each step, as one that pushes it onto an array before each `+=`, copies it each time, which is O(n²).
 - `s.split(separator)` gives the pieces of `s` between the occurrences of `separator`, in a `String[]`, empty pieces too: `'a,,b'.split(',')` is `['a', '', 'b']`, and `''.split(',')` is `['']`. An empty separator throws a `ValueError`, `split by an empty separator`.
 - `s.starts_with(prefix)` tells whether `s` begins with the bytes of `prefix`, and `s.ends_with(suffix)` whether it ends with those of `suffix`.
@@ -114,6 +114,12 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 - `b[start...end]` copies the bytes from `start` up to, but not including, `end` into a new `Binary`, as an array's index by a range copies its items (see [Array](#array)).
 - Why `Binary` is separate from `String`: a `String` only adds the invariant "valid UTF-8", rather than "a string is any byte sequence" as in Python 2 and Go.
 - `b.text(start, end)` gives the bytes from `start` up to `end` as a `String` if they are valid UTF-8, or nil otherwise; it throws an `IndexError` if they are out of range. `start` is 0 and `end` is `b.length` by default, and `b.text()` gives the whole `Binary` without copying its bytes. `b.text()!` or `b.text() ? throw ...` takes a String where the bytes must be UTF-8.
+
+## Constant expressions
+
+- A **constant expression** is an integer literal, of any [integer type](#sized-integers), a string literal that is a `String`, a top-level `const` whose value is a constant expression of the const's own type, imported or not, and `INT_MIN` and `INT_MAX`; and the arithmetic and bitwise operators of integers, prefix `-` among them, and `+` of `String`s, applied to constant expressions: `SIZE := 64 * KB`, `PATH := ROOT + '/bin'`. A local, a parameter or a `var` is none, nor are floats so far.
+- The compiler evaluates a constant expression as the program would, and writes its value in its place, at no cost when the program runs. One that would throw is a compile error: `INT_MAX + 1` is `integer overflow in a constant expression`, and so are `1 / 0` and `1 << 64` with their own messages, wherever they are, in a function too, run or not.
+- Why an error rather than the exception: the operation throws on every run, so it is a mistake the compiler can point out at once.
 
 ## Optional values
 

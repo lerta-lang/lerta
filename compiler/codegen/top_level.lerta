@@ -1,5 +1,5 @@
 # Top-level values in the generated code (see docs/internals.md#modules).
-import BooleanLiteral, Declaration, FloatLiteral, IntegerLiteral, StringLiteral from '../ast'
+import BooleanLiteral, Declaration, FloatLiteral, IntegerLiteral from '../ast'
 import Shared from '../checker/shared'
 import top_level_value from '../checker/top_level_values'
 import Module from '../loader'
@@ -8,10 +8,10 @@ import Generator, TopLevelGlobal from './generator'
 import throw_if from './runtime_errors'
 import IrBuilder, IrModule from './ir_builder'
 import
-  emit_release_stored, ir_type, ownership, string_constant, suffixed_symbol, top_level_symbol
+  constant_operand, emit_release_stored, ir_type, ownership, suffixed_symbol, top_level_symbol
 from './lerta_ir'
 import scalar_literal from './scalar'
-import format_type, is_kind, Type from '../types'
+import format_type, Type from '../types'
 
 export define_top_level_globals := (ir_module: IrModule, module: Module, shared: Shared) ->
   globals: Map<String, TopLevelGlobal>
@@ -29,21 +29,21 @@ export define_top_level_globals := (ir_module: IrModule, module: Module, shared:
     globals[name] = { name, type, pointer, flag, is_var: declaration.mutable, constant }
   globals
 
-# The operand of the const's value, if it is a literal of its own type, a Bool, a number or a
-# String: such a const is initialized from the start and never released, so that reading it, in its
-# module or another, checks nothing. The literal's type is known only to its module's facts, so its
-# operand is worked out here, but for a String's, which each IR module defines for itself.
+# The operand of the const's value, if it is of its own type and a constant expression (see
+# checker/constants) or a literal, a Bool or a number: such a const is initialized from the start
+# and never released, so that reading it, in its module or another, checks nothing. The value is
+# known only to its module's facts, so its operand is worked out here, but for a String's, which
+# each IR module defines for itself.
 constant_of := (declaration: Declaration, type: Type, shared: Shared): ((IrBuilder) -> String)? ->
   return nil if declaration.mutable
   value := declaration.value
   return nil if format_type(shared.facts.types[value]!) != format_type(type)
+  if constant := shared.facts.constants[value]
+    return (ir) -> constant_operand(ir, constant)
   case value
     when BooleanLiteral, FloatLiteral, IntegerLiteral
       operand := scalar_literal(value, type)
       (_) -> operand
-    when StringLiteral
-      return nil unless is_kind(type, 'String')
-      (ir) -> string_constant(ir, value.value)
     else nil
 
 export emit_mark_initialized := (ir: IrBuilder, global: TopLevelGlobal) ->
