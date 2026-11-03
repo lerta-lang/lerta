@@ -60,14 +60,6 @@ print "c"
 
 Fix: name the rule of the place reported, here Multi-line literals.
 
-## `expect_unchanged` in the format suite compares modification times written moments apart
-
-Severity: Low.
-
-test/format.lerta:64-67, used at :237-247, writes files, runs `fmt --fix` at once and takes `stat(path).modified_time == time` as proof that the files were not rewritten. On a filesystem with one-second timestamps a rewrite within the same second passes. APFS and ext4 have nanosecond timestamps, so the check works there.
-
-Fix: compare the inode or change time as well, or set the modification time back to a known value before running `fmt`.
-
 ## The benchmarks and the test reports measure with `time()` instead of `monotonic()`
 
 Severity: Low.

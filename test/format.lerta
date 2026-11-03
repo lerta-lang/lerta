@@ -8,7 +8,7 @@
 import Check, run_checks, select from './lib/report'
 import compare_text, expect_status from './lib/expect'
 import
-  compiler, FileRun, read_text_or, read_text_or_throw, root_dir, run_file, suite_dir
+  compiler, FileRun, read_text_or, read_text_or_throw, root_dir, run_file, SetupError, suite_dir
 from './lib/lerta'
 import list_dir, make_dir, stat, write_file from 'std:io'
 
@@ -63,6 +63,11 @@ expect_files := (dir: String, files: Map<String, String>) ->
   for (file, text) in files.entries()
     reasons.append compare_text(file, text, await read_text_or_throw("#{dir}/#{file}"))
   reasons
+
+# Sets the files back to 2000, so that a write shows even where times are kept in whole seconds.
+make_old := (paths: String[]) ->
+  result := await run_file('touch', ['-t', '200001010000', paths...], '.')
+  throw SetupError("touch failed (#{result.failure}):\n#{result.errors}") unless result.status == 0
 
 modified_time := (path: String) -> stat(path)!.modified_time
 
@@ -241,6 +246,7 @@ command_checks: Check[] =
     run: ->
       dir := await tree('fix', { 'a.lerta': unformatted, 'b.lerta': "print 1\n", 'c.lerta': "(\n" })
       (b, c) := ("#{dir}/b.lerta", "#{dir}/c.lerta")
+      await make_old([b, c])
       (b_time, c_time) := (modified_time(b), modified_time(c))
       result := await fmt(dir, ['--fix', '.'])
       [
