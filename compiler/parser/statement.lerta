@@ -346,17 +346,24 @@ export at_spaced_operand := (tokens: TokenStream, offset: Int) ->
   token.kind in COMMAND_ARGUMENT_STARTS
 
 # The number of tokens of the callee of a call without parentheses at the next token: a name or
-# `@name`, followed by any number of `.name`, all without spaces; 0 if there is none.
+# `@name`, followed by any number of `.name`, all without spaces; 0 if there is none. The tokens
+# are walked by their index, as a peek at each offset would walk from the start each time.
 command_callee_length := (tokens: TokenStream) ->
-  first := tokens.peek().kind
-  var length =
-    case
-      when first == IDENTIFIER then 1
-      when first == '@' and is_attached_name(tokens.peek_at(1)) then 2
-      else 0
-  return 0 if length == 0
-  while tokens.peek_at(length).kind == '.' and not tokens.peek_at(length).spaced
-    return 0 unless is_attached_name(tokens.peek_at(length + 1))
+  var index = tokens.index_at(0)
+  token := -> tokens.tokens[index]
+  advance := -> index = tokens.index_after(index)
+  var length = 1
+  if token().kind == '@'
+    advance()
+    return 0 unless is_attached_name(token())
+    length = 2
+  else if token().kind != IDENTIFIER
+    return 0
+  advance()
+  while token().kind == '.' and not token().spaced
+    advance()
+    return 0 unless is_attached_name(token())
+    advance()
     length += 2
   length
 

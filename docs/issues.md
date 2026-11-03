@@ -10,14 +10,6 @@ Severity: Low.
 
 Fix: keep `entered` as a `Set<Int>`, and build the path text only when a cycle is found.
 
-## Parsing a long call without parentheses is quadratic
-
-Severity: Low.
-
-`command_callee_length` (compiler/parser/statement.lerta:357-368) calls `peek_at(length)` for a growing `length`, and `index_at` (compiler/parser/token_stream.lerta:75-78) walks `offset` steps each time. A callee of 60,000 members on one line takes 17 s to parse, one of 100,000 takes 48 s.
-
-Fix: scan with a local index and `index_after`, as `closing_offset` does.
-
 ## `lerta fmt` is quadratic in the length of an `else if` chain
 
 Severity: Low.
