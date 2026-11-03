@@ -26,7 +26,8 @@ The planned design of modules, FFI, the standard library and tools.
 - In [std:process](../reference/std.md#stdprocess), a `run` that gathers both outputs and gives them with the `Exit`, so that a caller does not declare a `Byte[]` for each and convert it back.
 - `write_file` of [std:io](../reference/std.md#stdio) takes `String | Binary`, as `Writer.write` does.
 - In [std:async](../reference/std.md#stdasync), `all_settled`, which waits for every promise, rejected ones too.
-- `Char.to_upper`, `Char.is_lower` and `Char.hex_value`, of ASCII as those of `String` and `Byte` are; `skip(count)` of a [Scanner](../reference/std.md#stdscanner); and `split_whitespace` of a `String`.
+- `Char.to_upper`, `Char.is_lower` and `Char.hex_value`, of ASCII as those of `String` and `Byte` are; `skip(count)` of a [Scanner](../reference/std.md#stdscanner); `split_whitespace` of a `String`; `s.lines()`, the lines of `s` without their `\n` or `\r\n`, and no empty line after a last `\n`; and `s.index_of(part)`, the byte offset of the first occurrence of `part`, or nil.
+- `assert(condition)`, which throws, and `assert_equal(actual, expected)`, which says both values as their [literals](../reference/builtins.md#literal), for tests; and `dbg(x)`, which prints the expression and its literal to stderr and gives `x`.
 - In [std:net](../reference/std.md#stdnet), UDP, TLS and Unix domain sockets. Each protocol has functions named by it, as TCP's `listen_tcp` and `connect_tcp`, and the types are named by the shape of what they carry: a Unix domain socket, a stream, is a `Socket` of `connect_unix(path)` and a `Listener` of `listen_unix(path)`, as TCP's are, and UDP, of datagrams, is a `UdpSocket` of `bind_udp(host, port)`.
 - In [std:http](../reference/std.md#stdhttp), later: TLS, through that of std:net, for the server and for `fetch`; a URL module for the parts of `request.url`, which `fetch` would parse its URLs with; a cookie jar that a `Client` may be given, which stores the cookies of `Set-Cookie` and sends them with the requests they match; and HTTP/2.
 - Not planned: a server that goes on after an accept fails for want of a socket, as on Windows, where libuv makes the socket of the next connection before it comes and stops listening for good when it cannot, which listening again does not undo. Only making the listener again could, closing its port meanwhile and losing the connections queued; the failure ends the program instead, which a supervisor can restart. Windows has no small limit of sockets per process, so it comes only when the system runs out.
@@ -57,6 +58,7 @@ The planned design of modules, FFI, the standard library and tools.
   - Hover and going to a definition from a named argument's label.
   - A diagnostic's range over the whole token of its position, rather than the position alone.
   - Checking a document that is no file yet, which the loader takes a program's modules to be; and finding the open documents that import a file by real paths, so that two spellings of one directory through a symbolic link are one.
+- `lerta test`, which runs the tests of a program, functions found by a rule yet to be decided, each apart, and reports those that fail.
 - Package management.
 - The command-line checks (`test/cli.lerta`) run on Windows too, through `make test-cross` (the bootstrap runs there already: see [platforms](../internals.md#platforms)), with those that run a shell made to run without one.
 
