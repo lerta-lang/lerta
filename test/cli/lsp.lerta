@@ -124,6 +124,28 @@ imported_diagnostic_check := ->
       )...
     ]
 
+uri_host_check := ->
+  Check
+    name: 'lerta lsp reads a URI of localhost as a file till closed, and of another host as none'
+    run: ->
+      dir := new_cli_dir('lsp-uri-host')
+      path := "#{dir}/a.lerta"
+      await write_file(path, ''.binary)
+      uri := uri_of(path).replace('file://', 'file://LocalHost')
+      local := did_open(uri, "print missing\n")
+      remote := did_open(uri.replace('LocalHost', 'server'), "print missing\n")
+      ran := await session(dir, local + remote + did_close(uri))
+      [
+        expect_status(0, ran.status)...
+        exact_messages(
+          ran.stdout_text()
+          [
+            published_diagnostics(uri, [diagnostic_body(0, 6, 1, "undefined name 'missing'")])
+            published_diagnostics(uri, [])
+          ]
+        )...
+      ]
+
 uri_import_check := ->
   Check name: 'lerta lsp imports through parent paths in percent-encoded URIs', run: ->
     dir := new_cli_dir('lsp-uri-import')
@@ -1123,6 +1145,7 @@ export checks :=
   diagnostic_lifecycle_check()
   imported_diagnostic_check()
   uri_import_check()
+  uri_host_check()
   malformed_message_check()
   lowercase_header_check()
   lsp_input_errors_check()

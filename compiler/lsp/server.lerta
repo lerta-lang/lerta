@@ -98,6 +98,10 @@ class Server
   # written or one whose import is missing, keeps the program of the text before it, whose names
   # are found where the new text still writes them (see locate.lerta).
   programs: Map<String, ProgramWide> = Map()
+  # The URI that each open document was opened with, by its text's key (see text_key), which the
+  # server sends back, as the client knows the document by that spelling, while several URIs,
+  # `file://localhost/a.lerta` and `file:///a.lerta`, name one path.
+  uris: Map<String, String> = Map()
 
   # Handles each message until the input ends or an exit notification comes. A header that gives
   # no length tells nothing of where the next message starts, and a body that the end cuts short
@@ -182,6 +186,7 @@ class Server
   set_text = (uri: String, text: String) ->
     path := path_of_uri(uri) ? return
     open_texts[text_key(path)] = text
+    @uris[text_key(path)] = uri
     unless is_file(path)
       @programs.remove path
       await @check(doc) for doc in @importers(path)
@@ -197,6 +202,7 @@ class Server
     @programs.remove path
     await @check(doc) for doc in @importers(path)
     await @publish(file) for file in files
+    @uris.remove text_key(path)
 
   # The types of the name at the position, as a block of Lerta, from the program of the document's
   # own check if it has one, or of another open document's that holds it.
@@ -220,7 +226,7 @@ class Server
     return nil if is_standard_name(location)
     return nil unless is_written((await read_source(location)).split("\n"), declared.name)
     range := await name_range(location, declared.name, @encoding)
-    Location range, uri: uri_of_path(location)
+    Location range, uri: @uri_of(location)
 
   # What may be written where a name is being written, from a check of the document's text with
   # the checker's own name there (see complete.lerta), whose diagnostics are not published.
@@ -266,12 +272,15 @@ class Server
     files.append found.keys().to_array()
     await @publish(file) for file in files
 
+  # The URI of the file as the client opened it, or else as the server writes one.
+  uri_of = (path: String) -> @uris[text_key(path)] ? uri_of_path(path)
+
   # Publishes the diagnostics that the open documents' checks found in the file, each once.
   publish = (file: String) ->
     diagnostics: Set<LspDiagnostic>
     for found in @found.values()
       diagnostics.add each for each in found[file] ? []
-    params := PublishDiagnosticsParams(uri: uri_of_path(file), diagnostics: diagnostics.to_array())
+    params := PublishDiagnosticsParams(uri: @uri_of(file), diagnostics: diagnostics.to_array())
     await notify('textDocument/publishDiagnostics', params)
 
 # The edit that writes the document in the style, of its whole text, or none if it is so already;

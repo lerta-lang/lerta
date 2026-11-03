@@ -3,10 +3,13 @@
 
 FILE_PREFIX := 'file://'
 
-# The path of the URI, or nil for one that names no file.
+# The path of the URI, or nil for one that names no file. A host may come before the path, as in
+# `file://localhost/a.lerta`, which names a file only when it is this machine.
 export path_of_uri := (uri: String): String? ->
-  encoded := uri.without_prefix(FILE_PREFIX) ? return nil
-  path := percent_decoded(encoded) ? return nil
+  after_prefix := uri.without_prefix(FILE_PREFIX) ? return nil
+  (host, rest) := after_prefix.split_once('/') ? return nil
+  return nil if not (host.is_empty() or host.to_lower() == 'localhost')
+  path := percent_decoded("/#{rest}") ? return nil
   is_windows_drive(path) then path.without_prefix('/')! else path
 
 # The URI of the absolute path.

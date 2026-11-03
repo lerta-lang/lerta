@@ -108,14 +108,6 @@ Severity: Low.
 
 Fix: return none when `at.line < 1`, or reject negative positions in `source_position`.
 
-## The language server reads `file://host/path` as a relative path
-
-Severity: Low.
-
-`path_of_uri` (compiler/lsp/uri.lerta:7-10) strips `file://` and keeps the rest, so the host of `file://localhost/a/b.lerta`, which RFC 8089 allows, becomes the first path component. The document is then treated as not a file: no diagnostics, `null` from hover and definition, `[]` from formatting.
-
-Fix: after `file://`, when the rest does not start with `/`, drop an empty or `localhost` authority, and return nil for any other host.
-
 ## The VS Code extension stops reading a server after one message without a header
 
 Severity: Low.
