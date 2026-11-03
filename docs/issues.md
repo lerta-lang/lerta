@@ -76,14 +76,6 @@ print "c"
 
 Fix: name the rule of the place reported, here Multi-line literals.
 
-## The runtime cache names an entry by a 32-bit hash
-
-Severity: Low.
-
-`runtime_hash` (compiler/runtime_cache.lerta:154, 179-192) is a polynomial hash modulo a 32-bit prime, printed as 8 hex digits, and it is the only content-dependent part of a runtime directory's name. The key covers the clang version, the flags, the file names and the runtime and libuv sources, so a stale runtime takes a collision, but a collision links the wrong objects silently.
-
-Fix: widen to 64 bits and print 16 hex digits.
-
 ## The test driver leaves its work directory when a module's top level throws
 
 Severity: Low.

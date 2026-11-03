@@ -3,6 +3,7 @@
 import is_dir, is_file, list_dir, make_dir, read_text, remove_tree, rename, write_file from 'std:io'
 import env, is_running, platform, process_id, run from 'std:process'
 import embedded_source, EMBEDDED_PATHS from '../build/embedded'
+import bits_hex from './bits'
 import run_clang_jobs from './clang_jobs'
 import build_flags, BuildKind from './clang_flags'
 import CompileError from './errors'
@@ -148,7 +149,7 @@ cached_runtime_name := (kind: BuildKind, clang_version: String, libuv: LibuvBuil
   target_name := kind.target ? version_line_value(clang_version, 'Target: ') ? 'unknown'
   clang_name := "clang#{major_version(clang_version) ? 'unknown'}"
   flags := build_flags(kind).join(' ')
-  hash := runtime_hash([clang_version, flags, cached_file_names(libuv)...]).to_hex(8).to_upper()
+  hash := runtime_hash([clang_version, flags, cached_file_names(libuv)...])
   "runtime-#{kind_name}-#{target_name}-#{clang_name}-#{hash}"
 
 runtime_kind_name := (kind: BuildKind) ->
@@ -169,20 +170,26 @@ major_version := (clang_version: String) ->
   at := words.index_of('version') ? return nil
   words.get(at + 1)?.split('.')[0]
 
-# A polynomial hash modulo the largest prime below 2^32, so that it fits in 8 hex digits and its
-# products stay far within an Int.
-HASH_MODULUS := 4294967291
+# FNV-1a of 64 bits, whose offset basis, 0xCBF29CE484222325, is written as the Int of its bits.
+FNV_OFFSET_BASIS := -3750763034362895579
+FNV_PRIME := 0x100000001B3
 
 runtime_hash := (texts_besides_sources: String[]) ->
-  var hash = 0
   texts := [texts_besides_sources...]
   for path in [RUNTIME_PATHS..., LIBUV_PATHS...]
     texts.push path
     texts.push embedded_source(path)!
+  texts_hash texts
+
+# The texts' hash as 16 hex digits, wide enough that two keys do not take one runtime by chance.
+# Each text ends with a byte that no UTF-8 text holds, so that the texts' bounds count.
+export texts_hash := (texts: String[]) ->
+  var hash = FNV_OFFSET_BASIS
+  mix := (byte: Int) -> hash = (hash ^ byte).wrapping_mul(FNV_PRIME)
   for text in texts
-    hash = (hash * 257 + byte.to_int() + 1) % HASH_MODULUS for byte in text.binary
-    hash = hash * 257 % HASH_MODULUS
-  hash
+    mix byte.to_int() for byte in text.binary
+    mix 0xFF
+  bits_hex hash
 
 # The runtime's C files for `system`: platform_<systems>.c only for those systems, named as in
 # third_party/libuv.txt, and the others for all.

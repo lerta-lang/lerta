@@ -1,5 +1,6 @@
 # Runtime caches are isolated, complete, reused, and selected from the documented environment.
 import LTO_CACHE, lto_link_flags from '../../compiler/clang_flags'
+import texts_hash from '../../compiler/runtime_cache'
 import Check from '../lib/report'
 import compare_text, expect_status, reason_unless from '../lib/expect'
 import compiler, host_libuv, host_systems, read_text_or_throw, root_dir from '../lib/lerta'
@@ -33,7 +34,7 @@ runtime_name_reasons := (name: String, kind: String) ->
   [
     reason_unless(version.is_digits(), "the cached runtime #{name} has an invalid clang version")...
     reason_unless(
-      hash.binary.length == 8 and hash.all(is_hex_digit)
+      hash.binary.length == 16 and hash.all(is_hex_digit)
       "the cached runtime #{name} has an invalid hash"
     )...
   ]
@@ -401,6 +402,16 @@ lto_link_flags_check := ->
     reasons.push "the ThinLTO cache is #{LTO_CACHE}" if LTO_CACHE != 'thinlto-devirt-8'
     reasons
 
+# The hash in a runtime's name is FNV-1a of 64 bits, its top bit written too, with the end of each
+# text counted.
+texts_hash_check := -> Check(name: 'a runtime is named by a 64-bit hash of its texts', run: ->
+  hashes := [texts_hash([]), texts_hash(['a']), texts_hash(['ab', 'c']), texts_hash(['a', 'bc'])]
+  compare_text
+    'hashes'
+    'CBF29CE484222325 089BC907B544C769 20BA9B3025A8B421 A0A3542C19B900AB'
+    hashes.join(' ')
+)
+
 # `lerta clean` removes what builds keep in the cache, by their names, and leaves anything else
 # there; without a cache directory, it removes nothing and makes none.
 clean_check := ->
@@ -435,6 +446,7 @@ clean_check := ->
 
 export checks :=
   lto_link_flags_check()
+  texts_hash_check()
   clean_check()
   cached_runtime_check([], 'debug')
   cached_runtime_check(['-O'], 'release')
