@@ -6,14 +6,12 @@ import
   Range, Statement, TupleItem, TypeName, UnaryOperation, Unwrap
 from '../ast'
 import TokenKind from '../lexer/tokens'
-import parse_block_literal, starts_block from './block_literal'
+import at_block, parse_block_literal from './block_literal'
 import integer_literal, parse_primary from './primary'
 import parse_element, spread_of from './compound'
 import parse_if from './statement'
 import TokenStream from './token_stream'
-import
-  parse_cast_type, parse_type_arguments, parse_union_member, starts_type_arguments
-from './type'
+import at_type_arguments, parse_cast_type, parse_type_arguments, parse_union_member from './type'
 
 # Arithmetic and bitwise operators by precedence, weakest first. Comparisons are weaker than all of
 # them. `<<` and `>>` bind as `*` does, each two tokens (see shift_at).
@@ -53,7 +51,7 @@ parse_if_value := (tokens: TokenStream) ->
 export parse_value := (tokens: TokenStream): Expression ->
   value: Expression =
     case
-      when starts_block(tokens) then parse_block_literal(tokens)
+      when at_block(tokens) then parse_block_literal(tokens)
       when tokens.peek().kind == 'if' then parse_if_value(tokens)
       else parse_call_value(tokens)
   continue_with_members tokens, value
@@ -62,7 +60,7 @@ export parse_value := (tokens: TokenStream): Expression ->
 # the operand of `return`, `throw` or `yield` is one too.
 export parse_call_value := (tokens: TokenStream): Expression ->
   expression := parse_expression(tokens)
-  return expression unless starts_block_arguments(tokens, expression)
+  return expression unless at_block_arguments(tokens, expression)
   parse_block_arguments tokens, expression
 
 # The value of `return`, `throw` or `yield`, or an argument in a block, which takes the member
@@ -91,8 +89,8 @@ at_member_line := (tokens: TokenStream) ->
   line_start := after_block then 0 else 1
   first := tokens.peek_at(line_start).kind
   dot := tokens.peek_at(line_start + 1)
-  starts_nil_safe := first == '?' and dot.kind == '.' and not dot.spaced
-  (after_block or at_line_end) and (first == '.' or starts_nil_safe)
+  nil_safe_follows := first == '?' and dot.kind == '.' and not dot.spaced
+  (after_block or at_line_end) and (first == '.' or nil_safe_follows)
 
 # A line's `.` or `?.` follows the space of its indentation, which parse_postfix would not take.
 parse_member_line := (tokens: TokenStream, object: Expression): Expression ->
@@ -121,15 +119,15 @@ export parse_block_arguments := (tokens: TokenStream, callee: Expression) ->
 # member lines after it, as a named one's value may; a key, as of a map's entry, is not taken for a
 # name.
 parse_block_argument := (tokens: TokenStream) ->
-  return parse_argument(tokens) if starts_named_argument(tokens)
+  return parse_argument(tokens) if at_named_argument(tokens)
   value := spread_of(tokens, parse_continued_value(tokens))
   message := 'an argument is named by a name, not by a key'
   tokens.fail value.position, message if tokens.peek().kind == ':'
   Argument value
 
-export starts_block_arguments := (tokens: TokenStream, expression: Expression) ->
+export at_block_arguments := (tokens: TokenStream, expression: Expression) ->
   is_callee := expression is Call or expression is Identifier or expression is Member
-  is_callee and starts_block(tokens)
+  is_callee and at_block(tokens)
 
 export call_of := (callee: Expression, arguments: Arguments, type_args: TypeName[]) ->
   { args, named_args } := arguments
@@ -382,7 +380,7 @@ parse_nil_safe := (tokens: TokenStream, object: Expression) ->
 # arguments, `f<Int>(x)` or `x.f<Int>(y)`; nil if none follows.
 extend_by_postfix := (tokens: TokenStream, expression: Expression): Expression? ->
   is_name := expression is Identifier or expression is Member
-  if is_name and starts_type_arguments(tokens)
+  if is_name and at_type_arguments(tokens)
     type_args := parse_type_arguments(tokens)
     tokens.next()
     return call_of(expression, parse_parenthesized_arguments(tokens), type_args)
@@ -476,14 +474,14 @@ struct Argument
   name: Identifier?
   value: Expression
 
-starts_named_argument := (tokens: TokenStream) ->
+at_named_argument := (tokens: TokenStream) ->
   tokens.peek().kind == IDENTIFIER and tokens.peek_at(1).kind == ':'
 
 POSITIONAL_AFTER_NAMED := 'a positional argument cannot follow a named one'
 
 parse_argument := (tokens: TokenStream) ->
   # A spread, `xs...`, gives its items to a variadic parameter (see packed_arguments).
-  return Argument(parse_element(tokens)) unless starts_named_argument(tokens)
+  return Argument(parse_element(tokens)) unless at_named_argument(tokens)
   name := parse_identifier(tokens)
   tokens.next()
   Argument name, value: parse_value(tokens)

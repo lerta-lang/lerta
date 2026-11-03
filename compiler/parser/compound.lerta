@@ -7,7 +7,7 @@ import
   TupleLiteral
 from '../ast'
 import CLOSING_BRACKETS, OPENING_BRACKETS, TokenKind from '../lexer/tokens'
-import starts_block from './block_literal'
+import at_block from './block_literal'
 import
   at_spread, parse_expression, parse_identifier, parse_loop_header, parse_or, SPREAD_FOLLOWERS,
   take_apart_item
@@ -20,20 +20,20 @@ import parse_result_annotation, parse_type_annotation, parse_type_parameters fro
 # `)` is followed by `->`, or by `:` after `()`. A parenthesized expression followed by `:` is a
 # map key: `{ (k): v }`. `<` starts the type parameters of a generic one.
 # The parameters may start on the line after the `(`.
-export starts_function_literal := (tokens: TokenStream) ->
+export at_function_literal := (tokens: TokenStream) ->
   first := tokens.peek().kind
   return true if first == '->' or first == '<'
   return false if first != '('
-  starts_block := tokens.peek_at(1).kind == NEWLINE and tokens.peek_at(2).kind == INDENT
-  looks_like_parameters tokens, starts_block then 3 else 1
+  block_follows := tokens.peek_at(1).kind == NEWLINE and tokens.peek_at(2).kind == INDENT
+  looks_like_parameters tokens, block_follows then 3 else 1
 
-export starts_weak_function_literal := (tokens: TokenStream) ->
+export at_weak_function_literal := (tokens: TokenStream) ->
   return false unless tokens.at_word('weak')
   start := tokens.index
   tokens.next()
-  starts := starts_function_literal(tokens)
+  found := at_function_literal(tokens)
   tokens.index = start
-  starts
+  found
 
 # Whether the `(` next starts parameters, the first of which is `offset` tokens ahead. The
 # formatter tells them so too (see opens_parameters in compiler/format/source.lerta).
@@ -147,7 +147,7 @@ export parse_map_literal := (tokens: TokenStream, position: Position) ->
   tokens.inside -> parse_map_contents(tokens, position)
 
 parse_map_contents := (tokens: TokenStream, position: Position): Expression ->
-  if starts_record_field(tokens) or starts_spread(tokens)
+  if at_record_field(tokens) or item_ends_with_spread(tokens)
     return parse_record_literal(tokens, position)
   entries := tokens.parse_list_rest<MapEntry>('}', -> parse_map_entry(tokens), [])
   if entries.is_empty()
@@ -155,7 +155,7 @@ parse_map_contents := (tokens: TokenStream, position: Position): Expression ->
   MapLiteral entries, position
 
 parse_map_entry := (tokens: TokenStream) ->
-  if starts_record_field(tokens)
+  if at_record_field(tokens)
     token := tokens.peek()
     name := token.text
     message := "a map's keys are values: for the value of '#{name}', write (#{name})"
@@ -166,14 +166,14 @@ parse_map_entry := (tokens: TokenStream) ->
 
 # A name followed by `:`, `,`, `}` or the end of its line starts a field of an anonymous struct; a
 # map's keys are other expressions.
-starts_record_field := (tokens: TokenStream) ->
+at_record_field := (tokens: TokenStream) ->
   follows_name := tokens.peek_at(1).kind in [':', ',', '}', NEWLINE]
   tokens.peek().kind == IDENTIFIER and follows_name
 
 # An item that ends with `...`, which spreads the fields of a struct into a construction or an
 # anonymous struct (see the checker's spread_argument), before a `,`, `}`, `:` or the end of its
 # line outside brackets of its own, which end a field or a map's key.
-export starts_spread := (tokens: TokenStream) ->
+export item_ends_with_spread := (tokens: TokenStream) ->
   var depth = 0
   var index = tokens.index_at(0)
   while true
@@ -198,7 +198,8 @@ parse_record_literal := (tokens: TokenStream, position: Position) ->
 type RecordItem = NamedValue | Comprehension
 
 parse_record_item := (tokens: TokenStream): RecordItem ->
-  starts_spread(tokens) then parse_element(tokens) as Comprehension! else parse_record_field(tokens)
+  return parse_record_field(tokens) unless item_ends_with_spread(tokens)
+  parse_element(tokens) as Comprehension!
 
 export record_of := (tokens: TokenStream, items: RecordItem[], position: Position) ->
   if misplaced := [item for item in items[1..] when item is Comprehension].first()
@@ -209,7 +210,7 @@ export record_of := (tokens: TokenStream, items: RecordItem[], position: Positio
   RecordLiteral fields, position, spread
 
 parse_record_field := (tokens: TokenStream) ->
-  unless starts_record_field(tokens)
+  unless at_record_field(tokens)
     message := 'an anonymous struct and a map cannot be mixed'
     tokens.fail_here message
   name := parse_identifier(tokens)
@@ -252,7 +253,7 @@ parse_case_arm := (tokens: TokenStream, has_subject: Bool) ->
   tokens.expect_word 'when'
   # A pattern stops before `then`, which begins the arm's value.
   parse_pattern := -> parse_or(tokens)
-  if has_subject and starts_block(tokens)
+  if has_subject and at_block(tokens)
     patterns := parse_pattern_block(tokens, parse_pattern)
     return CaseArm(patterns, body: parse_arm_body(tokens, 'else'))
   patterns :=
