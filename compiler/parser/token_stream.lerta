@@ -35,9 +35,9 @@ export class TokenStream
   brackets: Token[] = []
   # The tokens that continue_line has skipped: the line ends, indentations and block ends around the
   # lines that continue a line.
-  skipped = Set<Int>()
+  skipped := Set<Int>()
   # The index of the INDENT of each block of lines that continue a line.
-  continued_blocks = Set<Int>()
+  continued_blocks := Set<Int>()
   # What find_block_starts found, once it has.
   var block_starts: Int[]? = nil
   # What each function literal being parsed, innermost last, has of its own.
@@ -51,39 +51,39 @@ export class TokenStream
 
   # The kind of the next token if it continues the current expression. After an indented block
   # (such as a `case`) the line has ended, so `-1` on the next line is not a subtraction.
-  peek_continuation = (): TokenKind -> @ended_with_block() then NEWLINE else @peek().kind
+  peek_continuation := (): TokenKind -> @ended_with_block() then NEWLINE else @peek().kind
 
   # As at_word, but a word after a line that ends with a block does not continue the expression.
-  continues_with_word = (word: String) -> not @ended_with_block() and @at_word(word)
+  continues_with_word := (word: String) -> not @ended_with_block() and @at_word(word)
 
-  ended_with_block = -> @index > 0 and @tokens[@index - 1].kind == DEDENT
+  ended_with_block := -> @index > 0 and @tokens[@index - 1].kind == DEDENT
 
   # A line that ends with an indented block (such as a `case`) has already consumed its line end.
-  expect_line_end = -> @expect(NEWLINE, 'end of line') unless @ended_with_block()
+  expect_line_end := -> @expect(NEWLINE, 'end of line') unless @ended_with_block()
 
-  peek = -> @peek_at(0)
+  peek := -> @peek_at(0)
 
-  peek_at = (offset: Int) -> @tokens[@index_at(offset)]
+  peek_at := (offset: Int) -> @tokens[@index_at(offset)]
 
-  next = ->
+  next := ->
     index := @index_at(0)
     token := @tokens[index]
     @index = index + 1 if token.kind != EOF
     token
 
   # The index of the token `offset` tokens ahead, past the tokens that are skipped.
-  index_at = (offset: Int) ->
+  index_at := (offset: Int) ->
     var index = @unskipped_from(@index)
     index = @index_after(index) for _ in 0...offset
     index
 
   # The index of the token after the one at `index`, past the tokens that are skipped; none follows
   # the end of the file, the last token.
-  index_after = (index: Int) ->
+  index_after := (index: Int) ->
     index == @tokens.length - 1 then index else @unskipped_from(index + 1)
 
   # The index of the first token from `index` on that is not skipped.
-  unskipped_from = (index: Int) ->
+  unskipped_from := (index: Int) ->
     last := @tokens.length - 1
     var unskipped = index
     unskipped += 1 while unskipped < last and unskipped in @skipped
@@ -92,7 +92,7 @@ export class TokenStream
   # Where an operand or an item starts, a line end continues the line: one before a line indented
   # deeper is skipped, with the indentation and the end of that block, whose lines continue the
   # line; one inside such a block, before its next line, is skipped too.
-  continue_line = ->
+  continue_line := ->
     return if @peek().kind != NEWLINE
     line_end := @index_at(0)
     indent := line_end + 1
@@ -104,17 +104,17 @@ export class TokenStream
 
   # Whether the line end at `line_end` is inside a block of lines that continue a line, and the
   # line after it is too, which it continues then, though it may leave a block inside that one.
-  continues_block = (line_end: Int) ->
+  continues_block := (line_end: Int) ->
     var next_line = line_end + 1
     next_line += 1 while @tokens[next_line].kind == DEDENT
     @in_continued_block(line_end) and @in_continued_block(next_line)
 
-  in_continued_block = (index: Int) ->
+  in_continued_block := (index: Int) ->
     start := @block_start(index) ? return false
     start in @continued_blocks
 
   # The index of the DEDENT that ends the block that the INDENT at `start` starts.
-  block_end = (start: Int) ->
+  block_end := (start: Int) ->
     var depth = 1
     var index = start
     while depth > 0
@@ -123,13 +123,13 @@ export class TokenStream
     index
 
   # The index of the INDENT that starts the innermost block around the token at `index`, if any.
-  block_start = (index: Int) ->
+  block_start := (index: Int) ->
     starts := @block_starts ? @find_block_starts()
     start := starts[index]
     start >= 0 then start
 
   # The block_start of each token, -1 for none, found once, as each line end inside brackets asks.
-  find_block_starts = ->
+  find_block_starts := ->
     starts: Int[]
     open: Int[]
     for token, index in @tokens
@@ -142,7 +142,7 @@ export class TokenStream
   # Inside brackets, skips a line end before `word`, a keyword or a name, whose line continues the
   # one before it, as the `for` and the `when` of a comprehension do, and returns whether it skipped
   # one.
-  continue_line_before = (word: String) ->
+  continue_line_before := (word: String) ->
     return false if not @in_brackets() or @peek().kind != NEWLINE
     deeper := @peek_at(1).kind == INDENT
     return false if @peek_at(deeper then 2 else 1).text != word
@@ -152,25 +152,25 @@ export class TokenStream
       @next()
     true
 
-  at_word = (word: String) -> @peek().is_word(word)
+  at_word := (word: String) -> @peek().is_word(word)
 
-  accept_word = (word: String) ->
+  accept_word := (word: String) ->
     return false unless @at_word(word)
     @next()
     true
 
-  expect_word = (word: String) -> @fail_expecting(@peek(), "'#{word}'") unless @accept_word(word)
+  expect_word := (word: String) -> @fail_expecting(@peek(), "'#{word}'") unless @accept_word(word)
 
-  accept = (kind: TokenKind) ->
+  accept := (kind: TokenKind) ->
     return false if @peek().kind != kind
     @next()
     true
 
-  expect = (kind: TokenKind, description: String = "'#{kind}'") ->
+  expect := (kind: TokenKind, description: String = "'#{kind}'") ->
     @fail_expecting @peek(), description unless @accept(kind)
 
   # Where only the ends of blocks are left, an open bracket is never closed.
-  fail_expecting = (token: Token, expected: String) ->
+  fail_expecting := (token: Token, expected: String) ->
     is_layout := token.kind in [NEWLINE, DEDENT, EOF]
     if open := @brackets.last()
       @fail open.position(), "'#{open.kind}' is never closed" if is_layout and @at_file_end()
@@ -181,17 +181,17 @@ export class TokenStream
         'a spread `xs...` can only be an item of an array or an argument of a variadic parameter'
     @fail at, "expected #{expected}, found #{describe_token(token)}"
 
-  at_file_end = ->
+  at_file_end := ->
     var index = @index_at(0)
     index += 1 while @tokens[index].kind == NEWLINE or @tokens[index].kind == DEDENT
     @tokens[index].kind == EOF
 
-  in_brackets = -> not @brackets.is_empty()
+  in_brackets := -> not @brackets.is_empty()
 
   # Runs `parse` on the contents of the brackets that the token before opens, from a line end after
   # it, which continues the line. A compile error ends the statement, after which
   # skip_to_next_statement restores the brackets, so they need no restoring on one.
-  inside = <T>(parse: () -> T): T ->
+  inside := <T>(parse: () -> T): T ->
     @brackets.push @tokens[@index - 1]
     @continue_line()
     result := parse()
@@ -199,7 +199,7 @@ export class TokenStream
     result
 
   # The closing bracket `close`, which may start the line after the contents.
-  expect_close = (close: TokenKind) ->
+  expect_close := (close: TokenKind) ->
     if @peek().kind == NEWLINE
       if @peek_at(1).kind == close
         @next()
@@ -209,19 +209,19 @@ export class TokenStream
 
   # A line end inside brackets that no block of continued lines holds leaves them unclosed, as the
   # next line is not deeper than the one that opened them.
-  fail_unless_continued = ->
+  fail_unless_continued := ->
     return if @continues_block(@index_at(0))
     open := @brackets.last()!
     @fail open.position(), "'#{open.kind}' is never closed"
 
   # Items separated by `separator`, at least one.
-  parse_separated = <T>(separator: TokenKind, parse_item: () -> T): T[] ->
+  parse_separated := <T>(separator: TokenKind, parse_item: () -> T): T[] ->
     items := [parse_item()]
     items.push parse_item() while @accept(separator)
     items
 
   # A newline and an indented block of lines, each of which `parse_line` parses.
-  parse_lines = <T>(description: String, parse_line: () -> T): T[] ->
+  parse_lines := <T>(description: String, parse_line: () -> T): T[] ->
     @expect NEWLINE, 'end of line'
     @expect INDENT, description
     lines: T[]
@@ -233,7 +233,7 @@ export class TokenStream
 
   # The offset of the token that closes the one at `start`, an `open`, past the pairs nested in it;
   # nil if a token that `allowed` rejects comes first.
-  closing_offset = (open: TokenKind, close: TokenKind, allowed: (TokenKind) -> Bool, start = 0) ->
+  closing_offset := (open: TokenKind, close: TokenKind, allowed: (TokenKind) -> Bool, start = 0) ->
     var depth = 0
     var offset = start
     var index = @index_at(start)
@@ -248,11 +248,11 @@ export class TokenStream
 
   # The items of a list after its opening bracket, through `close`. Items are separated by a
   # comma, by a line end, or by both, a comma ending a line.
-  parse_list = <T>(close: TokenKind, parse_item: () -> T): T[] ->
+  parse_list := <T>(close: TokenKind, parse_item: () -> T): T[] ->
     @inside -> @parse_list_rest(close, parse_item, [])
 
   # The rest of a list whose first items are `items`, through `close`.
-  parse_list_rest = <T>(close: TokenKind, parse_item: () -> T, items: T[]): T[] ->
+  parse_list_rest := <T>(close: TokenKind, parse_item: () -> T, items: T[]): T[] ->
     return items if not items.is_empty() and not @ends_item(close)
     until @accept(close)
       items.push parse_item()
@@ -261,7 +261,7 @@ export class TokenStream
 
   # Reads the items of an indented block on the next lines, through its end, with `read_item`.
   # Items are separated as in a list, with a line end, a comma, or both.
-  read_block_items = (read_item: () -> void) ->
+  read_block_items := (read_item: () -> void) ->
     @expect NEWLINE, 'end of line'
     @expect INDENT, 'indented block'
     while @peek().kind != DEDENT
@@ -272,7 +272,7 @@ export class TokenStream
 
   # Whether a comma follows, consumed with the line end after it; an item must follow at the same
   # indentation.
-  accept_block_comma = ->
+  accept_block_comma := ->
     return false unless @accept(',')
     @accept NEWLINE
     next := @peek()
@@ -283,7 +283,7 @@ export class TokenStream
   # After an item: whether a separator, which is consumed, follows it; otherwise the closing
   # bracket must, and is consumed. An item that ends with a block, a function's body, has ended its
   # line.
-  ends_item = (close: TokenKind) ->
+  ends_item := (close: TokenKind) ->
     if @accept(',')
       @continue_line()
       # A closing bracket after the block reports the comma before it.
@@ -300,7 +300,7 @@ export class TokenStream
     false
 
   # The body that `parse` reads is a function literal's: the result, and what it has of its own.
-  in_function = <T>(parse: () -> T) ->
+  in_function := <T>(parse: () -> T) ->
     marks := FunctionMarks()
     @functions.push marks
     body := parse()
@@ -308,10 +308,10 @@ export class TokenStream
     { body, marks }
 
   # A `yield` or `await` outside every function literal marks none; the checker rejects it.
-  innermost_function = -> @functions.last()
+  innermost_function := -> @functions.last()
 
   # Runs `parse`, which reads a part of an expression, one level deeper (see deepen).
-  nested = <T>(parse: () -> T): T ->
+  nested := <T>(parse: () -> T): T ->
     @deepen()
     part := parse()
     @nesting -= 1
@@ -320,16 +320,16 @@ export class TokenStream
   # Goes one level deeper, as a loop does for each part it adds to an expression, which it then
   # gives back by restoring `nesting`; the tree's depth is limited, as the passes after the parser
   # walk it by recursion, which would overflow the stack.
-  deepen = ->
+  deepen := ->
     @nesting += 1
     @fail_here "nesting deeper than #{MAX_NESTING}" if @nesting > MAX_NESTING
 
-  fail = (position: Position, message: String) ->
+  fail := (position: Position, message: String) ->
     compile_error @path, position.line, position.column, message
 
-  fail_here = (message: String) -> @fail(@peek().position(), message)
+  fail_here := (message: String) -> @fail(@peek().position(), message)
 
-  mark = ->
+  mark := ->
     StreamMark
       index: @index
       spread: @spread
@@ -343,7 +343,7 @@ export class TokenStream
   # was found, up to the next line at its indentation that does not continue it as `else`, `catch`
   # and `finally` do, or the end of the block it is in. The statement started at `start`; it is
   # skipped past at least one token, so that parsing goes on.
-  skip_to_next_statement = (start: StreamMark) ->
+  skip_to_next_statement := (start: StreamMark) ->
     @spread = start.spread
     @brackets.truncate start.brackets
     @functions.truncate start.functions
@@ -366,7 +366,7 @@ export class TokenStream
   # next token starts another. A line end outside the blocks ends it inside brackets too, which are
   # then never closed; the end of a block inside brackets does not, as the closing bracket comes
   # after it.
-  ends_statement = (kind: TokenKind, depth: StatementDepth) ->
+  ends_statement := (kind: TokenKind, depth: StatementDepth) ->
     ends_line := kind == NEWLINE or (kind == DEDENT and depth.brackets == 0)
     continues := @tokens[@index].kind in [INDENT, 'else', 'catch', 'finally']
     depth.blocks == 0 and ends_line and not continues
@@ -377,7 +377,7 @@ class StatementDepth
   var blocks = 0
   var brackets = 0
 
-  add = (kind: TokenKind) ->
+  add := (kind: TokenKind) ->
     @blocks += indentation_change(kind)
     case kind
       when '(', '[', '{' then @brackets += 1

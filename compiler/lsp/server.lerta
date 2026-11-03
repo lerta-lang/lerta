@@ -106,7 +106,7 @@ class Server
   # Handles each message until the input ends or an exit notification comes. A header that gives
   # no length tells nothing of where the next message starts, and a body that the end cuts short
   # leaves nothing to answer, so each ends the server.
-  run = ->
+  run := ->
     while true
       body :=
         try
@@ -118,7 +118,7 @@ class Server
 
   # A message that is not JSON, or not of a message's shape, is answered as a parse error, which
   # has no id to answer.
-  handle = (body: String) ->
+  handle := (body: String) ->
     header :=
       try
         decode_header body
@@ -133,7 +133,7 @@ class Server
       print_error error.message
       await respond_error(id, INTERNAL_ERROR, error.message) if id := header.id
 
-  dispatch = (method: String, id: Int | String?, body: String) ->
+  dispatch := (method: String, id: Int | String?, body: String) ->
     case method
       when 'initialize' then await @initialize(decode_request<InitializeParams>(body))
       when 'textDocument/didOpen'
@@ -166,7 +166,7 @@ class Server
       when 'exit' then exit(@shut_down then 0 else 1)
       else await respond_error(given, METHOD_NOT_FOUND, "no method #{method}") if given := id
 
-  initialize = (request: Request<InitializeParams>) ->
+  initialize := (request: Request<InitializeParams>) ->
     encodings := request.params.capabilities.general?.position_encodings ? []
     @encoding = UTF32 if 'utf-32' in encodings
     encoding := @encoding == UTF32 then 'utf-32' else 'utf-16'
@@ -183,7 +183,7 @@ class Server
   # whose file is gone keeps the diagnostics of its last check until it is closed, but not its
   # program, whose positions its new text no longer has; the open documents that import it are
   # checked again, from its new text.
-  set_text = (uri: String, text: String) ->
+  set_text := (uri: String, text: String) ->
     path := path_of_uri(uri) ? return
     open_texts[text_key(path)] = text
     @uris[text_key(path)] = uri
@@ -194,7 +194,7 @@ class Server
     await @check(doc) for doc in [path, @importers(path)...]
 
   # Its importers' checks, which took its text, are made again, from the file.
-  close = (uri: String) ->
+  close := (uri: String) ->
     path := path_of_uri(uri) ? return
     open_texts.remove text_key(path)
     files := @found[path]?.keys().to_array() ? []
@@ -206,7 +206,7 @@ class Server
 
   # The types of the name at the position, as a block of Lerta, from the program of the document's
   # own check if it has one, or of another open document's that holds it.
-  hover = (params: PositionParams) ->
+  hover := (params: PositionParams) ->
     path := path_of_uri(params.text_document.uri) ? return nil
     program := @program_of(path) ? return nil
     module_index := module_at(program, path) ? return nil
@@ -216,7 +216,7 @@ class Server
     Hover { kind: 'markdown', value: "```lerta\n#{lines.join("\n")}\n```" }
 
   # Where the name at the position is declared, if in a file that still writes it there.
-  definition = (params: PositionParams) ->
+  definition := (params: PositionParams) ->
     path := path_of_uri(params.text_document.uri) ? return nil
     program := @program_of(path) ? return nil
     module_index := module_at(program, path) ? return nil
@@ -230,7 +230,7 @@ class Server
 
   # What may be written where a name is being written, from a check of the document's text with
   # the checker's own name there (see complete.lerta), whose diagnostics are not published.
-  completion = (params: PositionParams): Promise<CompletionItem[]> ->
+  completion := (params: PositionParams): Promise<CompletionItem[]> ->
     path := path_of_uri(params.text_document.uri) ? return []
     key := text_key(path)
     text := open_texts[key] ? return []
@@ -249,20 +249,20 @@ class Server
     module_index := module_at(program, path) ? return []
     completion_items program, module_index, program.completion
 
-  program_of = (path: String) ->
+  program_of := (path: String) ->
     return own if own := @programs[path]
     for (doc, files) in @found.entries()
       return @programs[doc] if path in files and doc in @programs
     nil
 
   # The other open documents whose programs hold the document at the path.
-  importers = (path: String) ->
+  importers := (path: String) ->
     [doc for (doc, files) in @found.entries() when doc != path and path in files]
 
   # Checks the program whose entry module is the open document at the path, and publishes the
   # diagnostics of the files of its program, as of this check and of the last one. Its program is
   # kept if its modules cannot be loaded.
-  check = (path: String) ->
+  check := (path: String) ->
     before := @found[path]?.keys().to_array() ? []
     checked := await check_file(path, @encoding)
     found := checked.by_path
@@ -273,10 +273,10 @@ class Server
     await @publish(file) for file in files
 
   # The URI of the file as the client opened it, or else as the server writes one.
-  uri_of = (path: String) -> @uris[text_key(path)] ? uri_of_path(path)
+  uri_of := (path: String) -> @uris[text_key(path)] ? uri_of_path(path)
 
   # Publishes the diagnostics that the open documents' checks found in the file, each once.
-  publish = (file: String) ->
+  publish := (file: String) ->
     diagnostics: Set<LspDiagnostic>
     for found in @found.values()
       diagnostics.add each for each in found[file] ? []

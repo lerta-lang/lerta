@@ -9,7 +9,7 @@ export struct Text
   at: Position? = default nil
   # A closing bracket, before which a comment that ends the line of the last item stays at the end
   # of the line, after the bracket, while one on a line of its own stays inside.
-  closes = default false
+  closes := default false
 
 # Line feeds, `count` of them, after which the next text is indented as deep as the Indents around
 # it.
@@ -108,7 +108,7 @@ class Printer
   # The last line of the source that the output has reached, by a token or a comment.
   var source_line = 0
 
-  run = (doc: Doc) ->
+  run := (doc: Doc) ->
     steps: Step[] = [Work(doc, indent: 0)]
     until steps.is_empty()
       step := steps.pop()
@@ -119,12 +119,12 @@ class Printer
         when Work then @print(step, steps)
 
   # The comments after the last token, at the end of the file, and its last line feed.
-  finish = ->
+  finish := ->
     @print_comments_before nil, 0
     @feed_lines()
 
   # Prints the step, or puts what it holds on `steps`, the first of them last.
-  print = (work: Work, steps: Step[]) ->
+  print := (work: Work, steps: Step[]) ->
     { doc, indent } := work
     inner := (part: Doc, depth: Int) -> Work(doc: part, indent: depth)
     case doc
@@ -152,14 +152,14 @@ class Printer
         @source_line = doc.end_line
 
   # The part of the rule ends after what is on `steps` next, and starts at its first text.
-  start_rule = (style_rule: StyleRule, steps: Step[]) ->
+  start_rule := (style_rule: StyleRule, steps: Step[]) ->
     rule_end := RuleEnd(style_rule)
     @unstarted.push rule_end
     steps.push rule_end
 
   # A text of a token comes after the comments before it, and after a blank line where the source
   # has one before it and the output starts a line with it.
-  print_text = (text: Text, indent: Int) ->
+  print_text := (text: Text, indent: Int) ->
     if at := text.at
       if not text.closes or @own_line_comment_before(at)
         @print_comments_before at, indent
@@ -169,7 +169,7 @@ class Printer
 
   # The lines after the first are written as they are, but for the indentation that the first
   # loses or gains.
-  print_verbatim = (verbatim: Verbatim, indent: Int) ->
+  print_verbatim := (verbatim: Verbatim, indent: Int) ->
     { at, last_line } := verbatim
     @print_comments_before at, indent
     @keep_blank_line at.line
@@ -186,7 +186,7 @@ class Printer
       @next_comment += 1
     @source_line = last_line
 
-  own_line_comment_before = (at: Position) ->
+  own_line_comment_before := (at: Position) ->
     comments := @source.comments
     for i in @next_comment...comments.length
       return false if comments[i].line >= at.line
@@ -197,7 +197,7 @@ class Printer
   # line of its own goes on a line of its own, indented as the next text unless the source indents
   # it deeper, as at the end of a block. One that ends a line ends the output's line that holds
   # the last text of its line.
-  print_comments_before = (at: Position?, indent: Int) ->
+  print_comments_before := (at: Position?, indent: Int) ->
     comments := @source.comments
     while @next_comment < comments.length
       comment := comments[@next_comment]
@@ -220,17 +220,17 @@ class Printer
 
   # A blank line before a line that the output starts at a line of the source, where the source
   # has one between that line and the last that the output has reached.
-  keep_blank_line = (line: Int) ->
+  keep_blank_line := (line: Int) ->
     return if @pending_indent == nil or @source_line == 0 or @breaks != 1
     for l in (@source_line + 1)...line
       if @source.is_blank(l)
         @breaks += 1
         return
 
-  end_line = (indent: Int) -> @new_lines(1, indent)
+  end_line := (indent: Int) -> @new_lines(1, indent)
 
   # An empty text, as a part that is left out, does not start a line.
-  write = (text: String) ->
+  write := (text: String) ->
     return if text.is_empty()
     @feed_lines()
     if depth := @pending_indent
@@ -243,7 +243,7 @@ class Printer
     @pieces.push text
     @column += columns(text)
 
-  feed_lines = ->
+  feed_lines := ->
     return if @breaks == 0
     @pieces.push "\n" for _ in 0...@breaks
     @line += @breaks
@@ -251,12 +251,12 @@ class Printer
     @breaks = 0
 
   # The next line is indented when its first text comes, so that a blank line holds no spaces.
-  new_lines = (count: Int, indent: Int) ->
+  new_lines := (count: Int, indent: Int) ->
     @breaks += count
     @pending_indent = indent
 
   # Where the next text goes. A line that has no text yet starts after its indentation.
-  place = ->
+  place := ->
     if depth := @pending_indent
       return Position(line: @line + @breaks, column: depth * INDENT_WIDTH + 1)
     Position line: @line, column: @column
@@ -311,7 +311,7 @@ class Measurer
   var last_line = 0
   var closing_line = 0
 
-  fits = ->
+  fits := ->
     while true
       if @pending.is_empty()
         if @in_flat
@@ -326,7 +326,7 @@ class Measurer
     true
 
   # Whether the line fits, if the part tells; nil if what follows it does.
-  measure = (measured: Measured) ->
+  measure := (measured: Measured) ->
     { doc, depth, nested } := measured
     case doc
       when Text then return false unless @measure_text(doc, nested)
@@ -350,13 +350,13 @@ class Measurer
     nil
 
   # Whether the text fits in what is left of the line, which it takes.
-  measure_text = (text: Text, nested: Bool) ->
+  measure_text := (text: Text, nested: Bool) ->
     @left -= columns(text.text)
     @has_text = @has_text or not text.text.is_empty()
     @mark_lines text if @in_flat and not nested
     @left >= 0
 
-  mark_lines = (text: Text) ->
+  mark_lines := (text: Text) ->
     at := text.at ? return
     if text.closes
       @closing_line = at.line if at.line > @closing_line
@@ -364,10 +364,10 @@ class Measurer
       @first_line = at.line if @first_line == 0
       @last_line = at.line if at.line > @last_line
 
-  fits_at_line_end = -> not @in_flat or not @comment_inside()
+  fits_at_line_end := -> not @in_flat or not @comment_inside()
 
   # A comment between the texts, or one on a line of its own before a closing bracket after them.
-  comment_inside = ->
+  comment_inside := ->
     start := @from_line > 0 then @from_line else @first_line
     between := has_comment_line(@comment_lines, start, @last_line, own_line: false)
     between or has_comment_line(@comment_lines, @last_line, @closing_line, own_line: true)

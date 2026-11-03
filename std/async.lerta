@@ -10,28 +10,28 @@ extern lerta_promise_fire: (Promise) -> void
 class Outcome<T>
   var value: (() -> T)? = nil
   var error: Error? = nil
-  is_settled = -> @value != nil or @error != nil
+  is_settled := -> @value != nil or @error != nil
 
 # A promise and what settles it, apart: `promise()` waits until `resolve` or `reject` is called. The
 # first of them settles it, and later ones change nothing. The promise is made once it is asked
 # for, so that a Deferred that is never settled leaves nothing waiting.
 export class Deferred<T>
-  fired = lerta_promise_pending()
-  outcome = Outcome<T>()
+  fired := lerta_promise_pending()
+  outcome := Outcome<T>()
   var waiting: Promise<T>? = nil
 
-  promise = ->
+  promise := ->
     return waiting if waiting := @waiting
     started := settled_by(@fired, @outcome)
     @waiting = started
     started
 
-  resolve = (value: T) ->
+  resolve := (value: T) ->
     return if @outcome.is_settled()
     @outcome.value = -> value
     lerta_promise_fire @fired
 
-  reject = (error: Error) ->
+  reject := (error: Error) ->
     return if @outcome.is_settled()
     @outcome.error = error
     lerta_promise_fire @fired
@@ -40,17 +40,17 @@ export class Deferred<T>
 # void, so a Deferred<void> cannot stand for it.
 export class Signal
   # Only whether it is settled, and its error, matter; the Bool is never read.
-  deferred = Deferred<Bool>()
+  deferred := Deferred<Bool>()
   var waiting: Promise? = nil
 
-  promise = ->
+  promise := ->
     return waiting if waiting := @waiting
     started := ended(@deferred.promise())
     @waiting = started
     started
 
-  resolve = -> @deferred.resolve(true)
-  reject = (error: Error) -> @deferred.reject(error)
+  resolve := -> @deferred.resolve(true)
+  reject := (error: Error) -> @deferred.reject(error)
 
 ended := (promise: Promise<Bool>): Promise -> await promise
 
@@ -87,7 +87,7 @@ expired := <T>(seconds: Float): Promise<T> ->
 # one, by the extend of Promise[], which gives them its methods before the generic one does, as
 # promises of true that all_valued makes of them.
 extend<T> Promise<T>[]
-  gathered = (): Promise<T[]> ->
+  gathered := (): Promise<T[]> ->
     all_values := Deferred<T[]>()
     boxes: T[][] = [[] for _ in @]
     var left = @length
@@ -108,7 +108,7 @@ extend<T> Promise<T>[]
       promise.cancel() for promise in @
       throw error
 
-  first_settled = (): Promise<T> ->
+  first_settled := (): Promise<T> ->
     first := Deferred<T>()
     settle := (promise: Promise<T>) ->
       try
@@ -124,14 +124,14 @@ extend<T> Promise<T>[]
       # as a read that still holds its Reader would.
       await done for done in settling
 
-  settled_within = (seconds: Float) -> await [@[0], expired<T>(seconds)].first_settled()
+  settled_within := (seconds: Float) -> await [@[0], expired<T>(seconds)].first_settled()
 
 extend Promise[]
-  gathered = (): Promise -> await all_valued(@).gathered()
+  gathered := (): Promise -> await all_valued(@).gathered()
 
-  first_settled = (): Promise -> await all_valued(@).first_settled()
+  first_settled := (): Promise -> await all_valued(@).first_settled()
 
-  settled_within = (seconds: Float): Promise -> await all_valued(@).settled_within(seconds)
+  settled_within := (seconds: Float): Promise -> await all_valued(@).settled_within(seconds)
 
 valued := (promise: Promise) ->
   await promise

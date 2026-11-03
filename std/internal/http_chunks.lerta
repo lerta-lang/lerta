@@ -10,7 +10,7 @@ export class SizedBody
   name: String
   var left: Int?
 
-  next = ->
+  next := ->
     left := @left ? return await @reader.read(CHUNK_SIZE)
     return nil if left == 0
     chunk := await @reader.read(min(left, CHUNK_SIZE)) ? throw ended_early(@name)
@@ -37,7 +37,7 @@ export class ChunkedBody
   var in_trailer = false
   var ended = false
 
-  next = ->
+  next := ->
     return nil if @ended
     if @left == 0
       if @ending_chunk
@@ -58,7 +58,7 @@ export class ChunkedBody
     chunk
 
   # The size of the next chunk, in hexadecimal before its extensions.
-  size = ->
+  size := ->
     line := await @line() ? throw ended_early(@name)
     var size_text = line
     if parts := line.split_once(';')
@@ -78,26 +78,26 @@ export class ChunkedBody
     size = size * 16 + (byte.hex_value() ? throw @malformed()) for byte in hex
     size
 
-  end_chunk = ->
+  end_chunk := ->
     line := await @line() ? throw ended_early(@name)
     throw @malformed() unless line.is_empty()
 
-  skip_trailer = ->
+  skip_trailer := ->
     while line := await @line()
       return if line.is_empty()
     throw ended_early(@name)
 
   # A line, its line end counted as CR LF.
-  line = ->
+  line := ->
     line := await well_formed(@reader.read_line(MAX_LINE), @name) ? return nil
     @lines_taken += line.binary.length + 2
     # Compared so, as `room` may be INT_MAX.
     throw @too_large() if @lines_taken - MAX_LINE > @room
     line
 
-  too_large = -> IOError("a #{@name} too large")
+  too_large := -> IOError("a #{@name} too large")
 
-  malformed = -> IOError("a malformed #{@name}")
+  malformed := -> IOError("a malformed #{@name}")
 
 export ended_early := (name: String) -> IOError("a #{name} ended early")
 
@@ -110,7 +110,7 @@ export class JoinedReads
   var ended = false
   var waiting: Promise<Binary?>? = nil
 
-  next = ->
+  next := ->
     return nil if @ended
     first := await @taken_waiting() ? return nil
     pieces := [first]
@@ -134,12 +134,12 @@ export class JoinedReads
 
   # Cancels the read left for the next, of a body whose sending has stopped, and drops its result,
   # as an error that it has been rejected with would otherwise end the program.
-  cancel = ->
+  cancel := ->
     waiting := @waiting ? return
     waiting.cancel()
     spawn dropped(waiting)
 
-  taken_waiting = ->
+  taken_waiting := ->
     read := @waiting ? @reader.read(CHUNK_SIZE)
     @waiting = nil
     await read

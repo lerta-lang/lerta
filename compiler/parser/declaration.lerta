@@ -196,16 +196,25 @@ parse_member_modifier := (tokens: TokenStream) ->
   tokens.next() if is_weak_bang or is_weak_var
   modifier
 
-# `[var | weak | weak var | weak!] name[: Type][ = [default] value]`, with a type, a value or
-# both, or `name := [default] value`, a const declared as a local is.
+# `[modifier] name: Type[ = [default] value]`, `modifier name = [default] value` or
+# `name := [default] value`, as a local is declared, the modifier `var`, `weak`, `weak var` or
+# `weak!`.
 parse_member := (tokens: TokenStream) ->
   token := tokens.peek()
   modifier := parse_member_modifier(tokens)
   name := parse_identifier(tokens)
   type := parse_type_annotation(tokens)
-  is_const := modifier == nil and type == nil and tokens.accept(':=')
+  is_plain := modifier == nil and type == nil
+  # It would read as an assignment, which a type body cannot hold.
+  if is_plain and tokens.peek().kind == '='
+    tokens.fail tokens.peek().position(), "write 'name := value' to declare a member"
+  is_const := is_plain and tokens.accept(':=')
   has_value := is_const or type == nil or tokens.peek().kind in ['=', ':=']
-  expected := type == nil and modifier == nil then "':', ':=' or '='" else "'='"
+  expected :=
+    case
+      when is_plain then "':' or ':='"
+      when type == nil then "':' or '='"
+      else "'='"
   tokens.expect '=', expected if has_value and not is_const
   has_default := has_value and at_default(tokens)
   tokens.next() if has_default

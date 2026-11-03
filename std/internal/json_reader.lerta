@@ -13,28 +13,28 @@ export class JsonReader
   seen_keys: Set<String>[] = []
 
   # Whether the value is null, which it then reads.
-  read_null = -> @read_literal('null')
+  read_null := -> @read_literal('null')
 
-  read_bool = ->
+  read_bool := ->
     return true if @read_literal('true')
     return false if @read_literal('false')
     @fail_expected 'a Bool'
 
   # A number that `parse` reads as what `expected` names, as `an Int8`, or gives nil for.
-  read_number = <T>(expected: String, parse: (String) -> T?): T ->
+  read_number := <T>(expected: String, parse: (String) -> T?): T ->
     number := @number() ? @fail_expected(expected)
     value := parse(number) ? @fail("expected #{expected}, found #{number}")
     @at += number.binary.length
     value
 
   # An integer of the type that `expected` names, from `least` to `most`.
-  read_integer = (expected: String, least: Int, most: Int): Int ->
+  read_integer := (expected: String, least: Int, most: Int): Int ->
     @read_number expected, (number) ->
       value := number.parse_int()
       value != nil and least <= value and value <= most then value
 
   # Its digits are read on their own, as a UInt64 may be above the largest Int.
-  read_uint64 = (): UInt64 ->
+  read_uint64 := (): UInt64 ->
     number := @number() ? @fail_expected('a UInt64')
     out_of_range := -> @fail("expected a UInt64, found #{number}")
     var value: UInt64 = 0
@@ -47,9 +47,9 @@ export class JsonReader
     value
 
   # A number that is not finite as a Float32 is no Float32.
-  read_float32 = -> @read_number('a Float32', finite_float32)
+  read_float32 := -> @read_number('a Float32', finite_float32)
 
-  read_binary = (): Binary ->
+  read_binary := (): Binary ->
     @skip_space()
     @fail_expected 'a Binary' if @peek() != '"'
     at := @at
@@ -59,9 +59,9 @@ export class JsonReader
     @fail 'expected a Binary, found a string that is not base64'
 
   # A number that is not finite as a Float is no Float.
-  read_float = -> @read_number('a Float', String.parse_float)
+  read_float := -> @read_number('a Float', String.parse_float)
 
-  read_string = ->
+  read_string := ->
     @skip_space()
     @fail_expected 'a String' if @peek() != '"'
     @at += 1
@@ -83,10 +83,10 @@ export class JsonReader
     text
 
   # Reads `[` of an array, whose items next_item then starts.
-  begin_array = (): void -> @begin('[', 'an array')
+  begin_array := (): void -> @begin('[', 'an array')
 
   # Whether another item of the innermost array follows, which it then starts reading.
-  next_item = ->
+  next_item := ->
     level := @levels.last()!
     count := level.count
     return false unless @has_next(']')
@@ -94,12 +94,12 @@ export class JsonReader
     true
 
   # Reads `{` of an object, whose keys next_key then gives.
-  begin_object = (): void ->
+  begin_object := (): void ->
     @begin '{', 'an object'
     @seen_keys.push Set<String>()
 
   # The next key of the innermost object, whose value it then starts reading, or nil at its end.
-  next_key = (): String? ->
+  next_key := (): String? ->
     unless @has_next('}')
       @seen_keys.pop()
       return nil
@@ -116,7 +116,7 @@ export class JsonReader
     key
 
   # The value where the reader is, of whatever kind, as that of a key that is no field.
-  skip_value = (): void ->
+  skip_value := (): void ->
     @skip_space()
     byte := @peek()
     if byte == '"'
@@ -133,7 +133,7 @@ export class JsonReader
 
   # The kind of the value where the reader is, by the first byte that it can be told by, as one of
   # the JSON_ kinds below, which tells the member of a union that it is.
-  peek_kind = (): Int ->
+  peek_kind := (): Int ->
     @skip_space()
     byte := @peek() ? return JSON_OTHER
     case
@@ -144,26 +144,26 @@ export class JsonReader
       else JSON_OTHER
 
   # Whether the key read is that of the field, as next_field writes it.
-  is_field_key = (key: String, name: String, camel_case: String): Bool ->
+  is_field_key := (key: String, name: String, camel_case: String): Bool ->
     key == field_key(@keys, name, camel_case)
 
   # The object just read has no key for the field, which needs one.
-  fail_missing = (name: String, camel_case: String): never ->
+  fail_missing := (name: String, camel_case: String): never ->
     @fail "missing the key #{quoted(field_key(@keys, name, camel_case))}"
 
   # Starts reading the next of the `count` items of a tuple, which must be there.
-  next_tuple_item = (count: Int): void ->
+  next_tuple_item := (count: Int): void ->
     @fail "expected an array of #{count} items, found fewer" unless @next_item()
 
   # Reads the end of a tuple of `count` items, which must have no more.
-  end_tuple = (count: Int): void ->
+  end_tuple := (count: Int): void ->
     @fail "expected an array of #{count} items, found more" if @next_item()
 
   # The string just read names no member of the enum.
-  fail_member = (enum_name: String, text: String): never ->
+  fail_member := (enum_name: String, text: String): never ->
     @fail "expected a member of #{enum_name}, found #{quoted(text)}"
 
-  begin = (open: Byte, expected: String) ->
+  begin := (open: Byte, expected: String) ->
     @skip_space()
     @fail_expected expected if @peek() != open
     @fail "nesting deeper than #{MAX_DEPTH}" if @levels.length == MAX_DEPTH
@@ -172,7 +172,7 @@ export class JsonReader
 
   # Whether another item or key of the innermost array or object follows, after the `,` that it
   # reads; at the end, it reads `close`.
-  has_next = (close: Byte) ->
+  has_next := (close: Byte) ->
     @skip_space()
     level := @levels.last()!
     if @peek() == close
@@ -186,18 +186,18 @@ export class JsonReader
     true
 
   # Nothing but whitespace follows the value.
-  end = (): void ->
+  end := (): void ->
     @skip_space()
     @fail_expected 'the end of the text' if @at < @bytes.length
 
-  read_literal = (literal: String) ->
+  read_literal := (literal: String) ->
     @skip_space()
     return false unless @bytes.occurs_at(@at, literal.binary)
     @at += literal.binary.length
     true
 
   # Reads the escape after a backslash in a string, as the Char it gives.
-  read_escape = (): Char ->
+  read_escape := (): Char ->
     byte := @peek() ? @fail('a string that does not end')
     @at += 1
     return @read_escaped_char() if byte == 'u'
@@ -205,7 +205,7 @@ export class JsonReader
     escaped.to_char()
 
   # A surrogate pair is one Char, written as two escapes.
-  read_escaped_char = ->
+  read_escaped_char := ->
     code := @read_hex_unit()
     return code.to_char()! if code < 0xD800 or code > 0xDFFF
     lone := -> @fail("a lone surrogate in a string, \\u#{code.to_hex(4)}")
@@ -215,7 +215,7 @@ export class JsonReader
     lone() if low < 0xDC00 or low > 0xDFFF
     (0x10000 + (code - 0xD800) << 10 + (low - 0xDC00)).to_char()!
 
-  read_hex_unit = ->
+  read_hex_unit := ->
     var code = 0
     for _ in 0...4
       digit := (@peek() ? 0).hex_value() ? @fail('an escape \u without four hex digits')
@@ -224,7 +224,7 @@ export class JsonReader
     code
 
   # The number's text where the reader is, as JSON writes numbers, or nil if none is there.
-  number = (): String? ->
+  number := (): String? ->
     @skip_space()
     bytes := @bytes
     var end = @at
@@ -246,16 +246,16 @@ export class JsonReader
       return nil unless digits()
     bytes.text(@at, end)!
 
-  skip_space = -> @at += 1 while @peek()?.is_space() == true
+  skip_space := -> @at += 1 while @peek()?.is_space() == true
 
-  peek = -> @bytes.get(@at)
+  peek := -> @bytes.get(@at)
 
-  fail_expected = (expected: String): never -> @fail("expected #{expected}, found #{@found()}")
+  fail_expected := (expected: String): never -> @fail("expected #{expected}, found #{@found()}")
 
-  fail = (message: String): never -> throw JsonError(message: "#{path_of(@levels)}: #{message}")
+  fail := (message: String): never -> throw JsonError(message: "#{path_of(@levels)}: #{message}")
 
   # What is where the reader is, as an error says it.
-  found = ->
+  found := ->
     @skip_space()
     byte := @peek() ? return 'the end of the text'
     return number if number := @number()

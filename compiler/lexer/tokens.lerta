@@ -110,13 +110,13 @@ export struct Token
   parts: TemplatePart[]?
   # The line and the column after it, where the formatter reads its spelling up to; those of its
   # start for a layout token. Only a `"""` or `'''` literal ends on a later line.
-  end_line = default @line
-  end_column = default @column
+  end_line := default @line
+  end_column := default @column
 
-  position = -> Position(line: @line, column: @column)
+  position := -> Position(line: @line, column: @column)
 
   # Whether it is the identifier `word`, which is not a keyword, so that it stays usable as a name.
-  is_word = (word: String) -> @kind == IDENTIFIER and @text == word
+  is_word := (word: String) -> @kind == IDENTIFIER and @text == word
 
 # A comment, which runs from its `#` to the end of its line, alone on it if `own_line`. The
 # compiler skips comments; the formatter puts them back by the tokens around them.
@@ -197,9 +197,9 @@ layout_token := (kind: TokenKind, line: Int, column: Int) ->
 class Layout
   path: String
   tokens: Token[]
-  indents = [0]
+  indents := [0]
 
-  start_line = (line: SourceLine, indent: Int) ->
+  start_line := (line: SourceLine, indent: Int) ->
     column := line.column(indent)
     if indent > @indents.last()!
       @indents.push indent
@@ -210,10 +210,10 @@ class Layout
       @tokens.push layout_token(DEDENT, line.number, column)
     line.fail 'indentation does not match any outer block', indent if indent != @indents.last()!
 
-  end_line = (line: SourceLine) ->
+  end_line := (line: SourceLine) ->
     @tokens.push layout_token(NEWLINE, line.number, line.column(line.length))
 
-  finish = (eof_line: Int) ->
+  finish := (eof_line: Int) ->
     @tokens.push layout_token(DEDENT, eof_line, 1) for _ in 1...@indents.length
     @tokens.push layout_token(EOF, eof_line, 1)
 
@@ -228,7 +228,7 @@ class LineScanner
   # with one; scanning stops at it, and the caller reads the literal.
   var multiline_start: Int? = nil
 
-  run = ->
+  run := ->
     while @position < @line.length
       c := @line.bytes[@position]
       case
@@ -251,16 +251,16 @@ class LineScanner
         else @scan_punctuation()
     @tokens
 
-  at_multiline_quotes = ->
+  at_multiline_quotes := ->
     bytes := @line.bytes
     bytes.occurs_at(@position, '"""'.binary) or bytes.occurs_at(@position, "'''".binary)
 
   # `b` before a quote.
-  at_binary_literal = ->
+  at_binary_literal := ->
     next := @line.bytes.get(@position + 1)
     @line.bytes[@position] == 'b' and (next == "'" or next == '"')
 
-  scan_binary = ->
+  scan_binary := ->
     quote := @position + 1
     if @line.bytes.occurs_at(quote, "'''".binary) or @line.bytes.occurs_at(quote, '"""'.binary)
       @line.fail 'a Binary literal spans one line', @position
@@ -273,7 +273,7 @@ class LineScanner
       @add BINARY, '', end, parts
 
   # Adds the token that starts at the position, and moves to `end`, after it.
-  add = (kind: TokenKind, text: String, end: Int, parts: TemplatePart[]?) ->
+  add := (kind: TokenKind, text: String, end: Int, parts: TemplatePart[]?) ->
     start := @position
     spaced := start == 0 or @line.bytes[start - 1] == ' '
     column := @line.column(start)
@@ -281,20 +281,20 @@ class LineScanner
     @tokens.push { kind, text, spaced, parts, column, end_column, line: @line.number }
     @position = end
 
-  scan_word = ->
+  scan_word := ->
     end := @line.scan_while(@position, is_identifier_part)
     word := @line.text(@position, end)
     @add keyword_kind(word) ? IDENTIFIER, word, end, nil
 
-  scan_raw_string = ->
+  scan_raw_string := ->
     close := @raw_string_end(@position)
     @add STRING, @line.text(@position + 1, close), close + 1, nil
 
   # The index of the `'` that closes the `'...'` literal whose opening quote is at `start`.
-  raw_string_end = (start: Int) ->
+  raw_string_end := (start: Int) ->
     @line.index_of("'", start + 1) ? @line.fail('unterminated string literal', start)
 
-  read_double_quoted = ->
+  read_double_quoted := ->
     { parts, end } := scan_double_quoted(@line, @position, false)
     if text := plain_text(parts)
       @add STRING, text, end, nil
@@ -302,7 +302,7 @@ class LineScanner
       @add INTERPOLATED, '', end, parts
 
   # A `.` begins a fraction only before a digit, so `1.f()` stays an integer and a member.
-  scan_number = ->
+  scan_number := ->
     bytes := @line.bytes
     after_digits := (start: Int) -> @line.scan_while(start, is_identifier_part)
     var end = after_digits(@position)
@@ -325,7 +325,7 @@ class LineScanner
   # The longest punctuation that starts here; `...` is the longest of all. What follows may not be
   # a whole character, so a slice that is not valid UTF-8 is skipped. No word starts here, so no
   # keyword or named kind can match.
-  scan_punctuation = ->
+  scan_punctuation := ->
     for length in [3, 2, 1]
       end := @position + length
       continue if end > @line.length
@@ -336,7 +336,7 @@ class LineScanner
     @fail_unexpected_character()
 
   # Control characters such as '\r' would garble the error line if printed raw.
-  fail_unexpected_character = ->
+  fail_unexpected_character := ->
     number := @line.char_at(@position).to_int()
     is_printable_ascii := number in 0x20..0x7E
     shown :=

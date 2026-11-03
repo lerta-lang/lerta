@@ -11,71 +11,71 @@ export class JsonWriter
   # The objects being written that may hold themselves, by their addresses, with their paths.
   entered: { address: Int, path: String }[] = []
 
-  write_null = (): void -> @written += 'null'
-  write_bool = (value: Bool): void -> @written += value.to_string()
-  write_int = (value: Int): void -> @written += value.to_string()
-  write_float = (value: Float): void ->
+  write_null := (): void -> @written += 'null'
+  write_bool := (value: Bool): void -> @written += value.to_string()
+  write_int := (value: Int): void -> @written += value.to_string()
+  write_float := (value: Float): void ->
     @check_finite value
     @written += value.to_string()
-  write_string = (value: String): void -> @written += quoted(value)
-  write_uint64 = (value: UInt64): void -> @written += value.to_string()
-  write_float32 = (value: Float32): void ->
+  write_string := (value: String): void -> @written += quoted(value)
+  write_uint64 := (value: UInt64): void -> @written += value.to_string()
+  write_float32 := (value: Float32): void ->
     @check_finite value.to_float()
     @written += value.to_string()
   # As base64 (RFC 4648), whose letters need no escape.
-  write_binary = (value: Binary): void -> @written += "\"#{base64(value)}\""
+  write_binary := (value: Binary): void -> @written += "\"#{base64(value)}\""
 
-  begin_array = (): void -> @begin('[')
+  begin_array := (): void -> @begin('[')
 
   # Starts an item of the innermost array.
-  next_item = (): void -> @next("[#{@levels.last()!.count}]")
+  next_item := (): void -> @next("[#{@levels.last()!.count}]")
 
-  end_array = (): void -> @end(']')
+  end_array := (): void -> @end(']')
 
-  begin_object = (): void -> @begin('{')
+  begin_object := (): void -> @begin('{')
 
   # Starts the value of the key in the innermost object.
-  next_key = (key: String): void ->
+  next_key := (key: String): void ->
     @next ".#{key}"
     @written += quoted(key)
     @written += ':'
 
   # Starts the value of a field in the innermost object, by its key: its name as written, or in
   # camel case, which the compiler gives.
-  next_field = (name: String, camel_case: String): void ->
+  next_field := (name: String, camel_case: String): void ->
     @next_key field_key(@keys, name, camel_case)
 
-  end_object = (): void -> @end('}')
+  end_object := (): void -> @end('}')
 
   # Starts writing an object that may hold itself, by its address, which must not be written
   # already: JSON cannot hold a cycle.
-  enter = (address: Int): void ->
+  enter := (address: Int): void ->
     path := @path_text()
     if earlier := @entered.find((each) -> each.address == address)
       throw JsonError(message: "#{path}: a cycle back to #{earlier.path}")
     @entered.push { address, path }
 
   # JSON holds no infinity.
-  check_finite = (value: Float): void ->
+  check_finite := (value: Float): void ->
     return if is_finite(value)
     throw JsonError(message: "#{@path_text()}: #{value}, which JSON cannot hold")
 
-  leave = (): void -> @entered.pop()
+  leave := (): void -> @entered.pop()
 
-  begin = (open: String) ->
+  begin := (open: String) ->
     @written += open
     @levels.push Level()
 
-  next = (step: String) ->
+  next := (step: String) ->
     level := @levels.last()!
     @written += ',' if level.count > 0
     level.count += 1
     level.step = step
 
-  end = (close: String) ->
+  end := (close: String) ->
     @levels.pop()
     @written += close
 
-  path_text = -> path_of(@levels)
+  path_text := -> path_of(@levels)
 
-  text = -> @written
+  text := -> @written

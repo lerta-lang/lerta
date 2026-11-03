@@ -65,14 +65,14 @@ export class IrModule
   defined: Set<String> = Set()
   var symbol_count = 0
   names: Map<String, String> = Map()
-  metadata = Metadata()
+  metadata := Metadata()
   # With `--source-lines`, the metadata of the debug information, where the instructions come
   # from in the source, as LLVM's line tables have it; nil without.
   var source_lines: SourceLines? = nil
 
   # The name `<prefix>.<n>` given to `key`, the same for the same key; `define` runs when the name
   # is first given, to define what it names.
-  named = (key: String, prefix: String, define: (String, IrModule) -> void) ->
+  named := (key: String, prefix: String, define: (String, IrModule) -> void) ->
     return existing if existing := @names[key]
     name := "#{prefix}.#{@names.length}"
     @names[key] = name
@@ -80,54 +80,55 @@ export class IrModule
     name
 
   # A new global symbol, `@<prefix>.<n>`.
-  fresh_symbol = (prefix: String) ->
+  fresh_symbol := (prefix: String) ->
     symbol := "@#{prefix}.#{@symbol_count}"
     @symbol_count += 1
     symbol
 
   # Runs `define` the first time `key` is given, for definitions that are made on demand.
-  define_once = (key: String, define: (IrModule) -> void) ->
+  define_once := (key: String, define: (IrModule) -> void) ->
     return unless @defined.add(key)
     define @
 
   # Declaring the same symbol again with the same text is harmless.
-  declare = (symbol: String, declaration: String) ->
+  declare := (symbol: String, declaration: String) ->
     if existing := @declarations[symbol]
       panic "conflicting declarations of #{symbol}" if existing != declaration
     @declarations[symbol] = declaration
 
   # Adds `@<prefix>.<n> = <definition>`, which gives its linkage, and returns the global's name.
-  global = (prefix: String, definition: String) ->
+  global := (prefix: String, definition: String) ->
     name := "@#{prefix}.#{@globals.length}"
     @define_global name, definition
     name
 
   # Adds `<name> = <definition>`, which gives its linkage, for a global named by the caller.
-  define_global = (name: String, definition: String) ->
+  define_global := (name: String, definition: String) ->
     @globals.push definition_of(name, "#{name} = #{definition}", nil)
 
   # A constant of the IR type, of the linkage; without one, the other modules may use it.
-  define_constant = (name: String, linkage: String, type: String, initial: String) ->
+  define_constant := (name: String, linkage: String, type: String, initial: String) ->
     declaration := linkage.is_empty() then "#{name} = external constant #{type}"
     symbol := name
     text := "#{name} = #{linkage}constant #{type} #{initial}"
     @globals.push definition_of(symbol, text, declaration)
 
   # A global variable of the IR type, which other modules may use.
-  define_variable = (name: String, type: String, initial: String) ->
+  define_variable := (name: String, type: String, initial: String) ->
     declaration := "#{name} = external global #{type}"
     symbol := name
     text := "#{name} = global #{type} #{initial}"
     @globals.push definition_of(symbol, text, declaration)
 
-  add_type = (name: String, body: String) -> @types[name] = "#{name} = type #{body}"
+  add_type := (name: String, body: String) -> @types[name] = "#{name} = type #{body}"
 
   # Adds the function `define <signature>` with the lines of its body; without a linkage, the other
   # modules may use it (see Definition).
-  define_function = (signature: String, body: String[]) -> @define_function_in(signature, body, nil)
+  define_function := (signature: String, body: String[]) ->
+    @define_function_in signature, body, nil
 
   # As define_function, with the debug information of the function, `!<n>`, if it has some.
-  define_function_in = (signature: String, body: String[], subprogram: String?) ->
+  define_function_in := (signature: String, body: String[], subprogram: String?) ->
     attributes := @function_attributes.is_empty() then '' else ' #0'
     debug := subprogram then " !dbg #{subprogram}" else ''
     text := ["define #{signature}#{attributes}#{debug} {", body..., '}'].join("\n")
@@ -138,7 +139,7 @@ export class IrModule
 
   # The lines of the module, with the declarations and the types that it takes from other modules,
   # which are written out one by one rather than joined, as a module's text is large.
-  render = (imported_types: String[], imported_declarations: String[]) ->
+  render := (imported_types: String[], imported_declarations: String[]) ->
     lines := [
       "source_filename = #{@source_filename}"
       imported_types...
@@ -181,48 +182,48 @@ export class IrBuilder
   var subprogram: String? = nil
 
   # Emits `%r<n> = <value>` and returns the register.
-  assign = (value: String) ->
+  assign := (value: String) ->
     register := @fresh_register()
     @assign_to register, value
     register
 
   # A register to be assigned later with `assign_to`, for `phi` operands defined further down.
-  fresh_register = ->
+  fresh_register := ->
     register := "%r#{@register_count}"
     @register_count += 1
     register
 
-  assign_to = (register: String, value: String) -> @emit("#{register} = #{value}")
+  assign_to := (register: String, value: String) -> @emit("#{register} = #{value}")
 
   # A stack slot for a value of the IR type, valid in the whole function.
-  alloca = (type: String) ->
+  alloca := (type: String) ->
     register := @fresh_register()
     @stack_slots.push "  #{register} = alloca #{type}"
     register
 
-  emit = (instruction: String) -> @body.push("  #{instruction}#{@debug_location()}")
+  emit := (instruction: String) -> @body.push("  #{instruction}#{@debug_location()}")
 
   # Loads a value of the IR type; the tag, as `, !tbaa !<n>`, says what the memory may alias.
-  load = (type: String, pointer: String, tag = '') -> @assign("load #{type}, ptr #{pointer}#{tag}")
+  load := (type: String, pointer: String, tag = '') -> @assign("load #{type}, ptr #{pointer}#{tag}")
 
-  store = (type: String, value: String, pointer: String, tag = '') ->
+  store := (type: String, value: String, pointer: String, tag = '') ->
     @emit "store #{type} #{value}, ptr #{pointer}#{tag}"
 
   # An i1 that is true where the i1 is false.
-  negate = (condition: String) -> @assign("xor i1 #{condition}, true")
+  negate := (condition: String) -> @assign("xor i1 #{condition}, true")
 
-  is_null = (pointer: String) -> @assign("icmp eq ptr #{pointer}, null")
+  is_null := (pointer: String) -> @assign("icmp eq ptr #{pointer}, null")
 
-  is_not_null = (pointer: String) -> @assign("icmp ne ptr #{pointer}, null")
+  is_not_null := (pointer: String) -> @assign("icmp ne ptr #{pointer}, null")
 
-  branch = (label: String) -> @emit("br label %#{label}")
+  branch := (label: String) -> @emit("br label %#{label}")
 
-  branch_if = (condition: String, then_label: String, else_label: String) ->
+  branch_if := (condition: String, then_label: String, else_label: String) ->
     @emit "br i1 #{condition}, label %#{then_label}, label %#{else_label}"
 
   # `, !dbg !<n>`: where the instruction comes from, if the module has source lines and the
   # function a place in the source.
-  debug_location = ->
+  debug_location := ->
     lines := @module.source_lines ? return ''
     scope := @scope ? return ''
     position := @location ? return ''
@@ -230,20 +231,20 @@ export class IrBuilder
     @subprogram = subprogram
     ", !dbg #{lines.location(subprogram, position)}"
 
-  fresh_label = (prefix: String) ->
+  fresh_label := (prefix: String) ->
     label := "#{prefix}.#{@label_count}"
     @label_count += 1
     label
 
-  start_block = (label: String) ->
+  start_block := (label: String) ->
     @body.push "#{label}:"
     @current_block = label
 
   # A block for the code after a jump or a throw, which never runs but still needs one to go in.
-  start_unreachable = -> @start_block(@fresh_label('unreachable'))
+  start_unreachable := -> @start_block(@fresh_label('unreachable'))
 
   # Adds the function `define <signature>`, holding everything emitted, to the module.
-  finish = (signature: String) ->
+  finish := (signature: String) ->
     lines := ['entry:', @stack_slots..., @body...]
     subprogram := @subprogram ? return @module.define_function(signature, lines)
     # Every instruction of a function that has debug information has a location, as LLVM requires

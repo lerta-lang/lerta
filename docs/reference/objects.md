@@ -36,7 +36,7 @@ The members of a type, one per line, are declared as locals are (see [declaratio
 - `weak name: Type?` is a field of a class that holds an object of a class without keeping it alive, so that two objects that refer to each other, as a parent and its children, are freed. Reading it gives the object, or nil once the object is freed; `weak var name: Type?` can be assigned. Either may be given to the constructor or computed as any field. Its type is written, an optional class, which cannot be a type parameter so far.
 - `weak! name: Type` is a weak field for an object that should outlive its holder: of a class type that is not optional, it is a constructor argument, which cannot be assigned afterwards, and reading it throws `weak object is gone` once the object is freed, including while the object's `deinit` runs.
 - `name := (params) -> body` is a method, which may be generic, as `apply := <T>(f: (Int) -> T): T -> f(@n)` (see [generic methods](#extend)). A method cannot be `var`. `init`, which takes no parameters and no type parameters, runs at the end of construction. In a class, `deinit`, which takes no parameters and gives no value, runs when the object is released (see [deinit](#deinit)).
-- `name = value` in a type body is an error, as it reads as an assignment: `write 'name := value' to declare a field`.
+- `name = value` in a type body is an error, as it reads as an assignment: `write 'name := value' to declare a member`.
 - Why a function literal member is a method, one per type with `@` passed at call time, rather than a field holding a closure: closures capturing `@` would create a cycle in every object.
 
 ### Generic classes and structs

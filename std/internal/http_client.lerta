@@ -16,28 +16,28 @@ import bytes_of from './utf8'
 # What a request sends besides its URL, and whether a redirect is followed. A body that is a Reader
 # is sent in chunks as it comes, and closed once the final response has come.
 export struct FetchOptions
-  method = default 'GET'
-  headers = default Headers()
+  method := default 'GET'
+  headers := default Headers()
   body: Body = default ''
-  follow_redirects = default true
+  follow_redirects := default true
 
 # Keeps each connection whose response has been read to its end, for the next request to the same
 # host and port, for `idle_timeout` seconds and at most `max_idle` of them to each.
 export class Client
-  idle_timeout = default 4.0
-  max_idle = default 8
+  idle_timeout := default 4.0
+  max_idle := default 8
   # The connections kept by host and port, the latest last.
   var idle: Map<String, IdleSocket[]> = Map()
 
   # The response once its head has come; its body is read as it comes.
-  fetch = (url: String, options: FetchOptions) ->
+  fetch := (url: String, options: FetchOptions) ->
     { body } := options
     try
       await @fetch_body(url, options, body is Reader then body else bytes_of(body))
     finally
       body.close() if body is Reader
 
-  fetch_body = (url: String, options: FetchOptions, body: Binary | Reader) ->
+  fetch_body := (url: String, options: FetchOptions, body: Binary | Reader) ->
     { method } := options
     throw ValueError("not a method: #{method}") unless is_token(method)
     check_field name, value for (name, value) in options.headers.fields
@@ -53,7 +53,7 @@ export class Client
     response
 
   # Closes the connections kept; the client keeps those it uses after.
-  close = ->
+  close := ->
     for kept in @idle.values()
       idle.socket.close() for idle in kept
     @idle = Map()
@@ -62,7 +62,7 @@ export class Client
   # by the server in the meantime, so a request that gets no answer on one is sent again on a new
   # one, when its method is one that may be sent twice. A body that is a Reader cannot be sent
   # twice, so it goes on a new connection, which the server has not had the time to close.
-  exchange = (request: Outgoing) ->
+  exchange := (request: Outgoing) ->
     { target, body } := request
     if socket := body is Reader then nil else @take_idle(target.authority)
       try
@@ -77,7 +77,7 @@ export class Client
   # Closes the connection on a failure, after which what it holds is not known. A body that is a
   # Reader is sent while the response is read, as a server may answer before it has read it all, and
   # a failure to read it fails the request.
-  send = (socket: Socket, request: Outgoing) ->
+  send := (socket: Socket, request: Outgoing) ->
     { body } := request
     sent := body is Reader then SentBody(socket, request, body)
     sending := sent?.send()
@@ -115,7 +115,7 @@ export class Client
   # The latest connection kept for the host and port, after closing those kept too long, which the
   # server may be closing. The clock of `time` may be set back, which keeps one longer, and a
   # request on one the server has closed is sent again.
-  take_idle = (authority: String) ->
+  take_idle := (authority: String) ->
     kept := @idle[authority] ? return nil
     now := time()
     fresh := [idle for idle in kept when now - idle.since < @idle_timeout]
@@ -124,7 +124,7 @@ export class Client
     @idle[authority] = fresh
     fresh.is_empty() then nil else fresh.pop().socket
 
-  give_back = (authority: String, socket: Socket) ->
+  give_back := (authority: String, socket: Socket) ->
     kept := @idle[authority] ? []
     if kept.length >= @max_idle
       socket.close()
@@ -181,7 +181,7 @@ class SentBody
   var whole = false
   var failure: Error? = nil
 
-  send = ->
+  send := ->
     reads := JoinedReads(@body)
     try
       return unless await @written(request_bytes(@request))
@@ -196,7 +196,7 @@ class SentBody
     finally
       reads.cancel()
 
-  written = (bytes: Binary) ->
+  written := (bytes: Binary) ->
     try
       await @socket.write(bytes)
       true
@@ -362,7 +362,7 @@ malformed := -> IOError('a malformed response')
 # for one that ends with the connection; or `chunked`.
 struct Framing
   left: Int?
-  chunked = default false
+  chunked := default false
 
 # A response to HEAD, and one of 204 or 304, has no body, whatever its fields tell.
 framing := (head: Head, method: String) ->
@@ -382,7 +382,7 @@ class BodyChunks
   chunks: ChunkedBody | SizedBody
   var ended = false
 
-  next = ->
+  next := ->
     return nil if @ended
     chunk :=
       try
@@ -394,12 +394,12 @@ class BodyChunks
     @end() if chunk == nil
     chunk
 
-  end = ->
+  end := ->
     @ended = true
     @finish()
 
   # Closes the connection of a body left before its end, which cannot be kept with the rest unread.
-  abandon = ->
+  abandon := ->
     return if @ended
     @ended = true
     @socket.close()
