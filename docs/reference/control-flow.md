@@ -23,7 +23,7 @@ until n >= 10
   n += 1
 ```
 
-- A condition is a `Bool`, or an optional value, which holds when it is not nil (a `Bool?` holds when it is `true`). The operands of `and`, `or` and `not` follow the same rule.
+- A condition is a `Bool`, or an optional value other than a `Bool?`, which holds when it is not nil. A `Bool?` is compared instead, `flag == true`, as `if flag` would hide whether nil is meant to be false. The operands of `and`, `or` and `not` follow the same rule.
 - `unless x` is `if not x`, and `until x` is `while not x`, in their postfix forms too (`return unless found`). An `unless` takes no `else`, and neither binds a name: `'unless' cannot bind a name`.
 - `if name := value` and `while name := value` hold when the optional value is not nil; inside the body, `name` is the value without nil.
 - An `if` with an `else` gives a value, that of the branch taken, as a `case` does (see [case](#case-without-a-subject)): `label := if v := m[key]`, followed by the branches on the lines below. It is written where a block literal may be (see [bracketless blocks](syntax.md#bracketless-blocks)), on the same line or the next, and as the last statement of a block. If any branch gives no value, as a block ending with an assignment, the `if` gives none either and is a statement; an `if` without an `else` never gives one.
