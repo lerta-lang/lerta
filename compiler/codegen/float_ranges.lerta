@@ -6,7 +6,7 @@
 import
   Assignment, BinaryOperation, Binding, Call, Case, Condition, Declaration, EnumDeclaration,
   Expression, Extend, Extern, FloatLiteral, For, FunctionLiteral, Identifier, If, Import,
-  IntegerLiteral, InterfaceDeclaration, Member, operands_of, Pass, Statement, Try, TypeAlias,
+  IntegerLiteral, InterfaceDeclaration, Member, operands_of, Pass, Range, Statement, Try, TypeAlias,
   TypeDeclaration, UnaryOperation, While
 from '../ast'
 
@@ -327,18 +327,25 @@ is_square := (analysis: Analysis, binary: BinaryOperation) ->
   analysis.facts.local_declarations[right] == local
 
 # Narrows the ranges of the locals by the condition, which holds: each comparison that `and` joins
-# of an expression with a constant.
+# of an expression with a constant, and a test of a range, `e in a..b`, as `e >= a and e <= b`.
 narrow := (analysis: Analysis, condition: Condition): void ->
   return unless condition is BinaryOperation
   if condition.operator == 'and'
     narrow analysis, condition.left
     narrow analysis, condition.right
     return
+  range := condition.right
+  return narrow_by_range(analysis, condition.left, range) if range is Range
   { operator, left, right } := condition
   if constant := constant_of(right)
     narrow_comparison analysis, operator, left, constant
   else if constant := constant_of(left)
     narrow_comparison analysis, MIRRORED[operator] ? '', right, constant
+
+narrow_by_range := (analysis: Analysis, expression: Expression, range: Range) ->
+  narrow_comparison analysis, '>=', expression, constant if constant := constant_of(range.start!)
+  if constant := constant_of(range.end!)
+    narrow_comparison analysis, range.inclusive then '<=' else '<', expression, constant
 
 # The comparison read from the other side.
 MIRRORED := { '<': '>', '<=': '>=', '>': '<', '>=': '<=' }

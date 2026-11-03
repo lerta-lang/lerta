@@ -6,11 +6,14 @@ import FunctionLiteral, Identifier, Node, Statement from '../ast'
 import ProgramWide, Shared from '../checker/shared'
 import CompileError from '../errors'
 import imported_files, load_modules, Module, module_key from '../loader'
-import ArrayType, bool_type, MapType, SimpleType, Type from '../types'
+import
+  ArrayType, bool_type, INTEGER_KINDS, is_one_of_kinds, MapType, NUMBER_KINDS, SimpleType, Type,
+  TypeKind
+from '../types'
 import
   Annotation, AnnotationKey, annotations_of, DeclaredType, EmptinessTest, ImportedName,
-  MembershipCall, ParameterType, Placed, QualifiedMember, RecordConstruction, RedundantCast,
-  ReturnType, SharedArms, ShorthandArgument, SpreadCopy
+  MembershipCall, ParameterType, Placed, QualifiedMember, RangeEnds, RangeTest, RecordConstruction,
+  RedundantCast, ReturnType, SharedArms, ShorthandArgument, SpreadCopy
 from './annotated'
 import
   CheckResult, checks, imports_type, quiet_program, result_of, same_result
@@ -68,8 +71,14 @@ can_leave_out := (annotation: Annotation, shared: Shared, program: ProgramWide) 
     when EmptinessTest then has_is_empty(facts.types[target.value])
     # These two, not in the body of a generic function, whose types are those of its instances.
     when MembershipCall then facts.types[target.call] == bool_type
+    when RangeTest then is_of_kinds(facts.types[target.value], [NUMBER_KINDS..., 'Char'])
+    when RangeEnds
+      counted := target.counted ? return true
+      is_of_kinds facts.types[counted], INTEGER_KINDS
     when SharedArms then facts.types.contains(target.arms[0].patterns[0])
     when ReturnType, ParameterType, DeclaredType then inferable(target, shared, program)
+
+is_of_kinds := (type: Type?, kinds: TypeKind[]) -> type != nil and is_one_of_kinds(type, kinds)
 
 # Whether std gives the type `is_empty` (see EMPTINESS_TESTS). One test serves the tests of a length
 # and the comparisons with '': a `String` has no `length`, and nothing else compares with ''.

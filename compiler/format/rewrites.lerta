@@ -4,19 +4,23 @@
 # docs/reference/style.md); the named arguments of constructions written as names alone (see
 # Shorthand there); the casts left out (see Redundant casts); and the tests of emptiness written
 # with `is_empty()` (see Emptiness tests); the calls of `contains` written with `in` (see Membership
-# tests); and how to write them so in the syntax tree.
+# tests); two comparisons written as a test of a range (see Range tests) and ranges written with
+# fewer parts (see Ranges); and how to write them so in the syntax tree.
 import
   BinaryOperation, BooleanLiteral, Call, Case, CaseArm, Cast, construction_arguments,
-  construction_spread, Expression, FloatLiteral, Identifier, IntegerLiteral, is_spread, Member,
-  NamedValue, NilLiteral, Position, RecordLiteral, spread_of_value, Statement, StringLiteral, This,
-  UnaryOperation
+  construction_spread, Expression, FloatLiteral, Identifier, Index, IntegerLiteral, is_spread,
+  Member, NamedValue, NilLiteral, Position, Range, RecordLiteral, spread_of_value, Statement,
+  StringLiteral, This, UnaryOperation
 from '../ast'
 import dump_ast_without_positions from '../ast_dump'
 import
-  Annotation, EmptinessTest, MembershipCall, QualifiedMember, RecordConstruction, RedundantCast,
-  SharedArms, ShorthandArgument, SpreadCopy
+  Annotation, EmptinessTest, MembershipCall, QualifiedMember, RangeEnds, RangeTest,
+  RecordConstruction, RedundantCast, SharedArms, ShorthandArgument, SpreadCopy
 from './annotated'
-import EMPTINESS_TESTS, MEMBERSHIP_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES, SPREADS from './rules'
+import
+  EMPTINESS_TESTS, MEMBERSHIP_TESTS, RANGE_ENDS, RANGE_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES,
+  SPREADS
+from './rules'
 import Place, places_of from './places'
 
 # In the order of the source, but for a cast and a construction after those inside them, and the
@@ -24,11 +28,19 @@ import Place, places_of from './places'
 # the rewrites inside them leave them (see recorded).
 export rewrites_of := (program: Statement[]) ->
   found: Annotation[]
+  # The ranges that index, by what they index.
+  indexed: Map<Range, Expression>
   before := (value: Expression, place: Place) ->
     found.push unqualified(value, place) if value is Member
+    if value is Index
+      range := value.index
+      indexed[range] = value.object if range is Range
   after := (value: Expression, place: Place) ->
     found.push uncast(value, place) if value is Cast and value.throws
     found.push emptied(value, test, place) if test := emptiness_test(value)
+    found.push between(value, test, place) if test := range_test(value)
+    if value is Range
+      found.push ends if ends := range_ends(value, indexed[value], place)
     if value is Case
       found.push shared_arms(value, run) for run in runs_of_alike_arms(value)
     if value is Call
@@ -151,6 +163,109 @@ membership := (call: Call, place: Place) ->
     key: { kind: IN, at: member.name.position }
     remove: -> place(written)
     restore: -> place(call)
+
+# Two comparisons of one value joined by `and`, `x >= a and x <= b` or `a <= x and x < b`, which may
+# end a chain of `and`s, as the tree of `p and x >= a and x <= b` is `(p and x >= a) and x <= b`.
+struct RangeComparison
+  # The `and` of the `and`s before the comparisons and the first, if any, which keeps the `and`s
+  # where a rewrite inside them places theirs.
+  chain: BinaryOperation?
+  lower: BinaryOperation
+  value: Expression
+  start: Expression
+  end: Expression
+  inclusive: Bool
+  # The second comparison, whose position the annotation is found by.
+  at: Position
+
+# Of a value that runs no code, written the same in both comparisons, and an end that runs none,
+# which `and` evaluates only after the first comparison holds, as `in` does not.
+range_test := (expression: Expression): RangeComparison? ->
+  test := expression as BinaryOperation ? return nil
+  return nil if test.operator != 'and'
+  upper := test.right as BinaryOperation ? return nil
+  chain := test.left as BinaryOperation ? return nil
+  is_chain := chain.operator == 'and'
+  lower := (is_chain then chain.right else chain) as BinaryOperation ? return nil
+  value := lower_value(lower) ? return nil
+  return nil unless runs_no_code(value)
+  (inclusive, written_value, end) :=
+    case upper.operator
+      when '<=', '<' then (upper.operator == '<=', upper.left, upper.right)
+      when '>=', '>' then (upper.operator == '>=', upper.right, upper.left)
+      else return nil
+  return nil if not (runs_no_code(end) and same(value, written_value))
+  start := lower.operator == '>=' then lower.right else lower.left
+  { chain: is_chain then chain, lower, value, start, end, inclusive, at: upper.position }
+
+# The value that `x >= a` or `a <= x` compares with its start.
+lower_value := (comparison: BinaryOperation) ->
+  case comparison.operator
+    when '>=' then comparison.left
+    when '<=' then comparison.right
+    else nil
+
+same := (a: Expression, b: Expression) ->
+  dump_ast_without_positions([a]) == dump_ast_without_positions([b])
+
+# The comparisons written as `x in a..b` at their place, or, after `and`s, in place of the first,
+# the `and` of the `and`s and the first taking the place of the whole.
+between := (expression: Expression, test: RangeComparison, place: Place) ->
+  { chain, lower, value, start, end, inclusive } := test
+  range := Range(start, end, inclusive, position: start.position)
+  written := BinaryOperation(operator: 'in', left: value, right: range, position: value.position)
+  remove := ->
+    return place(written) unless chain
+    chain.right = written
+    place chain
+  restore := ->
+    chain.right = lower if chain
+    place expression
+  Annotation
+    remove
+    restore
+    target: RangeTest(value)
+    reported: { written, rule: RANGE_TESTS }
+    key: { kind: BETWEEN, at: test.at }
+
+# The range written `a..b` for `a...(b + 1)`, and, where it indexes `xs`, without a start 0 or an
+# end `xs.length`, `xs` being written the same and running no code; nil for one written so. An
+# index keeps its start 0 where it has no end, as `xs[..]` is no range.
+range_ends := (range: Range, indexed: Expression?, place: Place) ->
+  var end = range.end
+  var inclusive = range.inclusive
+  counted := not inclusive then counted_end(end)
+  if counted
+    end = counted
+    inclusive = true
+  var start = range.start
+  if indexed
+    if not inclusive and is_length_of(end, indexed)
+      end = nil
+      inclusive = true
+    start = nil if is_zero(start) and end != nil
+  return nil if start == range.start and end == range.end
+  written := Range(range..., start, end, inclusive)
+  Annotation
+    # The ends of an index are Ints, but those of a range after `in` may not be.
+    target: RangeEnds(counted: indexed then nil else counted)
+    reported: { written, rule: RANGE_ENDS }
+    key: { kind: RANGE, at: range.position }
+    remove: -> place(written)
+    restore: -> place(range)
+
+# The `b` of an end `b + 1`.
+counted_end := (end: Expression?) ->
+  sum := end as BinaryOperation ? return nil
+  sum.operator == '+' and is_one(sum.right) then sum.left
+
+is_one := (expression: Expression) -> expression is IntegerLiteral and expression.value == 1
+
+is_zero := (expression: Expression?) -> expression is IntegerLiteral and expression.value == 0
+
+is_length_of := (end: Expression?, indexed: Expression) ->
+  length := end as Member ? return false
+  length.name.name == 'length' and runs_no_code(indexed) and same(length.object, indexed)
 
 # The runs of two or more arms next to each other whose bodies are written alike, which may be one
 # arm of all their patterns (see Shared arm bodies); an arm of nil is in none, as nil must be the
