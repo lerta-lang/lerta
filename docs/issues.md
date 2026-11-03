@@ -20,14 +20,6 @@ With the debug runtime: `integer overflow`, then `leak: 1 object(s)`, exit 23. A
 
 Fix: pop the temporaries after `combine`.
 
-## A `Date` field pushed into `fields` with a capital letter gets a second `Date`
-
-Severity: Low.
-
-std/internal/http_response.lerta:19-22 compares the framing fields by `name.to_lower()` but checks `'date' not in response.headers`, whose `get_all` compares the stored name as written. A handler that pushes `('Date', ...)` into `headers.fields` directly, bypassing `Headers.set`, sends two `Date` fields.
-
-Fix: compare lowercased names in that check too.
-
 ## The HTTP client skips a response whose status is below 100 as informational
 
 Severity: Low.
