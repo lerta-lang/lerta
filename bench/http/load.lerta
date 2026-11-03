@@ -5,7 +5,7 @@
 import all from 'std:async'
 import Client from 'std:http'
 import argv, exit from 'std:process'
-import time from 'std:time'
+import monotonic from 'std:time'
 
 ECHOED := 'x'.repeat(1024)
 # What each path answers.
@@ -22,19 +22,19 @@ url := "http://127.0.0.1:#{port}/#{path}"
 expected := EXPECTED[path]!
 (method, body) := path == 'echo' then ('POST', ECHOED) else ('GET', '')
 # From this program's start, which those that run.lerta starts together reach within milliseconds.
-deadline := time() + seconds
+deadline := monotonic() + seconds
 
 send_all := ->
   client := Client(max_idle: 1)
   var count = 0
-  while time() < deadline
+  while monotonic() < deadline
     response := await client.fetch(url, method: method, body: body)
     text := await response.text()
     if response.status != 200 or text != expected
       print_error "#{url} answered #{response.status}: #{text}"
       exit 1
     # One sent before the deadline but answered after it is not answered within the seconds.
-    count += 1 if time() < deadline
+    count += 1 if monotonic() < deadline
   client.close()
   count
 

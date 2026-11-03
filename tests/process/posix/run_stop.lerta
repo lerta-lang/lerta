@@ -1,16 +1,16 @@
 # A cancel stops the program with SIGTERM, and kills one that ignores it once kill_after has
 # passed; the wait ends once the program has.
 import run from 'std:process'
-import sleep, time from 'std:time'
+import monotonic, sleep from 'std:time'
 
-started := time()
+started := monotonic()
 stopped := run('sh', '-c', 'exec sleep 5')
 stopped.cancel()
 try
   await stopped
 catch error: CancelledError
   print error.message
-print time() - started < 4
+print monotonic() - started < 4
 
 kept := run('sh', '-c', 'trap "" TERM; exec sleep 5', kill_after: 0.2)
 kept.cancel()
@@ -18,7 +18,7 @@ try
   await kept
 catch error: CancelledError
   print error.message
-print time() - started < 4
+print monotonic() - started < 4
 
 # The signal that ended a program is told apart from its exit code.
 exit := await run('sh', '-c', 'kill -TERM $$')
@@ -36,7 +36,7 @@ try
 catch error: CancelledError
   print error.message
 print [output.length, errors.length]
-print time() - started < 4
+print monotonic() - started < 4
 
 # A cancel after the program has exited, while a program it started holds its output open, ends
 # the wait at once.
@@ -48,7 +48,7 @@ try
   await exited
 catch error: CancelledError
   print error.message
-print time() - started < 4
+print monotonic() - started < 4
 
 # A program that ends by itself as it is stopped, with code 0, still has its wait cancelled; so
 # does one that was given input.
@@ -59,7 +59,7 @@ try
   await ending
 catch error: CancelledError
   print error.message
-print time() - started < 4
+print monotonic() - started < 4
 
 # A program that ignores SIGTERM as it writes past the limit of its output is killed after
 # kill_after.
@@ -76,4 +76,4 @@ try
 catch error: IOError
   print error.message
 print flood.length
-print time() - started < 6
+print monotonic() - started < 6

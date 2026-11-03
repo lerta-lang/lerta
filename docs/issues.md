@@ -59,11 +59,3 @@ print "c"
 `lerta fmt` reports ``1:6: call without parentheses at the start of a statement, with them after `then` or `->` (Calls without parentheses)``; without the last line, `1:6: indent by two spaces for each level, and end the lines with LF (Layout)`. `lerta fmt --fix` joins the list as expected.
 
 Fix: name the rule of the place reported, here Multi-line literals.
-
-## The benchmarks and the test reports measure with `time()` instead of `monotonic()`
-
-Severity: Low.
-
-`measure` of bench/run.lerta and test/lib/report.lerta:77 take durations from `time()`, which [std](reference/std.md) says may go back when the clock is set back, and provides `monotonic()` for. A clock step during `make bench` gives a wrong or negative sample, which `best` takes as the minimum, and a negative product can make the geometric mean throw. *Unverified*: it takes a clock step during a run.
-
-Fix: use `monotonic()` in both.

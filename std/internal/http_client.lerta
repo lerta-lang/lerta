@@ -4,7 +4,7 @@
 import Reader from 'std:io'
 import connect_tcp, Socket from 'std:net'
 import scan from 'std:scanner'
-import time from 'std:time'
+import monotonic from 'std:time'
 import is_control from './chars'
 import
   CHUNK_SIZE, chunk_bytes, ChunkedBody, ended_early, JoinedReads, LAST_CHUNK, MAX_LINE, SizedBody,
@@ -113,11 +113,10 @@ export class Client
       throw sent?.failure ? error
 
   # The latest connection kept for the host and port, after closing those kept too long, which the
-  # server may be closing. The clock of `time` may be set back, which keeps one longer, and a
-  # request on one the server has closed is sent again.
+  # server may be closing. A request on one the server has closed is sent again.
   take_idle := (authority: String) ->
     kept := @idle[authority] ? return nil
-    now := time()
+    now := monotonic()
     fresh := [idle for idle in kept when now - idle.since < @idle_timeout]
     for idle in kept
       idle.socket.close() if now - idle.since >= @idle_timeout
@@ -129,7 +128,7 @@ export class Client
     if kept.length >= @max_idle
       socket.close()
       return
-    kept.push { socket, since: time() }
+    kept.push { socket, since: monotonic() }
     @idle[authority] = kept
 
 # A request that a connection failed before any of its response came, which may then be sent again.
