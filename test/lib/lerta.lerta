@@ -2,7 +2,8 @@
 # how they run it, and what they need of it before they start. The tests run from the repository's
 # root, as the Makefile runs them.
 import is_file, make_dir, make_temp_dir, read_text, real_path, remove_tree, open from 'std:io'
-import exit, platform, run from 'std:process'
+import exit, Exit, platform, run from 'std:process'
+import timeout, TimeoutError from 'std:async'
 
 export root_dir := real_path('.').text()!
 
@@ -87,7 +88,7 @@ null_device := platform == 'windows' then 'NUL' else '/dev/null'
 export run_file := (file: String, args: String[], cwd: String) ->
   errors: Byte[]
   env := { 'LERTA_CACHE_DIR': cache_dir }
-  exit := await run(
+  ran := run
     file
     args...
     cwd: cwd
@@ -96,12 +97,28 @@ export run_file := (file: String, args: String[], cwd: String) ->
     stdout: open(null_device, WRITE).writer
     stderr: errors
     output_limit: OUTPUT_LIMIT
-  )
+  exit := await exit_in_time(file, ran)
   failure := exit.signal then "signal #{exit.signal}" else "exit status #{exit.code}"
   FileRun failure, status: exit.code, errors: shown_text(errors.to_binary())
 
-# The error of a step that the tests need, such as a build, which fails the whole run.
+# The error of a step that the tests need, such as a build, or of a program that did not end in
+# time: it fails the check that it is thrown in, or the whole run where no check holds it.
 export struct SetupError: Error
+
+# The longest that a program the tests run may take, far beyond what any check takes, so that one
+# that does not end, as a compiler that loops, fails instead of holding up the run.
+RUN_TIMEOUT_SECONDS := 300.0
+
+# The exit of the run of `command`, which is stopped if it has not ended in `seconds`.
+export exit_in_time := (
+  command: String
+  ran: Promise<Exit>
+  seconds: Float = RUN_TIMEOUT_SECONDS
+) ->
+  try
+    await timeout(ran, seconds)
+  catch _: TimeoutError
+    throw SetupError("#{command} did not end in #{seconds.to_fixed(0)}s")
 
 # Builds a program in `dir` with each of the sets of flags, so that the compiler caches each kind of
 # runtime before the tests start. Otherwise the tests started together would each compile the same

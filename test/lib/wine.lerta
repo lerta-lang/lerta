@@ -3,6 +3,7 @@
 # prefixes of their own, each with its own wineserver.
 import copy_file, list_dir, remove_tree from 'std:io'
 import env, run from 'std:process'
+import exit_in_time from './lerta'
 
 # Wine starts its device service as it starts a prefix, whose kernel, ntoskrnl.exe, may fault when
 # the machine is busy, as when the cross tests run, and writes so to the program's stderr. No
@@ -92,5 +93,6 @@ start_prefix := (prefix: String, started: String[]) ->
 run_wine := (prefix: String?, command: String, args: String...) ->
   env := { 'WINEDLLOVERRIDES': WINE_DLL_OVERRIDES }
   env['WINEPREFIX'] = prefix if prefix
-  exit := await run('sh', '-c', 'exec "$@" > /dev/null 2>&1', 'sh', command, args..., env: env)
+  ran := run('sh', '-c', 'exec "$@" > /dev/null 2>&1', 'sh', command, args..., env: env)
+  exit := await exit_in_time(command, ran)
   throw WineError("#{command} failed") if exit.code != 0

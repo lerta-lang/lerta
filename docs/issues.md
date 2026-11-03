@@ -60,14 +60,6 @@ print "c"
 
 Fix: name the rule of the place reported, here Multi-line literals.
 
-## The cli, format, leaks and self suites run the compiler without a timeout
-
-Severity: Low.
-
-`run_command` (test/lib/cli.lerta:26-36), `run_file` (test/lib/lerta.lerta:57-66), test/format.lerta:16, test/leaks.lerta:43-44 and test/self.lerta:44-55 await `run(...)` with no `timeout`, while test/run.lerta:252 and the runtime suite have one. A compiler that hangs, such as `lerta lsp` not exiting or a looping formatter, blocks a worker, and with all workers blocked `make test` never ends. *Unverified* by running.
-
-Fix: wrap them in `timeout(..., N)` as `run_program` does, throwing `SetupError`.
-
 ## `expect_unchanged` in the format suite compares modification times written moments apart
 
 Severity: Low.

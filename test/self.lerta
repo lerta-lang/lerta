@@ -4,7 +4,9 @@
 import at_once, Check, CheckFailed, run_checks, run_one, select from './lib/report'
 import compare_text, expect_status, lines, reason_unless from './lib/expect'
 import host_triple from './lib/cli'
-import OUTPUT_LIMIT, read_text_or_throw, root_dir, shown_text, suite_dir from './lib/lerta'
+import
+  exit_in_time, OUTPUT_LIMIT, read_text_or_throw, root_dir, shown_text, suite_dir
+from './lib/lerta'
 import list_dir, write_file from 'std:io'
 import run from 'std:process'
 
@@ -41,7 +43,7 @@ run_driver := (
   no_retry: String[] = retry then [] else ['--no-retry']
   env := { 'LERTA_TEST_RUN_DIR': harness_dir, 'LERTA_TEST_FAILED_FILE': failed_file }
   env[name] = value for (name, value) in extra_env.entries()
-  ended := await run(
+  ran := run
     driver
     '-j'
     '2'
@@ -52,7 +54,7 @@ run_driver := (
     stdout: stdout
     stderr: stderr
     output_limit: OUTPUT_LIMIT
-  )
+  ended := await exit_in_time(driver, ran)
   DriverRun
     status: ended.code
     stdout: shown_text(stdout.to_binary())
