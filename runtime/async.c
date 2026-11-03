@@ -198,6 +198,8 @@ void lerta_promise_reject_io(LertaPromise *promise, const LertaString *prefix,
   lerta_promise_reject(promise);
 }
 
+bool lerta_promise_is_settled(const LertaPromise *promise) { return promise->state != PENDING; }
+
 // The body that waits deepest, through the promises that the bodies wait for, throws a
 // CancelledError as it resumes; the work at the end, if it can be stopped, is, which rejects its
 // promise, so that the body resumes at once. Work that cannot be stopped ends first.

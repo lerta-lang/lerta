@@ -1,0 +1,33 @@
+# A Promise is settled once resolved or rejected: at once for a function that does not wait, and
+# once the work that it waits for ends otherwise.
+import sleep from 'std:time'
+
+at_once := (): Promise<Int> -> 1
+later := ->
+  await sleep(0.01)
+  2
+
+settled := at_once()
+print "at once: #{settled.is_settled()}"
+waiting := later()
+print "before: #{waiting.is_settled()}"
+await waiting
+print "after: #{waiting.is_settled()}"
+
+fails := (): Promise<Int> -> throw ValueError('no')
+rejected := fails()
+print "rejected: #{rejected.is_settled()}"
+try
+  await rejected
+catch error: ValueError
+  print error.message
+
+# A promise of no value, and one that a cancel has rejected.
+pause := -> await sleep(10)
+paused := pause()
+print "no value: #{paused.is_settled()}"
+paused.cancel()
+try
+  await paused
+catch _: CancelledError
+  print "cancelled: #{paused.is_settled()}"

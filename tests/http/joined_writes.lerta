@@ -1,0 +1,73 @@
+# A body that is a Reader is sent with what it gives at once joined, up to 65536 bytes, the last
+# chunk with the last of it, by the server and by fetch; what it gives later, or before a read that
+# fails, goes on its own.
+import Reader from 'std:io'
+import connect_tcp, listen_tcp from 'std:net'
+import sleep from 'std:time'
+import fetch, Request, Response, serve from 'std:http'
+import masked_dates from './lib/date'
+
+# A Reader of the pieces, each given at once, or after a sleep if `slow`, then of the error if one
+# is given, or of the end.
+pieces := (parts: String[], slow = false, error: Error? = nil) ->
+  var next = 0
+  Reader ->
+    await sleep(0.02) if slow
+    if next == parts.length
+      throw error if error
+      return nil
+    next += 1
+    parts[next - 1].binary
+
+handle := (request: Request) ->
+  path := request.url.split('/').last()!
+  case path
+    when 'slow' then Response(body: pieces(['hello', ', ', 'world'], true))
+    when 'fails' then Response(body: pieces(['hel', 'lo'], false, IOError('the source failed')))
+    when 'large' then Response(body: pieces(['a'.repeat(40000) for _ in 0...3]))
+    else Response(body: pieces(['hello', ', ', 'world']))
+
+server := serve(handle)
+
+# What the server answers to the request, until it closes the connection.
+ask := (request: String, sizes_only = false) ->
+  client := await connect_tcp('127.0.0.1', server.port())
+  await client.write(request)
+  client.end()
+  text := masked_dates((await client.reader.read_all()).text()!)
+  client.close()
+  if sizes_only
+    (_, body) := text.split_once("\r\n\r\n")!
+    print [line for line in body.split("\r\n") when not line.starts_with('a')].join(' | ')
+  else
+    print text.replace("\r\n", ' | ')
+
+await ask("GET /joined HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n")
+await ask("GET /joined HTTP/1.0\r\n\r\n")
+await ask("GET /slow HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n")
+await ask("GET /slow HTTP/1.0\r\n\r\n")
+await ask("GET /fails HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n")
+await ask("GET /large HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n", true)
+await server.close()
+
+# The request that fetch sends, from its body's start, as a raw server reads it to the last chunk,
+# or to the end of the sending side, which a fetch whose body fails ends.
+listener := listen_tcp('127.0.0.1')
+received := ->
+  socket := await listener.accept()
+  var bytes = ''.binary
+  bytes += await socket.reader.read(65536) ? break until bytes.text()!.ends_with("0\r\n\r\n")
+  await socket.write("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n")
+  socket.close()
+  (_, body) := bytes.text()!.split_once("\r\n\r\n")!
+  print body.replace("\r\n", ' | ')
+url := "http://127.0.0.1:#{listener.port}"
+failing := pieces(['un', 'sent'], false, IOError('the source failed'))
+for body in [pieces(['sent', ' in ', 'parts']), pieces(['sent', ' later'], true), failing]
+  receiving := received()
+  try
+    await fetch(url, method: 'POST', body: body)
+  catch error: IOError
+    print "failed: #{error.message}"
+  await receiving
+listener.close()

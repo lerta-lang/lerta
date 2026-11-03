@@ -272,6 +272,7 @@ void lerta_promise_reject(LertaPromise *promise);
 // has been cancelled meanwhile.
 bool lerta_promise_wait_in(LertaPromise *promise, void *coroutine, LertaPromise *own);
 void *lerta_promise_result_in(LertaPromise *promise, LertaPromise *own);
+bool lerta_promise_is_settled(const LertaPromise *promise);
 // Cancels the work that the promise waits for (see async.c); nothing if it is settled.
 void lerta_promise_cancel(LertaPromise *promise);
 // A promise without a value that lerta_promise_fire resolves, unless it is settled already.

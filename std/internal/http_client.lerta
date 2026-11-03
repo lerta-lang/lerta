@@ -7,7 +7,8 @@ import scan from 'std:scanner'
 import time from 'std:time'
 import is_control from './chars'
 import
-  CHUNK_SIZE, chunk_bytes, ChunkedBody, ended_early, LAST_CHUNK, MAX_LINE, SizedBody, well_formed
+  CHUNK_SIZE, chunk_bytes, ChunkedBody, ended_early, JoinedReads, LAST_CHUNK, MAX_LINE, SizedBody,
+  well_formed
 from './http_chunks'
 import Body, check_field, Headers, is_token, keeps_alive, Response from './http_message'
 import bytes_of from './utf8'
@@ -181,16 +182,19 @@ class SentBody
   failure: Error? = nil
 
   send = ->
+    reads := JoinedReads(@body)
     try
       return unless await @written(request_bytes(@request))
-      while chunk := await @body.read(CHUNK_SIZE)
-        return unless await @written(chunk_bytes(chunk))
-      @whole = await @written(LAST_CHUNK.binary)
+      while bytes := await reads.next()
+        return unless await @written(chunk_bytes(bytes, reads.ended))
+      @whole = reads.ended or await @written(LAST_CHUNK.binary)
     catch error: CancelledError
       throw error
     catch error
       @failure = error
       @socket.end()
+    finally
+      reads.cancel()
 
   written = (bytes: Binary) ->
     try

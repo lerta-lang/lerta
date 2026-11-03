@@ -2,7 +2,7 @@
 
 import Reader from 'std:io'
 import Socket from 'std:net'
-import chunk_bytes, CHUNK_SIZE, LAST_CHUNK from './http_chunks'
+import chunk_bytes, JoinedReads, LAST_CHUNK from './http_chunks'
 import date_now from './http_date'
 import check_field, Response from './http_message'
 import bytes_of from './utf8'
@@ -41,14 +41,19 @@ has_length := (status: Int) -> status != 204 and status != 304
 
 export has_body := (status: Int, method: String) -> has_length(status) and method != 'HEAD'
 
-# Writes the bytes of `body` as they come, each read as a chunk of its own when `chunked`, or else
-# as they are, which the end of the connection ends; for HTTP/1.0, a body that a failed read cuts
-# short so cannot be told from a whole one. Each write is awaited before the next read, so that the
-# body comes no faster than the peer takes it.
+# Writes the bytes of `body` as they come (see JoinedReads), each write a chunk of its own when
+# `chunked`, or else as they are, which the end of the connection ends; for HTTP/1.0, a body that a
+# failed read cuts short so cannot be told from a whole one. Each write is awaited before the read
+# after the one under way, so that the body comes no faster than the peer takes it, but for a read.
 export write_body := (socket: Socket, body: Reader, chunked: Bool) ->
-  while chunk := await body.read(CHUNK_SIZE)
-    await socket.write(chunked then chunk_bytes(chunk) else chunk)
-  await socket.write(LAST_CHUNK) if chunked
+  reads := JoinedReads(body)
+  try
+    while bytes := await reads.next()
+      ends := chunked and reads.ended
+      await socket.write(chunked then chunk_bytes(bytes, ends) else bytes)
+    await socket.write(LAST_CHUNK) if chunked and not reads.ended
+  finally
+    reads.cancel()
 
 # The fields that the server writes itself, as they tell where the response ends.
 FRAMING_FIELDS := ['content-length', 'transfer-encoding', 'connection']

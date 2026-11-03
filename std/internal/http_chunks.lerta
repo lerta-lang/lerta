@@ -1,5 +1,6 @@
 # The body of a message sent in chunks, by `Transfer-Encoding: chunked`.
 
+import spawn from 'std:async'
 import LineTooLongError, Reader from 'std:io'
 
 # The bytes of a body of `left` bytes as they come from `reader`, or of all that it gives where
@@ -100,8 +101,59 @@ export class ChunkedBody
 
 export ended_early := (name: String) -> IOError("a #{name} ended early")
 
-# The bytes of a chunk of a body that is sent in chunks; LAST_CHUNK ends them.
-export chunk_bytes := (data: Binary) -> "#{data.length.to_hex()}\r\n".binary + data + "\r\n".binary
+# The bytes of a body to send as they come from `reader`, those that it gives at once joined, up to
+# CHUNK_SIZE, so that a reader of small pieces takes few writes; or nil at its end. A read that does
+# not give at once, or that fails, is left for the next, so that what has come is not held back.
+# `ended` tells that the bytes given last were found to end the body.
+export class JoinedReads
+  reader: Reader
+  ended = false
+  waiting: Promise<Binary?>? = nil
+
+  next = ->
+    return nil if @ended
+    first := await @taken_waiting() ? return nil
+    pieces := [first]
+    var size = first.length
+    while size < CHUNK_SIZE
+      read := @reader.read(CHUNK_SIZE - size)
+      @waiting = read
+      break unless read.is_settled()
+      try
+        await read
+      catch _
+        break
+      @waiting = nil
+      if piece := await read
+        pieces.push piece
+        size += piece.length
+      else
+        @ended = true
+        break
+    pieces.join ''.binary
+
+  # Cancels the read left for the next, of a body whose sending has stopped, and drops its result,
+  # as an error that it has been rejected with would otherwise end the program.
+  cancel = ->
+    waiting := @waiting ? return
+    waiting.cancel()
+    spawn dropped(waiting)
+
+  taken_waiting = ->
+    read := @waiting ? @reader.read(CHUNK_SIZE)
+    @waiting = nil
+    await read
+
+dropped := (read: Promise<Binary?>) ->
+  try
+    await read
+  catch _
+    nil
+
+# The bytes of a chunk of a body that is sent in chunks; LAST_CHUNK ends them, after it if `ends`.
+export chunk_bytes := (data: Binary, ends = false) ->
+  chunk := "#{data.length.to_hex()}\r\n".binary + data + "\r\n".binary
+  ends then chunk + LAST_CHUNK.binary else chunk
 
 export LAST_CHUNK := "0\r\n\r\n"
 
