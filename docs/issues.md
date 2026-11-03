@@ -20,14 +20,6 @@ With the debug runtime: `integer overflow`, then `leak: 1 object(s)`, exit 23. A
 
 Fix: pop the temporaries after `combine`.
 
-## `read_file` reads special files without limit
-
-Severity: Low.
-
-`lerta_os_read_file` (runtime/platform.c) opens anything, and its `read_chunks` doubles its buffer until `realloc` fails. `read_file('/dev/zero')` grows until the allocator fails and the program panics `out of memory`, not a catchable `IOError`; a FIFO without a writer blocks one of libuv's four pool threads forever. `copy_file` already refuses a source that is not a regular file. *Unverified* by running, since it would take all memory.
-
-Fix: `fstat` after opening and fail with an `IOError` unless the file is regular, or document and enforce a size cap.
-
 ## A `Date` field pushed into `fields` with a capital letter gets a second `Date`
 
 Severity: Low.

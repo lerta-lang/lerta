@@ -61,10 +61,25 @@ static int64_t read_file(void *file, uint8_t *buffer, int64_t size) {
   return count < 0 ? -1 : count;
 }
 
+static bool is_file_mode(uint64_t mode) { return (mode & S_IFMT) == S_IFREG; }
+
+static bool is_dir_mode(uint64_t mode) { return (mode & S_IFMT) == S_IFDIR; }
+
+// A file that is not regular is refused, as a FIFO without a writer would block a worker, and a
+// device such as /dev/zero would fill the memory. The file is opened without blocking, so that a
+// FIFO does not wait for a writer, and checked by its descriptor, so that the path cannot be
+// replaced between the check and the read.
+static bool is_regular(uv_file file) {
+  uv_fs_t request;
+  bool regular = uv_fs_fstat(NULL, &request, file, NULL) == 0 && is_file_mode(request.statbuf.st_mode);
+  uv_fs_req_cleanup(&request);
+  return regular;
+}
+
 uint8_t *lerta_os_read_file(const char *path, int64_t *length) {
-  uv_file file = open_file(path, UV_FS_O_RDONLY, 0);
+  uv_file file = open_file(path, UV_FS_O_RDONLY | UV_FS_O_NONBLOCK, 0);
   if (file < 0) return NULL;
-  uint8_t *contents = read_chunks(read_file, (void *)(intptr_t)file, length);
+  uint8_t *contents = is_regular(file) ? read_chunks(read_file, (void *)(intptr_t)file, length) : NULL;
   close_file(file);
   return contents;
 }
@@ -111,10 +126,6 @@ static int stat_path(const char *path, uv_stat_t *found) {
   uv_fs_req_cleanup(&request);
   return error;
 }
-
-static bool is_file_mode(uint64_t mode) { return (mode & S_IFMT) == S_IFREG; }
-
-static bool is_dir_mode(uint64_t mode) { return (mode & S_IFMT) == S_IFDIR; }
 
 int lerta_os_stat(const char *path, LertaFileStatus *status) {
   uv_stat_t found;
