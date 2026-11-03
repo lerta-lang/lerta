@@ -100,14 +100,6 @@ print "c"
 
 Fix: name the rule of the place reported, here Multi-line literals.
 
-## The language server answers an internal error to a completion at a negative line
-
-Severity: Low.
-
-`source_position` (compiler/lsp/diagnostics.lerta:98-107) turns LSP line `-1` into source line 0, and `completion` (compiler/lsp/server.lerta:244-247) indexes `lines[at.line - 1]`, which throws; the server answers `-32603 index out of range` and prints it to stderr. Hover and definition at the same position return `null`.
-
-Fix: return none when `at.line < 1`, or reject negative positions in `source_position`.
-
 ## The VS Code extension stops reading a server after one message without a header
 
 Severity: Low.
