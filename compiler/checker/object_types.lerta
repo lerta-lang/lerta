@@ -24,7 +24,7 @@ import format_type, inner_of, InterfaceType, ObjectType, OptionalType, Type from
 export class FieldInfo
   name: Identifier
   # Nil until found, for a field given by an initializer alone.
-  type: Type?
+  var type: Type?
   mutable: Bool
   # The initializer, or the default of a constructor argument (see is_argument).
   value: Expression?
@@ -46,28 +46,28 @@ export class ObjectInfo
   # Of an instance: the generic class or struct, which holds it among its instances, and so only
   # refers to it back, and the instances of its init and deinit.
   weak generic: ObjectInfo?
-  init: Instance?
-  deinit: Instance?
+  var init: Instance?
+  var deinit: Instance?
   # The instances of its own equals, compare and hash, of an instance of a generic class or struct
   # (see check_equality_methods).
   comparison_instances: Map<String, Instance> = Map()
-  fields: FieldInfo[] = []
+  var fields: FieldInfo[] = []
   # The interface that the declaration says it satisfies, with the type arguments of an instance.
-  satisfies: InterfaceType? = nil
+  var satisfies: InterfaceType? = nil
   # Of a generic class or struct: the interface types that bound its type parameters (see
   # object_bounds).
-  bounds: InterfaceType?[] = []
-  methods: Map<String, FunctionLiteral> = Map()
+  var bounds: InterfaceType?[] = []
+  var methods: Map<String, FunctionLiteral> = Map()
   # The generic methods, those with type parameters, which have instances instead of a function.
-  generics: Map<String, GenericRef> = Map()
-  has_init = false
+  var generics: Map<String, GenericRef> = Map()
+  var has_init = false
   # `deinit`, which runs when the object is released (see runtime lerta_run_deinit).
-  has_deinit = false
-  state: CheckState = UNCHECKED
+  var has_deinit = false
+  var state: CheckState = UNCHECKED
   # Of a generic class or struct, whose type arguments make them.
   instances: ObjectInfo[] = []
   # Of an instance: whether its written field types are checked (see reject_invalid_type).
-  fields_checked = false
+  var fields_checked = false
 
   field_named = (name: String) -> @fields.find((each) -> each.name.name == name)
 
@@ -128,16 +128,9 @@ add_interface_fields := (shared: Shared, info: ObjectInfo, declared: Set<String>
   # As a bound, an interface whose members name Self can be named.
   interface_type := bound_interface(program, info.resolver, written)
   info.satisfies = interface_type
-  is_struct := info.declaration.is_struct
   field_of := (member: InterfaceMember) ->
     name := Identifier(name: member.name, position: written.position)
-    FieldInfo
-      name
-      type: member.type
-      mutable: not is_struct
-      value: nil
-      has_default: false
-      weak: false
+    FieldInfo name, type: member.type, mutable: false, value: nil, has_default: false, weak: false
   members := members_for(program, interface_type, info.type)
   from_interface := [field_of(member) for member in members when member.name not in declared]
   info.fields = [from_interface..., info.fields...]
@@ -180,9 +173,9 @@ field_of_member := (shared: Shared, info: ObjectInfo, member: MemberDeclaration)
   type_name := member.type
   type := type_name then resolve(program, info.resolver, type_name)
   modifier := member.modifier
-  weak := modifier == 'weak' or modifier == 'weak!'
+  weak := modifier == 'weak' or modifier == 'weak var' or modifier == 'weak!'
   reject_invalid_weak program, member, is_struct, type if weak
-  mutable := not is_struct and modifier != 'const' and modifier != 'weak!'
+  mutable := modifier == 'var' or modifier == 'weak var'
   FieldInfo type, mutable, value, weak, name: member.name, has_default: member.has_default
 
 reject_invalid_weak := (

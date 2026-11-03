@@ -6,13 +6,13 @@
 struct Point
   x: Int
   y: Int
-  sum = @x + @y
-  scaled = (k: Int) -> Point(x: @x * k, y: @y * k)
+  sum := @x + @y
+  scaled := (k: Int) -> Point(x: @x * k, y: @y * k)
 
 class Counter
   label: String
-  count = 0
-  increment = -> @count += 1
+  var count = 0
+  increment := -> @count += 1
 
 c := Counter(label: 'clicks')
 c.increment()
@@ -27,14 +27,16 @@ print c.count
 - `p.x` reads a field and `p.m(...)` calls a method.
 - There are no static members (`static`), but for an [enum](types.md#enums)'s builtin `parse`. Functions related to a type are module functions; `extend` adds methods to a type, but not functions without a receiver.
 
-The members of a type, one per line:
+The members of a type, one per line, are declared as locals are (see [declarations](syntax.md#declarations-and-assignment)): a field is a const unless it is declared `var` (see [mutability](#mutability)).
 
 - `name: Type` is a field without an initializer: a constructor argument. If its type is optional, the argument may be left out, and the field is nil. A field may hold a function (`on_click: () -> void`); `b.on_click()` calls it (see [function values](functions.md#function-values)).
-- `name = value` or `name: Type = value` is a field computed at construction from its initializer.
-- `name = default value` or `name: Type = default value` is a constructor argument that may be left out; the field then has the value, computed as an initializer would be, in its place. `default` is not a [keyword](syntax.md#operators).
-- `weak name: Type?` is a field of a class that holds an object of a class without keeping it alive, so that two objects that refer to each other, as a parent and its children, are freed. Reading it gives the object, or nil once the object is freed; it can be assigned, and given to the constructor or computed as any field. Its type is written, an optional class, which cannot be a type parameter so far.
+- `name := value` or `name: Type = value` is a field computed at construction from its initializer.
+- `name := default value` or `name: Type = default value` is a constructor argument that may be left out; the field then has the value, computed as an initializer would be, in its place. `default` is not a [keyword](syntax.md#operators).
+- `var` before any of them, `var name: Type`, `var name = value` or `var name = default value`, declares a field of a class that can be assigned.
+- `weak name: Type?` is a field of a class that holds an object of a class without keeping it alive, so that two objects that refer to each other, as a parent and its children, are freed. Reading it gives the object, or nil once the object is freed; `weak var name: Type?` can be assigned. Either may be given to the constructor or computed as any field. Its type is written, an optional class, which cannot be a type parameter so far.
 - `weak! name: Type` is a weak field for an object that should outlive its holder: of a class type that is not optional, it is a constructor argument, which cannot be assigned afterwards, and reading it throws `weak object is gone` once the object is freed, including while the object's `deinit` runs.
-- `name = (params) -> body` is a method, which may be generic, as `apply = <T>(f: (Int) -> T): T -> f(@n)` (see [generic methods](#extend)). `init`, which takes no parameters and no type parameters, runs at the end of construction. In a class, `deinit`, which takes no parameters and gives no value, runs when the object is released (see [deinit](#deinit)).
+- `name := (params) -> body` is a method, which may be generic, as `apply := <T>(f: (Int) -> T): T -> f(@n)` (see [generic methods](#extend)). A method cannot be `var`. `init`, which takes no parameters and no type parameters, runs at the end of construction. In a class, `deinit`, which takes no parameters and gives no value, runs when the object is released (see [deinit](#deinit)).
+- `name = value` in a type body is an error, as it reads as an assignment: `write 'name := value' to declare a field`.
 - Why a function literal member is a method, one per type with `@` passed at call time, rather than a field holding a closure: closures capturing `@` would create a cycle in every object.
 
 ### Generic classes and structs
@@ -49,7 +51,8 @@ The members of a type, one per line:
 
 ### Mutability
 
-- A class field can be assigned (`c.count = 1`) unless it is declared `const`. A struct field cannot be changed, and cannot be declared `var`.
+- A class field declared `var` can be assigned (`c.count = 1`); any other field cannot. A struct field cannot be changed, and cannot be declared `var`.
+- Why fields are const by default: most fields are never assigned after construction, so `var` marks the few that are, as it does among locals, and a const field can be narrowed (see [narrowing](control-flow.md#narrowing)). A class and a struct then differ only in what a class adds: `var` and weak fields, `deinit`, and comparison by identity.
 
 ### Reference counting and weak references
 
@@ -61,7 +64,7 @@ The members of a type, one per line:
 
 - Objects of a class compare by identity, unless the class has its own `equals` or `compare` (see below): `a == b` tells whether `a` and `b` are the same object, whatever their fields hold, and `!=` the opposite. The two sides may have different types, a class and a union or two unions, as long as both can hold objects of some class. Either side may be optional, compared as other [optional values](types.md#optional-values) are. Classes, and unions of classes, can also be [`Map`](types.md#map) keys, by identity.
 - Structs compare by their contents: two are equal when they are of the same type and each field is equal as `==` compares it (a field of a class as the same object). Anonymous structs and arrays compare so too, and so do unions that hold them, whose values are equal when they are of the same member type and equal as it. A type whose part `==` does not compare, such as a function, cannot be compared. Such values can be `Map` keys, hashed by their contents; a key's arrays must not change while it is in a map, or it is no longer found. A value is equal to itself at once, but a value that holds itself through an array cannot be hashed, as a map key, nor compared with another such value: neither ends, and the program stops with a stack overflow.
-- A class or struct may declare its own `equals = (other: T): Bool`, which `==` and `!=` then call, wherever its values compare: as a whole, as a field of a struct, as an item of an array, as a map key. Or it may declare `compare = (other: T): Ordering`, whose result names a member of `Ordering` as `Ordering.LESS`, or as `LESS` where the written result type tells the enum, which gives `<`, `<=`, `>` and `>=` (`a < b` is `a.compare(b) == LESS`), and `==` too (`a == b` is `a.compare(b) == EQUAL`), so that the order and the equality cannot disagree; a type cannot have both (`T has both equals and compare, which gives its == too; leave out equals`). `T` is the type itself, and each must be of exactly its type (`equals of Point must be of type (Point) -> Bool, not (Int) -> Bool`), and its `Ordering` is that of std:builtins, which a module's own `Ordering` does not stand for. Such a type is a map key or a set item only if it also declares `hash = (): Int`, which must give equal values the same hash (`a set item must hash as it compares`); a `hash` without `equals` or `compare` is an error. They are methods of the type itself: no extend can declare `equals` or `hash`, which every type that `==` compares has already (`an extend cannot declare equals`), and an extend of a class or struct cannot declare `compare`. They cannot throw: an exception that leaves one makes a panic, `equals, compare or hash threw an exception`, since `==` and map keys could not pass it on. [Equatable, Comparable and Hashable](builtins.md#equatable-comparable-and-hashable) are the interfaces of these methods.
+- A class or struct may declare its own `equals := (other: T): Bool`, which `==` and `!=` then call, wherever its values compare: as a whole, as a field of a struct, as an item of an array, as a map key. Or it may declare `compare := (other: T): Ordering`, whose result names a member of `Ordering` as `Ordering.LESS`, or as `LESS` where the written result type tells the enum, which gives `<`, `<=`, `>` and `>=` (`a < b` is `a.compare(b) == LESS`), and `==` too (`a == b` is `a.compare(b) == EQUAL`), so that the order and the equality cannot disagree; a type cannot have both (`T has both equals and compare, which gives its == too; leave out equals`). `T` is the type itself, and each must be of exactly its type (`equals of Point must be of type (Point) -> Bool, not (Int) -> Bool`), and its `Ordering` is that of std:builtins, which a module's own `Ordering` does not stand for. Such a type is a map key or a set item only if it also declares `hash := (): Int`, which must give equal values the same hash (`a set item must hash as it compares`); a `hash` without `equals` or `compare` is an error. They are methods of the type itself: no extend can declare `equals` or `hash`, which every type that `==` compares has already (`an extend cannot declare equals`), and an extend of a class or struct cannot declare `compare`. They cannot throw: an exception that leaves one makes a panic, `equals, compare or hash threw an exception`, since `==` and map keys could not pass it on. [Equatable, Comparable and Hashable](builtins.md#equatable-comparable-and-hashable) are the interfaces of these methods.
 
 ### Operators
 
@@ -72,7 +75,7 @@ The members of a type, one per line:
 ```
 class File
   path: String
-  deinit = -> print("closing #{@path}")
+  deinit := -> print("closing #{@path}")
 ```
 
 - A class's `deinit` runs when its object is released, when the last reference to it goes, before the references its fields hold are released. It cannot be called otherwise, and cannot throw (`deinit cannot throw`); an exception that a call in it throws makes a panic, `deinit threw an exception`, since no code that releases the object could take it. A struct has no `deinit`.
@@ -84,13 +87,13 @@ class File
 
 ```
 extend String
-  shout = (): String -> @ + '!'
+  shout := (): String -> @ + '!'
 
 extend Point
-  total = (): Int -> @x + @y
+  total := (): Int -> @x + @y
 
 extend<T> T[]
-  second = (): T -> @[1]
+  second := (): T -> @[1]
 
 print 'hi'.shout()
 print [1, 2].second()
@@ -101,7 +104,7 @@ print [1, 2].second()
 - **Extends of interfaces.** `extend<T> Source<T>`, or `extend Equatable`, gives its methods to every type that satisfies the interface, including the interface type itself; its type parameters are those of the interface's type arguments, which the type gives by its members (see [generic functions](functions.md#generic-functions)), and `Self` is the type, as in the interface. In the methods, `@` is of the type, and each method is checked and compiled for each type it is called on, as a generic method is. A method cannot have the name of a member of the interface, and does not count for satisfying an interface. A type that has a member of the name already, of its own or from an extend of a type, cannot call the method: the call is ambiguous, an error. Extends of two interfaces cannot give methods of the same name where both are in effect, since a type may satisfy both.
 - Why extends rather than default implementations in the interface: the interface says only what a type must have, and a method of an extend cannot be overridden, so which code runs never depends on whether the type declares a member.
 - **Generic extends.** `extend<T> Type` declares type parameters, as a generic function does, which the extended type must use: `extend<T> T[]` gives its methods to every array, `extend<V> Map<String, V>` to the maps whose keys are `String`s, and `extend<T> T[][]` to the arrays of arrays, while `extend Int[]` gives them to `Int[]` only. In the methods, the type parameters stand for the receiver's type arguments. A type parameter may have a bound, as a generic function's may, which the receiver's type arguments must satisfy where a method of the extend is used: with `extend<T: Comparable> T[]`, `[true].least()` is an error, `Bool does not satisfy Comparable`. Two extends of a type cannot give a method of the same name for different bounds. Two extends whose types overlap cannot give a method of the same name either, unless they are of one module and one of the types has no type parameters: that type takes the method of its own extend before the generic one, so `extend Int[]` and `extend<T> T[]` of one module may both give `head`, and `[5, 6].head()` calls the first, as the generic extend's other methods do; the same holds for `extend Promise[]` and `extend<T> Promise<T>[]`, since `Promise` is a `Promise<T>` without a value. A `Set<T>` is no `Map<K, V>`, so their extends do not overlap, and an extend of each may give a method of the same name. Of two modules, they are an error as before, since the generic extend's methods, checked in its module, would call another method than the module of the other extend does.
-- **Generic methods.** The methods of a generic extend, and the methods of extends, classes and structs that declare type parameters of their own, as `map = <U>(f: (T) -> U): Iter<U> -> (f(x) for x in @)` does, are generic: the receiver gives the extend's type arguments, and the arguments give the method's own, which may have an interface bound, as those of a generic function are inferred (see [generic functions](functions.md#generic-functions)). Like a generic function, each is checked and compiled per instance, for each receiver type and set of type arguments; an error in its body names the instance, as in `(in String[].total)`. A generic method takes no named arguments so far.
+- **Generic methods.** The methods of a generic extend, and the methods of extends, classes and structs that declare type parameters of their own, as `map := <U>(f: (T) -> U): Iter<U> -> (f(x) for x in @)` does, are generic: the receiver gives the extend's type arguments, and the arguments give the method's own, which may have an interface bound, as those of a generic function are inferred (see [generic functions](functions.md#generic-functions)). Like a generic function, each is checked and compiled per instance, for each receiver type and set of type arguments; an error in its body names the instance, as in `(in String[].total)`. A generic method takes no named arguments so far.
 - An extend is in effect in the module that declares it and in the modules that import that module directly, by any import, `import 'module'` included (see [modules](modules.md)), and, through modules that export from it and from one another, in each of those and in the modules that import one of them (see [exports](modules.md#exports)). It is not in effect further through imports: a module that imports one of those by an import does not get it.
 - It is an error, at the extend's method, for the method to have the name of a member that the type has already, builtin or of its class or struct, or of a method that another extend in effect in the module gives the same type; extends of a generic type give the same type a method when some type matches both, as `Int[]` matches both `extend<T> T[]` and `extend Int[]`. When two imported modules' extends conflict, the error is at the second import. A generic extend may give a method the name of a builtin one that only some of the types it matches have, as `to_string` of `extend<T> T[]`: those types keep their builtin one.
 
@@ -114,8 +117,8 @@ interface Shape
 
 struct Square
   side: Int
-  name = 'square'
-  area = -> @side * @side
+  name := 'square'
+  area := -> @side * @side
 
 describe := <T: Shape>(shape: T) -> print("#{shape.name}: #{shape.area()}")
 
@@ -130,9 +133,9 @@ print shape.area() for shape in shapes
 - **Generic interfaces.** `interface Source<T>` declares type parameters, which take no bound, and its type is written with as many type arguments, `Source<Int>`. A type satisfies it with the type arguments in the members' types. The types that the type arguments make in the members must be valid, as the fields of a [generic class](#generic-classes-and-structs): `Source<Int?>`, whose `items: () -> T[]` would give an `Int?[]`, is an error where it is first written. A member's type may not hold larger instances that lead back to it, as those of a class may not.
 - **`Self`** in the members stands for the type that satisfies the interface: `equals: (Self) -> Bool` is satisfied by a `Point` with `equals: (Point) -> Bool`. An interface whose members name `Self` can only bound type parameters, not be a type of values, since its values could not tell which type `Self` is.
 - A type **satisfies** an interface when it has, for each member, a method, a field or a property of the member's name and of exactly its type. Nothing needs to declare that it does (structural typing). A method may come from an extend in effect where it is checked; one with type parameters of its own has no one type, and satisfies no member. A function member, such as `area: () -> Int`, is satisfied alike by a method and by a field that holds a function. A union satisfies a member by a method that every member of it has, or by a field that every member has, of the member's type, as it is called or read through the union (see [unions](types.md#unions)); a method in some members and a field in the others do not.
-- **Declaring an interface.** `struct IndexError: Error` or `class Counter: Source<Int>` names an interface that the class or struct satisfies, which is checked where it is declared. Each member of the interface that the type's own members do not declare becomes a field of the member's type, a constructor argument, before the type's own fields; so `struct IndexError: Error` alone, without a body, declares a struct with a `message: String`. Such a field follows the rules of the type's others: it can be assigned in a class, not in a struct. A method of an extend of the type cannot stand for such a member, which is a field already. The interface may name `Self`, as a bound may. The type still satisfies other interfaces by its members alone, and only one interface can be named so far.
+- **Declaring an interface.** `struct IndexError: Error` or `class Counter: Source<Int>` names an interface that the class or struct satisfies, which is checked where it is declared. Each member of the interface that the type's own members do not declare becomes a field of the member's type, a constructor argument, before the type's own fields; so `struct IndexError: Error` alone, without a body, declares a struct with a `message: String`. Such a field is const, as any field not declared `var` is. A method of an extend of the type cannot stand for such a member, which is a field already. The interface may name `Self`, as a bound may. The type still satisfies other interfaces by its members alone, and only one interface can be named so far.
 - An interface bounds type parameters (see [generic functions](functions.md#generic-functions)), and is also a type of values: an **interface value** holds a value of a type that satisfies it, through which `shape.area()` and `shape.name` read the members. A value converts to an interface type, or to one optional, where one is expected, as a value converts to an optional type, provided that its type satisfies the interface where it is converted; the extends in effect there give the members. An interface type satisfies itself, so an interface value can be given to a type parameter that the interface bounds.
 - So far only references convert to interface values, not `Int`, `Float`, `Bool`, `Byte` or enum values, nor does an interface value to another interface. A union converts, whatever its members, as it satisfies the interface by what every member has (see [unions](types.md#unions)); a union of `Int` and `String` is a `Stringable`. Interface values cannot be compared with `==`, nor be map keys, and C functions cannot take or return them.
-- Members are read-only: an interface has no member that must be assignable, so its members are written without `const` or `var`, and have no value, and an interface value's members cannot be assigned. A function member is called, as a method is, not read as a value.
-- Why read-only: a struct's field, a `const` field and a method cannot be assigned, so an assignable member would leave them out, and an assignment whose meaning depended on how the member is satisfied would be a setter.
+- Members are read-only: an interface has no member that must be assignable, so its members are written without `var`, and have no value, and an interface value's members cannot be assigned. A function member is called, as a method is, not read as a value.
+- Why read-only: a struct's field, a class's field that is not `var` and a method cannot be assigned, so an assignable member would leave them out, and an assignment whose meaning depended on how the member is satisfied would be a setter.
 - Why exactly the member's type, not one assignable to it: the generic code is checked with the type the member has (see [generic functions](functions.md#generic-functions)), so a `String` field for a member `name: String?` would fail in that code rather than where the type is given.

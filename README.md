@@ -9,7 +9,7 @@ The language as planned (for what works today, see [the reference](docs/referenc
 ```
 struct Circle
   r: Float
-  area = @r * @r * PI
+  area := @r * @r * PI
 
 eval := (e: Expr): Int ->
   case e

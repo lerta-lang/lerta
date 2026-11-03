@@ -79,18 +79,20 @@ members_doc := (members: MemberDeclaration[], context: Context) ->
   docs := [member_doc(member, context) for member in members]
   indent join([line_feed(), separated(docs, line_feed())])
 
-# `[const | var | weak | weak!] name[: Type][ = [default] value]`.
+# `[var | weak | weak var | weak!] name[: Type][ = [default] value]`, or `name := [default] value`.
 member_doc := (member: MemberDeclaration, context: Context) ->
+  { modifier, type } := member
   parts: Doc[]
-  parts.push keyword("#{modifier} ", member.position) if modifier := member.modifier
+  parts.push keyword("#{modifier} ", member.position) if modifier
   parts.push name_doc(member.name)
   parts.push removed_type(FIELD, member.name.position, context)
-  parts.push join([text(': '), type_doc(type)]) if type := member.type
+  parts.push join([text(': '), type_doc(type)]) if type
   if value := member.value
+    operator := modifier or type then ' =' else ' :='
     if member.has_default
-      parts.push join([text(' = default '), expression_doc(value, context)])
+      parts.push join([text("#{operator} default "), expression_doc(value, context)])
     else
-      parts.push join([text(' ='), value_after(value, context)])
+      parts.push join([text(operator), value_after(value, context)])
   join parts
 
 enum_member := (member: Identifier | StringLiteral, context: Context) ->

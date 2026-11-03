@@ -142,13 +142,6 @@ export at_destructuring := (tokens: TokenStream) ->
   after_var := tokens.peek().kind == 'var' and tokens.peek_at(1).kind in ['{', '(']
   after_var or at_bare_destructuring(tokens, 0)
 
-# `const` where a declaration would start, which a const does without, as a field of a class or
-# struct alone takes it.
-reject_const := (tokens: TokenStream) ->
-  token := tokens.peek_at(tokens.at_word('weak') then 1 else 0)
-  return if token.kind != 'const'
-  tokens.fail token.position(), 'a const is declared as `name := value`, without `const`'
-
 # `{ a, b } := value` or `(a, b) := value`, which only `:=` after the names tells from an
 # expression.
 at_bare_destructuring := (tokens: TokenStream, offset: Int) ->
@@ -164,7 +157,6 @@ is_name_list_token := (kind: TokenKind) ->
 # A statement that fits on one line, which postfix `if` and `while` can follow, unless it is a
 # declaration.
 export parse_simple_statement := (tokens: TokenStream): Statement ->
-  reject_const tokens
   if at_destructuring(tokens)
     position := tokens.peek().position()
     parse_destructuring tokens
@@ -394,7 +386,6 @@ parse_for := (tokens: TokenStream) ->
 
 # A condition, or `name := value`, which holds when the value is not nil.
 parse_condition := (tokens: TokenStream): Condition ->
-  reject_const tokens
   token := tokens.peek()
   return parse_expression(tokens) unless at_binding(tokens)
   name := parse_identifier(tokens)
@@ -408,7 +399,6 @@ at_binding := (tokens: TokenStream) ->
 # of what follows it, which binds no name, as the name would hold where the condition does not.
 parse_condition_after := (tokens: TokenStream, kind: TokenKind): Condition ->
   return parse_condition(tokens) if kind == 'if' or kind == 'while'
-  reject_const tokens
   tokens.fail_here "'#{kind}' cannot bind a name" if at_binding(tokens)
   operand := parse_expression(tokens)
   UnaryOperation operand, operator: 'not', position: operand.position

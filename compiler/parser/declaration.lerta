@@ -184,27 +184,29 @@ parse_member_modifier := (tokens: TokenStream) ->
   at_weak := tokens.at_word('weak')
   is_weak_bang := at_weak and next.kind == '!' and not next.spaced
   is_weak := at_weak and next.kind == IDENTIFIER
-  if at_weak and next.kind in ['const', 'var']
-    form := '`weak name: Type?`, without const or var'
-    tokens.fail token.position(), "a weak field is written #{form}"
+  is_weak_var := at_weak and next.kind == 'var'
   text :=
     case
       when is_weak_bang then 'weak!'
       when is_weak then 'weak'
+      when is_weak_var then 'weak var'
       else token.kind.to_string()
   modifier := MemberModifier.parse(text)
   tokens.next() if modifier
-  tokens.next() if is_weak_bang
+  tokens.next() if is_weak_bang or is_weak_var
   modifier
 
-# `[const | var | weak | weak!] name[: Type][ = [default] value]`, with a type, a value or both.
+# `[var | weak | weak var | weak!] name[: Type][ = [default] value]`, with a type, a value or
+# both, or `name := [default] value`, a const declared as a local is.
 parse_member := (tokens: TokenStream) ->
   token := tokens.peek()
   modifier := parse_member_modifier(tokens)
   name := parse_identifier(tokens)
   type := parse_type_annotation(tokens)
-  has_value := type == nil or tokens.peek().kind == '='
-  tokens.expect '=', type == nil then "':' or '='" else "'='" if has_value
+  is_const := modifier == nil and type == nil and tokens.accept(':=')
+  has_value := is_const or type == nil or tokens.peek().kind in ['=', ':=']
+  expected := type == nil and modifier == nil then "':', ':=' or '='" else "'='"
+  tokens.expect '=', expected if has_value and not is_const
   has_default := has_value and at_default(tokens)
   tokens.next() if has_default
   value := has_value then parse_value(tokens)
