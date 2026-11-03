@@ -25,7 +25,7 @@ Do not report personal preferences that these documents do not support.
 
 ## Verify before reporting
 
-For each candidate defect, construct a concrete input or state that triggers it. If you cannot, drop it or mark it as uncertain. For a better-design finding, describe the alternative concretely and what it improves. Build and run a small program with the compiler when that settles a question. Do not run the whole check or test suite (`make test`, `make check`): the author runs them before the review.
+For each candidate defect, construct a concrete input or state that triggers it. If you cannot, drop it or mark it as uncertain. For a better-design finding, describe the alternative concretely and what it improves. Build and run a small program with the compiler when that settles a question. Do not run the whole check or test suite (`make test`, `make check`): the author runs them before the review. Make what you try in a temporary directory outside the repository, and remove it when done.
 
 ## Output
 
