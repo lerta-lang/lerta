@@ -2,14 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## The HTTP client skips a response whose status is below 100 as informational
-
-Severity: Low.
-
-`read_any_head` checks only that the status has three digits (std/internal/http_client.lerta:275), and the loop at :253 skips every status below 200. A server that sends `HTTP/1.1 099 Early` and then a 200 gets `200 ok` from `fetch`; expected: `a malformed response`.
-
-Fix: `throw malformed() if status < 100`.
-
 ## `encode_json` is quadratic in the depth of a self-referential structure
 
 Severity: Low.
