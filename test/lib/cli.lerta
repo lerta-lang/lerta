@@ -2,7 +2,7 @@
 # directories.
 import compare_text, lines from './expect'
 import Check, CheckFailed from './report'
-import cache_dir, OUTPUT_LIMIT, root_dir, shown_text, suite_dir from './lerta'
+import at_import, cache_dir, OUTPUT_LIMIT, root_dir, shown_text, suite_dir from './lerta'
 import is_file, list_dir, make_dir, read_file from 'std:io'
 import platform, run from 'std:process'
 
@@ -40,10 +40,12 @@ export run_command := (
   )
   CliRun status: result.code, stdout: stdout.to_binary(), stderr: stderr.to_binary()
 
-host_triple_run := await run_command('clang', ['-print-target-triple'], '.')
-if host_triple_run.status != 0
-  throw ValueError("clang -print-target-triple failed: #{host_triple_run.status}")
-export host_triple := host_triple_run.stdout_text().split("\n")[0]
+target_triple := ->
+  ran := await run_command('clang', ['-print-target-triple'], '.')
+  throw ValueError("clang -print-target-triple failed: #{ran.status}") if ran.status != 0
+  ran.stdout_text().split("\n")[0]
+
+export host_triple := await at_import(target_triple)
 export runtime_flags: String[][] = [[], ['-O'], ['--target', host_triple]]
 export host_platform := platform
 
@@ -51,7 +53,7 @@ export host_platform := platform
 export posix_check := (name: String, run: () -> Promise<String[]?>) ->
   Check name, run: -> host_platform == 'windows' then nil else await run()
 export host_executable_suffix := platform == 'windows' then '.exe' else ''
-export hello_output := await read_file("#{root_dir}/tests/examples/hello.out")
+export hello_output := await at_import(-> await read_file("#{root_dir}/tests/examples/hello.out"))
 export cli_work_dir := suite_dir('cli')
 
 var next_run_dir = 0

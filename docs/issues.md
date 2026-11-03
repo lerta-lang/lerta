@@ -60,14 +60,6 @@ print "c"
 
 Fix: name the rule of the place reported, here Multi-line literals.
 
-## The test driver leaves its work directory when a module's top level throws
-
-Severity: Low.
-
-`work_root := make_temp_dir()` runs when test/lib/lerta.lerta is imported (:32), and test/lib/cli.lerta runs clang at import (:39-41) and reads a file (:46). The only `remove_work_root` is the `finally` around `main()` in test/main.lerta:152-157, so an exception at import leaves the directory. `TMPDIR=<empty dir> PATH=/nonexistent bin/test --list` prints `cannot run: clang`, exits 1 and leaves `<empty dir>/lerta-XXXXXX/{cache,run}`.
-
-Fix: compute the clang probe and the hello output on first use, or make `work_root` on first use in `suite_dir`.
-
 ## The cli, format, leaks and self suites run the compiler without a timeout
 
 Severity: Low.
