@@ -2,27 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `lerta fmt` fails on a comment before an operand in parentheses
-
-Severity: Low.
-
-A comment on a line of its own before an operand that starts with `(` but is not a function literal makes the formatter fail, in two places at least:
-
-```
-x :=
-  # c
-  (1 + 2) * 3
-f := ->
-  print(
-    # c
-    (1 + 2) * 3
-  )
-```
-
-`lerta fmt` reports `the formatter would write a program that does not parse, which is a bug` for the first, and `the formatter would change the program, which is a bug` for the second, where the call is rewritten without parentheses. In an array, or as the argument of a call that is not a statement, the comment is placed.
-
-Fix: place the comment before the `(`, or report it as stranded, as one before the parameters of a function literal is (see stranded_comments in compiler/format/source.lerta).
-
 ## `lerta fmt` reports a list it would join under the rule of another place
 
 Severity: Low.

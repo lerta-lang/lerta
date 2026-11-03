@@ -21,7 +21,9 @@ import
   ADDITIVE, binary_doc, cast_doc, coalesce_doc, conditional_doc, is_doc, POSTFIX, precedence,
   PREFIX, range_doc, unary_doc
 from './print_operation'
-import ESCAPES, EXPECTED_TYPES, LINE_LENGTH, PARENTHESES, SHORTHAND, STRING_LITERALS from './rules'
+import
+  ESCAPES, EXPECTED_TYPES, LINE_LENGTH, LONG_LISTS, PARENTHESES, SHORTHAND, STRING_LITERALS
+from './rules'
 import with_ascii_escapes from './escapes'
 import
   array_doc, closing_at, item, map_doc, named_item, record_doc, value_after
@@ -260,12 +262,12 @@ export call_doc := (call: Call, context: Context, flags: { whole: Bool }) ->
   items := arguments(call, inside)
   open := join([callee, type_arguments(call.type_args), text('(')])
   closing_text := closing(')', arguments_closing_at(call, context))
-  opened :=
-    if flags.whole and takes_block_arguments(call, context)
-      indent join([callee, line_feed(), lines_of_items(items)])
-    else
-      opened_list open, items, closing_text
-  bracketed_or open, items, closing_text, opened
+  if flags.whole and takes_block_arguments(call, context)
+    block := indent(join([callee, line_feed(), lines_of_items(items)]))
+    # A comment before an argument ends the line before it.
+    return rule(LONG_LISTS, block) if items.any((item) -> item.after_comment)
+    return bracketed_or(open, items, closing_text, block)
+  bracketed_or open, items, closing_text, opened_list(open, items, closing_text)
 
 # Whether a call whose arguments do not fit on its line can take them in a block below it, without
 # parentheses (see Long lists): one on a line of its own, outside brackets, with arguments and the

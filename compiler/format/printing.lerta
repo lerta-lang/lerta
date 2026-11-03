@@ -2,7 +2,7 @@
 # the tokens that they place at their positions in the source.
 import
   BinaryOperation, Binding, Call, Cast, Coalesce, Conditional, Expression, If, Import, Index,
-  IsTest, Member, Position, Range, This, Unwrap
+  IsTest, Member, Position, Range, Unwrap
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import AnnotationKey, AnnotationKind from './annotated'
@@ -15,30 +15,42 @@ import LONG_LISTS, StyleRule, TYPE_ANNOTATIONS from './rules'
 import SourceText from './source'
 
 # The expression whose token comes first in the source.
-export leftmost := (expression: Expression): Expression ->
+export leftmost := (expression: Expression) ->
+  var current = expression
+  current = next while next := left_part(current)
+  current
+
+# The part of the expression that it starts with, if any.
+left_part := (expression: Expression) ->
   case expression
-    when BinaryOperation then leftmost(expression.left)
-    when Range
-      start := expression.start ? return expression
-      leftmost start
-    when IsTest, Cast, Coalesce then leftmost(expression.value)
-    when Conditional then leftmost(expression.condition)
-    when Member
-      expression.object is This then expression.object else leftmost(expression.object)
-    when Call then leftmost(expression.callee)
-    when Index then leftmost(expression.object)
-    when Unwrap then leftmost(expression.operand)
-    when If
-      if expression.nil_safe
-        leftmost (expression.condition as Binding!).value
-      else
-        expression
-    else expression
+    when BinaryOperation then expression.left
+    when Range then expression.start
+    when IsTest, Cast, Coalesce then expression.value
+    when Conditional then expression.condition
+    when Member then expression.object
+    when Call then expression.callee
+    when Index then expression.object
+    when Unwrap then expression.operand
+    when If then expression.nil_safe then (expression.condition as Binding!).value
+    else nil
+
+# The position of the first token of the expression: that of the `(` of the outermost parentheses
+# that it starts with, which the expression written in them takes, or else that of its leftmost.
+start_of := (expression: Expression) ->
+  var first = expression.position
+  var current = expression
+  while next := left_part(current)
+    current = next
+    first = current.position if is_before(current.position, first)
+  first
+
+is_before := (a: Position, b: Position) ->
+  a.line < b.line or (a.line == b.line and a.column < b.column)
 
 # Whether a comment ends the line before the value, of its `=`, key, `then`, `else` or `return`,
 # which would leave the value at the start of the next line: it goes below, one level deeper.
 export follows_comment := (value: Expression, context: Context) ->
-  context.source.comment_before leftmost(value).position
+  context.source.comment_before start_of(value)
 
 # The value's doc after the word before it, as `then` or `key:`: after a space, or on the next line
 # after a comment (see follows_comment).
