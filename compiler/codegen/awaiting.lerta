@@ -5,7 +5,7 @@ import emit_ramp, emit_wait, generate_coroutine from './coroutine'
 import emit_exception_check, holding from './exceptions'
 import generate, type_of from './expression'
 import Generator from './generator'
-import IrBuilder, IrModule from './ir_builder'
+import emit_when, IrBuilder, IrModule from './ir_builder'
 import
   emit_release, emit_retain, emit_retain_value, ir_type, returns_nothing, suffixed_symbol
 from './lerta_ir'
@@ -58,13 +58,7 @@ emit_await := (g: Generator, promise: String, value: Type) ->
   # The body's own promise is given too, through which a cancel of it reaches what it waits for.
   args := "ptr #{promise}, ptr #{handle}, ptr %promise"
   is_pending := call_runtime(ir, 'i1 @lerta_promise_wait_in(ptr, ptr, ptr)', args)
-  wait_label := ir.fresh_label('await.wait')
-  settled_label := ir.fresh_label('await.settled')
-  ir.branch_if is_pending, wait_label, settled_label
-  ir.start_block wait_label
-  emit_wait g
-  ir.branch settled_label
-  ir.start_block settled_label
+  emit_when ir, is_pending, -> emit_wait(g)
   result_args := "ptr #{promise}, ptr %promise"
   slot := call_runtime(ir, 'ptr @lerta_promise_result_in(ptr, ptr)', result_args)
   emit_exception_check g

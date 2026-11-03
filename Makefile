@@ -2,7 +2,6 @@
 # README.md for the targets and docs/internals.md#bootstrap for the bootstrap. Written for GNU make
 # 3.81, the one macOS has.
 
-# The files that the compiler carries in build/embedded.lerta, which tools/embed.lerta writes.
 # What third_party/libuv.txt lists of the kind $(1) for the host's system, on which the compiler
 # runs: macOS or Linux, by the rule of is_for in compiler/libuv.lerta.
 HOST_SYSTEM := $(if $(filter Darwin,$(shell uname -s)),macos,linux)
@@ -15,6 +14,7 @@ host_libuv = $(shell awk -v kind=$(1) -v systems='$(HOST_LIBUV_SYSTEMS)' \
 LIBUV_HEADERS := $(shell find third_party/libuv/include third_party/libuv/src -name '*.h')
 LIBUV_SOURCES := $(shell awk '$$2 == "source" { print "third_party/libuv/" $$3 }' third_party/libuv.txt)
 LIBUV := third_party/libuv.txt $(LIBUV_HEADERS) $(LIBUV_SOURCES)
+# The files that the compiler carries in build/embedded.lerta, which tools/embed.lerta writes.
 # std's files at any depth, as the seed finds them (see tools/embed.lerta).
 EMBEDDED := $(sort $(shell find std -name '*.lerta') $(wildcard runtime/*.c runtime/*.h) $(LIBUV))
 SOURCES := $(shell find compiler -name '*.lerta') build/embedded.lerta
