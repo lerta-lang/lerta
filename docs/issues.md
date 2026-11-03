@@ -2,24 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## A compound index assignment leaks an owned array when the operator throws
-
-Severity: Low.
-
-`generate_index_assignment` (compiler/codegen/assignment.lerta:118-119) pops the temporaries that hold the array and the value before `combine`, whose checked arithmetic can throw; the unwind then no longer releases the array.
-
-```
-get := (): Int[] -> [9223372036854775807]
-try
-  get()[0] += 1
-catch e: ArithmeticError
-  print e.message
-```
-
-With the debug runtime: `integer overflow`, then `leak: 1 object(s)`, exit 23. A borrowed array (`xs[0] += 1`) and the out-of-range path are clean.
-
-Fix: pop the temporaries after `combine`.
-
 ## The HTTP client skips a response whose status is below 100 as informational
 
 Severity: Low.

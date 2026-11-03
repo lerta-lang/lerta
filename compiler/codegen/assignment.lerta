@@ -111,12 +111,15 @@ generate_index_assignment := (g: Generator, assignment: Assignment, target: Inde
   index := generate(g, target.index)
   operand := assignment.value
   value := generate(g, operand)
+  array_depth := g.temporaries.length
   push_temporary g, value, type_at_use(g, operand)
   old := assignment.operator == '=' then '' else emit_get(ir, array, index, element)
   # An index out of range throws.
   emit_exception_check g unless old.is_empty()
-  pop_temporaries g, depth
+  # `combine` consumes the value, but may throw, on an overflow, while the array is still held.
+  pop_temporaries g, array_depth
   result := combine(g, assignment.operator, old, value, element, type_at_use(g, operand))
+  pop_temporaries g, depth
   items := emit_checked_items(ir, array, index)
   emit_set_in ir, items, index, result, element
   emit_release_value ir, result, element
