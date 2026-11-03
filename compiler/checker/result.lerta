@@ -38,19 +38,21 @@ export check_last_statement := (body: Body, statement: Statement) ->
       return
   annotated := context.annotated
   expects_value := annotated != nil and not is_kind(annotated, 'void')
+  # Written, or told by a `return` alone before it, the result is void: the last statement's value,
+  # if any, is not used.
+  gives_none := annotated == void_type or (annotated == nil and context.inferred == void_type)
   var gives_value = false
-  if value := value_of(statement)
-    if expects_value
-      record_result body, type_of_result(body, value), value
-      gives_value = true
+  value := value_of(statement)
+  if value and expects_value
+    record_result body, type_of_result(body, value), value
+    gives_value = true
+  else if value and not gives_none
+    type := type_of(body, value)
+    gives_value = not is_kind(type, 'void')
+    if gives_value
+      record_result body, type, value
     else
-      type := type_of(body, value)
-      annotated_void := annotated != nil and is_kind(annotated, 'void')
-      gives_value = not is_kind(type, 'void') and not annotated_void
-      if gives_value
-        record_result body, type, value
-      else
-        check_discarded body, value, type
+      check_discarded body, value, type
   else
     check_statement body, statement
   result := context.annotated ? context.inferred ? void_type

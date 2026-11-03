@@ -4,7 +4,7 @@ import Case, CaseArm, Conditional, Expression, If, NilLiteral, Statement from '.
 import generate_borrowed_value, is_borrowable_in_scope from './borrowing'
 import generate_condition_of, generate_if from './control_flow'
 import generate, generate_condition, type_of from './expression'
-import generate_block_value, hold from './function'
+import generate_block, generate_block_value, hold from './function'
 import Generator from './generator'
 import any_of, phi_incoming from './ir_builder'
 import emit_type_test from './heap_object'
@@ -36,10 +36,14 @@ export generate_case := (g: Generator, case_expression: Case) ->
   release_subject := held ? release_nothing
   end_label := ir.fresh_label('case.end')
   incoming: String[]
-  # An arm that ends with a jump gives no operand; it never reaches the end.
+  type := type_of(g, case_expression)
+  # One that gives no value runs its arms as statements, which release the values they discard, as
+  # an if does. An arm that ends with a jump gives no operand; it never reaches the end.
   generate_arm_value := (body: Statement[]) ->
-    value := generate_block_value(g, body)
-    incoming.push phi_incoming(value, ir.current_block)
+    if is_kind(type, 'void')
+      generate_block g, body
+    else
+      incoming.push phi_incoming(generate_block_value(g, body), ir.current_block)
     ir.branch end_label
   for arm in case_expression.arms
     test := generate_test(g, arm, subject_type, subject_operand)
@@ -54,7 +58,7 @@ export generate_case := (g: Generator, case_expression: Case) ->
   else
     ir.emit 'unreachable'
   ir.start_block end_label
-  result := merge(g, type_of(g, case_expression), incoming)
+  result := merge(g, type, incoming)
   release_subject()
   result
 

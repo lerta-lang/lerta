@@ -57,9 +57,9 @@ These apply when a value in statement position is not captured.
 - A literal, a name, an operator expression, a field or an index (`'a'`, `x`, `1 + 2`, `x == 1`, `p.x`, `xs[0]`) → error. An unused comparison often means a mistyped assignment.
 - A function value itself (`f` after `f := () -> 1`) → error "function value is unused; to call it, write `f()`".
 - An [`Iter`](types.md#iter) (`xs.map(f)`) → error "an Iter does nothing until it is consumed".
-- A [`Promise`](functions.md#functions-that-await) (`fetch('a')`) → error "a Promise must be awaited"; one whose work goes on unawaited is given to `spawn` of [std:async](std.md#stdasync). An Iter or a Promise that an arm of an `if`, a `case` or a `try` gives is reported so too, where the statement gives no value as its arms' values have no type in common, as in the last statement of a function that gives none.
-- A call, an `await`, or an expression with no value such as a `case` whose arms are calls to `void` functions → allowed.
-- A `try` → its blocks are checked as statements, as the branches of an `if` are, so the last statement of its block and of each catch is checked by these rules.
+- A [`Promise`](functions.md#functions-that-await) (`fetch('a')`) → error "a Promise must be awaited"; one whose work goes on unawaited is given to `spawn` of [std:async](std.md#stdasync). An Iter or a Promise that a branch of an `if` gives is reported so too, where the `if` gives no value as its branches' values have no type in common, as in the last statement of a function that gives none.
+- A call, an `await`, or an expression with no value → allowed.
+- A `try` or a `case` → its blocks are checked as statements, as the branches of an `if` are, so the last statement of each block, catch or arm is checked by these rules, and their values need no type in common.
 
 ## Unused names
 

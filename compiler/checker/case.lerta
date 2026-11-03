@@ -1,16 +1,18 @@
 # Types `case`, `if` with `else`, `try` and `then`/`else`, whose values their branches give (see
 # branches), and a `case`'s conditions or patterns (see case_patterns).
-import Case, Catch, Conditional, If, Statement, Try from '../ast'
+import Case, Catch, Conditional, Expression, If, Statement, Try from '../ast'
 import fail from './diagnostics'
 import expect_condition, set_type from './expression'
-import narrow, narrowings_of from './narrowing'
+import ends_with_jump, narrow, narrowings_of from './narrowing'
 import Body from './shared'
-import check_block, check_if, check_if_condition, define_local, nothing from './statement'
+import
+  check_block, check_if, check_if_condition, define_local, is_never_typed, nothing
+from './statement'
 import std_interface from './interfaces'
 import reject_unsatisfied from './satisfaction'
 import Local from './scopes'
 import resolve from './type_names'
-import format_type, is_kind, members_of, ObjectType, Type, void_type from '../types'
+import format_type, is_kind, members_of, never_type, ObjectType, Type, void_type from '../types'
 import Branch, BranchValue, type_of_branches, unify_unless_void, unify_values from './branches'
 import check_patterns from './case_patterns'
 
@@ -39,6 +41,20 @@ export type_of_if := (body: Body, if_expression: If, expected: Type?): Type ->
   description := if_expression.nil_safe then nil_safe else 'the branches of if'
   unify := unify_unless_void(body, if_expression, description)
   type_of_branches body, branches, expected, unify
+
+# A case that is a statement gives no value: its arms are checked as statements, as a try's blocks
+# are, so that their values need no type in common. It never ends if none of its arms does.
+export check_case_statement := (body: Body, case_expression: Case) ->
+  narrowings := check_patterns(body, case_expression)
+  blocks: Statement[][] = [arm.body for arm in case_expression.arms]
+  for arm, i in case_expression.arms
+    check_block body, arm.body, -> narrow(body, narrowings.arms[i]), nothing
+  if otherwise := case_expression.otherwise
+    check_block body, otherwise, -> narrow(body, narrowings.otherwise), nothing
+    blocks.push otherwise
+  is_never := (expression: Expression) -> is_never_typed(body, expression)
+  never_ends := blocks.all((block) -> ends_with_jump(block, is_never))
+  body.facts.types[case_expression] = never_ends then never_type else void_type
 
 # A try that is a statement gives no value: its blocks are checked as statements, as an if's
 # branches are, so that the values they end with are discarded by the same rules.
