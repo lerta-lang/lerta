@@ -3,6 +3,9 @@ const fs = require('fs')
 const path = require('path')
 const vscode = require('vscode')
 
+// Far more than the one line of a header that lerta lsp writes.
+const MAX_HEADER_LENGTH = 1024
+
 // A client of `lerta lsp` (see docs/reference/compiler.md#lsp), written without the
 // vscode-languageclient package, so that the extension needs no install of its own: it sends the
 // Lerta documents' texts, shows the diagnostics that the server publishes, formats a document by
@@ -26,16 +29,27 @@ function activate(context) {
     servers.set(command, server)
     let buffer = Buffer.alloc(0)
     let stderr = ''
+    // A server that writes what is not LSP is taken to be a program that `lerta.path` wrongly names,
+    // and ended, as is one whose header goes on past any that lerta lsp writes.
     child.stdout.on('data', data => {
+      if (server.ended) return
       buffer = Buffer.concat([buffer, data])
       for (;;) {
         const headerEnd = buffer.indexOf('\r\n\r\n')
-        if (headerEnd < 0) return
-        const length = Number(/Content-Length: (\d+)/i.exec(buffer.subarray(0, headerEnd).toString())?.[1])
+        if (headerEnd < 0 && buffer.length <= MAX_HEADER_LENGTH) return
+        const header = headerEnd < 0 ? '' : buffer.subarray(0, headerEnd).toString()
+        const match = /^Content-Length: *(\d+)\r?$/im.exec(header)
+        if (!match) return fail(server, 'lerta lsp wrote a message without its Content-Length')
         const start = headerEnd + 4
-        if (buffer.length < start + length) return
-        receive(server, JSON.parse(buffer.subarray(start, start + length).toString()))
-        buffer = buffer.subarray(start + length)
+        const bodyEnd = start + Number(match[1])
+        if (buffer.length < bodyEnd) return
+        const body = buffer.subarray(start, bodyEnd).toString()
+        buffer = buffer.subarray(bodyEnd)
+        try {
+          receive(server, JSON.parse(body))
+        } catch {
+          return fail(server, 'lerta lsp wrote a message that is not LSP')
+        }
       }
     })
     // Only the end of what the server wrote is kept, for the message when it ends.
@@ -67,6 +81,11 @@ function activate(context) {
     if (!server.stopping) {
       vscode.window.showErrorMessage(`Lerta: ${message}. Set lerta.path, or open a file to start it again.`)
     }
+  }
+
+  function fail(server, message) {
+    end(server, message)
+    server.child.kill()
   }
 
   function write(server, message) {

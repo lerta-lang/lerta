@@ -100,14 +100,6 @@ print "c"
 
 Fix: name the rule of the place reported, here Multi-line literals.
 
-## The VS Code extension stops reading a server after one message without a header
-
-Severity: Low.
-
-editors/vscode/extension.js:29-40 takes `Number(...)` of a `Content-Length` match, which is `NaN` when there is none, so the length guard passes and `JSON.parse` throws inside the `data` handler before `buffer` advances. Every later `data` event parses the same bytes and throws again; the server is never marked ended, no error is shown and documents stay attached to it. Reached when `lerta.path` names a program that writes anything else to stdout. *Unverified* in VS Code.
-
-Fix: end the server and kill the child when the header does not match; parse inside `try`, and advance `buffer` regardless.
-
 ## The runtime cache names an entry by a 32-bit hash
 
 Severity: Low.
