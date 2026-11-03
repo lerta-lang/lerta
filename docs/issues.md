@@ -10,18 +10,6 @@ Severity: Low.
 
 Fix: compute the comment lines of each block once, such as a sorted array of comment lines and a table of block ends per indent.
 
-## The array literal spread in another does not take the expected item type
-
-Severity: Low.
-
-A spread `xs...` is the comprehension `[x for x in xs]` marked to give its items in its place (`is_spread` in compiler/ast.lerta), and an array literal checks it with the array of its own item type expected (`expect_element` in compiler/checker/collection.lerta). The comprehension does not pass that type on to an array literal that it goes through, which is typed alone, so literals in it do not take a type from the context.
-
-```
-xs: Int8[] = [[1, 2]..., 3]
-```
-
-reports `1:15: expected Int8, got Int`, where `[1, 2, 3]` is an `Int8[]`. So does `n in [[1, 2]..., 3]` of an `Int8` `n`. The comprehension of a spread should check an array literal that it goes through with the array of the expected item type expected.
-
 ## `lerta fmt` fails on a comment before an operand in parentheses
 
 Severity: Low.

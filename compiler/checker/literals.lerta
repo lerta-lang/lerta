@@ -1,7 +1,8 @@
 # Facts about literals: which expressions take their type from the context, and integer and
 # string literals as the integer types that are expected.
 import
-  BinaryOperation, Expression, FloatLiteral, IntegerLiteral, StringLiteral, UnaryOperation
+  ArrayLiteral, BinaryOperation, Comprehension, Expression, FloatLiteral, IntegerLiteral, is_spread,
+  StringLiteral, UnaryOperation
 from '../ast'
 import fail from './diagnostics'
 import is_numeric_operator from './operator'
@@ -9,9 +10,11 @@ import ProgramWide from './shared'
 import float_bits, integer_float_text from '../float_literals'
 import format_type, int_type, integer_range, is_kind, Type from '../types'
 
-# Whether an expression takes its type from the context: a literal, or arithmetic on such
-# expressions, so that `1 + 2` is a Byte where one is expected.
+# Whether an expression takes its type from the context: a literal, arithmetic on such
+# expressions, so that `1 + 2` is a Byte where one is expected, or the spread of an array literal
+# of them, as `[1, 2]...`.
 export is_contextual := (expression: Expression): Bool ->
+  return literal.elements.all(is_contextual) if literal := spread_literal(expression)
   case expression
     when IntegerLiteral, FloatLiteral, StringLiteral then true
     when UnaryOperation then expression.operator == '-' and is_contextual(expression.operand)
@@ -24,12 +27,18 @@ export is_contextual := (expression: Expression): Bool ->
 # expected. It decides more of its type than other literals do, which an Int fits too, so it is
 # checked before them, as the operand, the item or the argument whose type the others take.
 export holds_float_literal := (expression: Expression): Bool ->
+  return literal.elements.any(holds_float_literal) if literal := spread_literal(expression)
   case expression
     when FloatLiteral then true
     when UnaryOperation then holds_float_literal(expression.operand)
     when BinaryOperation
       holds_float_literal(expression.left) or holds_float_literal(expression.right)
     else false
+
+# The array literal that a spread goes through, as `[1, 2]` of `[1, 2]...`; nil for any other
+# expression.
+spread_literal := (expression: Expression) ->
+  is_spread(expression) then (expression as Comprehension!).iterable as ArrayLiteral?
 
 # The items, those of contextual expressions that hold a float literal first (see
 # holds_float_literal), each in its order.
