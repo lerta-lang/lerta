@@ -133,7 +133,7 @@ closed_stdout_check := -> posix_check('a built program reports a failed stdout w
   built := await build_program('closed-stdout', "#{root_dir}/tests/print/lib/print_lost.lerta")
   return built.errors unless built.errors.is_empty()
   ran := await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
-  [expect_status(1, ran.status)..., compare_output('stderr', "reported\n".binary, ran.stderr)...]
+  [expect_status(1, ran.status)..., compare_output('stderr', b"reported\n", ran.stderr)...]
 )
 
 closed_write_check := -> posix_check('a built program reports a rejected stdout write', ->
@@ -154,7 +154,7 @@ closed_stderr_check := ->
     ran := await run_command('sh', ['-c', '"$0" 2>&-', built.executable], built.dir)
     [
       expect_status(0, ran.status)...
-      compare_output('stdout', "cannot write to stderr\n".binary, ran.stdout)...
+      compare_output('stdout', b"cannot write to stderr\n", ran.stdout)...
     ]
 
 closed_stdio_check := ->
@@ -187,11 +187,11 @@ broken_pipe_check := -> posix_check('a built program ends with SIGPIPE when its 
     await run_command('sh', ['-c', "trap '' PIPE; #{script}", built.executable], built.dir)
   [
     expect_status(0, ran.status)...
-    compare_output('stdout', "y\n".binary, ran.stdout)...
-    compare_output('stderr', "141\n".binary, ran.stderr)...
+    compare_output('stdout', b"y\n", ran.stdout)...
+    compare_output('stderr', b"141\n", ran.stderr)...
     expect_status(0, ignoring.status)...
-    compare_output('stdout', "y\n".binary, ignoring.stdout)...
-    compare_output('stderr', "141\n".binary, ignoring.stderr)...
+    compare_output('stdout', b"y\n", ignoring.stdout)...
+    compare_output('stderr', b"141\n", ignoring.stderr)...
   ]
 )
 
@@ -203,7 +203,7 @@ stdin_redirection_check := ->
     directory := await run_command('sh', ['-c', '"$0" < /', built.executable], built.dir)
     [
       expect_status(0, closed.status)...
-      compare_output('stdout', "0\n".binary, closed.stdout)...
+      compare_output('stdout', b"0\n", closed.stdout)...
       expect_status(1, directory.status)...
       compare_text('stderr', "cannot read stdin\n", first_line(directory.stderr_text()))...
     ]
@@ -226,7 +226,7 @@ slow_reader_check := -> posix_check('a built program keeps writing while a slow 
     ['-c', '"$0" | { sleep 1; cat >/dev/null; }', built.executable]
     built.dir
   )
-  [expect_status(0, ran.status)..., compare_output('stderr', "on time\n".binary, ran.stderr)...]
+  [expect_status(0, ran.status)..., compare_output('stderr', b"on time\n", ran.stderr)...]
 )
 
 read_before_exit_check := ->
@@ -250,8 +250,8 @@ read_then_run_check := -> posix_check('a built program preserves stdin for a pro
   ran := await run_command('sh', ['-c', script, built.executable], built.dir)
   [
     expect_status(0, ran.status)...
-    compare_output('stdout', "first\nsecond\ntrue\n".binary, ran.stdout)...
-    compare_output('stderr', ''.binary, ran.stderr)...
+    compare_output('stdout', b"first\nsecond\ntrue\n", ran.stdout)...
+    compare_output('stderr', b'', ran.stderr)...
   ]
 )
 
@@ -263,27 +263,27 @@ run_without_stdout_check := ->
     )
     return built.errors unless built.errors.is_empty()
     ran := await run_command('sh', ['-c', '"$0" >&-', built.executable], built.dir)
-    [expect_status(0, ran.status)..., compare_output('stderr', "true\n".binary, ran.stderr)...]
+    [expect_status(0, ran.status)..., compare_output('stderr', b"true\n", ran.stderr)...]
 
 read_lines_check := ->
   program_check
     'lerta build runs a program that reads lines without their line endings'
     "#{root_dir}/tests/io/lib/read_lines.lerta"
-    "a\r\nb\n\nlast\r".binary
+    b"a\r\nb\n\nlast\r"
     "[a]\n[b]\n[]\n[last\r]\n"
 
 read_parts_check := ->
   program_check
     'lerta build runs a program that reads parts and the rest of stdin'
     "#{root_dir}/tests/io/lib/read_parts.lerta"
-    "3\nabcdef".binary
+    b"3\nabcdef"
     "abc\ndef\n0\ntrue\ntrue\n"
 
 read_empty_check := ->
   program_check
     'lerta build runs a program that reads empty stdin'
     "#{root_dir}/tests/io/lib/read_empty.lerta"
-    ''.binary
+    b''
     "true\ntrue\n0\n"
 
 read_much_check := ->
@@ -318,7 +318,7 @@ read_bodies_streaming_check := ->
     ran := await run_command('sh', ['-c', script, built.executable], built.dir)
     [
       expect_status(0, ran.status)...
-      compare_output('stdout', "100000\nthe end came after 4 of 10 bytes\n".binary, ran.stdout)...
+      compare_output('stdout', b"100000\nthe end came after 4 of 10 bytes\n", ran.stdout)...
     ]
 
 read_errors_check := ->
@@ -335,14 +335,14 @@ write_much_check := ->
   program_check
     'lerta build writes stdout beyond one buffer'
     "#{root_dir}/tests/io/lib/write_much.lerta"
-    ''.binary
+    b''
     line.repeat(2000) + "end\n"
 
 write_both_check := ->
   program_check
     'lerta build writes to stdout and stderr'
     "#{root_dir}/tests/io/lib/write_both.lerta"
-    ''.binary
+    b''
     "ac\n"
     expected_stderr: 'b'
 
@@ -351,13 +351,13 @@ write_both_order_check := ->
     built := await build_program('write-both-order', "#{root_dir}/tests/io/lib/write_both.lerta")
     return built.errors unless built.errors.is_empty()
     ran := await run_command('sh', ['-c', '"$0" 2>&1', built.executable], built.dir)
-    [expect_status(0, ran.status)..., compare_output('stdout', "abc\n".binary, ran.stdout)...]
+    [expect_status(0, ran.status)..., compare_output('stdout', b"abc\n", ran.stdout)...]
 
 write_then_error_check := ->
   program_check
     'lerta build writes stdout and stderr after buffered output'
     "#{root_dir}/tests/print/lib/write_then_print_error.lerta"
-    ''.binary
+    b''
     "out printed\n"
     expected_stderr: "error\n"
 
@@ -371,14 +371,14 @@ merged_output_order_check := ->
     ran := await run_command('sh', ['-c', '"$0" 2>&1', built.executable], built.dir)
     [
       expect_status(0, ran.status)...
-      compare_output('stdout', "out error\nprinted\n".binary, ran.stdout)...
+      compare_output('stdout', b"out error\nprinted\n", ran.stdout)...
     ]
 
 wc_check := ->
   program_check
     'lerta build runs a program that reads its command-line arguments'
     "#{root_dir}/examples/wc.lerta"
-    ''.binary
+    b''
     "1 3 21 #{root_dir}/examples/hello.lerta\n"
     args: ["#{root_dir}/examples/hello.lerta"]
 
@@ -391,7 +391,7 @@ environment_check := (
   program_check
     name
     "#{root_dir}/tests/process/lib/print_env.lerta"
-    ''.binary
+    b''
     expected
     env: env
     unset_env: unset_env
@@ -401,7 +401,7 @@ empty_temp_dir_check := ->
   check := program_check
     'a built program makes a temporary directory under an empty TMPDIR'
     "#{root_dir}/tests/io/lib/make_temp_dir.lerta"
-    ''.binary
+    b''
     "true\n"
     env: { 'TMPDIR': '' }
   posix_check check.name, check.run
@@ -410,7 +410,7 @@ argv_check := ->
   program_check
     'lerta build runs a program with non-ASCII command-line arguments'
     "#{root_dir}/tests/binary/lib/decode_arguments.lerta"
-    ''.binary
+    b''
     "true\ntrue\ntrue\n"
     args: ['hello', 'héllo', '😀']
 
@@ -427,7 +427,7 @@ color_check := (name: String, color_variables: Map<String, String>, expected: St
   program_check
     name
     "#{root_dir}/tests/io/lib/print_color.lerta"
-    ''.binary
+    b''
     "stdout: #{expected}\n"
     env: env
     unset_env: unset_env
@@ -448,7 +448,7 @@ terminal_color_check := (
   on_macos := host_platform == 'macos'
   args := on_macos then ['-q', '/dev/null', 'sh', '-c', command] else ['-qec', command, '/dev/null']
   (env, unset_env) := color_env(color_variables)
-  ran := await run_command('script', args, built.dir, ''.binary, env, unset_env)
+  ran := await run_command('script', args, built.dir, b'', env, unset_env)
   shown := ran.stdout_text()
   [
     expect_status(0, ran.status)...

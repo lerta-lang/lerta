@@ -86,12 +86,9 @@ input_cases: InputCase[] =
 make_inputs := (cwd: String) ->
   make_dir "#{cwd}/lib"
   await write_file("#{cwd}/hello.lerta", await read_file(hello))
-  await write_file("#{cwd}/extern.c", ''.binary)
-  await write_file(
-    "#{cwd}/main.lerta"
-    "import greeting from './lib/greeting'\nprint greeting\n".binary
-  )
-  await write_file("#{cwd}/lib/greeting.lerta", "export greeting := 'hi'\n".binary)
+  await write_file("#{cwd}/extern.c", b'')
+  await write_file("#{cwd}/main.lerta", b"import greeting from './lib/greeting'\nprint greeting\n")
+  await write_file("#{cwd}/lib/greeting.lerta", b"export greeting := 'hi'\n")
   make_link "#{cwd}/hello.lerta", "#{cwd}/link.lerta"
 
 input_check := (test: InputCase) ->
@@ -188,8 +185,7 @@ relative_temp_check := ->
     temp := "#{cwd}/temp"
     make_dir temp
     environment := { 'TMPDIR': 'temp', 'TEMP': 'temp', 'TMP': 'temp' }
-    built :=
-      await run_command(compiler, ['build', hello, '-o', 'hello'], cwd, ''.binary, environment)
+    built := await run_command(compiler, ['build', hello, '-o', 'hello'], cwd, b'', environment)
     succeed 'build', built
     ran := await run_command("#{cwd}/hello#{host_executable_suffix}", [], cwd)
     [
@@ -202,7 +198,7 @@ no_clang_check := ->
   Check name: 'lerta build removes temporary files when clang cannot be started', run: ->
     cache := new_cli_dir('no-clang-cache')
     env := { 'LERTA_CACHE_DIR': cache, 'PATH': cli_work_dir }
-    built := await run_in_new_dir(compiler, ['build', hello, '-o', 'hello'], ''.binary, env)
+    built := await run_in_new_dir(compiler, ['build', hello, '-o', 'hello'], b'', env)
     [
       expect_status(1, built.result.status)...
       expect_left('files left', [], built.left)...
@@ -217,7 +213,7 @@ failed_target_check := ->
     built := await run_in_new_dir(
       compiler
       ['build', hello, '-o', 'hello', '--target', 'no-such-target']
-      ''.binary
+      b''
       env
     )
     [
@@ -253,7 +249,7 @@ optimized_runtime_check := ->
         bytes := after.binary
         return true if bytes.is_empty()
         next := bytes[0]
-        not (next.is_letter() or next.is_digit() or next == '_'.binary[0])
+        not (next.is_letter() or next.is_digit() or next == b'_'[0])
       )
     is_call := (line: String) ->
       words := [word for word in line.replace("\t", ' ').split(' ') when word != '']
@@ -548,7 +544,7 @@ dump_field_tag_check := ->
 # The root node of the alias analysis that clang gives the runtime's C, without its number, so that
 # the items' type is in the same tree as the C types of the runtime.
 clang_tbaa_root := (cwd: String) ->
-  await write_file("#{cwd}/load.c", 'long load(long *p) { return *p; }'.binary)
+  await write_file("#{cwd}/load.c", b'long load(long *p) { return *p; }')
   args := ['-O1', '-S', '-emit-llvm', '-o', '-', 'load.c']
   compiled := await run_command('clang', args, cwd)
   lines := compiled.stdout_text().split("\n")
@@ -585,7 +581,7 @@ dump_symbols_check := -> Check(name: 'lerta dump-llvm escapes module paths in sy
 source_lines_check := -> Check(name: 'lerta run --source-lines runs a program', run: ->
   source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
   ran := await run_command(compiler, ['run', source, '--source-lines'], cli_work_dir)
-  [expect_status(0, ran.status)..., compare_output('stdout', "2\n7\n".binary, ran.stdout)...]
+  [expect_status(0, ran.status)..., compare_output('stdout', b"2\n7\n", ran.stdout)...]
 )
 
 # macOS keeps the debug information beside the executable, in its dSYM bundle.
@@ -647,7 +643,7 @@ source_lines_build_check := (flags: String[]) ->
       has_debug := await has_debug_info(output)
       [
         expect_success('run', ran)...
-        compare_output('stdout', "2\n7\n".binary, ran.stdout)...
+        compare_output('stdout', b"2\n7\n", ran.stdout)...
         (has_debug then no_reasons else ['no debug information'])...
         (rows == nil then no_reasons else [
           [
@@ -682,7 +678,7 @@ no_trace_check := ->
     [
       expect_status(1, ran.status)...
       compare_text('stderr', "failed\n", ran.stderr_text())...
-      (program.index_of('<top level>'.binary) != nil then [
+      (program.index_of(b'<top level>') != nil then [
         'the program holds the names of traces'
       ] else no_reasons)...
     ]

@@ -74,7 +74,7 @@ FILE_BUFFER_SIZE := 65536
 class FileWriter
   pointer: Int
   path: String
-  var buffer = ''.binary
+  var buffer = b''
   var ended = false
   # The write out on the event loop, one at a time, which a flush waits for before its own, and
   # after which it finds whether it failed.
@@ -89,7 +89,7 @@ class FileWriter
     return if @ended
     @ended = true
     lerta_open_file_end @pointer, @buffer
-    @buffer = ''.binary
+    @buffer = b''
 
   # Resolves once all that was written before it is in the file.
   flush := ->
@@ -99,7 +99,7 @@ class FileWriter
       throw @write_failure() if lerta_open_file_failed(@pointer)
       return if @buffer.is_empty()
       bytes := @buffer
-      @buffer = ''.binary
+      @buffer = b''
       @writing = lerta_open_file_append(@pointer, bytes)
       try
         await @writing!
@@ -152,7 +152,7 @@ ends_with_dots := (path: String) ->
   var start = end
   start -= 1 while start > 0 and not part_starts(start)
   last := bytes[start...end]
-  last == '.'.binary or last == '..'.binary
+  last == b'.' or last == b'..'
 
 is_separator := (byte: Byte) -> byte == '/' or (lerta_platform() == 'windows' and byte == '\')
 
@@ -491,12 +491,12 @@ export struct LineTooLongError: Error
 export class Reader
   read_chunk: () -> Promise<Binary?>
   on_close: (() -> void)?
-  var chunk = ''.binary
+  var chunk = b''
   var start = 0
   var reading = false
   # What the read under way has sliced out of the chunks it went past, kept here rather than in
   # it, so that a read that throws or is cancelled leaves it for the next.
-  var taken = ''.binary
+  var taken = b''
 
   # The next line, without its "\n" and a "\r" before it, or nil at the end. A LineTooLongError
   # if more than `max` bytes, a "\r" among them, come before its "\n", which leaves them unread.
@@ -555,12 +555,12 @@ export class Reader
 
   taken_out := ->
     bytes := @taken
-    @taken = ''.binary
+    @taken = b''
     bytes
 
   line := (max: Int) ->
     while await @fill()
-      end := @chunk.index_of("\n".binary, @start) ? @chunk.length
+      end := @chunk.index_of(b"\n", @start) ? @chunk.length
       @taken += @chunk[@start...end]
       @start = end
       throw LineTooLongError("a line is longer than #{max} bytes") if @taken.length > max
@@ -591,7 +591,7 @@ export class Reader
     bytes
 
   # All that is left: a part of INT_MAX bytes, as many as a read can ask for, reads to the end.
-  rest := -> await @part(INT_MAX) ? ''.binary
+  rest := -> await @part(INT_MAX) ? b''
 
 # A line that ended with "\n", without a "\r" before it.
 ended_line_text := (bytes: Binary) ->

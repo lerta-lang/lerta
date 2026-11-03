@@ -46,7 +46,7 @@ export scan_multiline := (lines: SourceLine[], first: Int, start: Int) ->
   width := common_indentation(texts)
   template := Template()
   for end, i in ends
-    template.bytes += "\n".binary if i > 0
+    template.bytes += b"\n" if i > 0
     continue if is_blank(texts[i])
     line := lines[first + 1 + i]
     if is_raw
@@ -70,15 +70,15 @@ leading_spaces := (line: String) ->
   count
 
 # The index of the `'''` that closes a `'''` literal on the line, if one does: the first there.
-closing_raw_quotes := (line: SourceLine) -> line.bytes.index_of("'''".binary)
+closing_raw_quotes := (line: SourceLine) -> line.bytes.index_of(b"'''")
 
 # The index of the `"""` that closes a `"""` literal on the line, if one does. A `\` escapes the
 # character after it, so `\"""` is no closing, nor is one in an interpolation.
 closing_quotes := (line: SourceLine) ->
   var i = 0
   while i < line.length
-    return i if line.bytes.occurs_at(i, '"""'.binary)
-    if line.bytes.occurs_at(i, '#{'.binary)
+    return i if line.bytes.occurs_at(i, b'"""')
+    if line.bytes.occurs_at(i, b'#{')
       brace := find_interpolation_end(line, i + 2)
       i = (brace ? line.fail('unterminated interpolation', i)) + 1
     else
@@ -89,11 +89,11 @@ closing_quotes := (line: SourceLine) ->
 class Template
   parts: TemplatePart[] = []
   # The bytes since the last interpolation.
-  var bytes = ''.binary
+  var bytes = b''
 
   add_code := (part: CodePart) ->
     @parts.push TextPart(@bytes) unless @bytes.is_empty()
-    @bytes = ''.binary
+    @bytes = b''
     @parts.push part
 
   finish := ->
@@ -118,7 +118,7 @@ read_template := (
         template.bytes += escape.value
         i = escape.end
         plain = i
-      when c == '#' and line.bytes.occurs_at(i + 1, '{'.binary)
+      when c == '#' and line.bytes.occurs_at(i + 1, b'{')
         brace := find_interpolation_end(line, i + 2)
         close := brace ? line.fail('unterminated interpolation', i)
         template.bytes += line.bytes[plain...i]
@@ -136,7 +136,7 @@ read_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
   simple := simple_escape(kind)
   return { value: simple.binary, end: start + 2 } if simple
   return read_byte_escape(line, start, is_binary) if kind == 'x'
-  line.fail 'invalid escape sequence', start unless line.bytes.occurs_at(start + 1, 'u{'.binary)
+  line.fail 'invalid escape sequence', start unless line.bytes.occurs_at(start + 1, b'u{')
   close := line.index_of('}', start + 3) ? line.fail('invalid unicode escape', start)
   digits := line.bytes[(start + 3)...close]
   char := parse_char(digits) ? line.fail('invalid unicode escape', start)
@@ -144,7 +144,7 @@ read_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
 
 read_byte_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
   end := start + 4
-  digits := end <= line.length then line.bytes[(start + 2)...end] else ''.binary
+  digits := end <= line.length then line.bytes[(start + 2)...end] else b''
   value := parse_byte(digits) ? line.fail('invalid byte escape', start)
   if not (is_binary or value <= 0x7F)
     line.fail 'a String takes \x00 to \x7F, and other characters as \u{...}', start
@@ -197,7 +197,7 @@ export find_interpolation_end := (line: SourceLine, start: Int) ->
         i += 1
       else if byte == '"'
         level.string_start = nil
-      else if byte == '#' and line.bytes.occurs_at(i + 1, '{'.binary)
+      else if byte == '#' and line.bytes.occurs_at(i + 1, b'{')
         levels.push InterpolationLevel()
         i += 1
     else
