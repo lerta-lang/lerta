@@ -141,8 +141,11 @@ ir_string_bytes := (bytes: Binary) ->
   written
 
 # An immortal LertaString (see runtime/lerta.h) holding the literal's bytes.
-export string_constant := (ir: IrBuilder, value: String) ->
-  ir.module.global 'lerta.string', string_definition(value)
+export string_constant := (ir: IrBuilder, value: String) -> binary_constant(ir, value.binary)
+
+# As string_constant, of a Binary, which a LertaString holds too.
+export binary_constant := (ir: IrBuilder, bytes: Binary) ->
+  ir.module.global 'lerta.string', string_definition(bytes)
 
 # The operand of the value of a constant expression (see checker/constants).
 export constant_operand := (ir: IrBuilder, constant: Constant) ->
@@ -154,15 +157,14 @@ export constant_operand := (ir: IrBuilder, constant: Constant) ->
 # at every call.
 export shared_string_constant := (ir: IrBuilder, value: String) ->
   define := (symbol: String, module: IrModule) ->
-    module.define_global symbol, string_definition(value)
+    module.define_global symbol, string_definition(value.binary)
   ir.module.named "string #{value}", '@lerta.name', define
 
 # The LLVM type of a LertaString (see runtime/lerta.h) whose bytes have the IR type: the header
 # (reference count and type, none), the length and the bytes.
 export string_layout := (bytes_type: String) -> "{ i64, ptr, i64, #{bytes_type} }"
 
-string_definition := (value: String) ->
-  bytes := value.binary
+string_definition := (bytes: Binary) ->
   bytes_type := "[#{bytes.length} x i8]"
   type := string_layout(bytes_type)
   bytes_init := "#{bytes_type} c\"#{ir_string_bytes(bytes)}\""

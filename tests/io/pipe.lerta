@@ -9,7 +9,7 @@ import sleep from 'std:time'
 pipe := Pipe()
 var taken = false
 first := pipe.writer.write('one')
-second := pipe.writer.write('two'.binary)
+second := pipe.writer.write(b'two')
 waited := ->
   await first
   print "first resolved after the read: #{taken}"
@@ -82,7 +82,7 @@ print await ending == nil
 # One program writes what another reads.
 between := Pipe()
 output: Byte[]
-first_program := run('echo_input', stdin: 'through a pipe'.binary, stdout: between.writer)
+first_program := run('echo_input', stdin: b'through a pipe', stdout: between.writer)
 second_program := run('echo_input', stdin: between.reader, stdout: output)
 await all([first_program, second_program])
 print output.to_binary().text()!
@@ -118,12 +118,8 @@ print await ended.reader.read_line() ? 'nil'
 
 # One Pipe may take both outputs of a program.
 both := Pipe()
-both_run := run
-  'echo_input'
-  'to stderr'
-  stdin: "to stdout\n".binary
-  stdout: both.writer
-  stderr: both.writer
+both_run :=
+  run('echo_input', 'to stderr', stdin: b"to stdout\n", stdout: both.writer, stderr: both.writer)
 both_text := both.reader.read_all()
 await both_run
 lines := (await both_text).text()!.trim().split("\n")

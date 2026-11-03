@@ -8,7 +8,7 @@ import
   Unwrap, Yield
 from '../ast'
 import Token from '../lexer/tokens'
-import common_indentation, is_blank from '../lexer/string_literal'
+import common_indentation, is_blank, TextPart from '../lexer/string_literal'
 import
   breaking, choice, closing, Doc, indent, join, line_feed, LiteralLines, rule, separated, text,
   token
@@ -21,7 +21,8 @@ import
   ADDITIVE, binary_doc, cast_doc, coalesce_doc, conditional_doc, is_doc, POSTFIX, precedence,
   PREFIX, range_doc, unary_doc
 from './print_operation'
-import EXPECTED_TYPES, LINE_LENGTH, PARENTHESES, SHORTHAND, STRING_LITERALS from './rules'
+import ESCAPES, EXPECTED_TYPES, LINE_LENGTH, PARENTHESES, SHORTHAND, STRING_LITERALS from './rules'
+import with_ascii_escapes from './escapes'
 import
   array_doc, closing_at, item, map_doc, named_item, record_doc, value_after
 from './print_literal'
@@ -87,7 +88,8 @@ bare_doc := (expression: Expression, context: Context): Doc ->
   case expression
     when Identifier then identifier(expression, context)
     when StringLiteral then string_doc(expression, context)
-    when Interpolation, IntegerLiteral, FloatLiteral then spelled(expression.position, context)
+    when Interpolation then interpolation_doc(expression, context)
+    when IntegerLiteral, FloatLiteral then spelled(expression.position, context)
     when BooleanLiteral then token(expression.value.to_string(), expression.position)
     when NilLiteral then token('nil', expression.position)
     when This then token('@', expression.position)
@@ -165,9 +167,12 @@ multiline_string_doc := (literal: Token, context: Context) ->
   width := common_indentation(lines)
   dedented :=
     [is_blank(line) then '' else line.binary.text(width, line.binary.length)! for line in lines]
-  dedented.push "#{dedented.pop()}#{quotes}"
+  escaped := quotes == '"""' then [with_ascii_escapes(line) for line in dedented] else dedented
+  is_escaped := escaped != dedented
+  escaped.push "#{escaped.pop()}#{quotes}"
   first := token(quotes, literal.position())
-  join [first, LiteralLines(lines: dedented, end_line: literal.end_line)]
+  doc := join([first, LiteralLines(lines: escaped, end_line: literal.end_line)])
+  is_escaped then rule(ESCAPES, doc) else doc
 
 # The index of the literal's token at the position, past the parentheses that it was written in,
 # which give it their position.
@@ -195,15 +200,45 @@ export string_doc := (literal: StringLiteral, context: Context) ->
   first := source.tokens[index]
   return multiline_string_doc(first, context) if first.end_line > first.line
   written := source.spelling(first)
-  is_double := written.starts_with('"')
-  # A `\u{...}` escape writes a character that would not be seen, or told apart, as it is.
-  keeps_escapes := '\u{' in written
-  fits := is_double and not keeps_escapes and fits_single_quotes(literal.value)
-  return token(written, literal.position) unless fits
+  return token(written, literal.position) unless written.starts_with('"')
+  return escaped_doc(written, literal.position) unless fits_single_quotes(written, literal.value)
   rule STRING_LITERALS, token("'#{literal.value}'", literal.position)
 
-fits_single_quotes := (value: String) ->
-  value.binary.all (byte) -> byte != "'" and byte >= 0x20 and byte != 0x7F
+# A string with interpolations or a Binary literal as written, but a Binary with `b'...'` where it
+# can be (see string_doc); one written in place of a string's bytes (see write_binary_literals) is
+# that string with `b` before it.
+interpolation_doc := (interpolation: Interpolation, context: Context) ->
+  source := context.source
+  index := literal_token(interpolation.position, context) ? return text('')
+  first := source.tokens[index]
+  return multiline_string_doc(first, context) if first.end_line > first.line
+  is_written_otherwise := interpolation.binary and first.kind != BINARY
+  written := "#{is_written_otherwise then 'b' else ''}#{source.spelling(first)}"
+  at := interpolation.position
+  return token(written, at) if written.starts_with("b'")
+  value := plain_binary_text(interpolation)
+  return escaped_doc(written, at) if not (value and fits_single_quotes(written, value))
+  rule STRING_LITERALS, token("b'#{value}'", at)
+
+# The text of a Binary literal without interpolations, if it is valid UTF-8.
+plain_binary_text := (interpolation: Interpolation) ->
+  return nil if not (interpolation.binary and interpolation.parts.length == 1)
+  part := interpolation.parts[0]
+  part is TextPart then part.bytes.text()
+
+# A literal with escapes, as written, but with the escapes of ASCII characters as Escapes says.
+escaped_doc := (written: String, at: Position) ->
+  escaped := with_ascii_escapes(written)
+  escaped == written then token(written, at) else rule(ESCAPES, token(escaped, at))
+
+# Whether the literal with escapes, as written, can be written with `'...'` instead: where its text
+# holds no `'` and no control character, and no `\u{...}` or `\xHH` escape writes a character that
+# would not be seen, or told apart, as it is, once Escapes writes the others as the characters.
+fits_single_quotes := (written: String, value: String) ->
+  escaped := with_ascii_escapes(written)
+  keeps_escapes := '\u{' in escaped or '\x' in escaped
+  plain := value.binary.all((byte) -> byte != "'" and byte >= 0x20 and byte != 0x7F)
+  plain and not keeps_escapes
 
 member_doc := (member: Member, context: Context) ->
   name := token(member.name.name, member.name.position)

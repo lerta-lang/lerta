@@ -8,14 +8,15 @@ import
 from './string_literal'
 
 # A keyword or a punctuation is its own kind, whose text is its own. The others are named:
-# INTERPOLATED is a string with interpolations, and INDENT and DEDENT the start and the end of an
-# indented block.
+# INTERPOLATED is a string with interpolations, BINARY a Binary literal, with or without them, and
+# INDENT and DEDENT the start and the end of an indented block.
 export enum TokenKind
   IDENTIFIER
   INTEGER
   FLOAT
   STRING
   INTERPOLATED
+  BINARY
   NEWLINE
   INDENT
   DEDENT
@@ -105,7 +106,7 @@ export struct Token
   line: Int
   # Counted in code points, starting at 1.
   column: Int
-  # The parts of an interpolated string.
+  # The parts of an interpolated string or a Binary literal.
   parts: TemplatePart[]?
   # The line and the column after it, where the formatter reads its spelling up to; those of its
   # start for a layout token. Only a `"""` or `'''` literal ends on a later line.
@@ -242,6 +243,7 @@ class LineScanner
           @line.fail "#{shown} must end its line", @position if @position + 3 != @line.length
           @multiline_start = @position
           break
+        when @at_binary_literal() then @scan_binary()
         when is_identifier_start(c) then @scan_word()
         when c == "'" then @scan_raw_string()
         when c == '"' then @read_double_quoted()
@@ -252,6 +254,23 @@ class LineScanner
   at_multiline_quotes = ->
     bytes := @line.bytes
     bytes.occurs_at(@position, '"""'.binary) or bytes.occurs_at(@position, "'''".binary)
+
+  # `b` before a quote.
+  at_binary_literal = ->
+    next := @line.bytes.get(@position + 1)
+    @line.bytes[@position] == 'b' and (next == "'" or next == '"')
+
+  scan_binary = ->
+    quote := @position + 1
+    if @line.bytes.occurs_at(quote, "'''".binary) or @line.bytes.occurs_at(quote, '"""'.binary)
+      @line.fail 'a Binary literal spans one line', @position
+    if @line.bytes[quote] == "'"
+      close := @raw_string_end(quote)
+      parts: TemplatePart[] = [TextPart(@line.bytes[(quote + 1)...close])]
+      @add BINARY, '', close + 1, parts
+    else
+      { parts, end } := scan_double_quoted(@line, quote, true)
+      @add BINARY, '', end, parts
 
   # Adds the token that starts at the position, and moves to `end`, after it.
   add = (kind: TokenKind, text: String, end: Int, parts: TemplatePart[]?) ->
@@ -268,12 +287,15 @@ class LineScanner
     @add keyword_kind(word) ? IDENTIFIER, word, end, nil
 
   scan_raw_string = ->
-    start := @position
-    close := @line.index_of("'", start + 1) ? @line.fail('unterminated string literal', start)
-    @add STRING, @line.text(start + 1, close), close + 1, nil
+    close := @raw_string_end(@position)
+    @add STRING, @line.text(@position + 1, close), close + 1, nil
+
+  # The index of the `'` that closes the `'...'` literal whose opening quote is at `start`.
+  raw_string_end = (start: Int) ->
+    @line.index_of("'", start + 1) ? @line.fail('unterminated string literal', start)
 
   read_double_quoted = ->
-    { parts, end } := scan_double_quoted(@line, @position)
+    { parts, end } := scan_double_quoted(@line, @position, false)
     if text := plain_text(parts)
       @add STRING, text, end, nil
     else
@@ -343,13 +365,15 @@ multiline_token := (line: SourceLine, start: Int, literal: MultilineLiteral) ->
 plain_text := (parts: TemplatePart[]) ->
   return nil if parts.length != 1
   part := parts[0]
-  part is TextPart then part.text
+  # A String's escapes give valid UTF-8 (see read_escape).
+  part is TextPart then part.bytes.text()!
 
 # The kind of a keyword; the named kinds are no keywords, so that a name such as EOF stays a name.
 keyword_kind := (word: String) ->
   kind := TokenKind.parse(word) ? return nil
   case kind
-    when IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, NEWLINE, INDENT, DEDENT, EOF then nil
+    when IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, BINARY, NEWLINE, INDENT, DEDENT, EOF
+      nil
     else kind
 
 is_space := (c: Byte) -> c == ' '

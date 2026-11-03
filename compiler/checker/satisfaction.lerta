@@ -15,7 +15,9 @@ import is_jsonable_bound, reject_unjsonable from './json'
 import find_method from './methods'
 import Body from './shared'
 import has_type_parameters, infer, substitute from './type_patterns'
-import format_type, InterfaceType, string_type, Type, UnionType from '../types'
+import
+  binary_type, format_type, InterfaceType, is_kind, string_type, Type, UnionType
+from '../types'
 
 # Rejects a type that does not satisfy the interface type.
 export reject_unsatisfied := (body: Body, type: Type, bound: InterfaceType, at: Position) ->
@@ -75,11 +77,12 @@ export infer_through_members := (
     infer substitute(member.type, bindings), found, bind
 
 # `"#{x}"` calls `x.to_string()` (see Interpolation), which it records as typed here, so that x
-# is typed once. x must be Stringable.
-export check_interpolated := (body: Body, part: Call) ->
+# is typed once. x must be Stringable, or a Binary in a Binary literal, which takes it as it is.
+export check_interpolated := (body: Body, part: Call, into_binary: Bool) ->
   member := part.callee
   panic 'an interpolated value is read by a call of its to_string()' unless member is Member
   type := type_of(body, member.object)
+  return set_type(body, part, binary_type) if into_binary and is_kind(type, 'Binary')
   bound := std_interface(body.shared, 'Stringable', member.object.position).type
   to_string := members_for(body.program, bound, type)[0]
   name := Identifier(position: member.object.position, name: member.name.name)

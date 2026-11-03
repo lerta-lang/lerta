@@ -38,8 +38,8 @@ import emit_box, emit_unbox from './boxes'
 import emit_branch, IrBuilder from './ir_builder'
 import emit_adapter_iter from './iter'
 import
-  constant_operand, emit_release, emit_release_value, emit_retain, emit_retain_value, ir_type,
-  string_constant
+  binary_constant, constant_operand, emit_release, emit_release_value, emit_retain,
+  emit_retain_value, ir_type, string_constant
 from './lerta_ir'
 import emit_map_length from './map'
 import generate_binary, generate_coalesce, generate_unary, generate_unwrap from './operator'
@@ -343,17 +343,25 @@ export read_property := (
     when BINARY_LENGTH then released(emit_binary_length(ir, object))
 
 generate_interpolation := (g: Generator, interpolation: Interpolation) ->
+  only := interpolation.parts[0]
+  return binary_constant(g.ir, only.bytes) if interpolation.parts.length == 1 and only is TextPart
   parts: String[]
   depth := g.temporaries.length
   for part in interpolation.parts
     operand :=
       case part
-        when Call then generate(g, part)
-        when TextPart then string_constant(g.ir, part.text)
+        when Call then generate_interpolated(g, part)
+        when TextPart then binary_constant(g.ir, part.bytes)
     push_temporary g, operand, string_type
     parts.push operand
   pop_temporaries g, depth
   emit_concat g.ir, parts
+
+# The text of the value, or a Binary as it is, which only a Binary literal takes (see
+# check_interpolated).
+generate_interpolated := (g: Generator, part: Call) ->
+  return generate(g, part) unless is_kind(type_of(g, part), 'Binary')
+  generate g, (part.callee as Member!).object
 
 # Generates the expressions in order, each held while the later ones are evaluated, which may
 # throw, and gives their operands to `use`; they are let go of after it. Unlike `holding`, it

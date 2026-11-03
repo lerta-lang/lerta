@@ -9,7 +9,7 @@ import sleep from 'std:time'
 # Writes down what it gets, and its end.
 class Collected
   name: String
-  var written = ''.binary
+  var written = b''
   var ended = false
 
   write := (data: String | Binary): Promise -> @written += data is String then data.binary else data
@@ -41,7 +41,7 @@ struct Refusing
   end := -> return
 
 try
-  await run('echo_input', stdin: 'refused'.binary, stdout: Refusing())
+  await run('echo_input', stdin: b'refused', stdout: Refusing())
 catch error: IOError
   print error.message
 failing := Reader(-> throw IOError('the reader fails'))
@@ -105,7 +105,7 @@ print gapped.report()
 missing: Byte[]
 unstarted := Collected('unstarted')
 try
-  await run('no-such-command', stdin: 'x'.binary, stdout: missing, stderr: unstarted)
+  await run('no-such-command', stdin: b'x', stdout: missing, stderr: unstarted)
 catch error: IOError
   print "#{error.message}, ended: #{unstarted.ended}"
 
@@ -115,7 +115,7 @@ mixed_errors := Collected('mixed')
 await run(
   'echo_input'
   'to stderr'
-  stdin: 'to stdout'.binary
+  stdin: b'to stdout'
   stdout: mixed_output
   stderr: mixed_errors
 )
@@ -132,11 +132,11 @@ struct FailingEnd
   end := (): void -> throw IOError('the end fails')
 
 try
-  await run('echo_input', stdin: 'o'.binary, stdout: FailingEnd())
+  await run('echo_input', stdin: b'o', stdout: FailingEnd())
 catch error: IOError
   print error.message
 try
-  await run('echo_input', 'e', stdin: 'o'.binary, stdout: FailingEnd(), stderr: Refusing())
+  await run('echo_input', 'e', stdin: b'o', stdout: FailingEnd(), stderr: Refusing())
 catch error: IOError
   print error.message
 
@@ -146,7 +146,7 @@ struct Cancelling
   end := -> return
 
 try
-  await run('echo_input', stdin: 'x'.binary, stdout: Cancelling())
+  await run('echo_input', stdin: b'x', stdout: Cancelling())
 catch error: CancelledError
   print "failed: #{error.message}"
 
@@ -166,7 +166,7 @@ class SlowCollected
 
 slow := SlowCollected()
 try
-  await run('echo_input', 'e', stdin: 'x'.binary, stdout: LateCancelling(), stderr: slow)
+  await run('echo_input', 'e', stdin: b'x', stdout: LateCancelling(), stderr: slow)
 catch error: CancelledError
   print "failed: #{error.message}, stderr ended: #{slow.ended}"
 
@@ -177,7 +177,7 @@ class Waiting
   end := -> @ended = true
 
 waiting := Waiting()
-cancelled_run := run('echo_input', stdin: 'x'.binary, stdout: waiting)
+cancelled_run := run('echo_input', stdin: b'x', stdout: waiting)
 await sleep(0.1)
 cancelled_run.cancel()
 try

@@ -102,7 +102,7 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 
 ## Binary
 
-- `Binary` is an immutable sequence of bytes; a mutable one is a `Byte[]`. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.text()` goes back (see below).
+- `Binary` is an immutable sequence of bytes; a mutable one is a `Byte[]`. A literal writes one, `b'GET '` or `b"\xFF#{body}"` (see [the syntax](syntax.md)), and `b''` is the empty one. `s.binary` gives the bytes of a `String` (its UTF-8 encoding) without copying them; `b.text()` goes back (see below).
 - `b.length` is the number of bytes, and `b[i]` is the byte at `i`, a `Byte`; an index outside `0 ... b.length` throws `index out of range`, where `b.get(i)` gives nil.
 - `==` and `!=` compare two `Binary`s byte by byte.
 - `+` joins two `Binary`s into a new one, `b + byte` appends a `Byte`, and `+=` appends to a variable, as they do to `String`s; an integer literal there is no `Byte`, as `+` expects a `Binary`. A `String` and a `Binary` are not joined (`cannot join a String and a Binary`): `s.binary` gives the bytes of the `String` without copying them. An [array](#array)'s `join` joins a `Binary[]` into one; pieces gathered so and joined once are O(n), as for `String`s.

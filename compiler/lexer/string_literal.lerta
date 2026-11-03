@@ -1,10 +1,11 @@
 # `"..."` literals, within one line, and `"""` literals, over the lines up to their closing `"""`:
 # escapes and `#{expression}` interpolation. `'''` literals span lines as `"""` ones do, without
-# escapes or interpolation.
+# escapes or interpolation. `b"..."` literals read as `"..."` ones, into a Binary.
 import SourceLine from './source_line'
 
+# The bytes are valid UTF-8, except in a Binary literal.
 export struct TextPart
-  text: String
+  bytes: Binary
 
 # The source of an interpolated expression, parsed later; it starts at `line` and `column`.
 export struct CodePart
@@ -14,11 +15,12 @@ export struct CodePart
 
 export type TemplatePart = TextPart | CodePart
 
-# Reads the literal whose opening quote is at `start`. Returns its parts and the index after it.
-export scan_double_quoted := (line: SourceLine, start: Int) ->
+# Reads the literal whose opening quote is at `start`, of a Binary literal if `is_binary`. Returns
+# its parts and the index after it.
+export scan_double_quoted := (line: SourceLine, start: Int, is_binary: Bool) ->
   template := Template()
   at_end := (i: Int) -> i == line.length or line.bytes[i] == '"'
-  close := read_template(line, start + 1, template, at_end)
+  close := read_template(line, start + 1, template, is_binary, at_end)
   line.fail 'unterminated string literal', start if close == line.length
   { parts: template.finish(), end: close + 1 }
 
@@ -44,13 +46,13 @@ export scan_multiline := (lines: SourceLine[], first: Int, start: Int) ->
   width := common_indentation(texts)
   template := Template()
   for end, i in ends
-    template.text += "\n" if i > 0
+    template.bytes += "\n".binary if i > 0
     continue if is_blank(texts[i])
     line := lines[first + 1 + i]
     if is_raw
-      template.text += line.text(width, end)
+      template.bytes += line.bytes[width...end]
     else
-      read_template line, width, template, (j) -> j == end
+      read_template line, width, template, false, (j) -> j == end
   MultilineLiteral parts: template.finish(), line: lines[last], end: close! + 3
 
 # The least of the leading spaces of the lines that are not blank, which a `"""` or `'''` literal
@@ -86,21 +88,23 @@ closing_quotes := (line: SourceLine) ->
 # The parts of a literal as they are read.
 class Template
   parts: TemplatePart[] = []
-  # The text since the last interpolation.
-  var text = ''
+  # The bytes since the last interpolation.
+  var bytes = ''.binary
 
   add_code = (part: CodePart) ->
-    @parts.push TextPart(@text) unless @text.is_empty()
-    @text = ''
+    @parts.push TextPart(@bytes) unless @bytes.is_empty()
+    @bytes = ''.binary
     @parts.push part
 
   finish = ->
-    @parts.push TextPart(@text) if not @text.is_empty() or @parts.is_empty()
+    @parts.push TextPart(@bytes) if not @bytes.is_empty() or @parts.is_empty()
     @parts
 
 # Reads the text from `start` into the template, up to where `at_end` holds, which it holds at the
 # end of the line, if not before. Returns the index there.
-read_template := (line: SourceLine, start: Int, template: Template, at_end: (Int) -> Bool) ->
+read_template := (
+  line: SourceLine, start: Int, template: Template, is_binary: Bool, at_end: (Int) -> Bool
+) ->
   # The bytes from `plain` on need no change and are taken whole; escapes and interpolations split
   # them only between whole characters.
   var i = start
@@ -109,32 +113,49 @@ read_template := (line: SourceLine, start: Int, template: Template, at_end: (Int
     c := line.bytes[i]
     case
       when c == '\'
-        escape := read_escape(line, i)
-        template.text += line.text(plain, i)
-        template.text += escape.value
+        escape := read_escape(line, i, is_binary)
+        template.bytes += line.bytes[plain...i]
+        template.bytes += escape.value
         i = escape.end
         plain = i
       when c == '#' and line.bytes.occurs_at(i + 1, '{'.binary)
         brace := find_interpolation_end(line, i + 2)
         close := brace ? line.fail('unterminated interpolation', i)
-        template.text += line.text(plain, i)
+        template.bytes += line.bytes[plain...i]
         source := line.text(i + 2, close)
         template.add_code { source, line: line.number, column: line.column(i + 2) }
         i = close + 1
         plain = i
       else i += 1
-  template.text += line.text(plain, i)
+  template.bytes += line.bytes[plain...i]
   i
 
-read_escape := (line: SourceLine, start: Int) ->
+# A `\xHH` escape gives any byte in a Binary literal, and an ASCII one, up to `\x7F`, in a String.
+read_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
   kind := line.bytes.get(start + 1) ? 0
   simple := simple_escape(kind)
-  return { value: simple, end: start + 2 } if simple
+  return { value: simple.binary, end: start + 2 } if simple
+  return read_byte_escape(line, start, is_binary) if kind == 'x'
   line.fail 'invalid escape sequence', start unless line.bytes.occurs_at(start + 1, 'u{'.binary)
   close := line.index_of('}', start + 3) ? line.fail('invalid unicode escape', start)
   digits := line.bytes[(start + 3)...close]
   char := parse_char(digits) ? line.fail('invalid unicode escape', start)
-  { value: char.to_string(), end: close + 1 }
+  { value: char.to_string().binary, end: close + 1 }
+
+read_byte_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
+  end := start + 4
+  digits := end <= line.length then line.bytes[(start + 2)...end] else ''.binary
+  value := parse_byte(digits) ? line.fail('invalid byte escape', start)
+  if not (is_binary or value <= 0x7F)
+    line.fail 'a String takes \x00 to \x7F, and other characters as \u{...}', start
+  { value: [value].to_binary(), end }
+
+# The Byte that 2 hexadecimal digits give, or nil if they give none.
+export parse_byte := (digits: Binary) ->
+  return nil if digits.length != 2
+  high := digits[0].hex_value() ? return nil
+  low := digits[1].hex_value() ? return nil
+  (high << 4 | low).to_byte()
 
 simple_escape := (kind: Byte) ->
   case kind
@@ -148,7 +169,7 @@ simple_escape := (kind: Byte) ->
     else nil
 
 # The Char that 1 to 6 hexadecimal digits give, or nil if they give none.
-parse_char := (digits: Binary) ->
+export parse_char := (digits: Binary) ->
   return nil if digits.is_empty() or digits.length > 6
   var value = 0
   for digit in digits
@@ -164,7 +185,7 @@ class InterpolationLevel
 
 # The index of the `}` that closes an interpolation, skipping nested braces and string literals with
 # the interpolations in them. It reads them in a loop, not by recursion, as they may nest deep.
-find_interpolation_end := (line: SourceLine, start: Int) ->
+export find_interpolation_end := (line: SourceLine, start: Int) ->
   # The innermost last.
   levels := [InterpolationLevel()]
   var i = start

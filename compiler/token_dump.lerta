@@ -12,7 +12,7 @@ dump_token := (token: Token) ->
 
 dump_part := (part: TemplatePart) ->
   case part
-    when TextPart then "  text #{quote(part.text)}\n"
+    when TextPart then "  text #{quote_bytes(part.bytes)}\n"
     when CodePart then "  code #{part.column} #{quote(part.source)}\n"
 
 # The bytes below 0x20, 0x7F, `\` and `"` are written as `\xHH`, so that each token stays on its
@@ -23,4 +23,14 @@ export quote := (text: String) ->
     code := c.to_int()
     escaped := code < 0x20 or code == 0x7F or c == '\' or c == '"'
     quoted += escaped then "\\x#{code.to_hex(2).to_upper()}" else c.to_string()
+  quoted + '"'
+
+# As quote, with the bytes that are not valid UTF-8, of a Binary literal, written as `\xHH` too.
+export quote_bytes := (bytes: Binary) ->
+  return quote(text) if text := bytes.text()
+  var quoted = '"'
+  for byte in bytes
+    escaped := byte < 0x20 or byte >= 0x7F or byte == '\' or byte == '"'
+    quoted +=
+      escaped then "\\x#{byte.to_int().to_hex(2).to_upper()}" else byte.to_char().to_string()
   quoted + '"'
