@@ -34,6 +34,13 @@ LertaString *lerta_string_from_c(const char *text) {
   return lerta_string_from_bytes(text, (int64_t)strlen(text));
 }
 
+LertaString *lerta_string_from_os(char *text) {
+  if (text == NULL) return NULL;
+  LertaString *string = lerta_string_from_c(text);
+  free(text);
+  return string;
+}
+
 void lerta_append_c_string(LertaArray *array, const char *text) {
   LertaString *string = lerta_string_from_c(text);
   lerta_array_append(array, &string);

@@ -275,10 +275,7 @@ LertaString *lerta_env(const LertaString *name) {
   char *c_name = lerta_c_string(name);
   char *value = lerta_os_env(c_name);
   free(c_name);
-  if (value == NULL) return NULL;
-  LertaString *result = lerta_string_from_c(value);
-  free(value);
-  return result;
+  return lerta_string_from_os(value);
 }
 
 int64_t lerta_cpu_count(void) { return lerta_os_cpu_count(); }

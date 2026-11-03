@@ -175,16 +175,6 @@ const char *lerta_os_platform(void) {
   return strcmp(name.sysname, "Darwin") == 0 ? "macos" : "linux";
 }
 
-extern char **environ;
-
-void lerta_os_environ(LertaArray *entries) {
-  for (char **entry = environ; *entry != NULL; entry++) lerta_append_c_string(entries, *entry);
-}
-
-int64_t lerta_os_process_id(void) {
-  return getpid();
-}
-
 // Signal 0 only checks the process.
 bool lerta_os_is_running(int id) {
   return kill(id, 0) == 0 || errno != ESRCH;

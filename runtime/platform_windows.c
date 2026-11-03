@@ -272,23 +272,6 @@ char lerta_os_separator(void) { return '\\'; }
 // Wine tells libuv's uv_os_uname the system that it runs on, not Windows.
 const char *lerta_os_platform(void) { return "windows"; }
 
-// A variable that is not valid UTF-16 is read with U+FFFD in place of what is not, as the other
-// texts that Windows gives are.
-void lerta_os_environ(LertaArray *entries) {
-  wchar_t *block = GetEnvironmentStringsW();
-  if (block == NULL) return;
-  for (wchar_t *entry = block; *entry != L'\0'; entry += wcslen(entry) + 1) {
-    char *text = to_utf8(entry);
-    if (text != NULL) lerta_append_c_string(entries, text);
-    free(text);
-  }
-  FreeEnvironmentStringsW(block);
-}
-
-int64_t lerta_os_process_id(void) {
-  return GetCurrentProcessId();
-}
-
 // As libuv's kill with signal 0: a process that cannot be opened for another reason than that there
 // is none, such as one the program may not signal, is running.
 bool lerta_os_is_running(int id) {

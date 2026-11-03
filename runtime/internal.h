@@ -107,6 +107,9 @@ bool lerta_with_c_strings(const LertaString *a, const LertaString *b,
                           bool (*call)(const char *a, const char *b));
 // The String of the C string's bytes, which end at its NUL.
 LertaString *lerta_string_from_c(const char *text);
+// As lerta_string_from_c, of a C string that the platform allocated, which it frees; NULL if it is
+// NULL.
+LertaString *lerta_string_from_os(char *text);
 // Appends the C string to an array of strings, as a new string.
 void lerta_append_c_string(LertaArray *array, const char *text);
 

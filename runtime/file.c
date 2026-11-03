@@ -45,23 +45,15 @@ LertaArray *lerta_dir_names(const LertaString *path) {
   return NULL;
 }
 
-// Takes a C string that the platform allocated.
-static LertaString *string_from_os(char *text) {
-  LertaString *result = lerta_string_from_c(text);
-  free(text);
-  return result;
-}
-
 LertaString *lerta_resolve_path(const LertaString *path) {
   char *name = lerta_c_string(path);
   char *resolved = lerta_os_real_path(name);
   free(name);
-  return resolved == NULL ? NULL : string_from_os(resolved);
+  return lerta_string_from_os(resolved);
 }
 
 LertaString *lerta_make_temp_dir(void) {
-  char *path = lerta_os_make_temp_dir();
-  return path == NULL ? NULL : string_from_os(path);
+  return lerta_string_from_os(lerta_os_make_temp_dir());
 }
 
 // A read, write, copy or removal on libuv's thread pool (see docs/internals.md#files), whose promise

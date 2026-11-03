@@ -183,6 +183,29 @@ static int get_env(const void *name, char *buffer, size_t *size) {
   return uv_os_getenv(name, buffer, size);
 }
 
+// On Windows, libuv reads a variable that is not valid UTF-16 as WTF-8, which it reads back as it
+// was when it runs a program with it.
+void lerta_os_environ(LertaArray *entries) {
+  uv_env_item_t *items;
+  int count;
+  if (uv_os_environ(&items, &count) != 0) lerta_panic("out of memory");
+  for (int i = 0; i < count; i++) {
+    size_t name_length = strlen(items[i].name);
+    size_t value_length = strlen(items[i].value);
+    char *entry = lerta_checked_malloc(name_length + value_length + 2);
+    memcpy(entry, items[i].name, name_length);
+    entry[name_length] = '=';
+    memcpy(entry + name_length + 1, items[i].value, value_length + 1);
+    lerta_append_c_string(entries, entry);
+    free(entry);
+  }
+  uv_os_free_environ(items, count);
+}
+
+int64_t lerta_os_process_id(void) {
+  return uv_os_getpid();
+}
+
 // The path of `name` in the system's directory for temporary files, which the caller frees. libuv
 // takes the first of TMPDIR, TMP, TEMP and TEMPDIR that is set on POSIX, even if it is empty, which
 // is taken as unset, as most programs take it.
