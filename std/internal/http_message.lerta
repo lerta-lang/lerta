@@ -22,7 +22,7 @@ export class Headers
   contains := (name: String) -> @get(name) != nil
 
   set := (name: String, value: String) ->
-    @delete name
+    @remove name
     @append name, value
 
   # Throws a ValueError for a name that is no token, or a value that would break the line it is
@@ -31,9 +31,13 @@ export class Headers
     check_field name, value
     @fields.push (name.to_lower(), value)
 
-  delete := (name: String) ->
+  # Removes every field of the name, and tells whether there was one.
+  remove := (name: String) ->
     lower := name.to_lower()
-    @fields = [(field, value) for (field, value) in @fields when field != lower]
+    kept := [(field, value) for (field, value) in @fields when field != lower]
+    removed := kept.length != @fields.length
+    @fields = kept
+    removed
 
 export check_field := (name: String, value: String) ->
   throw ValueError("not a header name: #{name}") unless is_token(name)
@@ -60,7 +64,7 @@ export keeps_alive := (version: String, headers: Headers) ->
 # A body is read as it comes when it is a Reader, and sent so too.
 export type Body = String | Binary | Reader
 
-export class Request
+export struct Request
   method: String
   url: String
   headers: Headers

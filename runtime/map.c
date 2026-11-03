@@ -151,14 +151,17 @@ void *lerta_map_place(LertaMap *map, int64_t key) {
   return value_of(entry);
 }
 
-void lerta_map_remove(LertaMap *map, int64_t key) {
-  if (map->length == 0) return;
+// Tells whether the key was there, which the release of its value, running a deinit that may
+// change the map, cannot change.
+bool lerta_map_remove(LertaMap *map, int64_t key) {
+  if (map->length == 0) return false;
   int64_t position = map->slots[find_slot(map, key, hash_key(map, key))];
-  if (position == EMPTY) return;
+  if (position == EMPTY) return false;
   LertaMapEntry *entry = entry_at(map, position);
   entry->live = false;
   map->length--;
   release_entry(map, entry);
+  return true;
 }
 
 struct LertaMapCursor {
