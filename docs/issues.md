@@ -34,14 +34,6 @@ Severity: Low.
 
 Fix: document the rule and point at it from the checker's message, or refuse in `at_type_arguments` a `,` at depth 0 followed by something that does not start a type.
 
-## `(A | B)?` does not parse
-
-Severity: Low.
-
-`f := (x: (Int | String)?) -> 1` reports `expected '->', found '?'`. [The syntax](reference/syntax.md) documents `(A | B)[]` but not `(A | B)?`; the spelling `Int | String?` works, so this is a gap in the type syntax, not an unsoundness.
-
-Fix: accept `?` after a parenthesized type where `[]` is accepted, or document that an optional union is written `A | B?`.
-
 ## The array literal spread in another does not take the expected item type
 
 Severity: Low.

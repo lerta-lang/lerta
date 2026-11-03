@@ -111,7 +111,7 @@ total := sum
 
 ## Types
 
-- Types are written as names, with type arguments in `<>`, `[]` for an array and `?` for an optional type: `Int`, `Map<String, Int>`, `String[]`, `String?`. `[]` and `?` apply in the order they are written, `Int[]?` being an optional array; a function type or a union is in parentheses to be an array's items, `((Int) -> Int)[]`, `(A | B)[]`.
+- Types are written as names, with type arguments in `<>`, `[]` for an array and `?` for an optional type: `Int`, `Map<String, Int>`, `String[]`, `String?`. `[]` and `?` apply in the order they are written, `Int[]?` being an optional array; a function type or a union is in parentheses to be an array's items, `((Int) -> Int)[]`, `(A | B)[]`. A union is optional where a member is, `A | B?`, or in parentheses with `?` after them, `(A | B)?`.
 
 ## Operators
 

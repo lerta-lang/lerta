@@ -10,7 +10,7 @@ import PARENTHESES from './rules'
 export type_doc := (type: TypeName): Doc ->
   case type
     when NamedType then named_type(type)
-    when UnionTypeName then separated([type_doc(member) for member in type.members], text(' | '))
+    when UnionTypeName then union_doc(type)
     when FunctionTypeName
       params := separated([type_doc(param) for param in type.params], text(', '))
       result := type_doc(type.result)
@@ -27,6 +27,10 @@ export type_doc := (type: TypeName): Doc ->
       items := separated([type_doc(item) for item in type.items], text(', '))
       join [token('(', type.position), items, text(')'), optional_mark(type.optional)]
     when ArrayTypeName then join([element_doc(type), text('[]'), optional_mark(type.optional)])
+
+union_doc := (union: UnionTypeName) ->
+  members := separated([type_doc(member) for member in union.members], text(' | '))
+  union.optional then join([token('(', union.position), members, text(')?')]) else members
 
 # A function type returned by a function literal, which its `->` would end, is in parentheses.
 export result_type_doc := (type: TypeName) ->
@@ -67,7 +71,7 @@ element_doc := (array: ArrayTypeName) ->
   bare := type_doc(element)
   was_in_parentheses := array.position != element.position
   is_function := element is FunctionTypeName and not element.optional
-  if is_function or element is UnionTypeName
+  if is_function or (element is UnionTypeName and not element.optional)
     open := was_in_parentheses then token('(', array.position) else text('(')
     return join([open, bare, text(')')])
   was_in_parentheses then rule(PARENTHESES, bare) else bare
