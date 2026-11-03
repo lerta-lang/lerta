@@ -165,6 +165,21 @@ malformed_message_check := ->
       )...
     ]
 
+lowercase_header_check := ->
+  Check name: 'lerta lsp reads a Content-Length written in lower case', run: ->
+    dir := new_cli_dir('lsp-lowercase-header')
+    ran := await session(dir, "content-length: 5\r\n\r\n{bad}")
+    [
+      expect_status(0, ran.status)...
+      exact_messages(
+        ran.stdout_text()
+        [
+          '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,' +
+            "\"message\":#{encode_json("$: expected a key, found 'b'")}}}"
+        ]
+      )...
+    ]
+
 lsp_input_errors_check := ->
   Check
     name: 'lerta lsp rejects arguments, a message without Content-Length and one cut short'
@@ -1109,6 +1124,7 @@ export checks :=
   imported_diagnostic_check()
   uri_import_check()
   malformed_message_check()
+  lowercase_header_check()
   lsp_input_errors_check()
   empty_body_check()
   formatting_check()

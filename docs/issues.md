@@ -108,14 +108,6 @@ Severity: Low.
 
 Fix: return none when `at.line < 1`, or reject negative positions in `source_position`.
 
-## The language server matches `Content-Length` case-sensitively
-
-Severity: Low.
-
-compiler/lsp/protocol.lerta:55 uses `line.without_prefix('Content-Length:')`; header names are case-insensitive, and `printf 'content-length: 2\r\n\r\n{}' | bin/lerta lsp` ends the server with `an LSP message without its Content-Length`, exit 1.
-
-Fix: split on the first `:` and compare the lowercased name.
-
 ## The language server reads `file://host/path` as a relative path
 
 Severity: Low.
