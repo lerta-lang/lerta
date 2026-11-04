@@ -16,7 +16,7 @@ handle := (request: Request) ->
       Response body: encode_json(notes)
     when request.method == 'POST' and request.url.ends_with('/notes')
       try
-        notes.push decode_json<Note>(await request.text())
+        notes.push decode_json<Note>((await request.text())!)
         Response status: 201
       catch e: JsonError
         Response status: 400, body: e.message
@@ -27,7 +27,7 @@ url := "http://127.0.0.1:#{server.port}/notes"
 
 add := (body: String) ->
   response := await fetch(url, method: 'POST', body: body)
-  text := await response.text()
+  text := (await response.text())!
   print text.is_empty() then response.status else "#{response.status} #{text}"
 
 # The three are sent at the same time, so they may be stored in any order.
@@ -38,7 +38,7 @@ adding :=
 await all(adding)
 await add('{"tags": []}')
 
-listed := decode_json<Note[]>(await (await fetch(url)).text())
+listed := decode_json<Note[]>((await (await fetch(url)).text())!)
 for note in listed.sorted_by((note) -> note.title)
   tags := note.tags.is_empty() then '' else " [#{note.tags.join(', ')}]"
   print "#{note.title}#{tags}"

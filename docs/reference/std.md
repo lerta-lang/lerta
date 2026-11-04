@@ -68,14 +68,14 @@ handle := (request: Request) -> Response(body: "hello, #{request.url}")
 
 server := serve(handle, port: 8080)
 response := await fetch('http://127.0.0.1:8080/', method: 'POST', body: 'hi')
-print await response.text()
+print (await response.text())!
 ```
 
 ### Messages
 
 | Name | |
 |---|---|
-| `Request` | A struct of `method: String`, `url: String`, `headers: Headers` and `body: Body`, and the methods `text(): Promise<String>` and `binary(): Promise<Binary>`, which read the body to its end. |
+| `Request` | A struct of `method: String`, `url: String`, `headers: Headers` and `body: Body`, and the methods `text(): Promise<String?>` and `binary(): Promise<Binary>`, which read the body to its end; `text` gives nil if it is not valid UTF-8. |
 | `Response` | A struct of `body: Body = ''`, `status = 200` and `headers = Headers()`, and `text()` and `binary()`, as those of `Request`. |
 | `Body` | `String \| Binary \| Reader`, the `Reader` of [std:io](#stdio). |
 | `Headers` | A class of `fields: (String, String)[]`, each name in lower case with its value, and the methods below. |
@@ -84,7 +84,6 @@ print await response.text()
   - Its `url` is the target in absolute form as it is, or else `http://` with the `Host` field and the target.
   - In place of a `Host` that an HTTP/1.0 request leaves out, it takes the host that `serve` was given and the port, an IPv6 address in brackets: `http://0.0.0.0:8080/` for a server that listens at every address.
   - Its `body` is a `Reader` in a request that the server gives the handler.
-  - `text` throws a `ValueError`, `a body is not valid UTF-8`.
 - **Response.** Its `body` is a `Reader` in a response that `fetch` gives.
 - **Body.**
   - A body that comes is a `Reader`, read as it comes.
@@ -277,9 +276,9 @@ These responses, and the 500 below, have an empty body.
 | `write_file(path: String, data: String \| Binary): Promise` | Replaces the contents of a file, creating it if needed, with the data: a Binary's bytes, or a String's UTF-8. Rejected with `cannot write file: <path>` on failure. |
 | `copy_file(from: String, to: String): Promise` | Copies the contents of a file, replacing a file at `to` (below). |
 | `remove_tree(path: String): Promise` | Removes a file, or a directory with everything in it (below). |
-| `is_file(path: String): Bool` | Whether the path names a regular file, through symbolic links. False for a directory, a missing file or a path that holds a NUL byte. |
-| `is_dir(path: String): Bool` | Whether the path names a directory, through symbolic links. False for a file, a missing path or a path that holds a NUL byte. |
-| `stat(path: String): FileStatus?` | What the path names, through symbolic links, or nil if nothing is there, as for a dangling link or a path that holds a NUL byte. Throws `cannot read the status of: <path>` if it cannot be read, as for a loop of links. |
+| `is_file(path: String): Bool` | Whether the path names a regular file, through symbolic links. False where `stat` gives nil, and for a directory. |
+| `is_dir(path: String): Bool` | Whether the path names a directory, through symbolic links. False where `stat` gives nil, and for a file. |
+| `stat(path: String): FileStatus?` | What the path names, through symbolic links, or nil if nothing is there or its status cannot be read, as for a dangling link, a loop of links or a path that holds a NUL byte. |
 | `FileStatus` | A struct of `kind: FileKind`, `size: Int`, in bytes, and `modified_time: Float`, when it was last modified, in seconds since the Unix epoch, as `time` of [std:time](#stdtime) tells them. |
 | `FileKind` | An enum of `FILE`, `DIR` and `OTHER`, as a device. |
 | `list_dir(path: String): String[]` | The names of the entries of a directory (below). |

@@ -97,6 +97,17 @@ The trace tells where the exception was thrown and the calls and the `await`s it
 - A program built with `--no-trace` prints the message alone (see [the compiler](compiler.md#build)).
 - Why exceptions propagate as a pending exception checked after each call, rather than by unwinding the machine stack: see [internals](../internals/execution.md#exceptions).
 
+## Nil or an exception
+
+A failure that the caller is to handle gives nil, of an optional type, rather than throwing, since the compiler sees a nil that goes unhandled and not an exception. A caller that knows it does not fail says so with `!`. So nil is given by lookups (`xs.get(i)`, `m[k]`, `find`), conversions and parsing (`to_int`, `parse_int`, `b.text()`), and questions about what is there (`stat`, `env`).
+
+A function throws instead where nil would not do:
+
+- **A bug of the caller**, as an index out of range or a negative count: a caller that knows its index is in range would only write `!`, which throws too. A form that gives nil is there where the question is one about input: `xs.get(i)` for `xs[i]`, `as T?` for `as T!`.
+- **No value to hold nil**, as `make_dir` or `write_file`: a call's result may be discarded, so a nil that one gave would go unseen.
+- **A nil that means something else already**: the end of a `read_line`, an unset `env`. So a line or a value that is not valid UTF-8 throws there, and so do `argv` and `list_dir`, whose arrays would otherwise be of optional items.
+- **A reason to tell**, as which file could not be opened, or where `decode_json` found what is not JSON.
+
 ## Panics
 
 - A panic prints its message and a newline to stderr, after flushing stdout, and aborts the program. It cannot be caught.

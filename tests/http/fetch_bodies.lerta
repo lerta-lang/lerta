@@ -30,6 +30,7 @@ replies :=
   '/long-chunk-size': "HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n1000000000000000\r\n"
   '/two-lengths': "HTTP/1.1 200 OK\r\ncontent-length: 5\r\ncontent-length: 5\r\n\r\nhello"
   '/not-utf8': "HTTP/1.1 200 OK\r\ncontent-length: 1\r\n\r\n"
+  '/empty-body': "HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n"
   '/short-trailer': "HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n0\r\nx-trailer: t\r\n"
   '/zeros-before-size': "HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n" +
     "00000000000000003\r\nabc\r\n0\r\n\r\n"
@@ -64,10 +65,8 @@ client := Client()
 show := (path: String, options: FetchOptions) ->
   try
     response := await client.fetch(server.url(path), options)
-    print "#{path}: #{response.status} '#{await response.text()}'"
+    print "#{path}: #{response.status} '#{(await response.text()) ? '(not UTF-8)'}'"
   catch error: IOError
-    print "#{path}: #{error.message}"
-  catch error: ValueError
     print "#{path}: #{error.message}"
 
 await show(path, method: path == '/head' then 'HEAD' else 'GET') for path in replies.keys()

@@ -135,7 +135,7 @@ A signed type takes the rules of [`Int`](#int), an unsigned one those of [`Byte`
   - A type holds every value of another if it has no fewer bits and the same sign, or more bits than an unsigned one.
 - `x.to_float()` gives the nearest `Float`.
 - `x.to_string()` gives the decimal digits, with a `-` for a negative value.
-- Why nil rather than an exception: whether a value fits is often a question about input, which the caller answers with `? return`, a fallback or a message of its own; a caller that knows it fits says so with `!`. A check before the conversion would repeat the conversion's own. Arithmetic still throws, as an overflow there is a bug rather than a question.
+- Why nil rather than an exception: whether a value fits is often a question about input (see [nil or an exception](errors.md#nil-or-an-exception)), and a check before the conversion would repeat the conversion's own. Arithmetic still throws, as an overflow there is a bug rather than a question.
 
 ### Equality, keys and C
 

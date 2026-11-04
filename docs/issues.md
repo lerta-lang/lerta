@@ -17,3 +17,7 @@ Where a call's arguments are in a block and the value of one starts after a comm
 ## fmt writes a `case` inside a call's parentheses
 
 A call whose arguments fit on its line but for a `case`, as `x := label` over `text: 'a'` and `size: case n` with its arms, is rewritten to `x := label(text: 'a', size: case n`, the arms one level deeper and `)` on a line of its own, reported under Branches. The arms then hang from inside the parentheses, which [Branches](reference/style.md#branches) does not allow: a `case` starts a line of its own. `bracketed_or` (`compiler/format/printing.lerta`) keeps the arguments on the line of the call when the last one alone breaks. Fix: write the arguments in a block when one of them is an `if`, a `case` or a `try` that takes lines below.
+
+## lerta_status_fields gives a result that nothing needs
+
+`lerta_status_fields` (`runtime/file.c`) gives `false` where the status cannot be read, but `stat` (`std/io.lerta`) gives nil then as it does for an empty `fields`, so the result tells it nothing. It cannot become `void` before a seed refresh, as the seed is compiled from a std that declares it to give `Bool` and links against the current runtime. Fix: once the seed is refreshed, make it `void` in `runtime/file.c`, `runtime/lerta.h` and its extern in `std/io.lerta`, and drop `stat`'s check of it.

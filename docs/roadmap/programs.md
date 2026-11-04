@@ -140,9 +140,6 @@ The rest of [`lerta lsp`](../reference/compiler.md#lsp):
 - The names that `all`, `race` and `timeout` of std:async are defined by, `gathered`, `first_settled` and `settled_within`, which a module that imports it sees on its arrays of promises.
 - Whether a cancel of `run` stops the programs that the program started too, through a group of processes (a job object on Windows).
 - Whether the runtime checks keep running `script` for a terminal, or `std:process` gives one (a pty).
-- Whether bytes that are not UTF-8 where a `String` is wanted give nil or throw. One rule would say which. Now:
-  - `b.text()` and `read_text` give nil, as [conversions](../reference/types.md) do;
-  - `list_dir`, `argv`, `env`, `read_line` and the `text()` of a `Request` and a `Response` throw a `ValueError`.
 - What type a path is. A path is taken as a `String`, but `real_path` and `make_temp_dir` give a `Binary`, so code passes one back with `.text()!`, while `list_dir` gives `String`s and throws for a name that is not UTF-8. Either they give a `String` as `list_dir` does, or a path type serves both.
 - Whether `remainder` of [std:math](../reference/std.md#stdmath) is renamed, as it is C's `fmod` rather than its `remainder`.
 - Whether `listen_tcp` takes a default host, as `ServerOptions.host` of std:http has, `'127.0.0.1'`.
