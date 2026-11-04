@@ -190,10 +190,17 @@ difference_finding := (
     else if only_indentation_differs(old_lines, new_lines)
       LAYOUT
     else
-      last_line := in_new.line + place.new_count
+      # A line whose spaces alone differ, those within it among them, holds that difference, which
+      # a part on a later line is apart from; one whose other text differs may be joined or split
+      # by such a part, and one whose indentation alone differs may be of a block that it holds.
+      old_line := old_lines.first() ? ''
+      spaced_within := old_line.trim_start() != new_line.trim_start()
+      spaced_only := spaced_within and without_spaces(old_line) == without_spaces(new_line)
+      last_line := in_new.line + (spaced_only then 1 else place.new_count)
       inner := innermost_rule(rules, in_new, marks_from)
       found := inner then inner else first_rule_from(rules, in_new, last_line)
-      found ? kind_of_difference(old_lines, new_lines, source, at.line)
+      differing := (lines: String[]) -> spaced_only then lines[...1] else lines
+      found ? kind_of_difference(differing(old_lines), differing(new_lines), source, at.line)
   { at, rule }
 
 # The lines that the formatter keeps but that are too long, such as of a comment or a string, which
