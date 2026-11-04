@@ -217,7 +217,7 @@ compile_runtime := (kind: BuildKind, libuv: LibuvBuild, staging_dir: String, tem
   source_dir := join(temp_dir, 'runtime')
   make_dir source_dir
   for path in RUNTIME_PATHS
-    await write_file(join(source_dir, basename(path)), embedded_source(path)!.binary)
+    await write_file(join(source_dir, basename(path)), embedded_source(path)!)
   libuv_dir := join(temp_dir, 'libuv')
   libuv_includes := await write_libuv_sources(libuv_dir)
   # uv.h, which the runtime includes, asks nothing of its users but where it is; libuv's own flags
@@ -235,8 +235,8 @@ compile_runtime := (kind: BuildKind, libuv: LibuvBuild, staging_dir: String, tem
   ]
   return false unless await run_clang_jobs(jobs)
   ir := await clang_probe_ir(flags, temp_dir) ? return false
-  await write_file(join(staging_dir, ATTRIBUTES_FILE), function_attributes(ir).binary)
-  await write_file(join(staging_dir, CORO_END_FILE), coro_end_type(ir).binary)
+  await write_file(join(staging_dir, ATTRIBUTES_FILE), function_attributes(ir))
+  await write_file(join(staging_dir, CORO_END_FILE), coro_end_type(ir))
   true
 
 # The IR that clang writes, with `flags`, for a function that ends a coroutine; nil if clang fails.
@@ -244,7 +244,7 @@ compile_runtime := (kind: BuildKind, libuv: LibuvBuild, staging_dir: String, tem
 clang_probe_ir := (flags: String[], temp_dir: String) ->
   source := join(temp_dir, 'probe.cc')
   code := 'extern "C" void lerta_probe(void *handle) { __builtin_coro_end(handle, 0); }'
-  await write_file(source, code.binary)
+  await write_file(source, code)
   output: Byte[]
   args := ['-x', 'c++', '-std=c++20', '-S', '-emit-llvm', flags..., source, '-o', '-']
   return nil if (await run('clang', args..., stdout: output)).code != 0
