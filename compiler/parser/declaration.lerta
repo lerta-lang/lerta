@@ -182,28 +182,41 @@ parse_member_modifier := (tokens: TokenStream) ->
   token := tokens.peek()
   next := tokens.peek_at(1)
   at_weak := tokens.at_word('weak')
-  is_weak_bang := at_weak and next.kind == '!' and not next.spaced
   is_weak := at_weak and next.kind == IDENTIFIER
   is_weak_var := at_weak and next.kind == 'var'
   text :=
     case
-      when is_weak_bang then 'weak!'
       when is_weak then 'weak'
       when is_weak_var then 'weak var'
       else token.kind.to_string()
   modifier := MemberModifier.parse(text)
   tokens.next() if modifier
-  tokens.next() if is_weak_bang or is_weak_var
+  tokens.next() if is_weak_var
   modifier
 
+# `weak! name: Type`, the old spelling of `weak name: Type!`, which the seed compiler's source still
+# uses until the seed is refreshed.
+accept_legacy_weak_bang := (tokens: TokenStream) ->
+  is_legacy := tokens.at_word('weak') and is_attached_bang(tokens.peek_at(1))
+  if is_legacy
+    tokens.next()
+    tokens.next()
+  is_legacy
+
+is_attached_bang := (token: Token) -> token.kind == '!' and not token.spaced
+
 # `[modifier] name: Type[ = [default] value]`, `modifier name = [default] value` or
-# `name := [default] value`, as a local is declared, the modifier `var`, `weak`, `weak var` or
-# `weak!`.
+# `name := [default] value`, as a local is declared, the modifier `var`, `weak` or `weak var`. A
+# weak field's type may be `Type!`, as a cast's is.
 parse_member := (tokens: TokenStream) ->
   token := tokens.peek()
-  modifier := parse_member_modifier(tokens)
+  is_legacy_bang := accept_legacy_weak_bang(tokens)
+  modifier := is_legacy_bang then MemberModifier.parse('weak') else parse_member_modifier(tokens)
   name := parse_identifier(tokens)
   type := parse_type_annotation(tokens)
+  is_typed_bang := type != nil and is_attached_bang(tokens.peek())
+  tokens.next() if is_typed_bang
+  throws := is_typed_bang or (is_legacy_bang and type != nil)
   is_plain := modifier == nil and type == nil
   # It would read as an assignment, which a type body cannot hold.
   if is_plain and tokens.peek().kind == '='
@@ -219,7 +232,7 @@ parse_member := (tokens: TokenStream) ->
   has_default := has_value and at_default(tokens)
   tokens.next() if has_default
   value := has_value then parse_value(tokens)
-  MemberDeclaration name, modifier, type, value, has_default, position: token.position()
+  MemberDeclaration name, modifier, type, value, has_default, throws, position: token.position()
 
 # `default` marks a default when an operand follows it, as the argument of a call without
 # parentheses would.

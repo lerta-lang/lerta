@@ -34,7 +34,7 @@ The members of a type, one per line, are declared as locals are (see [declaratio
 | `name := value`, `name: Type = value` | A field computed at construction. It is not a constructor argument. |
 | `name := default value`, `name: Type = default value` | A constructor argument that may be left out; the value is then computed as an initializer. `default` is not a [keyword](syntax.md#contextual-words). |
 | `var` before any of the above | A field of a class that can be assigned (see [mutability](#mutability)). |
-| `weak name: Type?`, `weak var name: Type?`, `weak! name: Type` | A [weak field](#weak-references). |
+| `weak name: Type?`, `weak name: Type!`, either with `weak var` | A [weak field](#weak-references). |
 | `name := (params) -> body` | A method (see below). |
 
 - A field may hold a function (`on_click: () -> void`); `b.on_click()` calls it (see [function values](functions.md#function-values)).
@@ -91,9 +91,9 @@ A weak reference holds an object of a class without keeping it alive, so that ob
 
 - **`weak name: Type?`** is a field of a class. It reads as the object, or nil once the object is freed. `weak var` makes it assignable. It may be a constructor argument or be computed, as any field.
   - Its type is written: an optional class, which cannot be a type parameter so far.
-- **`weak! name: Type`** is a field for an object that should outlive its holder.
-  - Its type is a class, not optional.
-  - It is a constructor argument and cannot be assigned afterwards.
+- **`weak name: Type!`** is a field for an object that should outlive its holder. `weak var` makes it assignable.
+  - It reads as a `Type`, a class. `!` is written as in `x as T!`, and only after a weak field's type.
+  - It is a constructor argument, without an initializer.
   - Reading it throws `weak object is gone` once the object is freed, including while the object's `deinit` runs.
 - **`weak name := value`** and **`weak var name = value`** declare a weak local, in a function or in a block of top-level code; a top-level value cannot be weak.
   - Its type is the class's optional type, `Button?`; an annotation must write it so.
@@ -199,7 +199,7 @@ class File
 - It cannot throw (`deinit cannot throw`). An exception that a call in it throws is a panic, `deinit threw an exception`, since no code that releases the object could catch it.
 - It is for cleanup: it may use `@` and call its methods, but must not keep a reference to the object, as in a field of another object. That stops the program with `deinit kept a reference to its object`.
 - Objects still referenced when the program ends through `exit` or an uncaught `throw` are not released, so their `deinit` does not run.
-- A struct has no `deinit` and no `weak!` fields. Why: if the time of its release were observable, the implementation could no longer choose between copying and sharing it. Nor do structs need cycles broken.
+- A struct has no `deinit` and no weak fields. Why: if the time of its release were observable, the implementation could no longer choose between copying and sharing it. Nor do structs need cycles broken.
 
 ## extend
 

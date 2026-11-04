@@ -37,7 +37,7 @@ The runtime's errors are exceptions too, of types that `std:builtins` exports, e
 | `NilError` | `x!` of nil |
 | `CastError` | `x as T!` of a value of another type |
 | `IterError` | a second traversal of an `Iter`, `next` past its end, reading an `Iter` from within its own function |
-| `WeakError` | a `weak!` field whose object is gone |
+| `WeakError` | a `weak` field of type `T!` whose object is gone |
 | `IOError` | a file that cannot be read or written, a command that cannot be run |
 | `ValueError` | an argument of a value that a function does not take, as `split('')`, `exit(256)`, `sleep(-1)`; a negative count, length or limit (`repeat(-1)`, `truncate(-1)`; 0 is taken); `zip` of Iterables of different lengths; `c + n` or `c - n` of a `Char` past the Unicode scalar values |
 | `InitError` | a top-level value used before it is initialized (see [top-level values](functions.md#top-level-values)) |

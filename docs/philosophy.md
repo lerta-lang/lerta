@@ -27,7 +27,7 @@ In priority order:
 Safety means **zero undefined behavior** outside [C functions](reference/functions.md#c-functions), whose existence and types the compiler does not check: every operation returns a defined value or fails in a defined way.
 
 - **Nil safety** comes from [optional types](reference/types.md#optional-values).
-- **Weak safety** comes from [`weak!` fields](reference/objects.md#weak-references), which throw once their object is gone.
+- **Weak safety** comes from [`weak` fields of type `T!`](reference/objects.md#weak-references), which throw once their object is gone.
 - **No data races,** because programs are single-threaded.
 
 Planned rules are in [the roadmap](roadmap/runtime.md#safety).

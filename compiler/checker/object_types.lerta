@@ -29,7 +29,7 @@ export class FieldInfo
   # The initializer, or the default of a constructor argument (see is_argument).
   value: Expression?
   has_default: Bool
-  # A `weak!` field holds its object without keeping it alive (see codegen weak).
+  # A weak field of a type with `!` holds its object without keeping it alive (see codegen weak).
   weak: Bool
 
 export class ObjectInfo
@@ -178,7 +178,9 @@ field_of_member := (shared: Shared, info: ObjectInfo, member: MemberDeclaration)
   type_name := member.type
   type := type_name then resolve(program, info.resolver, type_name)
   modifier := member.modifier
-  weak := modifier == 'weak' or modifier == 'weak var' or modifier == 'weak!'
+  weak := modifier == 'weak' or modifier == 'weak var'
+  if member.throws and not weak
+    fail program, member.position, "only a weak field's type is written with '!'"
   reject_invalid_weak program, member, is_struct, type if weak
   mutable := modifier == 'var' or modifier == 'weak var'
   FieldInfo type, mutable, value, weak, name: member.name, has_default: member.has_default
@@ -188,15 +190,18 @@ reject_invalid_weak := (
 ) ->
   fail_weak := (message: String) -> fail(program, member.position, message)
   fail_weak 'a struct field cannot be weak' if is_struct
-  is_bang := member.modifier == 'weak!'
-  if is_bang
-    fail_weak 'a weak! field is a constructor argument, without an initializer' if member.value
   written := type ? fail_weak('the type of a weak field must be written')
-  if not is_bang and written is not OptionalType
-    optional := "#{format_type(written)}?"
-    fail_weak "a weak field may hold nil: write its type as #{optional}, or use weak!"
-  object := (is_bang then written else inner_of(written)) as ObjectType?
+  object := (written is OptionalType then inner_of(written) else written) as ObjectType?
   fail_weak 'a weak field holds an object of a class' if object?.is_struct != false
+  if member.throws
+    plain := format_type(written)
+    if member.value
+      fail_weak "a weak field of type #{plain}! is a constructor argument, without an initializer"
+    if written is OptionalType
+      fail_weak "write a weak field's type as #{plain} or as #{format_type(inner_of(written))}!"
+  else if written is not OptionalType
+    plain := format_type(written)
+    fail_weak "a weak field may hold nil: write its type as #{plain}?, or as #{plain}! to throw"
 
 # The class or struct of the name, of the module or imported.
 export object_type := (shared: Shared, name: String) ->
