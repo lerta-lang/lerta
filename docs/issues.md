@@ -2,23 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `lerta fmt` reports a list it would join under the rule of another place
-
-Severity: Low.
-
-A literal written on lines of its own that fits on one line is reported where it starts, but under the name and the message of a rule that some other place in the file breaks, or of Layout when none does:
-
-```
-xs :=
-  'a'
-  'b'
-print "c"
-```
-
-`lerta fmt` reports ``1:6: call without parentheses at the start of a statement, with them after `then` or `->` (Calls without parentheses)``; without the last line, `1:6: indent by two spaces for each level, and end the lines with LF (Layout)`. `lerta fmt --fix` joins the list as expected.
-
-Fix: name the rule of the place reported, here Multi-line literals.
-
 ## An array literal does not take its item type from an optional array expected
 
 Severity: Low.
@@ -47,3 +30,20 @@ print w in [1]
 reports `2:7: expected Int8, got Int8?`.
 
 Fix: either test a nil item as not in the array, or reject an optional item with a message that says so.
+
+## `lerta fmt` reports two differences in one hunk under the rule of the later one
+
+Severity: Low.
+
+Where a hunk is not split into pairs of lines, `difference_finding` (compiler/format/format.lerta) reports only its first difference, and where no rule holds that place, under the first rule whose part starts after it in the hunk (`first_rule_from`), even if that part is another difference:
+
+```
+a := 1 +  2
+xs :=
+  'a'
+  'b'
+```
+
+`lerta fmt` reports `1:10: write the literal in a block without brackets (Multi-line literals)` for the Spacing of line 1, and nothing for the list it joins.
+
+Fix: split a hunk at the lines where the formatted text reaches the source again, or report each rule part that starts in the hunk at a place of its own.
