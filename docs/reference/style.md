@@ -113,7 +113,7 @@ None:
 ### Long operations
 
 - An operation that does not fit on its line, but whose first operand and operator do, breaks after each operator of its chain, the operations of its level on its left (`a +`, `b +`, `c`). The operands after the first go on lines of their own, one level deeper.
-- A value after `=` or `:=` that does not fit on its line goes on the next line, one level deeper, if it fits there. Otherwise it breaks on its line if its first line fits there, and else on the next line.
+- A value after `=`, `:=` or `key:` in a block that does not fit on its line goes on the next line, one level deeper, if it fits there. Otherwise it breaks on its line if its first line fits there, and else on the next line.
 - These stay on one line:
   - an operation that is an operand of another outside brackets;
   - one in parentheses, whose `)` would end its last line;

@@ -23,7 +23,7 @@ import
 from './print_expression'
 import operation_start from './print_operation'
 import
-  bracketed, bracketed_or, Context, follows_comment, Item, lines_of_items, opened_list, spaced_value
+  bracketed, bracketed_or, Context, follows_comment, Item, lines_of_items, opened_list
 from './printing'
 
 export item := (expression: Expression, context: Context) ->
@@ -71,10 +71,10 @@ flat_literal := (literal: Expression, context: Context) ->
     when RecordLiteral then flat_braces(literal, record_items(literal, inside), context)
     else expression_doc(literal, context)
 
+# A field or a named argument, whose value is written as any after `key:`.
 export named_item := (named: NamedValue, context: Context) ->
   name := token(named.name.name, named.name.position)
-  doc := join
-    [name, text(':'), spaced_value(named.value, expression_doc(named.value, context), context)]
+  doc := join([name, text(':'), value_after(named.value, context)])
   after_comment := context.source.comment_before(named.name.position)
   Item doc, after_comment, simple: is_simple(named.value)
 
@@ -120,8 +120,7 @@ entry_item := (entry: MapEntry, context: Context) ->
       clarified entry.key, context
     else
       expression_doc entry.key, context
-  doc :=
-    join([key, text(':'), spaced_value(entry.value, expression_doc(entry.value, context), context)])
+  doc := join([key, text(':'), value_after(entry.value, context)])
   after_comment := context.source.comment_before(entry.key.position)
   Item doc, after_comment, simple: is_simple(entry.key) and is_simple(entry.value)
 
@@ -177,7 +176,7 @@ opening_brace := (literal: Braced, spelling: String, context: Context) ->
 # The value after `=`, `key:` or `return`, with the space before it. A literal of several items
 # that does not fit on the line goes in a block below it without brackets (see Multi-line literals),
 # and an `if`, a `case` or a `try` starts a line of its own (see Branches).
-export value_after := (value: Expression, context: Context) ->
+export value_after := (value: Expression, context: Context): Doc ->
   if follows_comment(value, context)
     return indent(join([line_feed(), expression_doc(value, context)]))
   on_line := join([text(' '), expression_doc(value, context)])
