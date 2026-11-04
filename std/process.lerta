@@ -25,14 +25,22 @@ export argv := [
   for argument in lerta_argv()
 ]
 
+# Where a program's output or errors go, besides a Writer or a Pipe: kept for its Exit, dropped, or,
+# for its errors alone, where its output goes, as `2>&1` does.
+export enum Output
+  CAPTURE
+  DISCARD
+  STDOUT
+
 # How `run` runs a program: what it reads as its standard input, where its standard output and
-# error go, an array that they are appended to or a Writer that they are copied to as they come, its
-# directory, the environment variables set and removed, the most bytes that it may write to each of
-# those arrays, and how long a cancel waits for it to end before it is killed.
+# error go, an array that they are appended to, a Writer that they are copied to as they come or an
+# Output, its directory, the environment variables set and removed, the most bytes that it may
+# write to each of those arrays and captures, and how long a cancel waits for it to end before it is
+# killed.
 export struct RunOptions
   stdin: Binary | Reader | Pipe?
-  stdout: Byte[] | Writer | Pipe?
-  stderr: Byte[] | Writer | Pipe?
+  stdout: Output | Byte[] | Writer | Pipe?
+  stderr: Output | Byte[] | Writer | Pipe?
   cwd: String?
   env: Map<String, String> = default Map()
   unset_env: String[] = default []
@@ -44,6 +52,9 @@ export struct RunOptions
 export struct Exit
   code: Int
   signal: Int?
+  # What the program wrote to each stream that was given as CAPTURE, else nil.
+  stdout: Binary?
+  stderr: Binary?
 
 # The system reads a text only up to a NUL byte, so none that it is given may hold one.
 holds_nul := (text: String) -> "\0" in text
@@ -67,8 +78,8 @@ export run := (command: String, args: String..., options: RunOptions) ->
   errors := output_of(options.stderr, 'standard error', command)
   streams :=
     stream_of(input.pipe, input.file)
-    stream_of(output.pipe, output.file)
-    stream_of(errors.pipe, errors.file)
+    stream_of(output.pipe, output.file, options.stdout)
+    stream_of(errors.pipe, errors.file, options.stderr)
   # Rounded up, so as not to kill early.
   kill_milliseconds := ceil(kill_after * 1000.0).to_int() ? INT_MAX
   pointer := lerta_program_run([command, args...], cwd, program_env, streams, kill_milliseconds)
@@ -102,7 +113,10 @@ export run := (command: String, args: String..., options: RunOptions) ->
   throw error if error := copies.error
   append_to output.sink, output_bytes
   append_to errors.sink, error_bytes
-  status >= 0 then Exit(code: status) else Exit(code: 128 - status, signal: -status)
+  stdout := is_output(options.stdout, CAPTURE) then output_bytes
+  stderr := is_output(options.stderr, CAPTURE) then error_bytes
+  return Exit(stdout, stderr, code: status) if status >= 0
+  Exit stdout, stderr, code: 128 - status, signal: -status
 
 # A program that runs, which runs on, if it has not ended, once nothing holds it.
 class Program
@@ -130,11 +144,11 @@ pipe_of := (stream: String, command: String) ->
 
 # The file of the end of a Pipe that the program takes, if the Pipe is a system pipe or becomes
 # one; a Pipe that this program uses is read or written as its Reader or Writer instead.
-file_of := (stream: Binary | Reader | Byte[] | Writer | Pipe?, reading: Bool) ->
+file_of := (stream: Binary | Reader | Output | Byte[] | Writer | Pipe?, reading: Bool) ->
   stream is Pipe then stream.writer.file_for(reading)
 
 # The program holds the end it has taken, which this program then closes.
-give := (stream: Binary | Reader | Byte[] | Writer | Pipe?, reading: Bool) ->
+give := (stream: Binary | Reader | Output | Byte[] | Writer | Pipe?, reading: Bool) ->
   stream.writer.give reading if stream is Pipe
 
 # How the program takes its input: the `file` of a system pipe's end, or else a `pipe` that this
@@ -146,17 +160,32 @@ input_of := (stdin: Binary | Reader | Pipe?, command: String) ->
 
 # As input_of, for an output: the `file` of a system pipe's end, or else a `pipe` that this program
 # reads into its `sink`, or neither, for this program's own output, which it shares.
-output_of := (output: Byte[] | Writer | Pipe?, stream: String, command: String) ->
+# Only a CAPTURE of the Outputs is read, as an array is.
+output_of := (output: Output | Byte[] | Writer | Pipe?, stream: String, command: String) ->
   file := file_of(output, false)
   # Of the type written, so that a Pipe's writer counts as a Writer.
-  sink: Byte[] | Writer? = not file then (output is Pipe then output.writer else output)
+  sink: Output | Byte[] | Writer? =
+    case output
+      when Pipe then not file then output.writer
+      when Output then output == CAPTURE then output
+      else output
   { file, sink, pipe: sink != nil then pipe_of(stream, command) }
 
-# As lerta_program_run takes them: a file as -1 minus it, a pipe by its handle, or 0 for the
-# program's own stream, which the program shares.
-stream_of := (pipe: Handle?, file: Int?) ->
+# As lerta_program_run takes them: a file as -1 minus it, a pipe by its handle, DISCARDED or
+# AS_STDOUT for those Outputs, the values of DISCARDED_STREAM and AS_STDOUT_STREAM in
+# runtime/process.c, or 0 for the program's own stream, which the program shares. A handle is the
+# address of an object, never 1 or 2.
+stream_of := (pipe: Handle?, file: Int?, output: Output | Byte[] | Writer | Pipe? = nil) ->
   return -1 - file if file
+  return DISCARDED if is_output(output, DISCARD)
+  return AS_STDOUT if is_output(output, STDOUT)
   pipe?.pointer ? 0
+
+DISCARDED := 1
+AS_STDOUT := 2
+
+is_output := (stream: Output | Byte[] | Writer | Pipe?, output: Output) ->
+  stream is Output and stream == output
 
 # The bytes of each read that a Reader gives the program at most.
 FEED_SIZE := 65536
@@ -191,7 +220,7 @@ written := (pipe: Handle, bytes: Binary) ->
 # What the program writes to the stream, as it comes: all of it, for an array, which takes it only
 # once the program has ended, or nil for a Writer, which run ends (see end_writers).
 copy_output := (
-  pipe: Handle, output: Byte[] | Writer, limit: Int?, program: Program, copies: Copies
+  pipe: Handle, output: Output | Byte[] | Writer, limit: Int?, program: Program, copies: Copies
 ) ->
   reader := reader_of(pipe)
   var bytes = b''
@@ -220,7 +249,9 @@ failed_copy := (copies: Copies, error: Error, program: Program): Binary? ->
 
 # The Writers are ended once both copies have ended, as one Writer may take both outputs, as `2>&1`
 # does; it is then ended twice, which a Writer takes as once.
-end_writers := (stdout: Byte[] | Writer?, stderr: Byte[] | Writer?, copies: Copies) ->
+end_writers := (
+  stdout: Output | Byte[] | Writer?, stderr: Output | Byte[] | Writer?, copies: Copies
+) ->
   end_writer stdout, copies if stdout is Writer
   end_writer stderr, copies if stderr is Writer
 
@@ -258,7 +289,7 @@ ended := <T>(copy: Promise<T>) ->
   catch _: CancelledError
     return
 
-append_to := (output: Byte[] | Writer?, bytes: Binary?) ->
+append_to := (output: Output | Byte[] | Writer?, bytes: Binary?) ->
   return unless bytes
   if output is Byte[]
     output.push byte for byte in bytes
@@ -281,6 +312,7 @@ env_name := (entry: Binary) ->
   entry[...end]
 
 check_options := (options: RunOptions) ->
+  throw ValueError('stdout cannot be Output.STDOUT') if is_output(options.stdout, STDOUT)
   throw ValueError('kill a program after a negative time') if options.kill_after < 0
   if options.output_limit ? 0 < 0
     throw ValueError("a negative limit of output: #{options.output_limit!}")

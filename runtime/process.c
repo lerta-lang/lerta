@@ -130,16 +130,21 @@ void lerta_program_stop(int64_t pointer) {
   uv_timer_start(&program->kill_timer, kill_program, program->kill_after, 0);
 }
 
+// The streams that std:process gives for a DISCARD and for errors sent as STDOUT, the values of
+// DISCARDED and AS_STDOUT in std/process.lerta.
+enum { DISCARDED_STREAM = 1, AS_STDOUT_STREAM = 2 };
+
 // A pipe of the system for the stream of a handle, rather than the pipes that libuv makes for a
 // program, which are sockets on Unix, which some programs tell apart, as `script` does by its
 // stdin: the program's end, which it inherits, in `child`, and this program's, which the handle
 // opens, without blocking, as libuv's streams on Windows need. A handle of 0 is this program's own
 // stream, and `child` is -1 then. A negative one is a file of a system pipe that Lerta holds, as
 // -1 minus it, which the program inherits as it is, and which is left to Lerta to close.
+// DISCARDED_STREAM and AS_STDOUT_STREAM, which no handle's address is, take no pipe (see spawn).
 static bool open_pipe(int64_t handle, bool program_reads, uv_file *child, bool *made) {
   *child = -1;
   *made = false;
-  if (handle == 0) return true;
+  if (handle == 0 || handle == DISCARDED_STREAM || handle == AS_STDOUT_STREAM) return true;
   if (handle < 0) {
     *child = (uv_file)(-1 - handle);
     return true;
@@ -174,7 +179,11 @@ static bool spawn(Program *program, char *file, char **args, char **env, const c
   for (int i = 0; i < 3; i++) {
     int fd = children[i] >= 0 ? children[i] : i;
     stdio[i] = (uv_stdio_container_t){.flags = UV_INHERIT_FD, .data.fd = fd};
+    // libuv opens the null device for an ignored stream.
+    if (handles[i] == DISCARDED_STREAM) stdio[i] = (uv_stdio_container_t){.flags = UV_IGNORE};
   }
+  // As `2>&1`: the errors go to what the output goes to, the same file, so in the order written.
+  if (handles[2] == AS_STDOUT_STREAM) stdio[2] = stdio[1];
   uv_process_options_t options = {
     .exit_cb = exit_program,
     .file = file,
