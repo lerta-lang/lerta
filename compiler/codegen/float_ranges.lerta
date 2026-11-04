@@ -4,10 +4,10 @@
 # that a branch or a loop takes. Only Floats are followed: a Float32's operations round in 32 bits,
 # which a bound computed as a double may fall short of.
 import
-  Assignment, BinaryOperation, Binding, Call, Case, Condition, Declaration, EnumDeclaration,
-  Expression, Extend, Extern, FloatLiteral, For, FunctionLiteral, Identifier, If, Import,
-  IntegerLiteral, InterfaceDeclaration, Member, operands_of, Pass, Range, Statement, Try, TypeAlias,
-  TypeDeclaration, UnaryOperation, While
+  Assignment, BinaryOperation, Binding, Call, Case, Comprehension, Condition, Declaration,
+  EnumDeclaration, Expression, Extend, Extern, FloatLiteral, For, FunctionLiteral, Identifier, If,
+  Import, IntegerLiteral, InterfaceDeclaration, Member, operands_of, Pass, Range, Statement, Try,
+  TypeAlias, TypeDeclaration, UnaryOperation, While
 from '../ast'
 
 import BuiltinMethod from '../checker/builtins'
@@ -31,10 +31,12 @@ UNKNOWN := FloatRange(nonnegative: false, nonpositive: false, bound: INFINITY)
 
 # The binary operations that give no NaN: with their operands, for a tree's root, whose operands
 # check none; and of operands that are no NaN, for an operation of no tree, whose operands have
-# checked theirs (see float_tree).
+# checked theirs (see float_tree). And the locals, by their declarations' names, that a loop reads
+# while they are declared outside of it, whose check, deferred, would run at each turn.
 export class NanFree
   whole: Set<BinaryOperation> = Set()
   alone: Set<BinaryOperation> = Set()
+  read_in_loops: Set<Identifier> = Set()
 
 # Of an expression: its range, and whether it, with its operands, can give no NaN.
 struct Found
@@ -52,6 +54,9 @@ class Analysis
   # What the last expression visited for its operations alone gives, which is not read: it holds
   # the result, as Lerta has no statement that drops a value.
   var visited = Found(range: UNKNOWN, nan_free: true)
+  # How many loops the statement analyzed is in, and that of each local's declaration.
+  var loop_depth = 0
+  declared_depths: Map<Identifier, Int> = Map()
 
 # The binary operations of the body, at any depth outside its function literals, that give no NaN
 # (see NanFree); the body is top-level code if `is_top_level`.
@@ -70,6 +75,7 @@ analyze_block := (analysis: Analysis, body: Statement[]) ->
 analyze_statement := (analysis: Analysis, statement: Statement): void ->
   case statement
     when Declaration
+      analysis.declared_depths[statement.name] = analysis.loop_depth
       forget_assigned analysis, [statement.value]
       found := found_of(analysis, statement.value)
       follow analysis, statement.name, found.range if is_float_node(analysis, statement.value)
@@ -111,18 +117,22 @@ analyze_if := (analysis: Analysis, statement: If) ->
 analyze_while := (analysis: Analysis, loop: While) ->
   assigned := assigned_in_blocks(analysis, [loop.body, [condition_value(loop.condition)]])
   forget_locals analysis, assigned
+  analysis.loop_depth += 1
   condition_found analysis, loop.condition
   before := analysis.ranges.entries().to_array()
   narrow analysis, loop.condition
   analyze_block analysis, loop.body
   restore analysis, before
+  analysis.loop_depth -= 1
 
 analyze_for := (analysis: Analysis, loop: For) ->
   forget_assigned analysis, [loop.iterable]
   visit analysis, loop.iterable
   forget_locals analysis, assigned_in_blocks(analysis, [loop.body])
   before := analysis.ranges.entries().to_array()
+  analysis.loop_depth += 1
   analyze_block analysis, loop.body
+  analysis.loop_depth -= 1
   restore analysis, before
 
 analyze_try := (analysis: Analysis, expression: Try) ->
@@ -170,6 +180,12 @@ follow := (analysis: Analysis, name: Identifier, range: FloatRange) ->
   return if name in analysis.facts.shared_vars or name in analysis.top_level_values
   analysis.ranges[name] = range
 
+# Notes a read of a local inside a loop that its declaration is outside of.
+note_read := (analysis: Analysis, identifier: Identifier) ->
+  local := analysis.facts.local_declarations[identifier] ? return
+  depth := analysis.declared_depths[local] ? return
+  analysis.found.read_in_loops.add local if depth < analysis.loop_depth
+
 # The declaration of the followed local that the target names, if it is one: a local of the
 # function, as a top-level value is not, which a call may assign.
 followed_local := (analysis: Analysis, target: Expression) ->
@@ -195,6 +211,7 @@ found_of := (analysis: Analysis, expression: Expression): Found ->
       return unknown_found(analysis, expression) unless is_float_node(analysis, expression)
       literal_found integer_float_text(expression)
     when Identifier
+      note_read analysis, expression
       local := followed_local(analysis, expression)
       range := local then analysis.ranges[local]
       { range: range ? UNKNOWN, nan_free: true }
@@ -210,6 +227,7 @@ found_of := (analysis: Analysis, expression: Expression): Found ->
     when BinaryOperation
       return and_found(analysis, expression) if expression.operator == 'and'
       binary_found analysis, expression
+    when Comprehension then comprehension_found(analysis, expression)
     when Call
       return unknown_found(analysis, expression) unless is_integer_to_float(analysis, expression)
       visit analysis, (expression.callee as Member!).object
@@ -220,6 +238,19 @@ found_of := (analysis: Analysis, expression: Expression): Found ->
         nan_free: true
       }
     else unknown_found(analysis, expression)
+
+# A comprehension that makes its items as it is evaluated, whose element and guard run for each
+# item, as a loop's body does. A lazy one is taken as any other expression: the closures that it
+# makes check the locals that they capture once, as they are made, and a loop that it is fused into
+# reads them where it uses them, as the closures would (see tests/comprehension/fused_nan).
+comprehension_found := (analysis: Analysis, comprehension: Comprehension) ->
+  return unknown_found(analysis, comprehension) if comprehension.lazy != nil
+  visit analysis, comprehension.iterable
+  analysis.loop_depth += 1
+  visit analysis, guard if guard := comprehension.guard
+  visit analysis, comprehension.element
+  analysis.loop_depth -= 1
+  Found range: UNKNOWN, nan_free: true
 
 # `n.to_float()` of an integer of any integer type, which is finite.
 is_integer_to_float := (analysis: Analysis, call: Call) ->
