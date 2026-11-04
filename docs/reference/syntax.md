@@ -47,6 +47,7 @@
 
 - `b'...'` and `b"..."` are [Binary](types.md#binary) literals: the bytes that `'...'` and `"..."` write, with no space after the `b`. `b''` is the empty `Binary`.
 - In `b"..."`, `\x00` to `\xFF` each write any byte.
+- A `Binary` literal of one byte that interpolates nothing is a `Byte` where one is expected (see [Literals by context](types.md#literals-by-context)).
 - An interpolated `Binary` inserts its bytes as they are; other values insert their text.
 - A `Binary` literal is single line only: `a Binary literal spans one line`.
 

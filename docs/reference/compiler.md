@@ -289,7 +289,7 @@ It leaves out the types written in the file that its checking shows the checker 
 Not where the type comes from where it is:
 
 - an empty array or map;
-- a number that the type makes a `Byte` or a `Float`, a string of one character that it makes a `Byte`;
+- a number that the type makes a `Byte` or a `Float`, a `Binary` literal or a string of one byte that it makes a `Byte`;
 - a member of an enum, a function literal;
 - a call of a generic function or a construction of a generic type.
 

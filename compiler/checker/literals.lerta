@@ -1,8 +1,8 @@
 # Facts about literals: which expressions take their type from the context, and integer and
 # string literals as the integer types that are expected.
 import
-  ArrayLiteral, BinaryOperation, Comprehension, Expression, FloatLiteral, IntegerLiteral, is_spread,
-  StringLiteral, UnaryOperation
+  ArrayLiteral, binary_literal_bytes, BinaryOperation, Comprehension, Expression, FloatLiteral,
+  IntegerLiteral, Interpolation, is_spread, StringLiteral, UnaryOperation
 from '../ast'
 import fail from './diagnostics'
 import is_numeric_operator from './operator'
@@ -17,11 +17,18 @@ export is_contextual := (expression: Expression): Bool ->
   return literal.elements.all(is_contextual) if literal := spread_literal(expression)
   case expression
     when IntegerLiteral, FloatLiteral, StringLiteral then true
+    when Interpolation then binary_literal_bytes(expression) != nil
     when UnaryOperation then expression.operator == '-' and is_contextual(expression.operand)
     when BinaryOperation
       { operator, left, right } := expression
-      is_numeric_operator(operator) and is_contextual(left) and is_contextual(right)
+      is_arithmetic := is_numeric_operator(operator) and not appends_to_literal(expression)
+      is_arithmetic and is_contextual(left) and is_contextual(right)
     else false
+
+# Whether `+` appends to a Binary literal on its left, which is then a Binary rather than a Byte, so
+# that `b'a' + c` appends a byte, as `b'ab' + c` does.
+export appends_to_literal := (binary: BinaryOperation) ->
+  binary.operator == '+' and binary_literal_bytes(binary.left) != nil
 
 # Whether a contextual expression holds a float literal, which is a Float unless a Float32 is
 # expected. It decides more of its type than other literals do, which an Int fits too, so it is
@@ -47,10 +54,11 @@ export float_first := <T>(items: T[], expression_of: (T) -> Expression) ->
   floats := [item for item in items when holds_float(item)]
   [floats..., [item for item in items when not holds_float(item)]...]
 
-# An integer literal where an integer type other than Int is expected, or a string literal of one
-# character where a Byte or a Char is: one byte, or one code point.
+# An integer literal where an integer type other than Int is expected, a string literal of one
+# character where a Byte or a Char is: one byte, or one code point, or a Binary literal of one byte
+# where a Byte is.
 export integer_literal := (
-  program: ProgramWide, literal: IntegerLiteral | StringLiteral, type: Type
+  program: ProgramWide, literal: IntegerLiteral | StringLiteral | Interpolation, type: Type
 ) ->
   at := literal.position
   case literal
@@ -66,6 +74,9 @@ export integer_literal := (
       else
         fits := literal.value.binary.length == 1
         fail program, at, 'a string literal used as a Byte must be one byte long' unless fits
+    when Interpolation
+      fits := binary_literal_bytes(literal)!.length == 1
+      fail program, at, 'a Binary literal used as a Byte must be one byte long' unless fits
   type
 
 # A float literal, or an integer one where a Float or a Float32 is expected, must be finite as one,

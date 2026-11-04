@@ -10,7 +10,7 @@ import compares_by_contents, own_equality from './equality'
 import may_name_member from './enums'
 import expect_condition, expect_optional, expect_type, require_type, type_of from './expression'
 import compares_by_bounds, has_method, member_type_by_name from './member'
-import holds_float_literal, is_contextual from './literals'
+import appends_to_literal, holds_float_literal, is_contextual from './literals'
 import range_part from './loop'
 import where_right_operand from './narrowing'
 import Body from './shared'
@@ -218,16 +218,19 @@ type_of_operands := (
   body: Body, binary: BinaryOperation, expected: Type?, allowed_kinds: TypeKind[],
   reject: (Type) -> String
 ) ->
-  { left, right } := binary
+  { left, right, operator } := binary
+  appends_to := (operand: Expression) -> operand == left and appends_to_literal(binary)
+  hint := (operand: Expression, type: Type?) -> appends_to(operand) then nil else type
+  takes := (operand: Expression) ->
+    contextual := not appends_to(operand) and is_contextual(operand)
+    contextual or may_name_member(body, operand)
   decides_more := (operand: Expression, than: Expression) ->
-    not takes_context(body, operand) or
-      (holds_float_literal(operand) and not holds_float_literal(than))
-  right_first := takes_context(body, left) and decides_more(right, left)
+    not takes(operand) or (holds_float_literal(operand) and not holds_float_literal(than))
+  right_first := takes(left) and decides_more(right, left)
   first := right_first then right else left
   second := right_first then left else right
-  type := type_of(body, first, expected)
+  type := type_of(body, first, hint(first, expected))
   program := body.program
-  operator := binary.operator
   call_type := type_of_operation_call(body, binary, first, second, type, right_first, allowed_kinds)
   return call_type if call_type
   is_equality := is_equality_operator(operator)
@@ -245,7 +248,7 @@ type_of_operands := (
       else is_one_of_kinds(inner, allowed_kinds)
   reject_operand body, operator, first, type, reject unless is_allowed
   return type_of_equality_operand(body, first, second, type) if is_equality
-  second_type := type_of(body, second, type)
+  second_type := type_of(body, second, hint(second, type))
   is_unit := not right_first and operator == '+' and appends_unit(type, second_type)
   return type if is_unit
   reject_text_and_bytes body, second, type, second_type

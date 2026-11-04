@@ -82,7 +82,7 @@
 
 ### Literals by context
 
-**The type of a literal is decided by context.** Where a `Byte` or a `Byte?` is expected, an integer literal from 0 to 255 is a `Byte`, and so is a string literal of one byte (`'a'`). Without such a context, `'a'` is a `String` and `1` an `Int`.
+**The type of a literal is decided by context.** Where a `Byte` or a `Byte?` is expected, an integer literal from 0 to 255 is a `Byte`, and so are a `Binary` literal of one byte (`b'a'`) and a string literal of one byte (`'a'`); a `Binary` literal on the left of `+` stays a `Binary`, so that `b'a' + c` appends a byte, while `c + b'a'` adds. Without such a context, `b'a'` is a `Binary`, `'a'` a `String` and `1` an `Int`.
 
 The expected type reaches literals:
 

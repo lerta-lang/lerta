@@ -3,10 +3,11 @@
 # maps. An expected type, where one is known, is passed down so that it can give literals their
 # type.
 import
-  ArrayLiteral, Await, BinaryOperation, BooleanLiteral, Call, Case, Cast, Coalesce, Comprehension,
-  Conditional, Expression, FloatLiteral, FunctionLiteral, Identifier, If, Index, IntegerLiteral,
-  Interpolation, IsTest, Jump, MapLiteral, Member, NilLiteral, Node, Range, RecordLiteral, Return,
-  StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, TypeName, UnaryOperation, Unwrap, Yield
+  ArrayLiteral, Await, binary_literal_bytes, BinaryOperation, BooleanLiteral, Call, Case, Cast,
+  Coalesce, Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, Identifier, If,
+  Index, IntegerLiteral, Interpolation, IsTest, Jump, MapLiteral, Member, NilLiteral, Node, Range,
+  RecordLiteral, Return, StringLiteral, This, Throw, Try, TupleItem, TupleLiteral, TypeName,
+  UnaryOperation, Unwrap, Yield
 from '../ast'
 import check_arguments from './arguments'
 import type_of_case, type_of_conditional, type_of_if, type_of_try from './case'
@@ -73,6 +74,8 @@ compute_type := (body: Body, expression: Expression, expected: Type?): Type ->
   literal_kind := literal_hint(expression, expected)
   # A string literal of one character is a byte where a Byte is expected, a Char where a Char is.
   wants_character := literal_kind != nil and is_one_of_kinds(literal_kind, ['Byte', 'Char'])
+  # A Binary literal of one byte is a byte where a Byte is expected.
+  wants_byte := literal_kind != nil and is_kind(literal_kind, 'Byte')
   # An integer literal is an Int unless another integer type is expected.
   wants_integer :=
     literal_kind != nil and is_integer(literal_kind) and not is_kind(literal_kind, 'Int')
@@ -83,6 +86,8 @@ compute_type := (body: Body, expression: Expression, expected: Type?): Type ->
       return integer_literal(program, expression, literal_kind!) if wants_character
       type_of_literal_member(body, expression, expected) ? string_type
     when Interpolation
+      byte_literal := wants_byte and binary_literal_bytes(expression) != nil
+      return integer_literal(program, expression, literal_kind!) if byte_literal
       for part in expression.parts
         check_interpolated body, part, expression.binary if part is Call
       expression.binary then binary_type else string_type
