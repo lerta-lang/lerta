@@ -19,9 +19,6 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 
 ## Generics
 
-- An instance of a generic function or method is **no longer checked**, its body being checked at its definition already (see [generic functions](../reference/functions.md#generic-functions)).
-  - An instance's facts are the generic's with the type arguments put in and the bounds' members resolved by its witnesses (see [the reference](../reference/functions.md#generic-functions)), which codegen generates as it does now. A default is still checked for the instance of a call that leaves it out, and a type that the body writes is still checked to be valid for the type arguments, as `Set<T>` for a `T` without hash. Named arguments for a parameter of a type parameter's type, which only an instance tells to be a struct, need a way of their own.
-  - It is for one check of each body, and `lerta fmt` and the editor inside generic bodies.
 - Generic function literals outside the top level.
 
 ## Equality
@@ -30,7 +27,7 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 
 ## Open questions
 
-- With generic bodies checked at definition ([generics](#generics)): whether an optional type argument stays allowed, which a type that the body writes may not take, as a `Set<T>`'s key; and whether a `Numeric` bound, under which a number literal is a `T`, is worth a new implicit conversion. It would also settle `sum` of [Iterables](../reference/types.md#iter), whose default `zero` of `0` is an error for a `String[]` now, `sum()` failing to compile where `sum('')` is needed.
+- With generic bodies checked at definition (see [generic functions](../reference/functions.md#generic-functions)): whether an optional type argument stays allowed, which a type that the body writes may not take, as a `Set<T>`'s key; and whether a `Numeric` bound, under which a number literal is a `T`, is worth a new implicit conversion. It would also settle `sum` of [Iterables](../reference/types.md#iter), whose default `zero` of `0` is an error for a `String[]` now, `sum()` failing to compile where `sum('')` is needed.
 - Whether an extend should be in effect beyond the modules that import its module directly.
 - Whether a class or struct may name several interfaces it satisfies (`struct S: A, B`), and what it does when two give a field of the same name.
 - Whether an interface may declare a writable member (`var count: Int`, satisfied only by a class's `var` field). Its members are read-only for now (see [the reference](../reference/objects.md#interfaces) for why); reconsider if that proves limiting.
