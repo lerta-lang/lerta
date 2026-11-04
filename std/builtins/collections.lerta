@@ -25,21 +25,38 @@ extend<T> T[]
   # items keeping their order.
   # A default rather than a `sorted` of an extend of Comparable items, as two extends cannot give
   # a method of one name for different bounds.
-  # A merge sort: runs of `width` items, sorted, are merged in pairs, doubling it.
   sorted := (compare: (T, T) -> Ordering = (a, b) -> a.compare(b)): T[] ->
-    var runs = [item for item in @]
+    copy := [item for item in @]
+    copy.sort compare
+    copy
+  # Orders the items in place, as `sorted` orders a copy.
+  # A merge sort: runs of `width` items, sorted, are merged in pairs, doubling it, from one array
+  # into the other, so that the copy is the only array it makes.
+  sort := (compare: (T, T) -> Ordering = (a, b) -> a.compare(b)) ->
+    count := @length
+    return if count < 2
+    var runs = @
+    var merged = [item for item in @]
     var width = 1
-    while width < runs.length
-      merged: T[]
-      var start = 0
-      while start < runs.length
-        middle := min(start + width, runs.length)
-        end := min(middle + width, runs.length)
-        merge runs, start, middle, end, compare, merged
-        start = end
-      runs = merged
-      width *= 2
-    runs
+    var in_copy = false
+    # The copy back is in a finally, so that a compare that throws while a merge writes into the
+    # array leaves it the items of the pass before, rather than some of them twice.
+    try
+      while width < count
+        var start = 0
+        while start < count
+          middle := min(start + width, count)
+          end := min(middle + width, count)
+          merge runs, start, middle, end, compare, merged
+          start = end
+        done := merged
+        merged = runs
+        runs = done
+        in_copy = not in_copy
+        width *= 2
+    finally
+      if in_copy
+        @[i] = runs[i] for i in 0...count
   # Pushes the items of another array, one by one; those of the array itself, if it is that, once.
   append := (items: T[]) ->
     count := items.length
@@ -51,6 +68,8 @@ extend<T> T[]
     @pop() while @length > length
   # The items in the order of their keys, as `sorted` orders them.
   sorted_by := <K: Comparable>(key: (T) -> K): T[] -> @sorted((a, b) -> key(a).compare(key(b)))
+  # Orders the items in place by their keys, as `sorted_by` orders a copy.
+  sort_by := <K: Comparable>(key: (T) -> K) -> @sort((a, b) -> key(a).compare(key(b)))
 
 # The methods that find items by their `==`.
 extend<T: Equatable> T[]
@@ -166,19 +185,19 @@ extend<T> Set<T>
   # Whether the other has every item of this set.
   is_subset := (other: Set<T>): Bool -> @iter().all(other.contains)
 
-# Pushes the items of runs[start...middle] and runs[middle...end], each sorted by `compare`, onto
-# `merged` in order, the left item first when equal, keeping the order of equal items.
+# Writes the items of runs[start...middle] and runs[middle...end], each sorted by `compare`, to
+# merged[start...end] in order, the left item first when equal, keeping the order of equal items.
 merge := <T>(
   runs: T[], start: Int, middle: Int, end: Int, compare: (T, T) -> Ordering, merged: T[]
 ) ->
   var left = start
   var right = middle
-  while left < middle or right < end
+  for at in start...end
     if right == end or (left < middle and compare(runs[left], runs[right]) != GREATER)
-      merged.push runs[left]
+      merged[at] = runs[left]
       left += 1
     else
-      merged.push runs[right]
+      merged[at] = runs[right]
       right += 1
 
 # The item whose key compares with every other key as `order` or equal, the first of such ones, or

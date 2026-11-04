@@ -56,7 +56,7 @@ The methods of the builtin types, by type (see [types](types.md) for what each d
 | `Bool` | `equals`, `hash`, `to_string`, `to_literal` |
 | `String` | `equals`, `hash`, `add`, `to_string`, `to_literal`, `iter`, `binary`, `parse_int`, `parse_float`, `split`, `starts_with`, `ends_with`, `is_empty`, `without_prefix`, `without_suffix`, `contains`, `is_digits`, `split_once`, `replace`, `trim`, `repeat`, `pad_start`, `pad_end`, `to_upper`, `to_lower`, `compare` |
 | `Binary` | `equals`, `hash`, `length`, `is_empty`, `get`, `first`, `last`, `starts_with`, `ends_with`, `iter`, `occurs_at`, `index_of`, `text` |
-| `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)) and `to_literal` of [Literal](#literal) items, `iter`, `contains`, `index_of`, `remove`, `is_empty`, `first`, `last`, `get`, `sorted`, `sorted_by`, `append`, `reversed`, `truncate`, `join` of a `String[]` or a `Binary[]` and `to_binary` of a `Byte[]` |
+| `T[]` | `equals` and `hash` (see [Equatable and Hashable](#equatable-comparable-and-hashable)), `length`, `push`, `pop`, `to_string` (see [Stringable](#stringable)) and `to_literal` of [Literal](#literal) items, `iter`, `contains`, `index_of`, `remove`, `is_empty`, `first`, `last`, `get`, `sorted`, `sorted_by`, `sort`, `sort_by`, `append`, `reversed`, `truncate`, `join` of a `String[]` or a `Binary[]` and `to_binary` of a `Byte[]` |
 | `Map<K, V>` | `length`, `is_empty`, `contains`, `remove`, `keys`, `values`, `entries` |
 | `Set<T>` | `length`, `is_empty`, `contains`, `add`, `remove`, `iter`, `bit_or`, `bit_and`, `sub`, `bit_xor`, `is_subset` |
 | `Iter<T>` | `has_next`, `next`, `iter` |
