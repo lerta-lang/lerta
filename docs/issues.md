@@ -2,20 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## An array literal does not take its item type from an optional array expected
-
-Severity: Low.
-
-`type_of_array` (compiler/checker/collection.lerta) takes the item type only from an expected `ArrayType`, not from an `OptionalType` of one, so
-
-```
-a: Byte[]? = [1, 2]
-```
-
-reports `1:14: expected Byte[]?, got Int[]`, where `a: Byte[] = [1, 2]` is taken.
-
-Fix: take the expected type of the array from inside an optional, as `inner_of_expected` does for other literals.
-
 ## `in` of an optional item and array literals fails
 
 Severity: Low.
