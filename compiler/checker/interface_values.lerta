@@ -14,7 +14,7 @@ import Body, Shared from './shared'
 import module_resolver from './type_names'
 import
   format_type, inner_of, InterfaceType, is_one_of_kinds, is_reference_type, IterType, Type,
-  UnionType
+  TypeParameterType, UnionType
 from '../types'
 
 # How the type gives a member of the interface: by a method, with the instance of a generic one, or
@@ -74,8 +74,11 @@ converts_to_iter := (body: Body, expression: Expression, type: Type, expected: T
   true
 
 # Records the plan of the itab of the value converted to the interface type, which its type must
-# satisfy.
+# satisfy. Of a type parameter standing for itself, whose instances tell whether it is a reference,
+# and which no codegen reads, there is no itab.
 record_itab := (body: Body, expression: Expression, type: Type, target: InterfaceType) ->
+  if type is TypeParameterType and type.standing
+    return reject_unsatisfied(body, type, target, expression.position)
   body.facts.itabs[expression] = itab_of(body, expression.position, type, target)
 
 itab_of := (body: Body, at: Position, type: Type, target: InterfaceType) ->

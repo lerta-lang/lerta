@@ -10,18 +10,20 @@ import common_field_problem from './fields'
 import
   interface_members, interface_of, InterfaceMember, members_for, SELF, std_interface
 from './interfaces'
-import find_member, member_type_by_name, record_member, union_method_problem from './member'
+import
+  compares_by_bounds, find_member, member_type_by_name, record_member, union_method_problem
+from './member'
 import is_jsonable_bound, reject_unjsonable from './json'
 import find_method from './methods'
 import Body from './shared'
-import has_type_parameters, infer, substitute from './type_patterns'
+import infer, substitute, type_parameter_names from './type_patterns'
 import
   binary_type, format_type, InterfaceType, is_kind, string_type, Type, UnionType
 from '../types'
 
 # Rejects a type that does not satisfy the interface type.
 export reject_unsatisfied := (body: Body, type: Type, bound: InterfaceType, at: Position) ->
-  return reject_unjsonable(body.program, type, at) if is_jsonable_bound(bound)
+  return reject_unjsonable(body, type, at) if is_jsonable_bound(body.program, bound)
   for member in members_for(body.program, bound, type)
     satisfying_member body, type, bound, member, Identifier(position: at, name: member.name), nil
 
@@ -54,6 +56,8 @@ unsatisfied_reason := (
   expected := format_type(member.type)
   case
     when found then "its #{member.name} is of type #{format_type(found)}, not #{expected}"
+    when name.name == 'equals' and not compares_by_bounds(body, type, name.position)
+      "it has no #{member.name} of type #{expected}"
     # Only a generic method has no type without a call.
     when find_method(body.program, type, name.name, body.extensions)
       "its #{member.name} has type parameters of its own"
@@ -105,8 +109,8 @@ satisfied_bindings := (body: Body, type: Type, pattern: InterfaceType, at: Posit
   bindings: Map<String, Type>
   bind := (name: String, bound: Type) -> bindings[name] = bound unless name in bindings
   infer_through_members body, pattern, type, at, bind
+  return nil unless type_parameter_names(pattern).all((name) -> name in bindings)
   bound := substitute(pattern, bindings)
-  return nil if has_type_parameters(bound)
   satisfies_member := (member: InterfaceMember) ->
     name := Identifier(position: at, name: member.name)
     unsatisfied_reason(body, type, member, name, member_type_by_name(body, type, name)) == nil

@@ -2,13 +2,14 @@
 import all_but_last from '../arrays'
 import
   ArrayLiteral, Assignment, BinaryOperation, Coalesce, Expression, Identifier, is_equality_operator,
-  is_nil_test, is_order_operator, method_call, NilLiteral, Range, StringLiteral, UnaryOperation
+  is_nil_test, is_order_operator, method_call, NilLiteral, Position, Range, StringLiteral,
+  UnaryOperation
 from '../ast'
 import fail from './diagnostics'
-import compares_by_contents, is_equatable, own_equality from './equality'
+import compares_by_contents, own_equality from './equality'
 import may_name_member from './enums'
 import expect_condition, expect_optional, expect_type, require_type, type_of from './expression'
-import member_type_by_name from './member'
+import compares_by_bounds, has_method, member_type_by_name from './member'
 import holds_float_literal, is_contextual from './literals'
 import range_part from './loop'
 import where_right_operand from './narrowing'
@@ -16,7 +17,7 @@ import Body from './shared'
 import
   ArrayType, bool_type, FLOAT_KINDS, format_type, FunctionType, inner_of, inner_of_expected,
   INTEGER_KINDS, is_identity_type, is_kind, is_one_of_kinds, members_of, NUMBER_KINDS, ObjectType,
-  OptionalType, SIGNED_INTEGER_KINDS, string_type, Type, TypeKind
+  OptionalType, SIGNED_INTEGER_KINDS, string_type, Type, TypeKind, TypeParameterType
 from '../types'
 
 EQUALITY_KINDS: TypeKind[] = [NUMBER_KINDS..., 'Char', 'Bool', 'String', 'Binary', ENUM]
@@ -43,7 +44,7 @@ export operator_of_method := (name: String) -> operators_by_method[name]
 # The result of the call of the method of the name on the object, of a type that the operator,
 # written as `written`, does not apply to otherwise, with the arguments; a call recorded in the
 # facts, which codegen generates instead of the operation (see operator_calls). Nil if the type has
-# no such member, which is an error for a class or struct.
+# no such member, which is an error for a class or struct, or a type parameter standing for itself.
 export type_of_operator_call := (
   body: Body, operation: BinaryOperation | UnaryOperation | Assignment, written: String,
   object: Expression, object_type: Type, name: String, args: Expression[]
@@ -51,7 +52,7 @@ export type_of_operator_call := (
   at := operation.position
   method_name := Identifier(name, position: at)
   if member_type_by_name(body, object_type, method_name) == nil
-    return nil unless object_type is ObjectType
+    return nil if not (object_type is ObjectType or object_type is TypeParameterType)
     message := "#{format_type(object_type)} has no #{name}, by which #{written} applies"
     fail body.program, object.position, message
   call := method_call(object, name, args, at)
@@ -199,7 +200,7 @@ expected_container := (body: Body, binary: BinaryOperation) ->
   return nil unless right.elements.all((item) -> takes_context(body, item))
   item := inner_of(type_of(body, left))
   # One that does not compare is typed as before, so that the error is not reported in contains.
-  return nil unless is_equatable(body.program, item, nil)
+  return nil unless compares_by_bounds(body, item, binary.position)
   ArrayType item
 
 # The call of `to_string()` of a Char that a String's contains takes, as `+` appends one: nil for
@@ -237,9 +238,10 @@ type_of_operands := (
   is_order := is_order_operator(operator)
   is_allowed :=
     case
-      when by_contents then is_equatable(program, inner, first.position)
+      when by_contents then compares_by_bounds(body, inner, first.position)
       # `<` and the like of a class or struct compare by its compare.
       when is_order and own_equality(program, inner) == 'compare' then true
+      when inner is TypeParameterType then bound_compares(body, inner, is_order, first.position)
       else is_one_of_kinds(inner, allowed_kinds)
   reject_operand body, operator, first, type, reject unless is_allowed
   return type_of_equality_operand(body, first, second, type) if is_equality
@@ -283,12 +285,18 @@ reject_operand := (
         program
         operand.position
         "#{operator} takes no optional values, got #{format_type(type)}"
-    if type is ObjectType
+    if type is ObjectType or type is TypeParameterType
       fail
         program
         operand.position
         "#{format_type(type)} has no compare, by which #{operator} orders"
   fail program, operand.position, reject(type)
+
+# Whether the bound of a type parameter standing for itself gives the method that the operator
+# compares by: compare for `<` and the like; equals or compare for `==`, as a class's own does.
+bound_compares := (body: Body, type: TypeParameterType, is_order: Bool, at: Position) ->
+  has := (name: String) -> has_method(body, type, Identifier(name, position: at))
+  has('compare') or (not is_order and has('equals'))
 
 # `<` and the like of two Strings test the Ordering of the left one's compare, by the call of it,
 # which the facts record for codegen to generate in place of the operation (see order_calls).

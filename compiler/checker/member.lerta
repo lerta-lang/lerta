@@ -1,10 +1,11 @@
 # Types the members of values: method calls, `x.name(...)`, and properties, `x.name`; and finds
 # the member of a name that an interface reads.
-import Call, FunctionLiteral, Identifier, Member, This from '../ast'
+import Call, FunctionLiteral, Identifier, Member, Position, This from '../ast'
 import check_arguments from './arguments'
 import builtin_method, BuiltinMethod from './builtins'
 import COMPLETION_NAME, probe_member from './completion_probe'
 import warn_if_kept from './cycles'
+import is_equatable from './equality'
 import fail from './diagnostics'
 import type_of_bound_method from './function_references'
 import reject_type_arguments, set_type, type_of from './expression'
@@ -29,7 +30,8 @@ import find_interface_extension from './satisfaction'
 import Body from './shared'
 import record_taken_items from './taken_items'
 import
-  ArrayType, format_member, format_type, FunctionType, InterfaceType, OptionalType, Type, UnionType
+  ArrayType, bool_type, format_member, format_type, FunctionType, InterfaceType, OptionalType, Type,
+  TypeParameterType, UnionType
 from '../types'
 
 # An array's `pop` takes out an item (see are_items_taken).
@@ -92,7 +94,31 @@ find := (body: Body, receiver: Type, name: Identifier): MethodSource? ->
   if receiver is UnionType
     return found if found := union_method(body, receiver, name)
     return builtin_method(body.program, receiver, name.name)
+  return bound_method(body, receiver, name.name) if receiver is TypeParameterType
+  return nil if name.name == 'equals' and not compares_by_bounds(body, receiver, name.position)
   find_method body.program, receiver, name.name, body.extensions
+
+# Whether `==` compares values of the type, which may hold type parameters standing for
+# themselves, as their bounds tell.
+export compares_by_bounds := (body: Body, type: Type, at: Position) ->
+  compares := (parameter: TypeParameterType) ->
+    return false unless parameter.standing
+    has := (name: String) -> has_method(body, parameter, Identifier(name, position: at))
+    has('equals') or has('compare')
+  is_equatable body.program, type, at, compares
+
+# The method that the bound of a type parameter standing for itself gives it, called as an
+# interface value's is; or the builtin equals, which a compare gives, as a class's own does.
+bound_method := (body: Body, type: TypeParameterType, name: String): MethodSource? ->
+  if found := bound_member(body, type, name)
+    member_type := found.member.type
+    return member_type is FunctionType then InterfaceMethod(type: member_type, index: found.index)
+  return nil if not (name == 'equals' and bound_member(body, type, 'compare'))
+  BuiltinMethod member: EQUALS, type: FunctionType(params: [type], result: bool_type)
+
+bound_member := (body: Body, type: TypeParameterType, name: String) ->
+  bound := body.resolver.bounds[type.name] ? return nil
+  interface_member body.program, bound, name, type
 
 # The method of the name that every member of the union has, of one type, or nil.
 union_method := (body: Body, union: UnionType, name: Identifier): UnionMethod? ->
@@ -197,10 +223,15 @@ export member_type_by_name := (
   call: Call? = nil
 ): Type? -> find_member(body, type, name, call)?.type
 
-# The member of the interface type of the name that is no method, which is read through the itab.
+# The member of the interface type of the name that is no method, which is read through the itab,
+# or that the bound of a type parameter gives it.
 interface_property := (body: Body, type: Type, name: String) ->
-  return nil unless type is InterfaceType
-  found := interface_member(body.program, type, name) ? return nil
+  found :=
+    case type
+      when InterfaceType then interface_member(body.program, type, name)
+      when TypeParameterType then bound_member(body, type, name)
+      else nil
+  return nil if found == nil
   member_type := found.member.type
   return nil if member_type is FunctionType
   FoundMember target: InterfaceProperty(found.index), type: member_type

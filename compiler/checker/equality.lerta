@@ -5,7 +5,7 @@ import field_type, info_of from './object_types'
 import ProgramWide from './shared'
 import
   ArrayType, EnumType, is_identity_type, is_number, is_one_of_kinds, ObjectType, OptionalType,
-  RecordType, SimpleType, TupleType, Type, TypeKind, UnionType
+  RecordType, SimpleType, TupleType, Type, TypeKind, TypeParameterType, UnionType
 from '../types'
 
 export enum OwnEquality
@@ -36,22 +36,32 @@ export compares_by_contents := (program: ProgramWide, type: Type): Bool ->
     else false
 
 # Whether `==` compares values of the type. `at` is where a struct's field types are needed, or nil
-# for where each field is declared.
-export is_equatable := (program: ProgramWide, type: Type, at: Position?) ->
-  equatable program, type, at, false, Set()
+# for where each field is declared. `compares` tells it of a type parameter standing for itself.
+export is_equatable := (
+  program: ProgramWide
+  type: Type
+  at: Position?
+  compares: (TypeParameterType) -> Bool = standing
+) -> equatable(program, type, at, false, Set(), compares)
 
 # Whether values of the type can be map keys: they compare, and a type that compares by a method
 # of its own hashes by one too, so that equal values have the same hash.
 export is_hashable := (program: ProgramWide, type: Type, at: Position?) ->
-  equatable program, type, at, true, Set()
+  equatable program, type, at, true, Set(), standing
+
+# Where a generic body is checked at its definition, what its types hold is checked for each
+# instance, unless said otherwise.
+standing := (type: TypeParameterType) -> type.standing
 
 # The simple types that compare by value but for the numbers.
 VALUE_KINDS: TypeKind[] = ['Char', 'Bool', 'String', 'Binary']
 
 equatable := (
-  program: ProgramWide, type: Type, at: Position?, hashes: Bool, seen: Set<String>
+  program: ProgramWide, type: Type, at: Position?, hashes: Bool, seen: Set<String>,
+  compares: (TypeParameterType) -> Bool
 ): Bool ->
-  all := (parts: Type[]) -> parts.all((part) -> equatable(program, part, at, hashes, seen))
+  all := (parts: Type[]) ->
+    parts.all (part) -> equatable(program, part, at, hashes, seen, compares)
   case type
     when SimpleType then is_number(type) or is_one_of_kinds(type, VALUE_KINDS)
     when EnumType then true
@@ -67,4 +77,5 @@ equatable := (
     when ArrayType then all([type.element])
     when OptionalType then all([type.inner])
     when UnionType then all(type.members)
+    when TypeParameterType then compares(type)
     else false

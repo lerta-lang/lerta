@@ -13,9 +13,10 @@ import has_declared_type, ProgramWide, record_type_name, Shared from './shared'
 import reject_invalid_instance from './type_validity'
 import
   ArrayType, binary_type, bool_type, char_type, float32_type, float_type, format_type, FunctionType,
-  inner_of, INTEGER_KINDS, is_kind, is_one_of_kinds, is_union_member, IterType, MapType, never_type,
-  ObjectType, optional_type, OptionalType, PromiseType, record_type, RecordField, set_of,
-  SimpleType, string_type, TupleType, Type, TypeKind, union_of, UnionType, void_type
+  inner_of, INTEGER_KINDS, InterfaceType, is_kind, is_one_of_kinds, is_union_member, IterType,
+  MapType, never_type, ObjectType, optional_type, OptionalType, PromiseType, record_type,
+  RecordField, set_of, SimpleType, string_type, TupleType, Type, TypeKind, union_of, UnionType,
+  void_type
 from '../types'
 
 # Names of the types that the compiler declares, which the module's names shadow, but which a
@@ -69,8 +70,12 @@ export class AliasEntry
 export struct Resolver
   module_index: Int
   type_parameters: Map<String, Type>
+  # The bounds of the type parameters that stand for themselves, as where a generic body is checked
+  # at its definition, whose members are those of their bounds alone.
+  bounds: Map<String, InterfaceType>
 
-export module_resolver := (module_index: Int) -> Resolver(module_index, type_parameters: Map())
+export module_resolver := (module_index: Int) ->
+  Resolver module_index, type_parameters: Map(), bounds: Map()
 
 export with_type_parameters := (resolver: Resolver, type_parameters: Map<String, Type>) ->
   Resolver(resolver..., type_parameters)
@@ -276,7 +281,7 @@ export instantiate_object := (
     fail program, position, "'#{generic.name}' takes #{count} type argument(s), got #{args.length}"
   resolved := [resolve(program, resolver, arg) for arg in args]
   type := ObjectType(generic..., args: resolved)
-  reject_invalid_instance program, resolver.module_index, type, position
+  reject_invalid_instance program, resolver, type, position
   type
 
 # A type parameter's type argument is checked where it is given (see generic_call).

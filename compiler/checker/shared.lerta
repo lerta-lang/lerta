@@ -14,6 +14,7 @@ import GenericFunction, Instance from './generics'
 import ExportRef, Imports from './imports'
 import EnumValue, MemberTarget from './member_targets'
 import Reference from './references'
+import has_standing from './type_patterns'
 import Itab from './interface_values'
 import InterfaceInfo from './interfaces'
 import Module from '../loader'
@@ -200,6 +201,9 @@ export struct EarlyInstance
   type: ObjectType | InterfaceType
   at: Position
   module_index: Int
+  # The bounds of the type parameters standing for themselves where it is written, by which its
+  # type arguments satisfy those of a generic class or struct (see check_early_bounds).
+  bounds: Map<String, InterfaceType>
 
 # A call whose instance's written types or defaults are being checked: an error in them is the
 # call's (see resolve_annotation and check_defaults), in its module, of `path` (nil for the entry
@@ -342,7 +346,9 @@ export has_declared_type := (shared: Shared, name: String) ->
 export declared_symbol := (shared: Shared, name: String) ->
   "#{module_symbol_name(shared.program, shared.index)}.#{name}"
 
-# Records the type that the type name of the module's code names (see Shared.type_names).
+# Records the type that the type name of the module's code names (see Shared.type_names), but not
+# one that the check of a generic body at its definition gives, which no instance has.
 export record_type_name := (shared: Shared, type_name: NamedType, type: Type) ->
+  return if has_standing(type)
   types := shared.type_names[type_name, default: []]
   types.push type unless type in types

@@ -8,7 +8,8 @@ import members_for from './interfaces'
 import reject_unsatisfied_object_bounds from './object_bounds'
 import info_of from './object_types'
 import ProgramWide from './shared'
-import has_type_parameters, parts_of from './type_patterns'
+import Resolver from './type_names'
+import is_pattern, parts_of from './type_patterns'
 import
   ArrayType, InterfaceType, is_set, IterType, MapType, ObjectType, Type, type_key
 from '../types'
@@ -29,15 +30,16 @@ reject_invalid_map := (program: ProgramWide, type: MapType, at: Position) ->
 
 # Checks the field types of an instance of a generic class or struct, or the member types of one of
 # a generic interface, where the module gives it, once they are known, and the bounds of the
-# former's type arguments.
+# former's type arguments, by the bounds of the type parameters that the resolver has.
 export reject_invalid_instance := (
-  program: ProgramWide, module_index: Int, type: ObjectType | InterfaceType, at: Position
+  program: ProgramWide, resolver: Resolver, type: ObjectType | InterfaceType, at: Position
 ) ->
   if program.members_known
     reject_invalid_instance_types program, type, at
   else
-    program.early_instances.push { type, at, module_index }
-  reject_unsatisfied_object_bounds program, module_index, type, at if type is ObjectType
+    { module_index, bounds } := resolver
+    program.early_instances.push { type, at, module_index, bounds }
+  reject_unsatisfied_object_bounds program, resolver, type, at if type is ObjectType
 
 # Checks the instances given before the fields and members were known, each as a part of the
 # program.
@@ -53,7 +55,7 @@ export check_early_instances := (program: ProgramWide) ->
 reject_invalid_instance_types := (
   program: ProgramWide, type: ObjectType | InterfaceType, at: Position
 ) ->
-  return if type.args.is_empty() or has_type_parameters(type)
+  return if type.args.is_empty() or is_pattern(type)
   case type
     when ObjectType
       info := info_of(program, type)

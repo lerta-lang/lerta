@@ -17,16 +17,6 @@ extend<T: Literal> T[]
 extend<T> T[]
   # The items, read as the Iter is.
   iter := (): Iter<T> -> (x for x in @)
-  # A loop rather than `@any`, whose result LLVM computes after the loop, at an extra move per item.
-  contains := (item: T): Bool ->
-    for each in @
-      return true if each == item
-    false
-  # The index of the first item equal to `item`.
-  index_of := (item: T): Int? ->
-    for each, i in @
-      return i if each == item
-    nil
   is_empty := -> @length == 0
   first := (): T? -> @get(0)
   last := (): T? -> @get(@length - 1)
@@ -55,23 +45,32 @@ extend<T> T[]
     count := items.length
     @push items[i] for i in 0...count
   reversed := (): T[] -> [@[@length - 1 - i] for i in 0...@length]
-  # Removes the first item equal to `item`, if there is one, moving those after it down, and tells
-  # whether it did.
-  # A comparison of its own rather than index_of, so that items that == cannot compare are an
-  # error of remove.
-  remove := (item: T): Bool ->
-    for each, index in @
-      continue if each != item
-      @[i] = @[i + 1] for i in index...(@length - 1)
-      @pop()
-      return true
-    false
   # Removes the items after the first `length`, if it has more.
   truncate := (length: Int) ->
     throw ValueError(message: 'truncate to a negative length') if length < 0
     @pop() while @length > length
   # The items in the order of their keys, as `sorted` orders them.
   sorted_by := <K: Comparable>(key: (T) -> K): T[] -> @sorted((a, b) -> key(a).compare(key(b)))
+
+# The methods that find items by their `==`.
+extend<T: Equatable> T[]
+  # A loop rather than `@any`, whose result LLVM computes after the loop, at an extra move per item.
+  contains := (item: T): Bool ->
+    for each in @
+      return true if each == item
+    false
+  # The index of the first item equal to `item`.
+  index_of := (item: T): Int? ->
+    for each, i in @
+      return i if each == item
+    nil
+  # Removes the first item equal to `item`, if there is one, moving those after it down, and tells
+  # whether it did.
+  remove := (item: T): Bool ->
+    index := @index_of(item) ? return false
+    @[i] = @[i + 1] for i in index...(@length - 1)
+    @pop()
+    true
 
 extend<T> Iter<T>
   # Itself, so that an Iter is Iterable.

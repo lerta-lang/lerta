@@ -6,11 +6,13 @@ import
   Parameter, RecordLiteral
 from '../ast'
 import fail from './diagnostics'
-import expect_type, require_type from './expression'
+import expect_type, require_type, type_of from './expression'
 import is_struct_type, required_params from './functions'
 import struct_construction, type_of_expected_construction from './object'
 import Body from './shared'
-import format_type, FunctionType, inner_of, nil_type, ObjectType, RecordType, Type from '../types'
+import
+  format_type, FunctionType, inner_of, nil_type, ObjectType, RecordType, Type, TypeParameterType
+from '../types'
 
 # The result of a call of a function of the type, once its arguments are checked. `declaration`,
 # the function's literal if the call knows it, tells the parameters that may be left out.
@@ -23,6 +25,10 @@ export check_arguments := (
   params := callee_type.params
   packed := packed_arguments(body, call, declaration)
   args := packed ? call.args
+  if gathers_per_instance(call, args, params)
+    expect_type body, arg, params[i] for arg, i in args
+    type_of body, arg.value for arg in call.named_args
+    return callee_type.result
   leaves_out_struct := args.length == params.length - 1 and is_struct_type(params.last())
   gathers := not call.named_args.is_empty() or leaves_out_struct
   gathered := gathers then gathered_argument(body, call, params.last())
@@ -87,6 +93,13 @@ pack_from := (body: Body, call: Call, params: Parameter[], place: Int) ->
   elements := call.args[place..]
   position := elements.first()?.position ? call.position
   [fixed..., ArrayLiteral(elements, position)]
+
+# Whether the call gathers named arguments, or none, into a last parameter of a type parameter
+# standing for itself, which only an instance tells to be a struct, an anonymous one or neither.
+gathers_per_instance := (call: Call, args: Expression[], params: Type[]) ->
+  last := inner_of(params.last() ? nil_type)
+  return false if not (last is TypeParameterType and last.standing)
+  not call.named_args.is_empty() or args.length == params.length - 1
 
 # Named arguments, none where a last parameter of a struct type is left out, are gathered into an
 # argument of that parameter: an anonymous struct, or a construction of the struct, so that codegen,

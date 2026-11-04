@@ -147,7 +147,7 @@ export value_interface_type := (
     case
       when info.names_self then "its members name #{SELF}, which its values could not tell"
       # std:json writes and reads a value by the type that the code gives it where it is called.
-      when is_jsonable_bound(info.type) then 'std:json converts a value by its type'
+      when is_jsonable_bound(program, info.type) then 'std:json converts a value by its type'
       else nil
   if reason
     fail program, type_name.position, "'#{info.name}' can only bound a type parameter: #{reason}"
@@ -182,7 +182,7 @@ instantiate := (
   generic := info.type
   resolved := [resolve(program, resolver, arg) for arg in args]
   type := InterfaceType(generic..., args: resolved)
-  reject_invalid_instance program, resolver.module_index, type, position
+  reject_invalid_instance program, resolver, type, position
   type
 
 # Checks the type parameters and resolves the members of every interface of the module, so that
@@ -220,9 +220,14 @@ export members_for := (program: ProgramWide, type: InterfaceType, satisfying: Ty
   [substituted(member) for member in interface_members(program, info)]
 
 # The member of a value of the interface type by the name, and its place among the members, which
-# is its place in an itab.
-export interface_member := (program: ProgramWide, type: InterfaceType, name: String) ->
-  members := members_for(program, type, type)
+# is its place in an itab; or of the type that satisfies it, as a type parameter that it bounds.
+export interface_member := (
+  program: ProgramWide
+  type: InterfaceType
+  name: String
+  satisfying: Type = type
+) ->
+  members := members_for(program, type, satisfying)
   index := members.find_index((member) -> member.name == name) ? return nil
   IndexedMember index, member: members[index]
 

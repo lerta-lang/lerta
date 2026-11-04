@@ -18,7 +18,7 @@ import builtin_type, imported_type from './imports'
 import bound_interface, InterfaceMember, members_for from './interfaces'
 import declared_symbol, has_declared_type, NodeFacts, ProgramWide, Shared from './shared'
 import module_resolver, resolve, Resolver, with_type_parameters from './type_names'
-import has_type_parameters, placeholders, substitute, type_depth from './type_patterns'
+import has_standing, is_pattern, placeholders, substitute, type_depth from './type_patterns'
 import format_type, inner_of, InterfaceType, ObjectType, OptionalType, Type from '../types'
 
 export class FieldInfo
@@ -66,6 +66,11 @@ export class ObjectInfo
   var state: CheckState = UNCHECKED
   # Of a generic class or struct, whose type arguments make them.
   instances: ObjectInfo[] = []
+  # Of a generic class or struct: those of type arguments that stand for themselves, which bodies
+  # checked at their definitions read, and codegen never sees. The first, its definition, is of
+  # its own type parameters, whose initializers it checks once; the others' fields have the types
+  # that its fields have.
+  standing: ObjectInfo[] = []
   # Of an instance: whether its written field types are checked (see reject_invalid_type).
   var fields_checked = false
 
@@ -205,16 +210,41 @@ export object_type := (shared: Shared, name: String) ->
 export info_of := (program: ProgramWide, type: ObjectType) ->
   declared := program.infos[type.symbol]!
   # A pattern, as the receiver of `extend<T> Stack<T>`, stands for any instance.
-  return declared if type == declared.type or type.args.any(has_type_parameters)
+  return declared if type == declared.type or type.args.any(is_pattern)
   is_same := (instance: ObjectInfo) -> instance.type == type
+  if type.args.any(has_standing)
+    # The definition is the first view.
+    definition_of declared
+    return found if found := declared.standing.find(is_same)
+    view := make_instance(declared, type, Map())
+    declared.standing.push view
+    return view
   declared.instances.find(is_same) ? add_instance(declared, type)
 
+# The view of the generic class or struct with its type parameters standing for themselves, with
+# their bounds, where its initializers are checked at its definition.
+definition_of := (generic: ObjectInfo) ->
+  return found if found := generic.standing.first()
+  { type_params } := generic.declaration
+  standing := placeholders(type_params, true)
+  bounds: Map<String, InterfaceType>
+  for (param, bound) in type_params.zip(generic.bounds)
+    bounds[param.name.name] = substitute(bound, standing) as InterfaceType! if bound
+  args := [standing[param.name.name]! for param in type_params]
+  view := make_instance(generic, { generic.type..., args }, bounds)
+  generic.standing.push view
+  view
+
 add_instance := (generic: ObjectInfo, type: ObjectType) ->
+  info := make_instance(generic, type, Map())
+  generic.instances.push info
+  info
+
+make_instance := (generic: ObjectInfo, type: ObjectType, bounds: Map<String, InterfaceType>) ->
   { declaration, module_index, methods, generics, has_init, has_deinit } := generic
-  type_bindings: Map<String, Type>
-  type_params := declaration.type_params
-  type_bindings[param.name.name] = arg for (param, arg) in type_params.zip(type.args)
-  resolver := with_type_parameters(module_resolver(module_index), type_bindings)
+  type_bindings := bindings_of(generic, type)
+  with_arguments := with_type_parameters(module_resolver(module_index), type_bindings)
+  resolver: Resolver = { with_arguments..., bounds }
   info := ObjectInfo(declaration, type, module_index, resolver, generic, facts: NodeFacts())
   instance_field := (field: FieldInfo) ->
     field_type := field.type
@@ -226,12 +256,26 @@ add_instance := (generic: ObjectInfo, type: ObjectType) ->
   info.generics = generics
   info.has_init = has_init
   info.has_deinit = has_deinit
-  generic.instances.push info
   info
 
-# The field's type, checking the initializers first if it is given by one alone.
-export field_type := (program: ProgramWide, info: ObjectInfo, field: FieldInfo, at: Position) ->
+# The type arguments of the instance by the names of its generic's type parameters.
+bindings_of := (generic: ObjectInfo, type: ObjectType) ->
+  type_bindings: Map<String, Type>
+  type_params := generic.declaration.type_params
+  type_bindings[param.name.name] = arg for (param, arg) in type_params.zip(type.args)
+  type_bindings
+
+# The field's type, checking the initializers first if it is given by one alone; of a view other
+# than its generic's definition, the type that the definition's initializer gives.
+export field_type := (
+  program: ProgramWide, info: ObjectInfo, field: FieldInfo, at: Position
+): Type ->
   return type if type := field.type
+  if generic := info.generic
+    definition := generic.standing.first()
+    if definition and info in generic.standing and info != definition
+      own := definition.field_named(field.name.name)!
+      return substitute(field_type(program, definition, own, at), bindings_of(generic, info.type))
   abort_part() if info.state == FAILED
   if info.state == CHECKING
     fail program, at, "the type of '#{field.name.name}' is not known yet; write it"
@@ -259,6 +303,13 @@ export check_pending_objects := (shared: Shared) ->
   check_all_satisfy shared.program, pending
   not pending.is_empty()
 
+# Checks the initializers of the generic class or struct at its definition, once; returns how it
+# went.
+export check_definition_of := (program: ProgramWide, generic: ObjectInfo) ->
+  definition := definition_of(generic)
+  check_info program, definition
+  definition.state
+
 # Those with an error are left out, as their fields' types may be unknown. Each satisfies the
 # interface it names, and its equals, compare and hash are of their types.
 check_all_satisfy := (program: ProgramWide, infos: ObjectInfo[]) ->
@@ -269,8 +320,13 @@ check_all_satisfy := (program: ProgramWide, infos: ObjectInfo[]) ->
 
 # Checks the initializers of the fields with the declaring module's checker, setting the types
 # that they give. An instance gets the instances of its generic's init and deinit.
-check_info := (program: ProgramWide, info: ObjectInfo) ->
+check_info := (program: ProgramWide, info: ObjectInfo): void ->
   return if info.state != UNCHECKED
+  # As a generic function's, an instance of one whose definition has an error is not checked.
+  if generic := info.generic
+    if info not in generic.standing and check_definition_of(program, generic) == FAILED
+      info.state = FAILED
+      return
   info.state = CHECKING
   check := (): void ->
     reject_endless_instance program, info

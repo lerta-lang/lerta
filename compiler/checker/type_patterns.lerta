@@ -7,10 +7,12 @@ import
   type_key, TypeParameterType, union_type, UnionType
 from '../types'
 
-# The type parameters standing for themselves, for resolving the types written with them.
-export placeholders := (type_params: TypeParameter[]) ->
+# The type parameters as patterns, for resolving the types written with them; or, `standing`,
+# standing for themselves, as types that no pattern binds.
+export placeholders := (type_params: TypeParameter[], standing = false) ->
   types: Map<String, Type>
-  types[param.name.name] = TypeParameterType(param.name.name) for param in type_params
+  for param in type_params
+    types[param.name.name] = TypeParameterType(standing, name: param.name.name)
   types
 
 # The type with each type it is made of replaced by `replace` of it.
@@ -39,12 +41,25 @@ map_parts := (type: Type, replace: (Type) -> Type): Type ->
 
 # The type with the type parameters that `bindings` has replaced by their types.
 export substitute := (type: Type, bindings: Map<String, Type>): Type ->
-  return bindings[type.name] ? type if type is TypeParameterType
+  return bindings[type.name] ? type if type is TypeParameterType and not type.standing
   map_parts type, (part) -> substitute(part, bindings)
 
+# The type with the type parameters standing for themselves that `bindings` has replaced by their
+# types, as the type of a generic function from its definition, for the type arguments of a call.
+export substitute_standing := (type: Type, bindings: Map<String, Type>): Type ->
+  return bindings[type.name] ? type if type is TypeParameterType and type.standing
+  map_parts type, (part) -> substitute_standing(part, bindings)
+
 # Whether the type has type parameters, as `T[]` has, which make it a pattern of other types.
-export is_pattern := (type: Type): Bool ->
-  type is TypeParameterType or parts_of(type).any(is_pattern)
+export is_pattern := (type: Type): Bool -> is_variable(type) or parts_of(type).any(is_pattern)
+
+# Whether the type is a type parameter that a pattern binds, rather than one standing for itself.
+is_variable := (type: Type) -> type is TypeParameterType and not type.standing
+
+# Whether the type names a type parameter standing for itself.
+export has_standing := (type: Type): Bool ->
+  return type.standing if type is TypeParameterType
+  parts_of(type).any(has_standing)
 
 # The types that the type is made of, such as the items of an array.
 export parts_of := (type: Type) ->
@@ -76,7 +91,7 @@ export matches := (pattern: Type, type: Type) ->
 # Substituting keeps what a pattern is outside, except a type parameter's and a union's, whose
 # members may merge.
 has_same_outer_shape := (pattern: Type, type: Type) ->
-  return true if pattern is TypeParameterType or pattern is UnionType or type is UnionType
+  return true if is_variable(pattern) or pattern is UnionType or type is UnionType
   case pattern
     when ObjectType then type is ObjectType and type.symbol == pattern.symbol
     when InterfaceType then type is InterfaceType and type.symbol == pattern.symbol
@@ -85,7 +100,7 @@ has_same_outer_shape := (pattern: Type, type: Type) ->
 # Whether some type matches both patterns, as Int[] matches T[] and Int[]. A type
 # parameter stands for any type on either side, even where it is repeated, as in Map<T, T>.
 export overlaps := (a: Type, b: Type): Bool ->
-  return true if a is TypeParameterType or b is TypeParameterType
+  return true if is_variable(a) or is_variable(b)
   # A set overlaps only a set, as only a set matches one (see infer).
   return false if is_set(a) != is_set(b)
   a_parts := parts_of(a)
@@ -98,8 +113,11 @@ export overlaps := (a: Type, b: Type): Bool ->
 # The type without the types it is made of: _[] for any array.
 shape_key := (type: Type) -> type_key(map_parts(type, (_) -> TypeParameterType('_')))
 
-export has_type_parameters := (type: Type): Bool ->
-  type is TypeParameterType or parts_of(type).any(has_type_parameters)
+export type_parameter_names := (type: Type): String[] ->
+  return [type.name] if type is TypeParameterType and not type.standing
+  names: String[]
+  names.append type_parameter_names(part) for part in parts_of(type)
+  names
 
 # Binds the type parameters in `pattern` to the types they have in `type`, where its shape
 # matches: `T[]` and an `Int[]` bind T to Int. A type parameter bound already is kept;
@@ -107,7 +125,7 @@ export has_type_parameters := (type: Type): Bool ->
 export infer := (pattern: Type, type: Type, bind: (String, Type) -> void): void ->
   match := (part: Type, type_part: Type?) -> infer(part, type_part, bind) if type_part
   case pattern
-    when TypeParameterType then bind(pattern.name, type)
+    when TypeParameterType then bind(pattern.name, type) unless pattern.standing
     when OptionalType then match(pattern.inner, inner_of(type))
     when ArrayType then match(pattern.element, type is ArrayType then type.element)
     when IterType then match(pattern.item, type is IterType then type.item)

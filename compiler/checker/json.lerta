@@ -13,13 +13,14 @@ import field_type, info_of from './object_types'
 import
   ArrayType, EnumType, format_type, InterfaceType, is_kind, is_number, is_one_of_kinds, MapType,
   NUMBER_KINDS, ObjectType, OptionalType, RecordType, TupleType, Type, type_key, TypeKind,
-  UnionType, void_type
+  TypeParameterType, UnionType, void_type
 from '../types'
 
 JSON_MODULE := 'std:json'
 
-export is_jsonable_bound := (bound: InterfaceType) ->
-  bound.module == JSON_MODULE and bound.name == 'Jsonable'
+export is_jsonable_bound := (program: ProgramWide, bound: InterfaceType) ->
+  is_declared_by := (shared: Shared) -> shared.name == bound.module and is_json_module(shared)
+  bound.name == 'Jsonable' and program.shared.any(is_declared_by)
 
 # Whether the interface of the name, declared in the module, is std:json's Jsonable.
 export is_jsonable_declaration := (shared: Shared, name: String) ->
@@ -32,8 +33,9 @@ is_json_module := (shared: Shared) ->
 # Rejects a type that has a part std:json does not convert, naming the part by its path, as
 # JsonError does in std:json: `$[]` is an item of an array, `$.*` a value of a map, and `$[0]` and
 # `$.name` an item of a tuple and a field.
-export reject_unjsonable := (program: ProgramWide, type: Type, at: Position) ->
-  finder := PartFinder(program, at)
+export reject_unjsonable := (body: Body, type: Type, at: Position) ->
+  { program } := body
+  finder := PartFinder(program, at, bounds: body.resolver.bounds)
   part := finder.unjsonable_part(type, '$') ? return
   where := part.path == '$' then 'it' else part.path
   reason := "#{where} #{part.problem}"
@@ -80,6 +82,8 @@ unconverted := (path: String, problem: String) ->
 class PartFinder
   program: ProgramWide
   at: Position
+  # Those of the type parameters that stand for themselves, which Jsonable may bound.
+  bounds: Map<String, InterfaceType>
   # The classes and structs whose parts are being looked through, which a part of them that is
   # of their own type does not look through again.
   visited: Set<String> = Set()
@@ -100,7 +104,12 @@ class PartFinder
         @unjsonable_part type.value, "#{path}.*"
       when type is ObjectType then @object_part(type, path)
       when type is UnionType then @union_part(type, path)
+      when type is TypeParameterType and @is_jsonable_parameter(type) then nil
       else unconverted(path, "is of type #{format_type(type)}")
+
+  is_jsonable_parameter := (type: TypeParameterType) ->
+    bound := @bounds[type.name]
+    type.standing and bound != nil and is_jsonable_bound(@program, bound)
 
   first_part := (parts: (Type, String)[]): Part? ->
     for (type, path) in parts
@@ -178,6 +187,6 @@ export type_of_json_call := (body: Body, call: Call, direction: JsonDirection) -
       when READ
         written := call.type_args.first() ? fail(program, call.position, 'read_json<T> needs T')
         resolve program, body.resolver, written
-  reject_unjsonable program, type, call.position
+  reject_unjsonable body, type, call.position
   record_reference body, callee, JsonConversion(direction, type)
   direction == WRITE then void_type else type

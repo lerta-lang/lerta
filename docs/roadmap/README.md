@@ -1,6 +1,6 @@
 # Roadmap
 
-This directory holds the planned design of what is not implemented yet, by area. The parts are in no order, but for [the dependencies](#dependencies) between areas. What is implemented is in [the reference](../reference/README.md).
+This directory holds the planned design of what is not implemented yet, by area. The parts are in no order; an order within one area is stated in its file. What is implemented is in [the reference](../reference/README.md).
 
 When a feature is implemented, its description moves to [the reference](../reference/README.md), or for the internal design to [the internals](../internals.md), and is removed from here.
 
@@ -11,14 +11,6 @@ When a feature is implemented, its description moves to [the reference](../refer
 | [objects.md](objects.md) | Classes and structs, interfaces, generics, equality |
 | [runtime.md](runtime.md) | Safety, errors and exceptions, memory management, concurrency, platforms |
 | [programs.md](programs.md) | Modules, FFI, the standard library, tools |
-
-## Dependencies
-
-Where one part needs another first, across areas:
-
-- Checking a generic body at definition ([objects](objects.md#generics)) needs a bound to allow every operator the body uses, as `x * 2` needs `Mul` (see [operators](../reference/builtins.md#operators)).
-
-An order within one area is stated in its file.
 
 ## Follow-ups
 
