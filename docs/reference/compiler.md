@@ -1,8 +1,30 @@
 # Compiler
 
-`lerta` is `bin/lerta`, which `make` builds (see the [README](../../README.md)); it carries the standard modules and the runtime in it, so it needs no other file of the repository. It is built with `-O`, without the memory checks (see [build](#build)). Arguments that do not fit a command's usage print the usage to stderr and exit with code 2. An argument that starts with `-` is taken as an option, but for the value of `-o` and `--target`, which is the next argument whatever it starts with; a path that starts with `-` is written as `./-name.lerta`.
+- `lerta` is `bin/lerta`, which `make` builds (see the [README](../../README.md)).
+- It carries the standard modules and the runtime in it, so it needs no other file of the repository.
+- It is built with `-O`, without the [memory checks](#memory-checks).
+
+## Arguments
+
+- Arguments that do not fit a command's usage print the usage to stderr and exit with code 2.
+- An argument that starts with `-` is taken as an option, but for the value of `-o` and `--target`, which is the next argument whatever it starts with.
+- A path that starts with `-` is written as `./-name.lerta`.
+- A `<source>`, in every command that takes one, is a file, or a standard module as `std:<name>`, such as `std:io`, read from those the compiler carries.
+  - An unknown one prints `unknown standard module 'std:<name>'` and exits with code 1.
+  - A source that is not a file prints `'<source>' is not a file` and exits with code 1.
+  - A file of `std/` given by its path is an ordinary module, which imports the carried `std:builtins` as any other does.
+  - `std/process.lerta` builds, while `std/builtins.lerta` fails, as the extends of the files it exports from repeat those of the carried `std:builtins`.
 
 ## Commands
+
+| Command | Does |
+|---|---|
+| [`build`](#build) | Builds an executable. |
+| [`run`](#run) | Builds and runs a program. |
+| [`fmt`](#fmt) | Checks or fixes the [style](style.md). |
+| [`lsp`](#lsp) | Runs a language server. |
+| [`clean`](#clean) | Empties the [cache](#cache). |
+| [`dump-tokens`, `dump-ast`, `dump-checked`, `dump-llvm`](#dumps) | Print what the compiler makes of a source. |
 
 ### build
 
@@ -11,20 +33,134 @@ lerta build <source> [<file>...] [-o <output>] [-O] [--memory-checks] [-Werror] 
             [--source-lines] [--eager-nan-checks] [--target <triple>]
 ```
 
-builds an executable. Usage errors are an unknown or repeated option, a missing source, a file after it of another kind than below, an option without its value, and, without `-o`, a source whose name does not end with `.lerta`, as `std:<name>` does not.
+Builds an executable.
 
-- `<source>` is a file, or a standard module as `std:<name>`, such as `std:io`, which is then the program, read from those the compiler carries; an unknown one prints `unknown standard module 'std:<name>'` and exits with code 1. The same holds for the commands below. A file of `std/` given by its path is an ordinary module, which imports the carried `std:builtins` as any other does: `std/process.lerta` builds, while `std/builtins.lerta` fails, as the extends of the files it exports from repeat those of the carried `std:builtins`.
-- `<file>...`, after the source, are files that clang links with the program as it is given them: C (`.c`), LLVM IR (`.ll`), objects (`.o`, `.obj`) and archives (`.a`, `.lib`), such as those that define the C functions of the program's own [externs](functions.md#c-functions). With `-O`, clang compiles `.c` and `.ll` files with `-O2 -flto=thin` as it does the program; objects and archives built without it link too.
-- `-o <output>` names the executable. Without it, the executable is the source's name without `.lerta`, in the current directory, as `go build` names it: `lerta build examples/hello.lerta` writes `hello`, or `hello.exe` for a Windows target. An output that is a module of the program or one of the files, by whatever path, is not written: the build prints `the output '<output>' is an input of the build` and exits with code 1.
-- Without `-O`, or with `--memory-checks`, the program checks for leaked memory when it ends. The objects that nothing in use holds, as those of a cycle and what they hold, are reported to stderr as `leak: <n> unreachable object(s): <type> (<count>), ...`, by the types of the objects, in the order the first of each was made: a class's or a struct's name, `box of <type>` for a value held as a union's, `var` for a captured `var`, `<function>.<anonymous>` for a function literal's closure, and `Array`, `Map`, `Map cursor`, `Promise`, `Iter`, `String or Binary` and `weak box` for the builtin ones. When the program ends by finishing its top-level code, what else is left alive, as a function that awaits a promise that is never settled, is reported after them as `leak: <n> object(s)`; through `exit`, what is in use is not released, so only the objects that nothing in use holds are reported. A program that reports a leak ends with exit code 23, in place of its own, so that a leak fails it as any error does; one built with `-O` alone, which does not check, keeps its own. An exit through an uncaught throw is not checked, since it ends the program in the middle of its work.
-- `-O` optimizes, including across the modules and the runtime (link-time optimization, ThinLTO), each module on a thread of its own. The linker keeps what it has optimized in [the cache](#cache), so that a build optimizes again only the modules that have changed, and those that inline from them; a `.c` or `.ll` file linked with the program is an exception, as clang compiles it into a temporary file of its own, which every build optimizes again, as it does what inlines from it.
-- `--memory-checks` keeps the checks of a build without `-O` in a build with it: of leaks, above, and of the use of an object after it is dropped, which stops the program. Without `-O`, it changes nothing.
-- `-Werror` makes a warning stop the build, as an error does: the warnings are printed, and the exit code is 1. The bootstrap builds the compiler so (see [internals](../internals.md#bootstrap)).
-- `--no-trace` leaves out the trace that an uncaught exception prints (see [errors](errors.md#exceptions)), and with it the names of the functions and the files and the positions that the trace tells, which the program would otherwise hold. The symbols of the executable still name the functions, unless it is stripped.
-- `--source-lines` gives the program debug information of where its code comes from in the source, the file, the line and the column of each statement and expression, for a debugger and for the backtrace of a panic or a crash, as `f at main.lerta:3:3`; it holds no names of locals nor their values. A file is named by its absolute path, which a debugger may show as a directory and a name, and a standard module as `std:<name>`. On macOS, the information goes into `<output>.dSYM` beside the program, which `dsymutil` makes, as the objects that the program would read it from are removed. On Windows, it goes into the program itself, as on Linux, for gdb or lldb to read; WinDbg and Visual Studio read a PDB instead, which is not made. It is off by default, and changes nothing else of the program.
-- `--eager-nan-checks` has each operation of `Float`s and `Float32`s check its result for NaN where it is, so that `not a number` is thrown by the operation that makes the NaN, before anything else runs, a NaN that is never used too, rather than where the value is used (see [Float](types.md#float)). The program is slower, as it checks more. It is there for finding where a NaN comes from.
-- `--target <triple>` has clang build the executable for that target, such as `i686-linux-gnu` or `x86_64-w64-mingw32`; without it, the executable is for the host. A Windows target (`*-w64-mingw32`) needs mingw-w64, and lld, which links it. The runtime is built for Linux targets with glibc or musl (`*-linux`, `*-linux-gnu*`, `*-linux-musl*`), macOS ones (`*-darwin*`, `*-macos*`) and Windows ones; another, such as `x86_64-unknown-freebsd` or `aarch64-linux-android`, is reported as `not a target that the runtime is built for: <triple>`, and the build exits with code 1. This tells only the system; what else a target lacks, such as its C library's headers, clang reports.
-- The build leaves no other file but [the cache](#cache): it writes the LLVM IR of each module to a temporary directory, which clang compiles, all modules at once, and links, and removes the directory after clang has built the executable, or failed to. An error while the directory is there removes it too: a file that cannot be written, or a program that cannot be started, clang or the one that `run` runs.
+Usage errors:
+
+- an unknown or repeated option, or an option without its value;
+- a missing source;
+- a file after the source of another kind than [below](#linked-files);
+- without `-o`, a source whose name does not end with `.lerta`, as `std:<name>` does not.
+
+| Option | Effect |
+|---|---|
+| [`-o <output>`](#-o-output) | Names the executable. |
+| [`-O`](#-o) | Optimizes, with ThinLTO. |
+| [`--memory-checks`](#--memory-checks) | Keeps the memory checks with `-O`. |
+| [`-Werror`](#-werror) | Makes a warning stop the build. |
+| [`--no-trace`](#--no-trace) | Leaves out the trace of an uncaught exception. |
+| [`--source-lines`](#--source-lines) | Adds debug information of source positions. |
+| [`--eager-nan-checks`](#--eager-nan-checks) | Checks each float operation for NaN. |
+| [`--target <triple>`](#--target-triple) | Builds for another target. |
+
+#### Linked files
+
+- The `<file>`s after the source are files that clang links with the program as it is given them, such as those that define the C functions of the program's own [externs](functions.md#c-functions):
+
+| Kind | Extensions |
+|---|---|
+| C | `.c` |
+| LLVM IR | `.ll` |
+| Objects | `.o`, `.obj` |
+| Archives | `.a`, `.lib` |
+
+- With `-O`, clang compiles `.c` and `.ll` files with `-O2 -flto=thin` as it does the program. Objects and archives built without it link too.
+
+#### `-o <output>`
+
+- Names the executable.
+- Without it, the executable is the source's name without `.lerta`, in the current directory, as `go build` names it: `lerta build examples/hello.lerta` writes `hello`, or `hello.exe` for a Windows target.
+- An output that is a module of the program or one of the linked files, by whatever path, is not written: the build prints `the output '<output>' is an input of the build` and exits with code 1.
+
+#### `-O`
+
+- Optimizes, including across the modules and the runtime (link-time optimization, ThinLTO), each module on a thread of its own.
+- The linker keeps what it has optimized in [the cache](#cache), so that a build optimizes again only the modules that have changed, and those that inline from them.
+- A `.c` or `.ll` file linked with the program is an exception: clang compiles it into a temporary file of its own, which every build optimizes again, as it does what inlines from it.
+
+#### Memory checks
+
+Without `-O`, or with `--memory-checks`, the program checks its memory.
+
+- **Use after drop.** The use of an object after it is dropped stops the program.
+- **Unreachable objects.** When the program ends, the objects that nothing in use holds, as those of a cycle and what they hold, are reported to stderr:
+
+  ```
+  leak: <n> unreachable object(s): <type> (<count>), ...
+  ```
+
+  They are counted by type, in the order the first of each was made:
+
+  | Type | Objects |
+  |---|---|
+  | `<name>` | a class's or a struct's |
+  | `box of <type>` | a value held as a union's |
+  | `var` | a captured `var` |
+  | `<function>.<anonymous>` | a function literal's closure |
+  | `Array`, `Map`, `Map cursor`, `Promise`, `Iter`, `String or Binary`, `weak box` | the builtin ones |
+
+- **Objects left alive.** When the program ends by finishing its top-level code, what else is left alive, as a function that awaits a promise that is never settled, is reported after them as `leak: <n> object(s)`.
+- Through `exit`, what is in use is not released, so only the objects that nothing in use holds are reported.
+- An exit through an uncaught throw is not checked, since it ends the program in the middle of its work.
+- A program that reports a leak ends with exit code 23, in place of its own, so that a leak fails it as any error does. One built with `-O` alone, which does not check, keeps its own.
+
+#### `--memory-checks`
+
+- Keeps the [memory checks](#memory-checks) of a build without `-O` in a build with it.
+- Without `-O`, it changes nothing.
+
+#### `-Werror`
+
+- Makes a warning stop the build, as an error does: the warnings are printed, and the exit code is 1.
+- The bootstrap builds the compiler so (see [internals](../internals.md#bootstrap)).
+
+#### `--no-trace`
+
+- Leaves out the trace that an uncaught exception prints (see [errors](errors.md#exceptions)), and with it the names of the functions and the files and the positions that the trace tells, which the program would otherwise hold.
+- The symbols of the executable still name the functions, unless it is stripped.
+
+#### `--source-lines`
+
+- Gives the program debug information of where its code comes from in the source: the file, the line and the column of each statement and expression.
+  - It is for a debugger and for the backtrace of a panic or a crash, as `f at main.lerta:3:3`.
+  - It holds no names of locals nor their values.
+- A file is named by its absolute path, which a debugger may show as a directory and a name, and a standard module as `std:<name>`.
+
+| System | Where the information goes |
+|---|---|
+| macOS | `<output>.dSYM` beside the program, which `dsymutil` makes, as the objects that the program would read it from are removed. |
+| Linux | The program itself. |
+| Windows | The program itself, for gdb or lldb to read. WinDbg and Visual Studio read a PDB instead, which is not made. |
+
+- It is off by default, and changes nothing else of the program.
+
+#### `--eager-nan-checks`
+
+- Has each operation of `Float`s and `Float32`s check its result for NaN where it is, so that `not a number` is thrown by the operation that makes the NaN, before anything else runs, rather than where the value is used (see [Float](types.md#float)). A NaN that is never used throws too.
+- The program is slower, as it checks more.
+- It is there for finding where a NaN comes from.
+
+#### `--target <triple>`
+
+- Has clang build the executable for that target, such as `i686-linux-gnu` or `x86_64-w64-mingw32`. Without it, the executable is for the host.
+- A Windows target (`*-w64-mingw32`) needs mingw-w64, and lld, which links it.
+- The runtime is built for these targets:
+
+| System | Triples |
+|---|---|
+| Linux, with glibc or musl | `*-linux`, `*-linux-gnu*`, `*-linux-musl*` |
+| macOS | `*-darwin*`, `*-macos*` |
+| Windows | `*-w64-mingw32` |
+
+- Another, such as `x86_64-unknown-freebsd` or `aarch64-linux-android`, is reported as `not a target that the runtime is built for: <triple>`, and the build exits with code 1.
+- This tells only the system; what else a target lacks, such as its C library's headers, clang reports.
+
+#### Temporary files
+
+- The build leaves no other file but [the cache](#cache).
+- It writes the LLVM IR of each module to a temporary directory, which clang compiles, all modules at once, and links.
+- It removes the directory after clang has built the executable, or failed to.
+- An error while the directory is there removes it too: a file that cannot be written, or a program that cannot be started, clang or the one that `run` runs.
 
 ### run
 
@@ -33,7 +169,13 @@ lerta run <source> [<file>...] [-O] [--memory-checks] [-Werror] [--no-trace] [--
           [--eager-nan-checks] [-- <arg>...]
 ```
 
-is provisional, until it runs the program directly with JIT (see [the roadmap](../roadmap/programs.md#tools)). It builds the program as `build` does, from the same source and files, in the temporary directory, and runs it, in the current directory, with the arguments after `--`, which go to the program as they are, even those that look like options; the program shares the standard streams. It then removes the directory, as `build` does, and exits with the program's exit code, or, if a signal ended it, 128 plus the signal number (see `run` in [std:process](std.md#stdprocess)). `-o` and `--target` are usage errors, and so is an argument for the program without `--`. A compile error or a failure of clang is reported as by `build`, and nothing runs.
+- It is provisional, until it runs the program directly with JIT (see [the roadmap](../roadmap/programs.md#tools)).
+- It builds the program as [`build`](#build) does, from the same source, files and options, in the temporary directory, for the host.
+- It runs it in the current directory, with the arguments after `--`, which go to the program as they are, even those that look like options. The program shares the standard streams.
+- It then removes the directory, as `build` does.
+- It exits with the program's exit code, or, if a signal ended it, 128 plus the signal number (see `run` in [std:process](std.md#stdprocess)).
+- Usage errors: `-o`, `--target`, and an argument for the program without `--`.
+- A compile error or a failure of clang is reported as by `build`, and nothing runs.
 
 ### fmt
 
@@ -41,42 +183,205 @@ is provisional, until it runs the program directly with JIT (see [the roadmap](.
 lerta fmt [--fix] <path>...
 ```
 
-checks that each file is in the [style](style.md).
+Checks that each file is in the [style](style.md). What of the style it does not apply yet, and its known faults, are in [the roadmap](../roadmap/programs.md#tools).
 
-- **Paths.** The paths are files, and directories, whose `.lerta` files it takes, in the order of their names and through the directories inside them, but for those whose names start with `.`. `--fix` must come first; no path, or another argument that starts with `-`, is a usage error.
-- **Reports.** It prints each file again from its syntax tree, in the style, and reports each place where the file differs from that, as a diagnostic is: `<path>:<line>:<column>: <message> (<rule>)`, where the rule is named by its bold label in the style, once for each line, or each run of lines, that differs; a run of a different number of lines, as where lines are joined or broken, or of lines that move, as the lines below a line that a body joins shift up by one, is reported once, at its first difference, and what else breaks the style in it once that is fixed. A line that it keeps, but over 100 columns, such as one of a comment or a string, which it cannot break, is reported under **Line length** at its 101st column, but one kept as it is written (see below).
-- **Programs checked.** It also checks a program that holds the file, reading the modules that it imports: that of which a file given that no other file given imports is the entry module, once for all the files given that it holds, and for the other files given, their own. If the program does not check, the types of its entry module are kept and its errors are not reported; the other files it holds are checked as the entry modules of their own programs.
-- **Type annotations left out.** It leaves out the types written in the file that its checking shows the checker can infer (see **Type annotations** in the style), of those that the style leaves out:
-  - a parameter's type that the function type expected, or a literal default, gives it;
-  - a variable's or a field's type that its value has of its own, not from where it is (not an empty array or map, a number that the type makes a `Byte` or a `Float`, a string of one character that it makes a `Byte`, a member of an enum, a function literal, or a call of a generic function or a construction of a generic type), as do the parts of an array, a map or a tuple, and give together the branches of a conditional, a `case`, an `if` or a `try`;
-  - a return type that the results give in this way, together (`T` and `nil` give `T?`), in a `Promise` for a function that awaits, or `void` for a function that gives no value, but not that of a function that uses itself, directly or through other functions.
+#### Paths
 
-  It does not leave out the other types that the checker could infer, such as those of functions that call each other. To be sure, it checks the program without them, and keeps those without which it does not check to the same types, conversions and warnings, such as a type that alone uses an import other than an enum's (see **Imports of enums and structs left out**), found by halving them.
-- **Enum members written alone.** It writes alone a member of an enum written with its enum, `E.MEMBER`, where the checking of its program shows that E is expected (see **Expected types** in the style) and nothing takes the name, but not in the body of a generic function, nor where the expected type comes from the member only as it is written, as the left operand of `==`, the first item of an array and an argument of a call of a generic function for a parameter whose type names a type parameter. It checks the program without them, with the types it leaves out, and keeps those without which it does not check the same.
-- **Structs constructed with `{}`.** It writes a construction of a struct, `S(x: 1)`, as `{ x: 1 }` where the checking of its program shows that S is expected (see **Expected types** in the style), but not in the body of a generic function, nor where the expected type comes only from the other items of an array or a map, nor as the left operand of `==`. It decides these first, checking the program without them, and keeps those without which it does not check the same; then the types and the enums of members, with those it writes so, so that a type that the constructions take is kept.
-- **Named arguments written alone.** It writes a named argument of a construction of a class or a struct that is a variable of its name, `Point(y: 2, x: x)`, as the name alone, `Point(x, y: 2)` (see **Shorthand** in the style), where the named arguments it then goes before are names, `@`, literals or members of these, whose values that order does not change; but not in the body of a generic function, nor a named argument of a call of a function, which a name alone would pass as positional.
-- **Membership tests written with `in`.** It writes a call of `contains` of one argument, `xs.contains(x)`, as `x in xs`, and `not xs.contains(x)` as `x not in xs` (see **Membership tests** and **Negated in tests** in the style), where the object and the argument are names, `@`, fields of them or literals, which run no code, and the checking of its program shows that the call gives a `Bool`; not in the body of a generic function, nor where it is the whole element or the whole guard of a comprehension, or in an interpolation, which are printed as written.
-- **Range tests written with `in`.** It writes two comparisons joined by `and` that test a value against a start and an end, `x >= a and x <= b` or `a <= x and x < b`, the second either way round, as `x in a..b` or `x in a...b`, after the `and`s before them in a chain (see **Range tests** in the style), where the value, written the same in both, and the end are names, `@`, fields of them or literals, which run no code, as `and` evaluates the end only where the first holds, and the checking of its program shows that the value is a number or a `Char`; not in the body of a generic function, nor in the places that membership tests are not written in.
-- **Ranges written with fewer parts.** It writes a range `a...(b + 1)` as `a..b`, where the checking of its program shows that `b` is an integer, as the ends of a range in a `for` or an index are, which then no longer throws where `b + 1` would overflow, and in an index it leaves out a start `0`, but where no end follows, and an end that is the length of what it indexes, `xs[i...xs.length]` written `xs[i..]`, where that is a name, `@` or a field of them, written the same (see **Ranges** in the style).
-- **Emptiness tests written with `is_empty`.** It writes a test of a length against 0, `x.length == 0`, `x.length != 0` or `x.length > 0`, the first two with the operands either way round, and a comparison of a `String` with `''`, `s == ''` or `s != ''`, either way round too, as `x.is_empty()` or `not x.is_empty()` (see **Emptiness tests** in the style), where the checking of its program shows that x is an array, a map, a set, a `Binary` or a `String`, whose `is_empty` std gives, and `not (x.length != 0)` as `x.is_empty()`; not that of another type, of an optional, in the body of a generic function, or where it is the whole element or the whole guard of a comprehension, or in an interpolation, which are printed as written.
-- **Arms of one body.** It writes arms of a `case` with a subject next to each other whose bodies are written alike as one arm of their patterns, in their order (see **Shared arm bodies** in the style), where the checking of its program shows that the program checks the same with the subject narrowed to the union of their types, but for the types in that body, which narrowing changes there; not an arm of `nil`, nor in the body of a generic function, nor arms with a comment from the line where the first starts, which the arm kept could not hold where it is. It decides them before the rewrites other than records, which are then checked with the arms made one.
-- **Copies written as spreads.** It writes a construction whose named arguments copy the fields of the same names of one value, `Point(x: 1, y: p.y)`, with a spread of that value first and the other arguments, `Point(p..., x: 1)` (see **Spreads** in the style), where the value is a name, `@` or a path of fields from one, and the checking of its program shows that it is of the type constructed and that the construction gives every argument, as the spread would give those it leaves to their defaults; and where the arguments before the last copy that are not copies have no effects, which the spread, read first, could see. Not in the body of a generic function.
-- **Casts left out.** It leaves out a cast that throws, `x as T!`, of a value that the checking of its program shows to be a `T` already, as narrowing makes it (see **Redundant casts** in the style), but not in the body of a generic function, whose instances may give the value other types. It checks the program without them, with the others, and keeps those without which it does not check the same, such as one whose value an optional is expected of, which would then be converted to it.
-- **Imports of enums and structs left out.** That an import of an enum is no longer used once the types and the enums of members are left out, or that of a struct once its constructions are written with `{}`, does not count in those checks: it leaves out the name from the import, and the import if it takes no other name, and reports it under **Expected types**.
-- **Code kept as written.** A comment `# fmt: skip` that ends a line keeps that line as it is written, and one on a line of its own the next line of code; the lines from a comment `# fmt: off` up to a comment `# fmt: on`, or to the end of the file, are kept likewise. A line of a statement on lines of its own keeps all the lines of the statement, or of the innermost one, where statements in its blocks hold it: a line of an `if`'s block keeps that statement alone, but one of a list keeps all of it, and so does an arm on the line of its `when` keep the whole `case`, and a member the whole class. The statement is printed as it is written, with its comments, its types and the enums of its members, and with the imports that it uses, but indented as its block is, and its lines after the first as much deeper or shallower than the first as they were, but none shallower than the first column. The blank lines and the comments between such statements are printed as elsewhere. A file in which `# fmt: off` comes before the code, and no `# fmt: on` after it, is not even parsed: it is left as it is written, blank lines and comments too, and reported in nothing, even if it does not parse.
+- The paths are files, and directories, whose `.lerta` files it takes, in the order of their names and through the directories inside them, but for those whose names start with `.`.
+- `--fix` must come first.
+- No path, or another argument that starts with `-`, is a usage error.
+
+#### Reports
+
+- It prints each file again from its syntax tree, in the style, and reports each place where the file differs from that, as a diagnostic is:
 
   ```
-  identity := [  # fmt: skip
-    1, 0
-    0, 1
-  ]
+  <path>:<line>:<column>: <message> (<rule>)
   ```
-- **`--fix`** writes the files that differ instead, and reports only the lines over 100 columns that remain.
-- **What it keeps.** The comments, and the blank lines, at most one in a row; the spelling of literals, such as `0xFF` and the escapes of a string, but `'...'` for a string that can be written so; and the names of a destructuring.
-- **Exit code.** 1 if a file differs (without `--fix`), or holds a line over 100 columns that it reports (with it too), and if a path names nothing (`'<path>' is not a file or a directory`), a file is not valid UTF-8 or does not parse (its compile error), and 0 otherwise; the other files are still taken.
-- **Self-check.** Before it reports or writes, it parses the text that it printed: if that is another program, which would be a bug of the formatter, it reports `<path>: the formatter would change the program, which is a bug` and leaves the file.
 
-What of the style it does not apply yet, and its known faults, are in [the roadmap](../roadmap/programs.md#tools).
+  The rule is named by its heading in the style.
+- It reports once for each line, or each run of lines, that differs.
+- A run of a different number of lines, as where lines are joined or broken, or of lines that move, as the lines below a line that a body joins shift up by one, is reported once, at its first difference.
+- What else breaks the style in it is reported once that is fixed.
+- A line that it keeps but is over 100 columns, such as one of a comment or a string, which it cannot break, is reported under [Line length](style.md#line-length) at its 101st column, but one [kept as written](#code-kept-as-written).
+
+#### `--fix`
+
+- Writes the files that differ instead of reporting them.
+- Reports only the lines over 100 columns that remain.
+
+#### What it keeps
+
+- The comments, and the blank lines, at most one in a row.
+- The spelling of literals, such as `0xFF` and the escapes of a string, but `'...'` for a string that can be written so.
+- The names of a destructuring.
+
+#### Exit code
+
+- 1 if:
+  - a file differs (without `--fix`);
+  - a file holds a line over 100 columns that it reports (with `--fix` too);
+  - a path names nothing (`'<path>' is not a file or a directory`);
+  - a file is not valid UTF-8 or does not parse (its compile error is reported).
+- 0 otherwise.
+- The other files are still taken.
+
+#### Self-check
+
+- Before it reports or writes, it parses the text that it printed.
+- If that is another program, which would be a bug of the formatter, it reports `<path>: the formatter would change the program, which is a bug` and leaves the file.
+
+#### Programs checked
+
+The rewrites below depend on the checking of a program that holds the file.
+
+- It reads the modules that the program imports.
+- A file given that no other file given imports is the entry module of a program, checked once for all the files given that it holds. The other files given are checked as their own.
+- If the program does not check, the types of its entry module are kept and its errors are not reported. The other files it holds are checked as the entry modules of their own programs.
+
+#### Rewrites
+
+| Rewrite | Style rule |
+|---|---|
+| [Type annotations left out](#type-annotations-left-out) | [Type annotations](style.md#type-annotations) |
+| [Enum members written alone](#enum-members-written-alone) | [Expected types](style.md#expected-types) |
+| [Structs constructed with `{}`](#structs-constructed-with-) | [Expected types](style.md#expected-types) |
+| [Named arguments written alone](#named-arguments-written-alone) | [Shorthand](style.md#shorthand) |
+| [Membership tests written with `in`](#membership-tests-written-with-in) | [Membership tests](style.md#membership-tests), [Negated in tests](style.md#negated-in-tests) |
+| [Range tests written with `in`](#range-tests-written-with-in) | [Range tests](style.md#range-tests) |
+| [Ranges written with fewer parts](#ranges-written-with-fewer-parts) | [Ranges](style.md#ranges) |
+| [Emptiness tests written with `is_empty`](#emptiness-tests-written-with-is_empty) | [Emptiness tests](style.md#emptiness-tests) |
+| [Arms of one body](#arms-of-one-body) | [Shared arm bodies](style.md#shared-arm-bodies) |
+| [Copies written as spreads](#copies-written-as-spreads) | [Spreads](style.md#spreads) |
+| [Casts left out](#casts-left-out) | [Redundant casts](style.md#redundant-casts) |
+| [Imports of enums and structs left out](#imports-of-enums-and-structs-left-out) | [Expected types](style.md#expected-types) |
+
+- None is made in the body of a generic function, whose instances may give its values other types.
+- Where a rewrite below says it is checked, it checks the program with it and keeps those without which the program does not check the same: to the same types, conversions and warnings.
+- Order:
+  1. [Structs constructed with `{}`](#structs-constructed-with-) are decided first.
+  2. [Arms of one body](#arms-of-one-body) next, checked with them.
+  3. Then the others, checked with both, so that a type that the constructions take is kept.
+
+#### Type annotations left out
+
+It leaves out the types written in the file that its checking shows the checker can infer, of those that the style leaves out:
+
+- a parameter's type that the function type expected, or a literal default, gives it;
+- a variable's or a field's type that its value has of its own, not from where it is:
+  - of an array, a map or a tuple, the type that its parts have so;
+  - of a conditional, a `case`, an `if` or a `try`, the type that its branches give together;
+- a return type that the results give in this way, together (`T` and `nil` give `T?`), in a `Promise` for a function that awaits, or `void` for a function that gives no value; but not that of a function that uses itself, directly or through other functions.
+
+Not where the type comes from where it is:
+
+- an empty array or map;
+- a number that the type makes a `Byte` or a `Float`, a string of one character that it makes a `Byte`;
+- a member of an enum, a function literal;
+- a call of a generic function or a construction of a generic type.
+
+Besides:
+
+- It does not leave out the other types that the checker could infer, such as those of functions that call each other.
+- It is checked: it keeps, for one, a type that alone uses an import other than an enum's (see [Imports of enums and structs left out](#imports-of-enums-and-structs-left-out)), found by halving them.
+
+#### Enum members written alone
+
+- It writes a member of an enum written with its enum, `E.MEMBER`, alone where `E` is expected and nothing takes the name.
+- Not where the expected type comes from the member only as it is written:
+  - the left operand of `==`;
+  - the first item of an array;
+  - an argument of a call of a generic function for a parameter whose type names a type parameter.
+- It is checked, with the types it leaves out.
+
+#### Structs constructed with `{}`
+
+- It writes a construction of a struct, `S(x: 1)`, as `{ x: 1 }` where `S` is expected.
+- Not where the expected type comes only from the other items of an array or a map, nor as the left operand of `==`.
+- It is checked.
+
+#### Named arguments written alone
+
+- It writes a named argument of a construction of a class or a struct that is a variable of its name, `Point(y: 2, x: x)`, as the name alone, `Point(x, y: 2)`.
+- Only where the named arguments it then goes before are names, `@`, literals or members of these, whose values that order does not change.
+- Not a named argument of a call of a function, which a name alone would pass as positional.
+
+#### Membership tests written with `in`
+
+- It writes `xs.contains(x)`, a call of `contains` of one argument, as `x in xs`, and `not xs.contains(x)` as `x not in xs`.
+- Only where the object and the argument are names, `@`, fields of them or literals, which run no code, and the call gives a `Bool`.
+- Not where it is the whole element or the whole guard of a comprehension, or in an interpolation, which are printed as written.
+
+#### Range tests written with `in`
+
+- It writes two comparisons joined by `and` that test a value against a start and an end, `x >= a and x <= b` or `a <= x and x < b`, the second either way round, as `x in a..b` or `x in a...b`, after the `and`s before them in a chain.
+- Only where the value, written the same in both, and the end are names, `@`, fields of them or literals, which run no code, as `and` evaluates the end only where the first holds, and the value is a number or a `Char`.
+- Not in the places that [membership tests](#membership-tests-written-with-in) are not written in.
+
+#### Ranges written with fewer parts
+
+- It writes a range `a...(b + 1)` as `a..b` where `b` is an integer, as the ends of a range in a `for` or an index are. The range then no longer throws where `b + 1` would overflow.
+- In an index, it leaves out:
+  - a start `0`, but where no end follows;
+  - an end that is the length of what it indexes, `xs[i...xs.length]` written `xs[i..]`, where that is a name, `@` or a field of them, written the same.
+
+#### Emptiness tests written with `is_empty`
+
+- It writes these as `x.is_empty()` or `not x.is_empty()`:
+  - a test of a length against 0, `x.length == 0`, `x.length != 0` or `x.length > 0`, the first two with the operands either way round;
+  - a comparison of a `String` with `''`, `s == ''` or `s != ''`, either way round too.
+- It writes `not (x.length != 0)` as `x.is_empty()`.
+- Only where `x` is an array, a map, a set, a `Binary` or a `String`, whose `is_empty` std gives; not that of another type, nor of an optional.
+- Not where it is the whole element or the whole guard of a comprehension, or in an interpolation, which are printed as written.
+
+#### Arms of one body
+
+- It writes arms of a `case` with a subject next to each other whose bodies are written alike as one arm of their patterns, in their order.
+- Only where the program checks the same with the subject narrowed to the union of their types, but for the types in that body, which narrowing changes there.
+- Not an arm of `nil`, nor arms with a comment from the line where the first starts, which the arm kept could not hold where it is.
+
+#### Copies written as spreads
+
+- It writes a construction whose named arguments copy the fields of the same names of one value, `Point(x: 1, y: p.y)`, with a spread of that value first and the other arguments, `Point(p..., x: 1)`.
+- Only where:
+  - the value is a name, `@` or a path of fields from one;
+  - it is of the type constructed;
+  - the construction gives every argument, as the spread would give those it leaves to their defaults;
+  - the arguments before the last copy that are not copies have no effects, which the spread, read first, could see.
+
+#### Casts left out
+
+- It leaves out a cast that throws, `x as T!`, of a value that is a `T` already, as narrowing makes it.
+- It is checked, with the others; it keeps, for one, a cast whose value an optional is expected of, which would then be converted to it.
+
+#### Imports of enums and structs left out
+
+- That an import of an enum is no longer used once the types and the enums of members are left out, or that of a struct once its constructions are written with `{}`, does not count in the checks of the rewrites above.
+- It leaves out the name from the import, and the import if it takes no other name, and reports it under [Expected types](style.md#expected-types).
+
+#### Code kept as written
+
+```
+identity := [  # fmt: skip
+  1, 0
+  0, 1
+]
+```
+
+| Comment | Keeps |
+|---|---|
+| `# fmt: skip` that ends a line | that line |
+| `# fmt: skip` on a line of its own | the next line of code |
+| `# fmt: off` up to `# fmt: on`, or to the end of the file | the lines between |
+
+- A line of a statement on lines of its own keeps all the lines of the statement, or of the innermost one, where statements in its blocks hold it:
+  - a line of an `if`'s block keeps that statement alone;
+  - one of a list keeps all of it;
+  - an arm on the line of its `when` keeps the whole `case`, and a member the whole class.
+- The statement is printed as it is written, with its comments, its types and the enums of its members, and with the imports that it uses.
+- It is indented as its block is, and its lines after the first as much deeper or shallower than the first as they were, but none shallower than the first column.
+- The blank lines and the comments between such statements are printed as elsewhere.
+- A file in which `# fmt: off` comes before the code, and no `# fmt: on` after it, is not even parsed. It is left as it is written, blank lines and comments too, and reported in nothing, even if it does not parse.
 
 ### lsp
 
@@ -84,15 +389,80 @@ What of the style it does not apply yet, and its known faults, are in [the roadm
 lerta lsp
 ```
 
-is a language server, of the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/), over stdin and stdout, for an editor to start; it takes no arguments.
+A language server, of the [Language Server Protocol](https://microsoft.github.io/language-server-protocol/), over stdin and stdout, for an editor to start. It takes no arguments.
 
-- **Documents.** It takes a document's whole text on each change (`TextDocumentSyncKind.Full`), and reads the open documents' texts in place of their files, for each program that holds them. A document of a URI that is not `file:` is left alone; one that is no file yet is formatted, but not checked.
-- **Diagnostics.** When a document is opened or changed, it checks the program whose entry module is that document, as `lerta build` does but without generating code, and publishes the errors and warnings of each file of the program, the standard modules left out, warnings once there are no errors, as `lerta build` gives them: a diagnostic's range is the one position of its message. Each module is checked with its statements that parse, in blocks too, so that a program is checked while it is being written, and a file whose statements do not all parse has only its parse errors. It checks again the open documents whose programs hold the document, and does so too when a document is closed, then from its file. A file's diagnostics are those of all the open documents' programs that hold it; one that none finds any in is published empty.
-- **Positions.** In UTF-32 units, code points, as diagnostics count columns, if the client says it takes them (`general.positionEncodings`), and in UTF-16 units otherwise.
-- **Formatting.** `textDocument/formatting` gives the document as `lerta fmt --fix` would write it, as one edit of the whole text, or none if it is in the style already, and `null` if it does not parse.
-- **Hover and definition.** `textDocument/hover` gives the types of the name at the position, as `name: Type` in a block of Lerta, one line for each type it has in the instances of a generic function or class it is in; `textDocument/definition` gives where it is declared: a local, a parameter, a top-level value, a function, an import, a class, struct or enum member, a field or a method, own or of an extend, and the class, struct, interface, enum or alias that a type name names, as in an annotation or the enum of `Color.RED`. They answer from the last check of the document's program, or of an open document's program that holds it, as far as it was checked, and give nothing for a name that the checker gave no type, as a builtin type's name or a type parameter, or whose declaration is in a standard module.
-- **Completion.** `textDocument/completion` gives what may be written where a name is being written, the name under the cursor replaced: after `.` or `@`, the members of the value's type, without nil after `?.` (its fields, its methods and those of the extends in effect there, and the builtin methods and properties of its kind), the exports of a module imported as a name, or the members of an enum and its `parse`; elsewhere, the locals that the code there sees, the innermost of a name, the module's names and those it imports, as declared, and std:builtins' exports, top-level code seeing only the top-level values it has declared, and the keywords. Each item has its kind and, where it is known, its type. It checks the program with the cursor's name replaced by one of its own and takes what the checker found where it met that name, so it gives nothing where the checker does not meet it: in a comment, a string or a type, and after an error earlier in the same function's body. In a generic body, which is checked at its definition first, a type parameter's members are those that its bound gives. The methods of extends of interfaces, and an enum's member written alone where the enum is expected, are not offered yet.
-- **Other messages.** A request of another method is answered with the error `MethodNotFound`, one whose params are not of the method's shape with `InvalidParams` (with what `decode_json` found), a message that is not JSON with a parse error, and a bug of the server with `InternalError`, its message on stderr; another notification is ignored. A header without a length ends the server with status 1, as the next message cannot be found; `exit` ends it with 0 after `shutdown`, and with 1 otherwise.
+| Method | Answer |
+|---|---|
+| `textDocument/didOpen`, `didChange`, `didClose` | [Diagnostics](#diagnostics-of-documents) |
+| `textDocument/formatting` | [Formatting](#formatting) |
+| `textDocument/hover` | [Hover](#hover-and-definition) |
+| `textDocument/definition` | [Definition](#hover-and-definition) |
+| `textDocument/completion` | [Completion](#completion) |
+
+#### Documents
+
+- It takes a document's whole text on each change (`TextDocumentSyncKind.Full`).
+- It reads the open documents' texts in place of their files, for each program that holds them.
+- A document of a URI that is not `file:` is left alone.
+- One that is no file yet is formatted, but not checked.
+
+#### Positions
+
+- In UTF-32 units, code points, as diagnostics count columns, if the client says it takes them (`general.positionEncodings`).
+- In UTF-16 units otherwise.
+
+#### Diagnostics of documents
+
+- When a document is opened or changed, it checks the program whose entry module is that document, as `lerta build` does but without generating code.
+- It publishes the errors and warnings of each file of the program, the standard modules left out, as `lerta build` gives them, warnings once there are no errors.
+- A diagnostic's range is the one position of its message.
+- Each module is checked with its statements that parse, in blocks too, so that a program is checked while it is being written. A file whose statements do not all parse has only its parse errors.
+- It checks again the open documents whose programs hold the document. It does so too when a document is closed, then from its file.
+- A file's diagnostics are those of all the open documents' programs that hold it. One that none finds any in is published empty.
+
+#### Formatting
+
+- `textDocument/formatting` gives the document as `lerta fmt --fix` would write it, as one edit of the whole text.
+- None if it is in the style already, and `null` if it does not parse.
+
+#### Hover and definition
+
+- `textDocument/hover` gives the types of the name at the position, as `name: Type` in a block of Lerta, one line for each type it has in the instances of a generic function or class it is in.
+- `textDocument/definition` gives where it is declared:
+  - a local, a parameter, a top-level value, a function, an import;
+  - a class, struct or enum member, a field or a method, own or of an extend;
+  - the class, struct, interface, enum or alias that a type name names, as in an annotation or the enum of `Color.RED`.
+- They answer from the last check of the document's program, or of an open document's program that holds it, as far as it was checked.
+- They give nothing for a name that the checker gave no type, as a builtin type's name or a type parameter, or whose declaration is in a standard module.
+
+#### Completion
+
+`textDocument/completion` gives what may be written where a name is being written, the name under the cursor replaced.
+
+| Where | Items |
+|---|---|
+| After `.` or `@` | The members of the value's type, without nil after `?.`: its fields, its methods and those of the extends in effect there, and the builtin methods and properties of its kind. |
+| | The exports of a module imported as a name. |
+| | The members of an enum and its `parse`. |
+| Elsewhere | The locals that the code there sees, the innermost of a name; the module's names and those it imports, as declared; std:builtins' exports; the keywords. Top-level code sees only the top-level values it has declared. |
+
+- Each item has its kind and, where it is known, its type.
+- It checks the program with the cursor's name replaced by one of its own, and takes what the checker found where it met that name.
+- So it gives nothing where the checker does not meet it: in a comment, a string or a type, and after an error earlier in the same function's body.
+- In a generic body, which is checked at its definition first, a type parameter's members are those that its bound gives.
+- Not offered yet: the methods of extends of interfaces, and an enum's member written alone where the enum is expected.
+
+#### Other messages
+
+| Message | Answer |
+|---|---|
+| A request of another method | The error `MethodNotFound` |
+| A request whose params are not of the method's shape | `InvalidParams`, with what `decode_json` found |
+| A message that is not JSON | A parse error |
+| A bug of the server | `InternalError`, its message on stderr |
+| Another notification | Ignored |
+| A header without a length | Ends the server with status 1, as the next message cannot be found |
+| `exit` | Ends the server with 0 after `shutdown`, and with 1 otherwise |
 
 ### clean
 
@@ -100,46 +470,118 @@ is a language server, of the [Language Server Protocol](https://microsoft.github
 lerta clean
 ```
 
-removes what builds keep in the [cache](#cache), in the directory that a build would take: each entry whose name starts with `runtime-`, the compiled runtimes and their staging directories, or is `thinlto` or starts with `thinlto-devirt-`, the linker's ThinLTO caches, of this compiler or an earlier one. It prints `removed <path>` for each, in the order of their names, but for one that a build renames or removes meanwhile, as it does with its staging directory, and leaves anything else that the directory holds, as one that `$LERTA_CACHE_DIR` names may hold more. Without the directory, it removes nothing and makes none. The next build compiles the runtime again. A build that runs meanwhile may fail, as what it links goes. It takes no arguments; a failure to find the directory, as without `HOME`, is reported as by a build.
+- Removes what builds keep in the [cache](#cache), in the directory that a build would take, of this compiler or an earlier one:
+  - each entry whose name starts with `runtime-`: the compiled runtimes and their staging directories;
+  - `thinlto`, and each entry whose name starts with `thinlto-devirt-`: the linker's ThinLTO caches.
+- It prints `removed <path>` for each, in the order of their names, but for one that a build renames or removes meanwhile, as it does with its staging directory.
+- It leaves anything else that the directory holds, as one that `$LERTA_CACHE_DIR` names may hold more.
+- Without the directory, it removes nothing and makes none.
+- The next build compiles the runtime again. A build that runs meanwhile may fail, as what it links goes.
+- It takes no arguments.
+- A failure to find the directory, as without `HOME`, is reported as by a build.
 
 ### Dumps
 
-The commands below print what the lexer, the parser, the checker and codegen make of the source. They are there for debugging the compiler. Each takes one argument, the source: more, or one that starts with `-`, is a usage error.
+- These commands print what the lexer, the parser, the checker and codegen make of the source.
+- They are there for debugging the compiler.
+- Each takes one argument, the source: more, or one that starts with `-`, is a usage error.
 
-```
-lerta dump-tokens <source>
-```
+| Command | Prints | Reads imports |
+|---|---|---|
+| `lerta dump-tokens <source>` | The tokens of one file | No |
+| `lerta dump-ast <source>` | The syntax tree of one file | No |
+| `lerta dump-checked <source>` | The checked syntax trees of the program | Yes |
+| `lerta dump-llvm <source>` | The LLVM IR of the program | Yes |
 
-prints the tokens of one file, without reading the modules it imports, one per line: `<line>:<column> <spaced|joined> <kind> "<text>"`, where `spaced` means that whitespace or the start of the line precedes it. An interpolated string is followed by its parts, indented: `text "<text>"` and `code <column> "<source>"`. In the quoted texts, the characters below U+0020, U+007F, `\` and `"` are written as `\xHH`. A lexical error is reported as a compile error.
+#### dump-tokens
 
-```
-lerta dump-ast <source>
-```
+- One token per line: `<line>:<column> <spaced|joined> <kind> "<text>"`, where `spaced` means that whitespace or the start of the line precedes it.
+- An interpolated string is followed by its parts, indented: `text "<text>"` and `code <column> "<source>"`.
+- In the quoted texts, the characters below U+0020, U+007F, `\` and `"` are written as `\xHH`.
+- A lexical error is reported as a compile error.
 
-prints the syntax tree of one file, likewise. A node is a line `<kind> <line>:<column>`, followed by its other fields, one per line and in the order of their names, indented under it: `<name>: <value>` for a value, written as in `dump-tokens` for a string and `-` for none, and `<name>:` followed by the contents on the next lines, indented further, for a node, a group of fields without a kind, or a list, whose items each follow a `-` line (or `- <value>` for a value). An empty list is `[]`. A group of fields without a kind that has a position writes it as its fields `line` and `column`, before the others. A syntax error is reported as a compile error.
+#### dump-ast
 
-```
-lerta dump-checked <source>
-```
+- A node is a line `<kind> <line>:<column>`, followed by its other fields, one per line and in the order of their names, indented under it:
+  - `<name>: <value>` for a value, written as in `dump-tokens` for a string and `-` for none;
+  - `<name>:` followed by the contents on the next lines, indented further, for a node, a group of fields without a kind, or a list.
+- The items of a list each follow a `-` line, or are `- <value>` for a value. An empty list is `[]`.
+- A group of fields without a kind that has a position writes it as its fields `line` and `column`, before the others.
+- A syntax error is reported as a compile error.
 
-loads and checks the program as `build` does, without generating code. For each module that is not a standard module, in the order they are loaded, it prints a line `module <path>`, with the path as given for the entry module and as diagnostics write it for the others, then the module's syntax tree as `dump-ast` prints it, as loaded, with the implicit import of `std:builtins`. The header line of each node that the checker gave a type is followed by ` : <type>`, and by ` => <type>` if the node is converted where it is used, such as an `Int` passed as an `Int?`; types are written as in messages. The bodies of generic functions, which are checked only for each use, have no types. Warnings and errors are reported as by `build`. The rest of what the checker works out (the captures of closures, the shared variables, the instances of generic functions and their checked bodies, the exports, the extends and the objects) is not printed.
+#### dump-checked
 
-```
-lerta dump-llvm <source>
-```
+- Loads and checks the program as `build` does, without generating code.
+- For each module that is not a standard module, in the order they are loaded, it prints:
+  - a line `module <path>`, with the path as given for the entry module and as diagnostics write it for the others;
+  - the module's syntax tree as `dump-ast` prints it, as loaded, with the implicit import of `std:builtins`.
+- The header line of each node that the checker gave a type is followed by ` : <type>`, and by ` => <type>` if the node is converted where it is used, such as an `Int` passed as an `Int?`. Types are written as in messages.
+- The bodies of generic functions, which are checked only for each use, have no types.
+- Not printed: the rest of what the checker works out: the captures of closures, the shared variables, the instances of generic functions and their checked bodies, the exports, the extends and the objects.
+- Warnings and errors are reported as by `build`.
 
-prints the LLVM IR that `build` has clang compile, before optimization, with the modules as one rather than one each. It names no target, so it is the same for every one; `build` also gives every function the attributes of the target, from [the cached runtime](#cache). Warnings and errors are reported as by `build`.
+#### dump-llvm
+
+- Prints the LLVM IR that `build` has clang compile, before optimization, with the modules as one rather than one each.
+- It names no target, so it is the same for every one. `build` also gives every function the attributes of the target, from [the cached runtime](#cache).
+- Warnings and errors are reported as by `build`.
 
 ## Cache
 
-The runtime, with [libuv](../internals.md#platforms), which the compiler carries the sources of, is compiled once for each kind of build and kept in a cache, so that a build only links it, with the system's libraries that libuv needs. An executable so holds libuv: given to others, it goes with libuv's license notice, `third_party/libuv/LICENSE`. An optimized build keeps what ThinLTO optimizes there too.
+- The runtime, with [libuv](../internals.md#platforms), whose sources the compiler carries, is compiled once for each kind of build and kept in a cache. A build only links it, with the system's libraries that libuv needs.
+- An executable so holds libuv: given to others, it goes with libuv's license notice, `third_party/libuv/LICENSE`.
+- An optimized build keeps what ThinLTO optimizes there too.
 
-- **Where.** In `$LERTA_CACHE_DIR`, or else the system's place for caches: on Linux and macOS, `$XDG_CACHE_HOME/lerta`, or else `~/.cache/lerta`, and without `HOME` either, the build prints `no cache directory: set HOME or LERTA_CACHE_DIR`; on Windows, `%LOCALAPPDATA%\lerta`, and without `LOCALAPPDATA`, the build prints `no cache directory: set LOCALAPPDATA or LERTA_CACHE_DIR`. An empty variable counts as unset. The build exits with code 1 then, as it does with `cannot make the cache directory: <path>` if the directory cannot be made.
-- **Names.** Each compiled runtime is a directory of its object files and `function_attributes.txt`, named so that a person can tell them apart, such as `runtime-debug-arm64-apple-darwin25.6.0-clang17-3F9A2C1D8E4B7065`: `debug`, or `release` with `-O`, or `release-checked` with `-O --memory-checks`; the target, or the host's as `clang --version` gives it; clang's major version; and a hash of 64 bits, in 16 hex digits, of the runtime's sources and libuv's, of clang's flags, of the names of the files it holds and of what `clang --version` prints, since `-flto` objects depend on clang's version. A target that holds `/` or `\` would name a path, and the build prints `not a target: <target>` and exits with code 1.
-- **Builds at once.** A build compiles the runtime into a directory beside its place, named after it with `.staging-<process ID>-<name>` added, the name being that of the build's temporary directory, and renames that into place, so builds that run at once never see a part of one. If clang fails, nothing is left; a build killed meanwhile leaves its staging directory, which the next build that compiles the same runtime removes, as it does that of any process that is no longer running. Since it judges that by process IDs, which are those of its own system, a cache must not be shared with builds on another system or in another container, whose staging directories it would take as left. If the rename fails other than because another build has put the same runtime there, the build prints `cannot move the compiled runtime into the cache: <path>` and exits with code 1. A compiled runtime that has lost some of its objects is not compiled again, since a build may be linking with the others: the build prints `the cached runtime <path> is incomplete: remove it` and exits with code 1.
-- **ThinLTO.** An optimized build has the linker keep what ThinLTO optimizes in `thinlto-devirt-8` in the cache directory, for every target, as the linker that clang uses by default takes it: ld64 for macOS, lld for Windows, and GNU ld with LLVM's plugin for Linux; a clang that links with lld for Linux fails an optimized build. The name carries an option of LLVM's that the build gives the linker, which the linker leaves out of the keys of its entries, so that builds with another value of it share none.
+### Where
+
+| System | Directory |
+|---|---|
+| Any | `$LERTA_CACHE_DIR`, if set |
+| Linux, macOS | `$XDG_CACHE_HOME/lerta`, or else `~/.cache/lerta` |
+| Windows | `%LOCALAPPDATA%\lerta` |
+
+- An empty variable counts as unset.
+- These errors exit with code 1:
+
+| Error | Cause |
+|---|---|
+| `no cache directory: set HOME or LERTA_CACHE_DIR` | On Linux and macOS, none of the variables is set. |
+| `no cache directory: set LOCALAPPDATA or LERTA_CACHE_DIR` | On Windows, neither variable is set. |
+| `cannot make the cache directory: <path>` | The directory cannot be made. |
+
 - Other failures of the file system, such as a cache directory that cannot be written, are reported as [std:io](std.md#stdio) reports them, as an uncaught error.
-- **Removal.** No build removes old runtimes, nor staging directories other than those above, such as one whose process ID another process now has, and the linker prunes `thinlto-devirt-8` by its own policy only: [`lerta clean`](#clean) removes them all, a ThinLTO cache of another name, as `thinlto` of earlier compilers, too.
+
+### Names
+
+- Each compiled runtime is a directory of its object files, `function_attributes.txt` and `coro_end_type.txt`.
+- It is named so that a person can tell them apart, such as `runtime-debug-arm64-apple-darwin25.6.0-clang17-3F9A2C1D8E4B7065`:
+  - the kind: `debug`, or `release` with `-O`, or `release-checked` with `-O --memory-checks`;
+  - the target, or the host's as `clang --version` gives it;
+  - clang's major version;
+  - a hash of 64 bits, in 16 hex digits, of the runtime's sources and libuv's, of clang's flags, of the names of the files it holds and of what `clang --version` prints, since `-flto` objects depend on clang's version.
+- A target that holds `/` or `\` would name a path: the build prints `not a target: <target>` and exits with code 1.
+
+### Builds at once
+
+- A build compiles the runtime into a directory beside its place, named after it with `.staging-<process ID>-<name>` added, the name being that of the build's temporary directory.
+- It renames that into place, so builds that run at once never see a part of one.
+- If clang fails, nothing is left.
+- A build killed meanwhile leaves its staging directory. The next build that compiles the same runtime removes it, as it does that of any process that is no longer running.
+  - Since it judges that by process IDs, which are those of its own system, a cache must not be shared with builds on another system or in another container, whose staging directories it would take as left.
+- If the rename fails other than because another build has put the same runtime there, the build prints `cannot move the compiled runtime into the cache: <path>` and exits with code 1.
+- A compiled runtime that has lost some of its files is not compiled again, since a build may be linking with the others: the build prints `the cached runtime <path> is incomplete: remove it` and exits with code 1.
+
+### ThinLTO
+
+- An optimized build has the linker keep what ThinLTO optimizes in `thinlto-devirt-8` in the cache directory, for every target.
+- The linker is the one that clang uses by default: ld64 for macOS, lld for Windows, and GNU ld with LLVM's plugin for Linux. A clang that links with lld for Linux fails an optimized build.
+- The name carries an option of LLVM's that the build gives the linker, which the linker leaves out of the keys of its entries, so that builds with another value of it share none.
+
+### Removal
+
+- No build removes old runtimes, nor staging directories other than those above, such as one whose process ID another process now has.
+- The linker prunes `thinlto-devirt-8` by its own policy only.
+- [`lerta clean`](#clean) removes them all, a ThinLTO cache of another name, as `thinlto` of earlier compilers, too.
 
 ## Diagnostics
 
@@ -150,12 +592,25 @@ Diagnostics are printed to stderr, one per line:
 <path>:<line>:<column>: warning: <message>
 ```
 
-- A compile error stops the build, and the exit code is 1. The compiler goes on past an error to find the others, and reports them together, module by module in the order the modules are read, and in source order in each:
-  - A syntax error ends its top-level statement alone; parsing goes on from the next top-level line, but for `else`, `catch` and `finally`, which continue the statement. The syntax errors of a module are reported without checking the program.
-  - A type error ends the checking of the part of the program it is found in: a top-level statement, a function's or a method's body, a generic one's at its definition, an instance of a generic function, or the field initializers of a class or struct. What needs a part with an error, such as a call of a function whose return type the body with the error would tell, or a top-level value whose declaration has the error, is not checked, and reports no error of its own. An error in what the modules declare, such as their imports, ends the checking.
-  - The warnings are printed before the errors; the names never used of the top-level code and the imports are not reported with errors, since the part with an error may use them.
-- A warning does not stop the build, unless `-Werror` is given. Those of the standard modules are not reported, since the program cannot act on them; each standard module builds on its own without warnings.
-- If `<source>` is not a file, `'<source>' is not a file` is printed, and the exit code is 1.
+- Lines and columns start at 1, and columns count code points.
 - If clang fails, its messages are printed as they are, and the exit code is 1.
 
-Lines and columns start at 1, and columns count code points.
+### Errors
+
+- A compile error stops the build, and the exit code is 1.
+- The compiler goes on past an error to find the others, and reports them together, module by module in the order the modules are read, and in source order in each.
+- **Syntax errors.** A syntax error ends its top-level statement alone. Parsing goes on from the next top-level line, but for `else`, `catch` and `finally`, which continue the statement. The syntax errors of a module are reported without checking the program.
+- **Type errors.** A type error ends the checking of the part of the program it is found in:
+  - a top-level statement;
+  - a function's or a method's body, a generic one's at its definition;
+  - an instance of a generic function;
+  - the field initializers of a class or struct.
+- What needs a part with an error, such as a call of a function whose return type the body with the error would tell, or a top-level value whose declaration has the error, is not checked, and reports no error of its own.
+- An error in what the modules declare, such as their imports, ends the checking.
+
+### Warnings
+
+- A warning does not stop the build, unless [`-Werror`](#-werror) is given.
+- The warnings are printed before the errors.
+- The names never used of the top-level code and the imports are not reported with errors, since the part with an error may use them.
+- Those of the standard modules are not reported, since the program cannot act on them. Each standard module builds on its own without warnings.

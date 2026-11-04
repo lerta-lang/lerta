@@ -1,20 +1,61 @@
 # Standard modules
 
-`'std:<name>'` is the Lerta file `std/<name>.lerta` of the repository, which the compiler carries in it and a program [imports](modules.md) as any module: `'std:async'`, `'std:http'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:process'`, `'std:scanner'` and `'std:time'` so far (below), and `'std:builtins'`, the module of the [builtins](builtins.md). A standard module may import the files of `std/`'s directories, as `std/internal/`, by relative paths, `import JsonWriter from './internal/json_writer'`, as a file imports another; those files are not standard modules: a program cannot import them as `std:...`, and their warnings show only when a standard module that imports them is built on its own.
+- `'std:<name>'` is the Lerta file `std/<name>.lerta` of the repository. The compiler carries it, and a program [imports](modules.md) it as any module.
+- The standard modules so far: `'std:async'`, `'std:http'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:process'`, `'std:scanner'` and `'std:time'` (below), and `'std:builtins'`, the module of the [builtins](builtins.md).
+- A standard module may import the files of `std/`'s directories, as `std/internal/`, by relative paths, as a file imports another: `import JsonWriter from './internal/json_writer'`.
+  - Those files are not standard modules: a program cannot import them as `std:...`.
+  - Their warnings show only when a standard module that imports them is built on its own.
 
 ## std:async
 
 | Name | |
 |---|---|
-| `Deferred<T>` | A class of a promise and what settles it, apart: its method `promise(): Promise<T>` gives a promise that waits until its method `resolve(value: T)` or `reject(error: Error)` is called. The first of them settles it, and later ones change nothing. `promise()` gives the same promise each time; it is made when it is first asked for, so a Deferred that is never settled, or whose promise is never asked for, leaves nothing waiting. A promise rejected with nothing to await it ends the program, as any promise's does (see [functions that await](functions.md#functions-that-await)); one never settled keeps what awaits it waiting, which the debug runtime reports as a leak (see [build](compiler.md#build)). |
-| `Signal` | A `Deferred` of a promise of no value: `promise(): Promise`, `resolve()` and `reject(error: Error)`, as those of `Deferred<T>`, for a wait that only tells that something has happened. |
-| `spawn<T>(task: Promise<T>)` | Lets the work of a promise go on without awaiting it, `spawn serve(socket)`, where a promise must otherwise be awaited (see [errors](errors.md#discarded-values)), and gives nothing. The work goes on as any started does, the call that made the promise having run up to its first `await`; an error it ends with, which nothing awaits, ends the program, as that of any promise dropped (see [functions that await](functions.md#functions-that-await)). |
-| `all(promises)` | For `Promise<T>[]`, a `Promise<T[]>` of the value of each promise, in their order, once all are resolved; for `Promise[]`, of promises without a value, a `Promise` without one, resolved once all are. The error of the first promise that is rejected rejects it at once. |
-| `race(promises)` | For `Promise<T>[]`, a `Promise<T>` of the value or the error of the first of the promises to be settled; for `Promise[]`, a `Promise` without a value. The others are then cancelled, and it is settled once they have ended. Of no promises, it is never settled. |
-| `timeout(promise, seconds)` | For a `Promise<T>`, a `Promise<T>` of its value or its error if it is settled within the seconds; for a `Promise`, a `Promise` without a value. Otherwise, the promise is cancelled and, once it has ended, a `TimeoutError` rejects it, `timed out after <seconds> seconds`; for seconds below 0, the error of `sleep` rejects it instead. |
+| `Deferred<T>` | A class of a promise and what settles it, apart (below). |
+| `Signal` | A `Deferred` of a promise of no value (below). |
+| `spawn<T>(task: Promise<T>)` | Lets the work of a promise go on without awaiting it (below). |
+| `all<T>(promises: Promise<T>[])` | A promise of the values of all the promises (below). |
+| `race<T>(promises: Promise<T>[])` | A promise of the outcome of the first promise settled (below). |
+| `timeout<T>(promise: Promise<T>, seconds: Float)` | A promise of the outcome of a promise settled in time (below). |
 | `TimeoutError` | The error of `timeout`, a struct of one field, `message`. |
 
-A promise that goes on after `race` or `timeout` cancels it, as a write in progress does, delays them as long. `all`, `race` and `timeout` await each of the promises, so that the error of one that is rejected after the outcome is decided ends nothing. Cancelled, they cancel the promises they were given (see [cancellation](functions.md#cancellation)); an error that rejects `all` leaves the others going on. Promises with a value and without one are not mixed, as an array holds items of one type, and `all` of promises of an optional `Int`, `Byte`, `Float` or `Bool` is an error, as no array holds them (see [arrays](types.md#array)). `all`, `race` and `timeout` are generic functions that call the methods `gathered`, `first_settled` and `settled_within` of an extend of `Promise<T>[]` and one of `Promise[]`, which are in effect where `std:async` is imported (see [objects](objects.md#extend)), so those names are taken there; `timeout` passes its promise in an array of one, as a `Promise` cannot be extended.
+### Deferred
+
+- `promise(): Promise<T>` gives a promise that waits until `resolve(value: T)` or `reject(error: Error)` is called.
+- The first of them settles it; later ones change nothing.
+- `promise()` gives the same promise each time. It is made when it is first asked for, so a Deferred that is never settled, or whose promise is never asked for, leaves nothing waiting.
+- A promise rejected with nothing to await it ends the program, as any promise's does (see [functions that await](functions.md#functions-that-await)).
+- One never settled keeps what awaits it waiting, which the debug runtime reports as a leak (see [build](compiler.md#build)).
+
+### Signal
+
+- `promise(): Promise`, `resolve()` and `reject(error: Error)`, as those of `Deferred<T>`.
+- For a wait that only tells that something has happened.
+
+### spawn
+
+- `spawn serve(socket)` lets the work go on where a promise must otherwise be awaited (see [errors](errors.md#discarded-values)). It gives nothing.
+- The work goes on as any started does, the call that made the promise having run up to its first `await`.
+- An error it ends with, which nothing awaits, ends the program, as that of any promise dropped (see [functions that await](functions.md#functions-that-await)).
+
+### all, race and timeout
+
+| Call | Of `Promise<T>[]` or `Promise<T>` | Of `Promise[]` or `Promise` |
+|---|---|---|
+| `all(promises)` | A `Promise<T[]>` of the value of each promise, in their order, once all are resolved. | A `Promise` without a value, resolved once all are. |
+| `race(promises)` | A `Promise<T>` of the value or the error of the first promise to be settled. | A `Promise` without a value. |
+| `timeout(promise, seconds)` | A `Promise<T>` of its value or its error if it is settled within the seconds. | A `Promise` without a value. |
+
+- **all.** The error of the first promise that is rejected rejects it at once. That error leaves the others going on.
+- **race.** The others are then cancelled, and it is settled once they have ended. Of no promises, it is never settled.
+- **timeout.** If the promise is not settled in time, it is cancelled and, once it has ended, a `TimeoutError` rejects it: `timed out after <seconds> seconds`. For seconds below 0, the error of `sleep` rejects it instead.
+- A promise that goes on after `race` or `timeout` cancels it, as a write in progress does, delays them as long.
+- They await each of the promises, so that the error of one that is rejected after the outcome is decided ends nothing.
+- Cancelled, they cancel the promises they were given (see [cancellation](functions.md#cancellation)).
+- Promises with a value and without one are not mixed, as an array holds items of one type.
+- `all` of promises of a `T?` that no array holds is an error (see [optional values](types.md#optional-values)).
+- **Extends.** They are generic functions that call the methods `gathered`, `first_settled` and `settled_within` of an extend of `Promise<T>[]` and one of `Promise[]`.
+  - Those extends are in effect where `std:async` is imported (see [objects](objects.md#extend)), so those names are taken there.
+  - `timeout` passes its promise in an array of one, as a `Promise` cannot be extended.
 
 ## std:http
 
@@ -30,72 +71,393 @@ response := await fetch('http://127.0.0.1:8080/', method: 'POST', body: 'hi')
 print await response.text()
 ```
 
+### Messages
+
 | Name | |
 |---|---|
-| `serve(handler: (Request) -> Promise<Response>, options: ServerOptions): Server` | Listens at once, as `listen_tcp` does, and serves each connection until the server is closed. The options are given as named arguments, as `serve(handle, port: 8080)`. |
-| `ServerOptions` | A struct of `host = '127.0.0.1'` and `port = 0`, where the server listens, at a free port for 0; the limits of a request, `max_line = 8192`, the bytes of its request line and of each field before its CR LF, or its LF alone, answered 414 and 431 beyond them, `max_fields = 100`, answered 431 beyond them, and `max_body = 10485760`, the length of its body, answered 413 beyond it before the body is read, or, for a body in chunks, failing the handler's read with an `IOError`, `a body too large`, once its data goes beyond it, or its lines, of the sizes, the line end after each chunk and the trailer, each counted with CR LF, go beyond it and 64 KiB more together; and its timeouts, in seconds: `idle_timeout = 5.0`, until the request line of a request has come, after which a connection is closed without a response, `head_timeout = 30.0`, until the rest of its head has, answered 408, and `body_timeout = 30.0`, for each chunk of its body, which for a body in chunks includes the lines read before it, as the trailer, after which the handler's read fails with an `IOError`, `a body timed out`. A negative one throws a `ValueError`, `a negative <name>: <value>`, as `serve` starts. |
-| `Server` | A class of `port: Int`, the port it listens at, and `close(): Promise`, which stops listening and closes the connections that wait for their next request, before the whole of its request line has come, and those that read and drop what the client still sends after their last response, even if what one leaves unread resets it; a request being served gets its response, with `connection: close`, and its connection ends then, as it ends after any response. It resolves once every connection has ended, as does a `close` of a closed server. |
-| `Request` | A struct of `method: String`; `url: String`, the target in absolute form as it is, or `http://` with the `Host` field and the target, or, in place of a `Host` that an HTTP/1.0 request leaves out, the host that `serve` was given and the port, an IPv6 address in brackets, so `http://0.0.0.0:8080/` for a server that listens at every address; `headers: Headers`; `body: Body`, a `Reader` in a request that the server gives the handler; and `text(): Promise<String>` and `binary(): Promise<Binary>`, which read the body to its end. `text` throws a `ValueError`, `a body is not valid UTF-8`. |
-| `Response` | A struct of `body: Body = ''`, a `Reader` in a response that `fetch` gives, `status = 200` and `headers = Headers()`, and `text()` and `binary()`, as those of `Request`. |
-| `Body` | `String \| Binary \| Reader`, of [std:io](#stdio): a body that comes is a `Reader`, read as it comes, and one that is sent as a `Reader` is sent as it comes, each read of it awaiting the write of the one before, so that it goes no faster than the peer takes it, and is closed once sent, or once it is not to be, as for a response that has no body. |
-| `Headers` | A class of `fields: (String, String)[]`, each name in lower case with its value, and the methods `get(name): String?`, the values of the name joined by `, `, or nil; `get_all(name): String[]`, the values apart, as those of `Set-Cookie`, which may hold `, `; `contains(name)`, which `name in headers` calls; `set(name, value)`, which replaces the name's values; `append(name, value)`; and `remove(name)`, which tells whether the name had any. Names are told apart regardless of case. `set` and `append` throw a `ValueError` for a name that is not a token of HTTP, `not a header name: <name>`, and for a value that holds an ASCII control character other than a tab, or DEL, `a header value holds a control character: <name>`, as RFC 9110 allows none, so that a value taken from a request cannot add fields to a response. |
+| `Request` | A struct of `method: String`, `url: String`, `headers: Headers` and `body: Body`, and the methods `text(): Promise<String>` and `binary(): Promise<Binary>`, which read the body to its end. |
+| `Response` | A struct of `body: Body = ''`, `status = 200` and `headers = Headers()`, and `text()` and `binary()`, as those of `Request`. |
+| `Body` | `String \| Binary \| Reader`, the `Reader` of [std:io](#stdio). |
+| `Headers` | A class of `fields: (String, String)[]`, each name in lower case with its value, and the methods below. |
 
-- A connection serves its requests one after another. It goes on after a response to HTTP/1.1 unless the request's `Connection` holds `close`, and after one to HTTP/1.0 only if it holds `keep-alive`. What the handler leaves unread of a body is read and dropped before the next request; if that read fails, the connection is closed. To an HTTP/1.1 request with a body and `Expect: 100-continue`, the server sends `100 Continue` as the handler starts to read the body, or before the head of a response whose body is a `Reader`, which may read it; if the handler answers without reading it, the client may not send it, so the connection is closed after the response.
-- A body is read by `Content-Length`, or by its last chunk for `Transfer-Encoding: chunked`, whose extensions and trailer fields are dropped. A read of a body fails with an `IOError`: `a body ended early` once the connection ends before it, and `a malformed body` for a chunk that is malformed, as a size that is not hexadecimal, which only spaces and tabs may follow, and only before its extensions, or a line longer than 64 KiB. After a read that fails, every later one fails so too, and the response gives `Connection: close` and closes the connection.
-- The server answers 400, without calling the handler, a request line that is not three words, a method that is not a token, a target that holds a character that is not printable ASCII or that neither starts with `/` nor is a URL of `http` or `https`, as `*`, a field that `Headers` does not take or that has no `:`, a line that is not UTF-8, a `Content-Length` that is not digits alone, a `Host` that is empty, holds a character that is not printable ASCII, or holds `/`, `\`, `?`, `#` or `@`, as it would change the path of the URL, a second `Host`, and an HTTP/1.1 request without one; 505 a version other than HTTP/1.1 and HTTP/1.0; and an HTTP/1.0 request with `Transfer-Encoding`, one whose `Transfer-Encoding` names no coding, its empty elements dropped, or `chunked` more than once, or one with both `Transfer-Encoding` and `Content-Length`, which could tell another end of the body to a proxy before the server; and 501 a request with a `Transfer-Encoding` other than `chunked`. It closes the connection after each. These responses, and the 500 below, have an empty body.
-- A handler that throws, as one does that reads a body that ends before its `Content-Length`, is answered 500, and so is a `Response` of a status outside 200 to 599, of a `Reader` as its body, or of fields that `Headers` would not take, put in `fields` directly. The connection is closed then.
-- The server writes `Content-Length` and `Connection` itself, in place of those the handler gives, and leaves out its `Transfer-Encoding`. It writes `Date`, the time of the response in the form of RFC 9110, `Thu, 29 Oct 2026 08:00:00 GMT`, unless the handler gives one. A body that is a `Reader` has no `Content-Length`: it is sent with `Transfer-Encoding: chunked`, or to an HTTP/1.0 request as it is, ended by closing the connection. What its reads give at once, without waiting, is joined, up to 64 KiB, into one chunk and one write, the last chunk with it once they give the end, so that a `Reader` of small pieces takes few writes; what comes after a read that waits goes in the next, so it is not held back. A read of it that fails closes the connection, which leaves its last chunk unsent, or, for HTTP/1.0, leaves the body cut short, which the client cannot tell from a whole one. A response to `HEAD` has no body but its `Content-Length` or `Transfer-Encoding`; one of 204 or 304 has neither.
-- A connection is closed once what the client still sends, as a body that the server did not read, has been read and dropped, for up to 2 seconds and 64 KiB, after the server has ended its writing side, so that the client gets the response rather than a reset; closing the server cuts this short.
-- Each connection is served in a function of its own that catches what it throws. A failure of an accept while the server is open rejects a promise that nothing awaits, which ends the program (see [functions that await](functions.md#functions-that-await)): on Windows, where libuv stops listening once it cannot make a socket for the next connection, as when the system runs out of them; elsewhere libuv drops a connection it cannot take, and one that its peer resets is served (see [std:net](#stdnet)).
+- **Request.**
+  - Its `url` is the target in absolute form as it is, or else `http://` with the `Host` field and the target.
+  - In place of a `Host` that an HTTP/1.0 request leaves out, it takes the host that `serve` was given and the port, an IPv6 address in brackets: `http://0.0.0.0:8080/` for a server that listens at every address.
+  - Its `body` is a `Reader` in a request that the server gives the handler.
+  - `text` throws a `ValueError`, `a body is not valid UTF-8`.
+- **Response.** Its `body` is a `Reader` in a response that `fetch` gives.
+- **Body.**
+  - A body that comes is a `Reader`, read as it comes.
+  - One that is sent as a `Reader` is sent as it comes, each read of it awaiting the write of the one before, so that it goes no faster than the peer takes it.
+  - It is closed once sent, or once it is not to be, as for a response that has no body.
 
-The client:
+#### Headers
+
+| Method | |
+|---|---|
+| `get(name): String?` | The values of the name joined by `, `, or nil. |
+| `get_all(name): String[]` | The values apart, as those of `Set-Cookie`, which may hold `, `. |
+| `contains(name)` | Whether the name has a value; `name in headers` calls it. |
+| `set(name, value)` | Replaces the name's values. |
+| `append(name, value)` | Adds a value. |
+| `remove(name)` | Removes the name's values, and tells whether it had any. |
+
+- Names are told apart regardless of case.
+- `set` and `append` throw a `ValueError`:
+  - `not a header name: <name>` for a name that is not a token of HTTP;
+  - `a header value holds a control character: <name>` for a value that holds an ASCII control character other than a tab, or DEL.
+  - Why: RFC 9110 allows none, and so a value taken from a request cannot add fields to a response.
+
+### The server
+
+| Name | |
+|---|---|
+| `serve(handler: (Request) -> Promise<Response>, options: ServerOptions): Server` | Listens at once, as `listen_tcp` does, and serves each connection until the server is closed. The options are named arguments: `serve(handle, port: 8080)`. |
+| `ServerOptions` | A struct of the options below. |
+| `Server` | A class of `port: Int`, the port it listens at, and `close(): Promise` (below). |
+
+#### ServerOptions
+
+| Option | |
+|---|---|
+| `host = '127.0.0.1'`, `port = 0` | Where the server listens; at a free port for 0. |
+| `max_line = 8192` | The bytes of the request line and of each field, before its CR LF or its LF alone. It answers 414 for a longer request line and 431 for a longer field. |
+| `max_fields = 100` | The fields of a request. Beyond them it answers 431. |
+| `max_body = 10485760` | The length of a body (below). |
+| `idle_timeout = 5.0` | Seconds until the request line of a request has come. After them, the connection is closed without a response. |
+| `head_timeout = 30.0` | Seconds until the rest of its head has come. After them it answers 408. |
+| `body_timeout = 30.0` | Seconds for each chunk of its body, which for a body in chunks includes the lines read before it, as the trailer. After them the handler's read fails with an `IOError`, `a body timed out`. |
+
+- A body beyond `max_body` is answered 413 before the body is read.
+- For a body in chunks, the handler's read fails with an `IOError`, `a body too large`, once its data goes beyond `max_body`, or once its lines go beyond it and 64 KiB more together: the sizes, the line end after each chunk and the trailer, each counted with CR LF.
+- A negative option throws a `ValueError`, `a negative <name>: <value>`, as `serve` starts.
+
+#### Server.close
+
+- It stops listening and closes the connections that wait for their next request, before the whole of its request line has come.
+- It also closes those that read and drop what the client still sends after their last response, even if what one leaves unread resets it.
+- A request being served gets its response, with `connection: close`, and its connection ends then, as it ends after any response.
+- It resolves once every connection has ended, as does a `close` of a closed server.
+
+#### Connections
+
+- A connection serves its requests one after another.
+- It goes on after a response to HTTP/1.1 unless the request's `Connection` holds `close`, and after one to HTTP/1.0 only if it holds `keep-alive`.
+- What the handler leaves unread of a body is read and dropped before the next request; if that read fails, the connection is closed.
+- **100-continue.** To an HTTP/1.1 request with a body and `Expect: 100-continue`, the server sends `100 Continue` as the handler starts to read the body, or before the head of a response whose body is a `Reader`, which may read it.
+  - If the handler answers without reading it, the client may not send it, so the connection is closed after the response.
+- **Closing.** A connection is closed once what the client still sends, as a body that the server did not read, has been read and dropped, for up to 2 seconds and 64 KiB, after the server has ended its writing side.
+  - Why: so that the client gets the response rather than a reset. Closing the server cuts this short.
+- Each connection is served in a function of its own that catches what it throws.
+- **A failed accept.** A failure of an accept while the server is open rejects a promise that nothing awaits, which ends the program (see [functions that await](functions.md#functions-that-await)).
+  - This happens on Windows, where libuv stops listening once it cannot make a socket for the next connection, as when the system runs out of them.
+  - Elsewhere libuv drops a connection it cannot take, and one that its peer resets is served (see [std:net](#stdnet)).
+
+#### Reading a request
+
+- A body is read by `Content-Length`, or by its last chunk for `Transfer-Encoding: chunked`, whose extensions and trailer fields are dropped.
+- A read of a body fails with an `IOError`:
+  - `a body ended early` once the connection ends before it;
+  - `a malformed body` for a chunk that is malformed, as a size that is not hexadecimal, which only spaces and tabs may follow, and only before its extensions, or a line longer than 64 KiB.
+- After a read that fails, every later one fails so too, and the response gives `Connection: close` and closes the connection.
+
+#### Requests answered without the handler
+
+The server answers these without calling the handler, and closes the connection after each:
+
+| Status | Request |
+|---|---|
+| 400 | A request line that is not three words. |
+| | A method that is not a token. |
+| | A target that holds a character that is not printable ASCII, or that neither starts with `/` nor is a URL of `http` or `https`, as `*`. |
+| | A field that `Headers` does not take, or that has no `:`. |
+| | A line that is not UTF-8. |
+| | A `Content-Length` that is not digits alone. |
+| | A `Host` that is empty, holds a character that is not printable ASCII, or holds `/`, `\`, `?`, `#` or `@`, as it would change the path of the URL; a second `Host`; an HTTP/1.1 request without one. |
+| | An HTTP/1.0 request with `Transfer-Encoding`; one whose `Transfer-Encoding` names no coding, its empty elements dropped, or `chunked` more than once; one with both `Transfer-Encoding` and `Content-Length`, which could tell another end of the body to a proxy before the server. |
+| 505 | A version other than HTTP/1.1 and HTTP/1.0. |
+| 501 | A `Transfer-Encoding` other than `chunked`. |
+
+These responses, and the 500 below, have an empty body.
+
+#### Errors of the handler
+
+- A handler that throws is answered 500, as one does that reads a body that ends before its `Content-Length`.
+- So is a `Response` of a status outside 200 to 599, of a `Reader` as its body, or of fields that `Headers` would not take, put in `fields` directly.
+- The connection is closed then.
+
+#### Writing a response
+
+- The server writes `Content-Length` and `Connection` itself, in place of those the handler gives, and leaves out its `Transfer-Encoding`.
+- It writes `Date`, the time of the response in the form of RFC 9110, `Thu, 29 Oct 2026 08:00:00 GMT`, unless the handler gives one.
+- **A `Reader` body** has no `Content-Length`. It is sent with `Transfer-Encoding: chunked`, or to an HTTP/1.0 request as it is, ended by closing the connection.
+  - What its reads give at once, without waiting, is joined, up to 64 KiB, into one chunk and one write, the last chunk with it once they give the end, so that a `Reader` of small pieces takes few writes.
+  - What comes after a read that waits goes in the next, so it is not held back.
+  - A read of it that fails closes the connection. That leaves its last chunk unsent, or, for HTTP/1.0, the body cut short, which the client cannot tell from a whole one.
+- A response to `HEAD` has no body but its `Content-Length` or `Transfer-Encoding`; one of 204 or 304 has neither.
+
+### The client
 
 | Name | |
 |---|---|
 | `fetch(url: String, options: FetchOptions): Promise<Response>` | Sends a request with a client that the program shares, as `Client().fetch` does. |
-| `FetchOptions` | A struct of `method = 'GET'`, `headers = Headers()`, `body: Body = ''` and `follow_redirects = true`, given as named arguments, as `fetch(url, method: 'POST', body: 'hi')`. |
-| `Client` | A class of `idle_timeout = 4.0`, the seconds it keeps a connection, and `max_idle = 8`, the connections it keeps to each host and port, and the methods `fetch(url: String, options: FetchOptions): Promise<Response>`, resolved once the head of the response has come, and `close()`, which closes the connections kept; the client keeps those it uses after. |
+| `FetchOptions` | A struct of `method = 'GET'`, `headers = Headers()`, `body: Body = ''` and `follow_redirects = true`, given as named arguments: `fetch(url, method: 'POST', body: 'hi')`. |
+| `Client` | A class of `idle_timeout = 4.0`, the seconds it keeps a connection, and `max_idle = 8`, the connections it keeps to each host and port, and the methods below. |
 
-- A URL is `http://`, of a host, an IPv6 address in brackets, a port, 80 if none, a path and a query, which the request line takes; the scheme is told regardless of case, and the fragment is left out. `fetch` throws a `ValueError`, `not an http URL: <url>`, for another scheme, a URL without a host, with a user, a host with a space, a control character or one that is not ASCII, or a port that is not digits or is past 65535. In the path and the query, a space, a control character, one that is not ASCII, and `"`, `<` and `>`, with `^`, `` ` ``, `{` and `}` in the path and `'` in the query, are sent as `%XX` of each byte of their UTF-8, as the WHATWG URL Standard has them; a `%` is sent as it is. An `https` URL, which needs TLS, is rejected with an `IOError`, `https is not supported so far: <url>`.
-- It throws a `ValueError`, `not a method: <method>`, for a method that is not a token, and for fields that `Headers` would not take, put in `fields` directly, before it connects.
-- The client writes `Host` and `Content-Length` itself, in place of those it is given in any case, and leaves out `Connection`, as connections are kept alive by default in HTTP/1.1, and `Transfer-Encoding`. It writes a `Content-Length` for a body that is not empty, and for one of `POST`, `PUT` and `PATCH` that is, and `Transfer-Encoding: chunked` for one that is a `Reader`, whose chunks are joined as the server's are, which it sends on a new connection, as it cannot send it again on one that the server has closed meanwhile, while it reads the response, which a server may give before it has read the body: what is left of the body is then not sent, and the connection is not kept. The `Reader` is closed once the final response has come, past those of redirects, or the request has failed. A read of it that fails fails the request with its error.
-- A response's body ends by its `Content-Length`, by its last chunk for `Transfer-Encoding: chunked`, whose extensions and trailer fields are dropped, and which goes before a `Content-Length`, or else with the connection. A `Content-Length` written twice is malformed, even with one value. A response to `HEAD`, and one of 204 or 304, has none. A response of 100 to 199 is passed over for the one that follows it, but a 101, which switches to another protocol, is rejected with an `IOError`, `switching protocols not supported`.
-- A malformed response is rejected with an `IOError`, `a malformed response`, as is one of another transfer coding, `a transfer coding not supported: <coding>`; a body read past where the connection ended, `a response ended early`; and a connection that ends before the response, `the connection closed before a response`. A line longer than 64 KiB, more than 256 lines of fields and the size of a chunk that the server would take as malformed are malformed. A field folded onto lines that start with a space or a tab is read as one, its lines joined by a space, and is malformed if longer than 64 KiB so joined; such a line before any field is malformed.
-- A connection is kept alive once the body of its response has been read to its end, or at once for a response without a body by its framing, unless the response ends with the connection, holds `close` in its `Connection` field, or is HTTP/1.0 without `keep-alive` there. The next request to the same host and port, as the URL writes them, is sent on the latest kept, and one kept for `idle_timeout` seconds is closed instead, before the server, whose timeout may be about as long, closes it. A request of `GET`, `HEAD`, `PUT`, `DELETE`, `OPTIONS` or `TRACE` that fails on a kept connection before any of its response comes, as when the server has closed it meanwhile, is sent again on a new one. A connection that is not kept is closed once its body ends, and on a failure. A body left unread holds its connection, which closes once nothing holds it, or once the body, a `Reader`, is closed before its end. A read of a body that is cancelled, as by `timeout`, leaves its connection open, and the next read goes on from where it stopped.
-- A redirect, a 301, 302, 303, 307 or 308 with a `Location`, is followed to the URL it names, relative to that of the request, an empty one or a fragment naming that URL itself, with its `.` and `..` segments as they are, for the server to resolve, unless `follow_redirects` is false, up to 20 in a row; one more is rejected with an `IOError`, `too many redirects: <url>`, and a `Location` that is not an http URL, as `fetch` would take it, with one, `a malformed redirect: <location>`. A 303 to a method other than `HEAD`, and a 301 or a 302 to `POST`, is followed with a `GET` without the body or its `Content-Type`; another with the method and the body, unless the body is a `Reader`, which has been read: the response is then given as it is. A redirect to another host or port leaves out `Authorization`, `Cookie` and `Proxy-Authorization`. The body of each response redirected is read to its end and dropped, so that its connection is kept, unless it is longer than 1 MiB: its connection is then closed.
+- `Client.fetch(url: String, options: FetchOptions): Promise<Response>` is resolved once the head of the response has come.
+- `Client.close()` closes the connections kept; the client keeps those it uses after.
 - Cookies are not stored or sent by the client: a program reads `Set-Cookie` with `get_all` and writes `Cookie` itself.
+
+#### URLs
+
+- A URL is `http://`, of a host, an IPv6 address in brackets, a port, 80 if none, a path and a query, which the request line takes.
+- The scheme is told regardless of case, and the fragment is left out.
+- `fetch` throws a `ValueError`, `not an http URL: <url>`, for another scheme, a URL without a host, with a user, a host with a space, a control character or one that is not ASCII, or a port that is not digits or is past 65535.
+- In the path and the query, these are sent as `%XX` of each byte of their UTF-8, as the WHATWG URL Standard has them: a space, a control character, one that is not ASCII, `"`, `<` and `>`; `^`, `` ` ``, `{` and `}` in the path; `'` in the query. A `%` is sent as it is.
+- An `https` URL, which needs TLS, is rejected with an `IOError`, `https is not supported so far: <url>`.
+
+#### Sending a request
+
+- Before it connects, it throws a `ValueError`, `not a method: <method>`, for a method that is not a token, and for fields that `Headers` would not take, put in `fields` directly.
+- The client writes `Host` and `Content-Length` itself, in place of those it is given in any case.
+- It leaves out `Connection`, as connections are kept alive by default in HTTP/1.1, and `Transfer-Encoding`.
+- It writes a `Content-Length` for a body that is not empty, and for an empty one of `POST`, `PUT` and `PATCH`.
+- **A `Reader` body** is sent with `Transfer-Encoding: chunked`, its chunks joined as the server's are.
+  - It is sent on a new connection, as it cannot be sent again on one that the server has closed meanwhile.
+  - The client reads the response while it sends it, as a server may answer before it has read the body. What is left of the body is then not sent, and the connection is not kept.
+  - The `Reader` is closed once the final response has come, past those of redirects, or the request has failed.
+  - A read of it that fails fails the request with its error.
+
+#### Reading a response
+
+- A response's body ends by its `Content-Length`; by its last chunk for `Transfer-Encoding: chunked`, whose extensions and trailer fields are dropped, and which goes before a `Content-Length`; or else with the connection.
+- A `Content-Length` written twice is malformed, even with one value.
+- A response to `HEAD`, and one of 204 or 304, has no body.
+- A response of 100 to 199 is passed over for the one that follows it. A 101, which switches to another protocol, is rejected with an `IOError`, `switching protocols not supported`.
+- It is rejected with an `IOError`:
+  - `a malformed response` for a malformed response;
+  - `a transfer coding not supported: <coding>` for another transfer coding;
+  - `a response ended early` for a body read past where the connection ended;
+  - `the connection closed before a response` for a connection that ends before the response.
+- Malformed are: a line longer than 64 KiB, more than 256 lines of fields, and the size of a chunk that the server would take as malformed.
+- A field folded onto lines that start with a space or a tab is read as one, its lines joined by a space. It is malformed if longer than 64 KiB so joined; such a line before any field is malformed.
+
+#### Kept connections
+
+- A connection is kept alive once the body of its response has been read to its end, or at once for a response without a body by its framing.
+- It is not if the response ends with the connection, holds `close` in its `Connection` field, or is HTTP/1.0 without `keep-alive` there.
+- The next request to the same host and port, as the URL writes them, is sent on the latest kept.
+- One kept for `idle_timeout` seconds is closed instead, before the server, whose timeout may be about as long, closes it.
+- A request of `GET`, `HEAD`, `PUT`, `DELETE`, `OPTIONS` or `TRACE` that fails on a kept connection before any of its response comes, as when the server has closed it meanwhile, is sent again on a new one.
+- A connection that is not kept is closed once its body ends, and on a failure.
+- A body left unread holds its connection, which closes once nothing holds it, or once the body, a `Reader`, is closed before its end.
+- A read of a body that is cancelled, as by `timeout`, leaves its connection open, and the next read goes on from where it stopped.
+
+#### Redirects
+
+- A 301, 302, 303, 307 or 308 with a `Location` is followed to the URL it names, unless `follow_redirects` is false, up to 20 in a row.
+  - The URL is relative to that of the request; an empty one or a fragment names that URL itself.
+  - Its `.` and `..` segments are kept as they are, for the server to resolve.
+- It is rejected with an `IOError`:
+  - `too many redirects: <url>` for one more;
+  - `a malformed redirect: <location>` for a `Location` that is not an http URL, as `fetch` would take it.
+- A 303 to a method other than `HEAD`, and a 301 or a 302 to `POST`, is followed with a `GET` without the body or its `Content-Type`.
+- Another is followed with the method and the body, unless the body is a `Reader`, which has been read: the response is then given as it is.
+- A redirect to another host or port leaves out `Authorization`, `Cookie` and `Proxy-Authorization`.
+- The body of each response redirected is read to its end and dropped, so that its connection is kept, unless it is longer than 1 MiB: its connection is then closed.
 
 ## std:io
 
+### Files
+
 | Name | |
 |---|---|
-| `read_file(path: String): Promise<Binary>` | The contents of a file, read on the event loop. Rejected with `cannot read file: <path>` on failure, including for a path that holds a NUL byte and for a file that is not regular, such as a FIFO or a device. |
-| `read_text(path: String): Promise<String?>` | The contents of a file as a `String`, read as `read_file` reads them, or nil if they are not valid UTF-8. Rejected as `read_file` is. |
-| `write_file(path: String, data: Binary): Promise` | Replaces the contents of a file, creating it if needed, on the event loop. Rejected with `cannot write file: <path>` on failure. |
-| `is_file(path: String): Bool` | Whether the path names a regular file (through symbolic links); false for a directory, a missing file or a path that holds a NUL byte. |
-| `is_dir(path: String): Bool` | Whether the path names a directory (through symbolic links); false for a file, a missing path or a path that holds a NUL byte. |
-| `list_dir(path: String): String[]` | The names of the entries of a directory, without `.` and `..`, in the order of their bytes. Throws `cannot list directory: <path>` if the path does not name a directory that can be read, is empty or holds a NUL byte, and a `ValueError`, `a name is not valid UTF-8 in the directory: <path>`, if a name is not valid UTF-8. On Windows, whose names are UTF-16, a name that is not valid UTF-16 is read with U+FFFD in place of what is not, as the other paths that Windows gives are. |
-| `real_path(path: String): Binary` | The absolute path of what the path names, without `.`, `..` or symbolic links. It is a `Binary`, as nothing makes it UTF-8. Throws `cannot resolve path: <path>` if it names nothing, or holds a NUL byte. On POSIX systems, the system works a path out as it reads it, so a `..` names the directory above the one a symbolic link before it points into, and a path through a name that is not there names nothing; on Windows, it works `.` and `..` out as text first, so a `..` cancels the name before it, a link or not, there or not. |
-| `make_temp_dir(): Binary` | Makes a new, empty directory in the system's directory for temporary files (on POSIX systems, the first of `TMPDIR`, `TMP`, `TEMP` and `TEMPDIR` that is set, or else `/tmp`, also if that is set empty; `GetTempPathW` on Windows), and returns its path, as a `Binary`, as `real_path` does. Throws `cannot make a temporary directory` on failure. |
-| `remove_tree(path: String): Promise` | Removes a file, or a directory with everything in it, on the event loop. A symbolic link is removed, not what it links to, on POSIX systems even when a `/` follows its name. Rejected with `cannot remove: <path>` on failure, including for a path that names nothing or holds a NUL byte, and for one whose last part is `.` or `..`, before anything is removed. On Windows, a read-only file is removed too. |
-| `make_dir(path: String)` | Makes a directory and any of its parents that are missing; a directory that is there already is no failure. Throws `cannot make directory: <path>` on failure, including for an empty path or one that holds a NUL byte. |
-| `rename(from: String, to: String)` | Moves a file or a directory, replacing a file at `to`; on POSIX systems, the replacement is atomic. A directory also replaces an empty directory at `to` on POSIX systems, but not on Windows. Throws `cannot rename: <from>` on failure, including when `to` is a directory that is not empty, or a path holds a NUL byte. |
+| `read_file(path: String): Promise<Binary>` | The contents of a file. Rejected with `cannot read file: <path>` on failure, including for a path that holds a NUL byte and for a file that is not regular, such as a FIFO or a device. |
+| `read_text(path: String): Promise<String?>` | The contents as a `String`, read as `read_file` reads them, or nil if they are not valid UTF-8. Rejected as `read_file` is. |
+| `write_file(path: String, data: Binary): Promise` | Replaces the contents of a file, creating it if needed. Rejected with `cannot write file: <path>` on failure. |
+| `copy_file(from: String, to: String): Promise` | Copies the contents of a file, replacing a file at `to` (below). |
+| `remove_tree(path: String): Promise` | Removes a file, or a directory with everything in it (below). |
+| `is_file(path: String): Bool` | Whether the path names a regular file, through symbolic links. False for a directory, a missing file or a path that holds a NUL byte. |
+| `is_dir(path: String): Bool` | Whether the path names a directory, through symbolic links. False for a file, a missing path or a path that holds a NUL byte. |
 | `stat(path: String): FileStatus?` | What the path names, through symbolic links, or nil if nothing is there, as for a dangling link or a path that holds a NUL byte. Throws `cannot read the status of: <path>` if it cannot be read, as for a loop of links. |
-| `FileStatus` | A struct of `kind: FileKind`; `size: Int`, in bytes; and `modified_time: Float`, when it was last modified, in seconds since the Unix epoch, as `time` of [std:time](#stdtime) tells them. |
+| `FileStatus` | A struct of `kind: FileKind`, `size: Int`, in bytes, and `modified_time: Float`, when it was last modified, in seconds since the Unix epoch, as `time` of [std:time](#stdtime) tells them. |
 | `FileKind` | An enum of `FILE`, `DIR` and `OTHER`, as a device. |
-| `make_link(target: String, path: String)` | Makes a symbolic link at `path` to `target`, which is written as it is, relative to the link's directory unless it is absolute, and need not be there. On Windows, `/` in either is written `\`, and the link is to a directory if the target is one when it is made; making it needs developer mode or the privilege to make links. Throws `cannot make link: <path>` on failure, as when something is at `path`. |
-| `copy_file(from: String, to: String): Promise` | Copies the contents of a file, replacing a file at `to`, on the event loop; on POSIX systems, a new copy takes the permissions of the file, less the umask and without the setuid, setgid and sticky bits, and a file replaced keeps those of its own that the file has too, so that the copy of a private file is not readable by others. Rejected with `cannot copy file: <from>` on failure, including for a path that holds a NUL byte, for a directory, for a copy onto the file itself, which is left as it was, and on POSIX systems for one onto a file that the user does not own and that the copy would make private. |
-| `open(path: String, mode: OpenMode): File` | Opens a file, at once, as it is one system call: so far only for writing, `WRITE`, which empties the file or makes it. Throws `cannot open file: <path>` on failure, including for a path that holds a NUL byte. |
-| `OpenMode` | An enum of how `open` opens a file: `WRITE` so far. |
-| `File` | A struct of a file that `open` has opened, whose `writer` is a `Writer` of it. The writer gathers what is written in a buffer, which it writes out on the event loop once it holds 64 KiB; a write that fills it is resolved once the bytes are written out, as for `stdout`. Its `flush(): Promise` is resolved once all that was written before it is in the file. A write out that fails rejects the write or the flush that waits for it, and every later one, with `cannot write file: <path>`. Its `end()` writes out the rest on the event loop and closes the file after; a write or a flush after it is rejected with `cannot write to a file that has ended`. A writer that nothing holds any more writes out the rest at once, unless it has ended, and closes the file. A failure of either has no one to tell, so a program that needs to know, or that reads the file next, flushes first. |
-| `stdout`, `stderr` | `Writer`s, which write through one buffer for both, to a terminal or not, in the order of the writes, so that the output keeps its order where the two go to the same place. The buffer is written out on the event loop when it holds 64 KiB or more, on `flush`, before each `print` and `print_error` (see [builtins](builtins.md)), before `run` starts a program, and at exit. Once a write to `stdout` or `stderr` fails, its later output is dropped, and once one to `stdout` fails, the program exits with code 1 if it would exit with 0. A write to a pipe whose reader has closed it, as in `program \| head -1`, ends the program on POSIX systems by the signal SIGPIPE, which shells report as status 141, as it does C programs, even if the program was started with SIGPIPE ignored, so that a program that writes on and on stops with its reader; on Windows, which has no such signal, the write fails as any other. |
-| `stdin` | A `Reader` of the standard input, which reads it on the event loop in chunks of up to 64 KiB, through a buffer that its methods share. A closed stdin reads as empty. A read that fails is rejected with an `IOError`, `cannot read stdin`. A program that `run` of [std:process](#stdprocess) starts may share it (see `RunOptions`). |
+| `list_dir(path: String): String[]` | The names of the entries of a directory (below). |
+| `make_dir(path: String)` | Makes a directory and any of its parents that are missing; a directory that is there already is no failure. Throws `cannot make directory: <path>` on failure, including for an empty path or one that holds a NUL byte. |
+| `make_temp_dir(): Binary` | Makes a new, empty directory for temporary files, and gives its path (below). |
+| `rename(from: String, to: String)` | Moves a file or a directory (below). |
+| `make_link(target: String, path: String)` | Makes a symbolic link at `path` to `target` (below). |
+| `real_path(path: String): Binary` | The absolute path of what the path names, without `.`, `..` or symbolic links (below). |
 
-`read_file`, `write_file`, `remove_tree` and `copy_file` run at the same time as each other and as the program, so one that depends on another, as a read of a file that a write makes, awaits it first.
+- `open` is under [open and File](#open-and-file).
+- `read_file`, `write_file`, `remove_tree` and `copy_file` run on the event loop, at the same time as each other and as the program. So one that depends on another, as a read of a file that a write makes, awaits it first.
 
-`Reader`, exported too, is a class that reads a stream in chunks through a buffer: its field `read_chunk: () -> Promise<Binary?>` gives the next chunk, or nil at the end. Its methods are `read_line(max = INT_MAX): Promise<String?>`, the next line without its `\n` and a `\r` before it, or nil at the end, which throws a `ValueError` for a negative `max`, a `ValueError`, `a line is not valid UTF-8`, for a line that is not, and a `LineTooLongError`, exported too, `a line is longer than <max> bytes`, once more than `max` bytes, a `\r` among them, have come before its `\n`; `read(max: Int): Promise<Binary?>`, the bytes there are to read, at most `max`, waiting for some only if there are none, or nil at the end, so that `read(0)` takes none and tells whether the end has come; `read_exactly(count: Int): Promise<Binary?>`, `count` bytes, or nil at the end, which throws an `IOError`, `the end came after <n> of <count> bytes`, once the end comes after some of them, each of `read` and `read_exactly` throwing a `ValueError` for a negative `max` or `count`; and `read_all(): Promise<Binary>`, all that is left. A read must end before the next one starts: one that starts while another is pending throws a `ValueError`, `a Reader is read by another read that has not ended`. A read that throws or is cancelled leaves what it has taken from the chunks for the next, and a cancel cancels the chunk it waits for, if it waits for one (see [cancellation](functions.md#cancellation)); a chunk that `read_chunk` has given but the read has not taken yet is lost, unless `read_chunk` keeps it for the next call itself, as that of `stdin` does. A read of `stdin` keeps the program running until it ends, as a timer does, even if nothing awaits it. `close()` tells the source that nothing reads it any more, by the field `on_close: (() -> void)?` that the `Reader` is made with, if it is; it does nothing else.
+#### copy_file
 
-`Writer`, exported too, is an interface of what data is written to, as a stream: `write(data: String | Binary): Promise` and `end()`, which closes it, so that its reader reads its end; a write after the end is rejected, but by `stdout` and `stderr`, whose `end` does nothing (see below). `stdout`, `stderr` and a `Socket` of [std:net](#stdnet) are `Writer`s. `Pipe`, exported too, is a struct of a `writer` and a `reader`, a `Reader` that reads what the `writer` writes, in its order, so that one program that `run` of [std:process](#stdprocess) starts may read what another writes: `run('a', stdout: pipe.writer)` beside `run('b', stdin: pipe.reader)`. A write is resolved once the reader has taken its chunk, so that a writer waits for its reader; an empty one is resolved at once, and one that is cancelled before its chunk is taken writes nothing, and one cancelled after is resolved, as its data has gone to the reader. Once the `writer` has ended, the reader reads nil after the rest, an `end` after it does nothing, and a write is rejected with an `IOError`, `cannot write to a pipe that has ended`. The `writer` also has `fail(error: Error)`, which ends it so that the reader, after the rest, throws the error in place of reading nil, at every read, so that its reader can tell a stream cut short from one that ended; a `fail` or an `end` after the end does nothing, and a `fail` once the reader has closed leaves it reading nil; a program that reads a system pipe (below) reads its end. A `Pipe` that `run` is given itself, as `run('a', stdout: pipe)` beside `run('b', stdin: pipe)`, before anything has used it, becomes a pipe of the system, which the programs share, so that their data does not go through this program: a program that takes an end holds it, and this program no longer does, so that the program that reads reads the end once the program that writes has ended, and the program that writes once the program that reads has ended fails as a write to such a pipe does, by SIGPIPE on POSIX systems. An end is taken by one program, as a `writer` is ended by the first `run` it is given, but by both outputs of one. The `reader` and the `writer` read and write the ends that no program has taken, through the system, a write resolved once the system has taken it; at an end that a program has taken, the `reader` reads nil, a write is rejected as after an end, and a `fail` does nothing, as after an end, and a `run` given that end again reads nothing or fails so. The `reader`'s `close` and the `writer`'s `end` close this program's end, and a write fails then with an `IOError` of the system, `cannot write to a pipe`, once no end that reads is left. A `Pipe` that `run` is given once it has been used is read or written as its `reader` and `writer` are. Once the `reader` of one that is not a system pipe is closed, it reads nil after what its buffer still holds, the chunks not taken yet are dropped, and their writes and every later one are rejected with an `IOError`, `cannot write to a pipe whose reader has closed`, as a write to a pipe of the system whose reader has gone fails. `stdout` and `stderr` also have `flush(): Promise`; `is_terminal(): Bool`, whether the stream goes to a terminal, a console on Windows (where the terminals of MSYS2 and Cygwin are pipes); and `uses_color(): Bool`, whether to color what is written to it, as tools do: false if `NO_COLOR` is set and not empty, else true if `FORCE_COLOR` is set and not empty, else false if `TERM` is `dumb`, else `is_terminal()`. On Windows, a console is set at start to show the escape sequences of colors, and left so at exit. Their type, `StandardOutput`, is not exported, so that no other is made: code that flushes names `stdout` or `stderr` itself. A write of theirs that leaves the buffer under 64 KiB is resolved at once; one that fills it is resolved once its bytes are written out, so that a program that writes faster than its reader reads waits for it, and `flush` once all that was written before it is. Once the bytes of a stream fail to be written out, the writes and flushes that wait for them, and every later write and flush of the stream, are rejected with an `IOError`, `cannot write to stdout` or `cannot write to stderr`; a write resolved at once is not. Their `end` does nothing, and leaves the stream open: the program writes on to them after a `run` that is given one, which ends it, and their reader does not read its end.
+- On POSIX systems, a new copy takes the permissions of the file, less the umask and without the setuid, setgid and sticky bits.
+- A file replaced keeps those of its own permissions that the file has too, so that the copy of a private file is not readable by others.
+- Rejected with `cannot copy file: <from>` on failure, including:
+  - for a path that holds a NUL byte;
+  - for a directory;
+  - for a copy onto the file itself, which is left as it was;
+  - on POSIX systems, for a copy onto a file that the user does not own and that the copy would make private.
+
+#### remove_tree
+
+- A symbolic link is removed, not what it links to; on POSIX systems, even when a `/` follows its name.
+- Rejected with `cannot remove: <path>` on failure, including for a path that names nothing or holds a NUL byte, and, before anything is removed, for one whose last part is `.` or `..`.
+- On Windows, a read-only file is removed too.
+
+#### list_dir
+
+- The names are without `.` and `..`, in the order of their bytes.
+- Throws `cannot list directory: <path>` if the path does not name a directory that can be read, is empty or holds a NUL byte.
+- Throws a `ValueError`, `a name is not valid UTF-8 in the directory: <path>`, if a name is not valid UTF-8.
+- On Windows, whose names are UTF-16, a name that is not valid UTF-16 is read with U+FFFD in place of what is not, as the other paths that Windows gives are.
+
+#### make_temp_dir
+
+- The directory is made in the system's directory for temporary files:
+  - on POSIX systems, the first of `TMPDIR`, `TMP`, `TEMP` and `TEMPDIR` that is set, or else `/tmp`, also if that is set empty;
+  - on Windows, `GetTempPathW`.
+- Its path is a `Binary`, as `real_path` gives.
+- Throws `cannot make a temporary directory` on failure.
+
+#### rename
+
+- It replaces a file at `to`; on POSIX systems, the replacement is atomic.
+- A directory also replaces an empty directory at `to` on POSIX systems, but not on Windows.
+- Throws `cannot rename: <from>` on failure, including when `to` is a directory that is not empty, or a path holds a NUL byte.
+
+#### make_link
+
+- `target` is written as it is, relative to the link's directory unless it is absolute, and need not be there.
+- On Windows, `/` in either is written `\`, and the link is to a directory if the target is one when it is made. Making it needs developer mode or the privilege to make links.
+- Throws `cannot make link: <path>` on failure, as when something is at `path`.
+
+#### real_path
+
+- It is a `Binary`, as nothing makes it UTF-8.
+- Throws `cannot resolve path: <path>` if it names nothing, or holds a NUL byte.
+- On POSIX systems, the system works a path out as it reads it. So a `..` names the directory above the one that a symbolic link before it points into, and a path through a name that is not there names nothing.
+- On Windows, it works `.` and `..` out as text first. So a `..` cancels the name before it, a link or not, there or not.
+
+### open and File
+
+| Name | |
+|---|---|
+| `open(path: String, mode: OpenMode): File` | Opens a file, at once, as it is one system call. Throws `cannot open file: <path>` on failure, including for a path that holds a NUL byte. |
+| `OpenMode` | An enum of how `open` opens a file: so far only `WRITE`, for writing, which empties the file or makes it. |
+| `File` | A struct of a file that `open` has opened, whose `writer` is a `Writer` of it. |
+
+The `writer`:
+
+- It gathers what is written in a buffer, which it writes out on the event loop once it holds 64 KiB.
+- A write that fills the buffer is resolved once the bytes are written out, as for `stdout`.
+- `flush(): Promise` is resolved once all that was written before it is in the file.
+- A write out that fails rejects the write or the flush that waits for it, and every later one, with `cannot write file: <path>`.
+- `end()` writes out the rest on the event loop and closes the file after. A write or a flush after it is rejected with `cannot write to a file that has ended`.
+- A writer that nothing holds any more writes out the rest at once, unless it has ended, and closes the file.
+  - A failure of either has no one to tell, so a program that needs to know, or that reads the file next, flushes first.
+
+### Reader
+
+A class, exported, that reads a stream in chunks through a buffer.
+
+| Member | |
+|---|---|
+| `read_chunk: () -> Promise<Binary?>` | A field: gives the next chunk, or nil at the end. |
+| `on_close: (() -> void)?` | A field: what `close` calls. |
+| `read_line(max = INT_MAX): Promise<String?>` | The next line, without its `\n` and a `\r` before it, or nil at the end. |
+| `read(max: Int): Promise<Binary?>` | The bytes there are to read, at most `max`, or nil at the end. |
+| `read_exactly(count: Int): Promise<Binary?>` | `count` bytes, or nil at the end. |
+| `read_all(): Promise<Binary>` | All that is left. |
+| `close()` | Tells the source that nothing reads it any more. |
+
+- **read_line** throws:
+  - a `ValueError` for a negative `max`;
+  - a `ValueError`, `a line is not valid UTF-8`, for a line that is not;
+  - a `LineTooLongError`, exported too, `a line is longer than <max> bytes`, once more than `max` bytes, a `\r` among them, have come before its `\n`.
+- **read** waits for bytes only if there are none. So `read(0)` takes none and tells whether the end has come.
+- **read_exactly** throws an `IOError`, `the end came after <n> of <count> bytes`, once the end comes after some of them.
+- `read` and `read_exactly` throw a `ValueError` for a negative `max` or `count`.
+- **One read at a time.** A read must end before the next one starts: one that starts while another is pending throws a `ValueError`, `a Reader is read by another read that has not ended`.
+- **A read that throws or is cancelled** leaves what it has taken from the chunks for the next.
+  - A cancel cancels the chunk it waits for, if it waits for one (see [cancellation](functions.md#cancellation)).
+  - A chunk that `read_chunk` has given but the read has not taken yet is lost, unless `read_chunk` keeps it for the next call itself, as that of `stdin` does.
+- A read of `stdin` keeps the program running until it ends, as a timer does, even if nothing awaits it.
+- **close** calls `on_close`, if the `Reader` is made with it; it does nothing else.
+
+### Writer
+
+An interface, exported, of what data is written to, as a stream.
+
+| Member | |
+|---|---|
+| `write(data: String \| Binary): Promise` | Writes the data. |
+| `end()` | Closes it, so that its reader reads its end. |
+
+- A write after the end is rejected, but by `stdout` and `stderr`, whose `end` does nothing (see [stdout and stderr](#stdout-and-stderr)).
+- `stdout`, `stderr`, the `writer` of a `File` and of a `Pipe`, and a `Socket` of [std:net](#stdnet) are `Writer`s.
+
+### Pipe
+
+A struct, exported, of a `writer` and a `reader`, a `Reader` that reads what the `writer` writes, in its order.
+
+- Why: so that one program that `run` of [std:process](#stdprocess) starts may read what another writes: `run('a', stdout: pipe.writer)` beside `run('b', stdin: pipe.reader)`.
+- **Writes.** A write is resolved once the reader has taken its chunk, so that a writer waits for its reader.
+  - An empty one is resolved at once.
+  - One that is cancelled before its chunk is taken writes nothing; one cancelled after is resolved, as its data has gone to the reader.
+- **End.** Once the `writer` has ended, the reader reads nil after the rest, an `end` after it does nothing, and a write is rejected with an `IOError`, `cannot write to a pipe that has ended`.
+- **fail.** The `writer` also has `fail(error: Error)`, which ends it so that the reader, after the rest, throws the error in place of reading nil, at every read.
+  - Why: so that its reader can tell a stream cut short from one that ended.
+  - A `fail` or an `end` after the end does nothing, and a `fail` once the reader has closed leaves it reading nil.
+  - A program that reads a system pipe (below) reads its end.
+- **A closed reader.** Once the `reader` of a pipe that is not a system pipe is closed, it reads nil after what its buffer still holds, and the chunks not taken yet are dropped.
+  - Their writes and every later one are rejected with an `IOError`, `cannot write to a pipe whose reader has closed`, as a write to a system pipe whose reader has gone fails.
+
+#### System pipes
+
+- A `Pipe` that `run` is given itself, before anything has used it, becomes a pipe of the system, which the programs share, so that their data does not go through this program: `run('a', stdout: pipe)` beside `run('b', stdin: pipe)`.
+- A program that takes an end holds it, and this program no longer does. So the program that reads reads the end once the program that writes has ended, and the program that writes fails, once the program that reads has ended, as a write to such a pipe does: by SIGPIPE on POSIX systems.
+- An end is taken by one program, as a `writer` is ended by the first `run` it is given, but by both outputs of one.
+- The `reader` and the `writer` read and write the ends that no program has taken, through the system; a write is resolved once the system has taken it.
+- At an end that a program has taken, the `reader` reads nil, a write is rejected as after an end, and a `fail` does nothing, as after an end. A `run` given that end again reads nothing or fails so.
+- The `reader`'s `close` and the `writer`'s `end` close this program's end. A write fails then with an `IOError` of the system, `cannot write to a pipe`, once no end that reads is left.
+- A `Pipe` that `run` is given once it has been used is read or written as its `reader` and `writer` are.
+
+### stdout and stderr
+
+`Writer`s of the standard output and error, which also have:
+
+| Method | |
+|---|---|
+| `flush(): Promise` | Resolved once all that was written before it is written out. |
+| `is_terminal(): Bool` | Whether the stream goes to a terminal; a console on Windows, where the terminals of MSYS2 and Cygwin are pipes. |
+| `uses_color(): Bool` | Whether to color what is written to it, as tools do: false if `NO_COLOR` is set and not empty, else true if `FORCE_COLOR` is set and not empty, else false if `TERM` is `dumb`, else `is_terminal()`. |
+
+- **One buffer.** They write through one buffer for both, to a terminal or not, in the order of the writes, so that the output keeps its order where the two go to the same place.
+- The buffer is written out on the event loop when it holds 64 KiB or more, on `flush`, before each `print` and `print_error` (see [builtins](builtins.md)), before `run` starts a program, and at exit.
+- **Writes.** A write that leaves the buffer under 64 KiB is resolved at once. One that fills it is resolved once its bytes are written out, so that a program that writes faster than its reader reads waits for it.
+- **Failures.** Once the bytes of a stream fail to be written out, the writes and flushes that wait for them, and every later write and flush of the stream, are rejected with an `IOError`, `cannot write to stdout` or `cannot write to stderr`. A write resolved at once is not.
+  - Once a write to `stdout` or `stderr` fails, its later output is dropped.
+  - Once one to `stdout` fails, the program exits with code 1 if it would exit with 0.
+- **SIGPIPE.** A write to a pipe whose reader has closed it, as in `program | head -1`, ends the program on POSIX systems by the signal SIGPIPE, which shells report as status 141, as it does C programs, even if the program was started with SIGPIPE ignored.
+  - Why: so that a program that writes on and on stops with its reader.
+  - On Windows, which has no such signal, the write fails as any other.
+- **Windows.** A write to a console is written as UTF-16, so it shows whatever the console's code page. No newline becomes CRLF.
+- **Closed streams.** On POSIX systems, a stdout or stderr closed when the program starts is opened read-only on `/dev/null`, so writes to it fail.
+- **end** does nothing, and leaves the stream open: the program writes on to them after a `run` that is given one, which ends it, and their reader does not read its end.
+- On Windows, a console is set at start to show the escape sequences of colors, and left so at exit.
+- Their type, `StandardOutput`, is not exported, so that no other is made: code that flushes names `stdout` or `stderr` itself.
+
+### stdin
+
+- A `Reader` of the standard input, which reads it on the event loop in chunks of up to 64 KiB, through a buffer that its methods share.
+- A closed stdin reads as empty.
+- On Windows, a console is read as UTF-16 and given as UTF-8, and a line that begins with Ctrl-Z ends the input.
+- A read that fails is rejected with an `IOError`, `cannot read stdin`.
+- A program that `run` of [std:process](#stdprocess) starts may share it (see [RunOptions](#runoptions)).
 
 ## std:json
 
@@ -110,45 +472,85 @@ xs := decode_json<Int[]>(text)
 |---|---|
 | `encode_json<T: Jsonable>(value: T, keys: JsonKeys = JsonKeys.AS_WRITTEN): String` | The value as JSON, with no whitespace. |
 | `decode_json<T: Jsonable>(text: String, keys: JsonKeys = JsonKeys.AS_WRITTEN): T` | The value of type `T` that the text holds, with whitespace around its parts and nothing but whitespace after it. Throws a `JsonError` for text that is not JSON, does not fit `T` or nests arrays and objects more than 128 deep. |
-| `Jsonable` | The interface of the types that the two convert, which only bounds type parameters, as `<T: Jsonable>` of a function that passes its type on to them: a type of values would not tell which type to convert by. It has no members: the compiler tells the types that satisfy it by their parts, and generates the code that converts each, so no type declares anything for it. It is the only interface without members. |
-| `JsonKeys` | How the keys of the fields of objects are written: `AS_WRITTEN`, as the fields' names, or `CAMEL_CASE`, with each `_` between another character and a lowercase ASCII letter left out and the letter in uppercase, as `textDocument` for `text_document`, for formats such as the LSP's; a leading `_`, one after another, and one before anything else, stay. The keys of maps, which are data, stay as they are. A type with two fields that camel case writes as one key, as `ab_c` and `abC`, does not satisfy `Jsonable`. |
+| `Jsonable` | The interface of the types that the two convert (below). |
+| `JsonKeys` | How the keys of the fields of objects are written (below). |
 | `JsonError` | The error of `decode_json`, and of `encode_json` for a value that holds itself (below), a struct of a `message`. |
 
-The types convert as the table says, and a type that has a part of another type, such as a function, a `Promise`, an `Iter`, an interface, a `Char`, a `Set`, a map whose keys are not `String`s, or a `weak` field, does not satisfy `Jsonable`, which is an error at the call that names its path, as JsonError's messages write it, with `$[]` for an item of an array and `$.*` for a value of a map: `Request does not satisfy Jsonable: $.handler is of type (Int) -> Int, which std:json does not convert`.
+### Jsonable
+
+- It only bounds type parameters, as `<T: Jsonable>` of a function that passes its type on to the two.
+  - Why: a type of values would not tell which type to convert by.
+- It has no members: the compiler tells the types that satisfy it by their parts, and generates the code that converts each, so no type declares anything for it. It is the only interface without members.
+- A type that has a part of a type the table below lacks does not satisfy it: a function, a `Promise`, an `Iter`, an interface, a `Char`, a `Set`, a map whose keys are not `String`s, or a `weak` field.
+- That is an error at the call, which names the path of the part, as JsonError's messages write it, with `$[]` for an item of an array and `$.*` for a value of a map: `Request does not satisfy Jsonable: $.handler is of type (Int) -> Int, which std:json does not convert`.
+
+### JsonKeys
+
+- `AS_WRITTEN`: the fields' names.
+- `CAMEL_CASE`: each `_` between another character and a lowercase ASCII letter left out, and the letter in uppercase, as `textDocument` for `text_document`, for formats such as the LSP's.
+  - A leading `_`, one after another, and one before anything else, stay.
+- The keys of maps, which are data, stay as they are.
+- A type with two fields that camel case writes as one key, as `ab_c` and `abC`, does not satisfy `Jsonable`.
+
+### Types
 
 | Lerta | JSON |
 |---|---|
-| `Int` and the other integer types | a number written as an integer, without a fraction or an exponent, in the range of the type: `$.size: expected a Byte, found 256` |
-| `Float`, `Float32` | a number, written as the type's `to_string` writes it; one that is not finite as one of the type, as `1e400`, is none, and an infinity cannot be written: `$.x: inf, which JSON cannot hold` |
-| `Bool` | `true` or `false` |
-| `String` | a string; `encode_json` escapes `"`, `\` and the control characters, and `decode_json` reads every escape of JSON, a surrogate pair as one code point, but no lone surrogate |
-| `Binary` | a string of its bytes in base64 (RFC 4648), with its `=` padding; `decode_json` takes only that, with the bits that the padding leaves over zero, so that each `Binary` has one text |
-| `T?` | `null` for nil, otherwise as `T` |
-| `T[]` | an array |
-| tuples | an array of as many items |
-| `Map<String, V>` | an object, of the entries in their order |
-| classes, structs, anonymous structs | an object, of a key for each field, as `JsonKeys` writes its name, in the order of the fields. `decode_json` reads the fields that the constructor takes, and constructs the object as a call does, running its `init`: a field with a default, or of an optional type, may be left out, and is then its default, or nil; a key that is no such field, as one of a field given by an initializer alone, is skipped. A key may not be given twice. |
-| enums | the member's text, as `to_string` gives it, as a string |
-| unions | the member, as it is written alone. `decode_json` takes the member that the kind of the JSON value tells: a number, `true` or `false`, a string or an object. So the members must be of different kinds: a union of two number types, as `Int` and `Float`, of two that are strings, as `String` and `Binary` or an enum, or of two classes or structs, does not satisfy `Jsonable`; nor does a union with an array, a map, a tuple or an anonymous struct as a member, so far. A value of no member's kind is an error, `$.id: expected Int \| String, found an array`. |
+| `Int` and the other integer types | A number written as an integer, without a fraction or an exponent, in the range of the type: `$.size: expected a Byte, found 256`. |
+| `Float`, `Float32` | A number, written as the type's `to_string` writes it. One that is not finite as one of the type, as `1e400`, is none, and an infinity cannot be written: `$.x: inf, which JSON cannot hold`. |
+| `Bool` | `true` or `false`. |
+| `String` | A string. `encode_json` escapes `"`, `\` and the control characters. `decode_json` reads every escape of JSON, a surrogate pair as one code point, but no lone surrogate. |
+| `Binary` | A string of its bytes in base64 (RFC 4648), with its `=` padding. `decode_json` takes only that, with the bits that the padding leaves over zero, so that each `Binary` has one text. |
+| `T?` | `null` for nil, otherwise as `T`. |
+| `T[]` | An array. |
+| tuples | An array of as many items. |
+| `Map<String, V>` | An object, of the entries in their order. |
+| classes, structs, anonymous structs | An object, of a key for each field, as `JsonKeys` writes its name, in the order of the fields (below). |
+| enums | The member's text, as `to_string` gives it, as a string. |
+| unions | The member, as it is written alone (below). |
 
-The message of a `JsonError` gives the path to the value it is about, `$` for the whole value, `[i]` for an item of an array and `.name` for the value of a key, and what was expected and found: `$.items[1]: expected an Int, found 2.5`; for an object, `$.position: missing the key "line"`, `$.kind: the key "kind" twice`, and `$.color: expected a member of Color, found "BLUE"` for an enum. What is found is a number as it is written, `null`, `true`, `false`, `a string`, `an array`, `an object`, `a number that is not JSON`, a character in quotes, or `the end of the text`. A string that does not end, an escape that is not JSON, a lone surrogate and a control character in a string give messages of their own.
+- **Objects.** `decode_json` reads the fields that the constructor takes, and constructs the object as a call does, running its `init`.
+  - A field with a default, or of an optional type, may be left out, and is then its default, or nil.
+  - A key that is no such field, as one of a field given by an initializer alone, is skipped.
+  - A key may not be given twice.
+- **Unions.** `decode_json` takes the member that the kind of the JSON value tells: a number, `true` or `false`, a string or an object.
+  - So the members must be of different kinds. A union of two number types, as `Int` and `Float`, of two that are strings, as `String` and `Binary` or an enum, or of two classes or structs, does not satisfy `Jsonable`.
+  - Nor does a union with an array, a map, a tuple or an anonymous struct as a member, so far.
+  - A value of no member's kind is an error: `$.id: expected Int | String, found an array`.
 
-`encode_json` throws a `JsonError` for a value that holds itself, through any of its parts, naming the path to where it does and the path it comes back to: `$.children[0].parent: a cycle back to $`. An object reached twice otherwise is written twice. Only the classes and structs whose types can hold themselves are looked for.
+### JsonError
+
+- Its message gives the path to the value it is about: `$` for the whole value, `[i]` for an item of an array and `.name` for the value of a key.
+- Then what was expected and found: `$.items[1]: expected an Int, found 2.5`.
+- For an object: `$.position: missing the key "line"` and `$.kind: the key "kind" twice`. For an enum: `$.color: expected a member of Color, found "BLUE"`.
+- What is found is written as one of: a number as it is written, `null`, `true`, `false`, `a string`, `an array`, `an object`, `a number that is not JSON`, a character in quotes, or `the end of the text`.
+- A string that does not end, an escape that is not JSON, a lone surrogate and a control character in a string give messages of their own.
+- **Cycles.** `encode_json` throws a `JsonError` for a value that holds itself, through any of its parts, naming the path to where it does and the path it comes back to: `$.children[0].parent: a cycle back to $`.
+  - An object reached twice otherwise is written twice.
+  - Only the classes and structs whose types can hold themselves are looked for.
 
 ## std:math
 
-Functions of `Float`s, which throw an `ArithmeticError` where the result would be NaN, as `Float`'s operators do (see [Float](types.md#float)), and constants. `min` and `max` are [builtins](builtins.md).
+- Functions of `Float`s, and constants.
+- The functions throw an `ArithmeticError` where the result would be NaN, as `Float`'s operators do (see [Float](types.md#float)).
+- `min` and `max` are [builtins](builtins.md#functions).
 
 | Name | |
 |---|---|
 | `INFINITY: Float` | The positive infinity; `-INFINITY` is the negative one. |
 | `PI: Float`, `E: Float` | The nearest `Float`s to π and e. |
 | `abs(x: Float): Float` | The value without its sign. |
-| `floor(x: Float): Float`, `ceil(x: Float): Float` | The greatest integer not above `x`, and the least not below it, as `Float`s; `.to_int()` makes an `Int?` of one, nil beyond an `Int`. |
+| `floor(x: Float): Float`, `ceil(x: Float): Float` | The greatest integer not above `x`, and the least not below it, as `Float`s. `.to_int()` makes an `Int?` of one, nil beyond an `Int`. |
 | `round(x: Float): Float` | The nearest integer, half way between two away from zero: `round(2.5)` is `3.0`, `round(-2.5)` is `-3.0`. |
 | `sqrt(x: Float): Float` | The square root. Throws `square root of a negative number` for one below 0. |
 | `pow(x: Float, y: Float): Float` | `x` to the power `y`, as C's `pow` gives it: an infinity where the result is too large, or for 0 to a negative power. Throws `a negative number to a fractional power` for a finite negative `x` and a `y` that is no integer. |
-| `remainder(x: Float, y: Float): Float` | The remainder of `x` divided by `y`, `x - n * y` for `n` the integer of `x / y` truncated toward zero, as `%` of `Int`s takes it, so of the sign of `x`: `remainder(-7.5, 2.0)` is `-1.5`. It is C's `fmod`, not its `remainder`, which rounds `n` to the nearest. Throws `division by zero` for a `y` of 0, and `not a number` for an infinite `x`; an infinite `y` gives `x`. |
+| `remainder(x: Float, y: Float): Float` | The remainder of `x` divided by `y` (below). |
+
+`remainder`:
+
+- It is `x - n * y`, for `n` the integer of `x / y` truncated toward zero, as `%` of `Int`s takes it. So it has the sign of `x`: `remainder(-7.5, 2.0)` is `-1.5`.
+- It is C's `fmod`, not its `remainder`, which rounds `n` to the nearest.
+- Throws `division by zero` for a `y` of 0, and `not a number` for an infinite `x`. An infinite `y` gives `x`.
 
 ## std:net
 
@@ -156,36 +558,104 @@ TCP over IPv4 and IPv6, on the [event loop](functions.md#functions-that-await).
 
 | Name | |
 |---|---|
-| `listen_tcp(host: String, port = 0): Listener` | Listens at the first address that the host resolves to, at once, and at a free port if `port` is 0. Throws `cannot listen at <host>:<port>` on failure, including for a host that holds a NUL byte. |
+| `listen_tcp(host: String, port = 0): Listener` | Listens, at once, at the first address that the host resolves to, and at a free port if `port` is 0. Throws `cannot listen at <host>:<port>` on failure, including for a host that holds a NUL byte. |
 | `connect_tcp(host: String, port: Int): Promise<Socket>` | Resolves the host and connects to each of its addresses in turn until one connects. Rejected with `cannot connect to <host>:<port>` if none does, including for a host that holds a NUL byte. A cancel gives up the connect. |
-| `Listener` | A struct of `port: Int`, the port it listens at, and the methods `accept(): Promise<Socket>`, the next connection, rejected with `cannot accept at <host>:<port>` on failure, which throws a `ValueError`, `a Listener is accepted by another accept that has not ended`, while another accept is pending, as a `Reader` does; and `close()`. |
-| `Socket` | A struct of `reader: Reader`, of [std:io](#stdio), which reads what comes in chunks, nil at the peer's end; and the methods `write(data: String \| Binary): Promise`, resolved once the data has been handed to the system, so that a writer faster than the network waits; `end()`, which closes the writing side, read by the peer as its end once what was written has gone; and `close()`, which closes both. A failure of a read or a write is rejected with `cannot read from <address>` or `cannot write to <address>`, where the address is that of the peer, and a write to a peer that has gone fails so, rather than ending the program by SIGPIPE. |
+| `Listener` | A struct of `port: Int`, the port it listens at, and the methods `accept(): Promise<Socket>` and `close()`. |
+| `Socket` | A struct of `reader: Reader`, of [std:io](#stdio), and the methods `write(data: String \| Binary): Promise`, `end()` and `close()`. |
 
-- A port outside 0 to 65535 throws a `ValueError`. An address is written `<host>:<port>`, with an IPv6 address in brackets, as `[::1]:80`.
-- A socket or a listener closes once nothing holds it, and keeps the program running only while a read or an accept of it waits, so that one left open does not keep the program from ending; a write that is under way does.
-- `close` fails what waits for the socket or the listener, a read, an accept, and what is asked of it after the close, but `close` itself, which does nothing then. A write that is under way may still go out.
-- A cancelled read loses nothing, as the next read gets what comes; a cancelled accept leaves the connection for the next; a cancelled write goes on, which cannot be stopped.
-- A connection whose peer's address cannot be read, as one that its peer resets before an accept takes it, is given all the same, its address `a peer that has gone`, and its reads fail or end, so that a server goes on accepting.
-- A server serves each connection in a function of its own that it does not await, `spawn serve(await listener.accept())`, which must catch what it throws, since a rejected promise that nothing awaits ends the program (see [functions that await](functions.md#functions-that-await)).
+- **accept** gives the next connection. It is rejected with `cannot accept at <host>:<port>` on failure.
+  - It throws a `ValueError`, `a Listener is accepted by another accept that has not ended`, while another accept is pending, as a `Reader` does.
+- **A Socket.**
+  - Its `reader` reads what comes in chunks, nil at the peer's end.
+  - `write` is resolved once the data has been handed to the system, so that a writer faster than the network waits.
+  - `end()` closes the writing side, read by the peer as its end once what was written has gone.
+  - `close()` closes both.
+  - A failure of a read or a write is rejected with `cannot read from <address>` or `cannot write to <address>`, the address that of the peer.
+  - A write to a peer that has gone fails so, rather than ending the program by SIGPIPE.
+- A port outside 0 to 65535 throws a `ValueError`.
+- An address is written `<host>:<port>`, with an IPv6 address in brackets, as `[::1]:80`.
+- **Lifetime.** A socket or a listener closes once nothing holds it.
+  - It keeps the program running only while a read or an accept of it waits, so that one left open does not keep the program from ending; a write that is under way does.
+- **close** fails what waits for the socket or the listener, a read or an accept, and what is asked of it after the close, but `close` itself, which does nothing then. A write that is under way may still go out.
+- **Cancels.** A cancelled read loses nothing, as the next read gets what comes. A cancelled accept leaves the connection for the next. A cancelled write goes on, which cannot be stopped.
+- **A peer that has gone.** A connection whose peer's address cannot be read, as one that its peer resets before an accept takes it, is given all the same, its address `a peer that has gone`. Its reads fail or end, so that a server goes on accepting.
+- **Serving.** A server serves each connection in a function of its own that it does not await, `spawn serve(await listener.accept())`. That function must catch what it throws, since a rejected promise that nothing awaits ends the program (see [functions that await](functions.md#functions-that-await)).
 
 ## std:process
 
 | Name | |
 |---|---|
 | `argv: String[]` | The command-line arguments, without the program name, read when the module runs. A program that imports `std:process` throws at its start if an argument is not valid UTF-8. |
-| `exit(code: Int): never` | Writes out the buffer of `stdout` and `stderr` and ends the program with the exit code, from 0 to 255; another code throws a `ValueError`. A failed write to `stdout` turns 0 into 1 (see [`stdout`](#stdio)). |
-| `run(command: String, args: String..., options: RunOptions): Promise<Exit>` | Runs a program, found on `PATH` on every platform unless the command holds a directory (on Windows, `<command>.exe` before `<command>` on `PATH`, and with a directory, the name as it is before it with `.com` and then `.exe` added; on POSIX systems, the `PATH` that the program is given, as `env` may change it, and on Windows, this program's), with the arguments, in the [event loop](functions.md#functions-that-await): programs run at the same time. The options, given as named arguments (see [functions](functions.md)), are below. `stdout` is flushed first, so that output keeps its order. The `Promise` is resolved with how the program ended, an `Exit`, once it ends. A cancel stops the program: on POSIX systems, it is sent SIGTERM, then SIGKILL if it has not ended after `kill_after` seconds; on Windows, it is terminated at once. The `Promise` is then rejected with the `CancelledError` once the program has ended, its output dropped; a program that it started goes on. The `Promise` is rejected with `cannot run: <command>` if the program cannot start, including when the command, an argument, the directory or a variable's value holds a NUL byte, and on Windows when the file is a `.bat` or `.cmd` batch file, whose arguments `cmd.exe` would parse again, with `cannot read the output of: <command>` if its output or errors cannot be read, and with `the output is too long: <command>` if either goes past `output_limit`, which stops the program as a cancel does, its output dropped; of several such failures, the first rejects it. Throws a `ValueError` for options that are not valid (below). |
-| `RunOptions` | A struct of the options of `run`, each of which may be left out. `stdin: Binary | Reader | Pipe?`: what the program reads as its standard input, through a pipe that is closed after it, the bytes or what a `Reader` of [std:io](#stdio) gives until its end, or a `Pipe` of std:io, or else this program's standard input, which this program and the program then share: while a read of `stdin` of std:io waits for input, as one that was cancelled still does until input comes, the read and the program each take a part of what comes; a program that ends without reading all of it is no failure, and a write to it that fails ends the input so, whatever the failure. Once the program has started, `run` closes a `Reader` when it reads it no more, so that a `Pipe`'s writer fails then; a program that cannot start leaves the `Reader` as it was, as it does a `Writer`. `stdout: Byte[] | Writer | Pipe?` and `stderr: Byte[] | Writer | Pipe?`: an array that the program's standard output or error is appended to once it ends, or a `Writer` that it is written to as it comes, which `run` ends after it, however the run ends once the program has started, or a `Pipe` of std:io, whose reader reads its end so too, or else shared with this program; what reads the output reads its end alike whether the program ended well, failed, was killed or was cancelled, and only the `Promise` of `run` tells which; a program that cannot start leaves the `Writer` as it was. The error of the `Reader` or of a `Writer`, as a read of the program's output that fails, stops the program, which would otherwise go on with an input cut short or wait for an output read no more, and rejects the `Promise` once the program has ended. One `Writer` may take both outputs, as `2>&1` does: `run` ends the `Writer`s once both outputs have ended, so such a `Writer` is ended twice. A `run` given a `Writer` that waits for its reader, as a socket's does, must not be awaited before that reader reads, or a program that writes more than its pipe holds waits for ever. `cwd: String?`: the directory the program runs in, or else this program's. `env: Map<String, String>`: variables set for the program, besides this program's, replacing those of the same names; `unset_env: String[]`: this program's variables that the program is not given; on Windows, names are compared without case. `output_limit: Int?`: the most bytes that the program may write to each of `stdout` and `stderr` given as arrays, or no limit. `kill_after = 5.0`: the seconds that a cancel waits for the program to end before it kills it. A name that is empty or holds `=` or a NUL byte, a name set twice (on Windows, in another case) or both set and removed, and a negative `output_limit` or `kill_after` throw a `ValueError`. |
-| `Exit` | A struct of how a program ended: `code: Int`, its exit code, which a signal makes 128 plus its number, as shells do; and `signal: Int?`, that signal, on POSIX systems. On Windows, the code of a program that an exception or `TerminateProcess` ended is a non-negative 32-bit value, such as 3221225477 (0xC0000005) for an access violation. |
+| `exit(code: Int): never` | Writes out the buffer of `stdout` and `stderr` and ends the program with the exit code, from 0 to 255; another code throws a `ValueError`. A failed write to `stdout` turns 0 into 1 (see [stdout and stderr](#stdout-and-stderr)). |
+| `run(command: String, args: String..., options: RunOptions): Promise<Exit>` | Runs a program with the arguments (below). |
+| `RunOptions` | A struct of the options of `run` (below). |
+| `Exit` | A struct of how a program ended (below). |
 | `env(name: String): String?` | The value of an environment variable, or nil if it is not set, including for a name that holds `=` or a NUL byte. Throws a `ValueError`, `the environment variable <name> is not valid UTF-8`, if the value is not. |
 | `platform: String` | The system the program runs on: `'linux'`, `'macos'` or `'windows'`. |
 | `cpu_count: Int` | The number of CPUs that the program may run on when the module runs, at least 1. |
 | `process_id: Int` | The ID of the program's process. |
 | `is_running(id: Int): Bool` | Whether a process with the ID is running, including one that the program may not signal. An ID of 0 or below, or beyond those the system gives, is not. |
 
+### run
+
+- **Finding the program.** It is found on `PATH` on every platform, unless the command holds a directory.
+  - On Windows, `<command>.exe` is tried before `<command>` on `PATH`; with a directory, the name as it is, after it with `.com` and then `.exe` added.
+  - On POSIX systems, the `PATH` is the one that the program is given, as `env` may change it; on Windows, this program's.
+- It runs in the [event loop](functions.md#functions-that-await): programs run at the same time.
+- The options are named arguments (see [functions](functions.md)).
+- `stdout` is flushed first, so that output keeps its order.
+- On Windows, the arguments reach the program as they were given, and so do the variables, even those that are not valid UTF-16.
+- The `Promise` is resolved with how the program ended, an `Exit`, once it ends.
+- **A cancel** stops the program: on POSIX systems, it is sent SIGTERM, then SIGKILL if it has not ended after `kill_after` seconds; on Windows, it is terminated at once.
+  - The `Promise` is then rejected with the `CancelledError` once the program has ended, its output dropped.
+  - A program that it started goes on.
+- **Failures.** The `Promise` is rejected with:
+  - `cannot run: <command>` if the program cannot start, including when the command, an argument, the directory or a variable's value holds a NUL byte, and on Windows when the file is a `.bat` or `.cmd` batch file, whose arguments `cmd.exe` would parse again;
+  - `cannot read the output of: <command>` if its output or errors cannot be read;
+  - `the output is too long: <command>` if either goes past `output_limit`, which stops the program as a cancel does, its output dropped.
+  - Of several such failures, the first rejects it.
+- It throws a `ValueError` for options that are not valid (below).
+
+### RunOptions
+
+Each option may be left out.
+
+| Option | |
+|---|---|
+| `stdin: Binary \| Reader \| Pipe?` | What the program reads as its standard input, through a pipe that is closed after it: the bytes, or what a `Reader` of [std:io](#stdio) gives until its end, or a `Pipe` of std:io. Else this program's standard input, which the two share. |
+| `stdout: Byte[] \| Writer \| Pipe?`, `stderr: Byte[] \| Writer \| Pipe?` | Where the program's standard output or error goes: an array that it is appended to once the program ends, a `Writer` that it is written to as it comes, or a `Pipe` of std:io. Else it is shared with this program. |
+| `cwd: String?` | The directory the program runs in; else this program's. |
+| `env: Map<String, String>` | Variables set for the program, besides this program's, replacing those of the same names. |
+| `unset_env: String[]` | This program's variables that the program is not given. |
+| `output_limit: Int?` | The most bytes that the program may write to each of `stdout` and `stderr` given as arrays; else no limit. |
+| `kill_after = 5.0` | The seconds that a cancel waits for the program to end before it kills it. |
+
+- **A shared stdin.** While a read of `stdin` of std:io waits for input, as one that was cancelled still does until input comes, the read and the program each take a part of what comes.
+- **Input.** A program that ends without reading all of its input is no failure, and a write to it that fails ends the input so, whatever the failure.
+  - Once the program has started, `run` closes a `Reader` when it reads it no more, so that a `Pipe`'s writer fails then.
+  - A program that cannot start leaves the `Reader` as it was, as it does a `Writer`.
+- **Output.** `run` ends a `Writer` after the program, however the run ends once the program has started, and a `Pipe`'s reader reads its end so too.
+  - What reads the output reads its end alike whether the program ended well, failed, was killed or was cancelled; only the `Promise` of `run` tells which.
+  - A program that cannot start leaves the `Writer` as it was.
+- **Stream errors.** The error of the `Reader` or of a `Writer`, as a read of the program's output that fails, stops the program, and rejects the `Promise` once the program has ended.
+  - Why: the program would otherwise go on with an input cut short, or wait for an output read no more.
+- **Both outputs.** One `Writer` may take both outputs, as `2>&1` does. `run` ends the `Writer`s once both outputs have ended, so such a `Writer` is ended twice.
+- **A waiting Writer.** A `run` given a `Writer` that waits for its reader, as a socket's does, must not be awaited before that reader reads, or a program that writes more than its pipe holds waits for ever.
+- On Windows, the names of variables are compared without case.
+- **Invalid options** throw a `ValueError`: a name that is empty or holds `=` or a NUL byte, a name set twice (on Windows, in another case) or both set and removed, and a negative `output_limit` or `kill_after`.
+
+### Exit
+
+- `code: Int`: the exit code, which a signal makes 128 plus its number, as shells do.
+- `signal: Int?`: that signal, on POSIX systems.
+- On Windows, the code of a program that an exception or `TerminateProcess` ended is a non-negative 32-bit value, such as 3221225477 (0xC0000005) for an access violation.
+
 ## std:scanner
 
-A `Scanner` reads a `String` by code points, as a lexer does: it looks at the next one before passing over it, and takes the text of what it has passed over, without byte offsets, which only `Binary` has (see [String](types.md#string)). One that `scan` makes only ever stands at the start of a code point, so what it gives is a `String` without a check. It is an interface to an object that `scan` makes, whose methods alone see and move where it stands; they are called, not taken as values.
+- A `Scanner` reads a `String` by code points, as a lexer does: it looks at the next one before passing over it, and takes the text of what it has passed over.
+- It has no byte offsets, which only `Binary` has (see [String](types.md#string)).
+- One that `scan` makes only ever stands at the start of a code point, so what it gives is a `String` without a check.
+- `Scanner` is an interface to an object that `scan` makes, whose methods alone see and move where it stands. They are called, not taken as values.
 
 ```lerta
 import scan from 'std:scanner'
@@ -212,6 +682,6 @@ print "#{name}: #{scanner.rest()}"
 
 | Name | |
 |---|---|
-| `sleep(seconds: Float): Promise` | A promise that is resolved once at least the seconds have passed (a time of zero only lets other work run first), for a [function that awaits](functions.md#functions-that-await) to wait for. Throws a `ValueError`, `sleep for a negative time`, for a negative time. |
-| `time(): Float` | The seconds since the Unix epoch, 1970-01-01T00:00:00Z, with their fraction, as the system's clock tells them; it may go back if the clock is set back. |
+| `sleep(seconds: Float): Promise` | A promise that is resolved once at least the seconds have passed, for a [function that awaits](functions.md#functions-that-await) to wait for. A time of zero only lets other work run first. Throws a `ValueError`, `sleep for a negative time`, for a negative time. |
+| `time(): Float` | The seconds since the Unix epoch, 1970-01-01T00:00:00Z, with their fraction, as the system's clock tells them. It may go back if the clock is set back. |
 | `monotonic(): Float` | The seconds, with their fraction, since a time that is not specified, as a clock that only goes forward tells them, which a setting of the system's clock does not move: what a time that has passed is measured by. |

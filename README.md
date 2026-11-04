@@ -52,17 +52,36 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 
 | Path | Contents |
 |---|---|
-| `compiler/` | The compiler: `lexer/` and `parser/`, which builds the tree of `ast.lerta`, `loader.lerta`, which reads the modules of a program, `checker/`, which checks them, `codegen/`, which emits LLVM IR, and `format/`, behind the commands of `main.lerta`; `minilerta.lerta` is the entry the seed is made from |
+| `compiler/` | The compiler (see [below](#the-compiler)) |
 | `std/` | The standard modules, in Lerta, which the compiler embeds |
 | `runtime/` | The C runtime, which the compiler embeds |
 | `seed/` | The seed, from which `make` builds the compiler (see [the bootstrap](docs/internals.md#bootstrap)) |
-| `third_party/` | libuv, with its license, and `libuv.txt`, which says how the runtime builds it for each system. Its license notice goes with the compiler, and with the programs it builds (see [the reference](docs/reference/compiler.md)) |
-| `tools/` | `embed.lerta`, which writes the module that embeds `std/` and `runtime/` into the compiler; `test_cross.sh`, which `make test-cross` runs, and the Docker images it uses in `docker/`, where `run.sh` runs a command, bash by default, in one of them |
-| `test/` | The test scripts (see [Tests](#tests)) |
-| `tests/` | Run tests: Lerta sources and their expected output; also the files of the CLI checks (`tests/cli/`) and the formatter cases (`tests/format/`) |
+| `third_party/` | libuv and its license; `libuv.txt` says how the runtime builds it for each system. The license notice goes with the compiler and the programs it builds (see [the reference](docs/reference/compiler.md)) |
+| `tools/` | `embed.lerta`, which writes the module that embeds `std/` and `runtime/` into the compiler; `test_cross.sh`, which `make test-cross` runs; `docker/`, its Docker images, with `run.sh` to run a command (bash by default) in one |
+| `test/` | The test driver and suites (see [Tests](#tests)) |
+| `tests/` | The run tests: Lerta sources and their expected output; also the CLI checks' files (`tests/cli/`) and the formatter cases (`tests/format/`) |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
-| `bench/` | Benchmarks, each in Lerta, Swift, Go, JavaScript and C, the reference, and `run.lerta`, which builds them and prints the version of each language, their times next to each other and the geometric mean of each language, the fastest but C in bold where stdout is colored (`make bench`); `bench/http/`: an HTTP server in Lerta, Go and JavaScript; its `run.lerta` loads each with `load.lerta` and prints their requests per second (`make bench-http`); `shared.lerta`, what both runners use |
-| `editors/` | Editor support for VS Code and Vim; see the README in each subdirectory to install it |
+| `bench/` | Benchmarks (see [below](#benchmarks)) |
+| `editors/` | Editor support for VS Code and Vim; each subdirectory's README says how to install it |
+
+#### The compiler
+
+| Path in `compiler/` | Role |
+|---|---|
+| `lexer/`, `parser/` | Build the tree of `ast.lerta` |
+| `loader.lerta` | Reads the modules of a program |
+| `checker/` | Checks them |
+| `codegen/` | Emits LLVM IR |
+| `format/` | The formatter |
+| `main.lerta` | The commands |
+| `minilerta.lerta` | The entry the seed is made from |
+
+#### Benchmarks
+
+- Each benchmark in `bench/` is written in Lerta, Swift, Go, JavaScript and C; C is the reference.
+- `bench/run.lerta` (`make bench`) builds them and prints each language's version, their times side by side and each language's geometric mean. Where stdout is colored, the fastest other than C is bold.
+- `bench/http/` holds an HTTP server in Lerta, Go and JavaScript. Its `run.lerta` (`make bench-http`) loads each with `load.lerta` and prints their requests per second.
+- `bench/shared.lerta` holds what both runners use.
 
 ### Building and testing
 
@@ -76,24 +95,38 @@ make seed              # rewrites the seed, only when needed (see the bootstrap)
 make test              # builds bin/lerta, then runs the tests and test-bootstrap, on the host only
 make test-cross        # the tests for every environment but the host's own (see below)
 make check             # the code in the style (lerta fmt)
-make bench             # the benchmarks' times in Lerta, Swift, Go, JavaScript and C (see bench/)
-make bench-http        # the HTTP server's requests per second in Lerta, Go and JavaScript
+make bench             # the benchmarks' times (see Benchmarks)
+make bench-http        # the HTTP server's requests per second
 make clean
 ```
 
 `make` rebuilds only when what the compiler is built from changes: the seed, `compiler/`, `std/`, `runtime/`, `third_party/libuv` or `tools/embed.lerta`.
 
-`make test-cross` runs the tests as 32-bit Linux programs and as 64-bit and 32-bit Windows programs (mingw-w64 and Wine), with the bootstrap through a compiler for each. On a host other than Linux, it also runs `make test` on Linux in Docker.
+#### Cross testing
 
-- Each runs on the host if the host can run it, and otherwise in Docker when Docker runs it without emulation, which for the 32-bit and the Windows programs takes an x86-64 host.
-- The targets run one after another. It ends with what ran and what was skipped, and why, except what a container skips, such as the Windows bootstrap in the Wine image without a clang for Windows, which only its output tells.
-- On an Apple silicon Mac, for instance, it runs Linux in Docker and skips 32-bit Linux. It runs Windows only with mingw-w64, lld and Wine installed, and the Windows bootstrap only with a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s) on Wine's `PATH` (`WINEPATH`) too.
+`make test-cross` runs the tests, with the bootstrap through a compiler for each target, as:
+
+- 32-bit Linux programs;
+- 64-bit and 32-bit Windows programs (mingw-w64 and Wine);
+- on a host other than Linux, also `make test` on Linux in Docker.
+
+Where each runs:
+
+- On the host if it can, otherwise in Docker when Docker runs it without emulation. The 32-bit and Windows programs then need an x86-64 host.
+- The targets run one after another. It ends with what ran and what was skipped, and why. What a container skips, such as the Windows bootstrap in the Wine image without a clang for Windows, shows only in its output.
+- For example, on an Apple silicon Mac it runs Linux in Docker and skips 32-bit Linux. Windows runs only with mingw-w64, lld and Wine installed; the Windows bootstrap also needs a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s) on Wine's `PATH` (`WINEPATH`).
 
 ### Tests
 
-Every language feature gets run tests in `tests/`: a Lerta source file and its expected output, as described at the top of `test/run.lerta`. Programs in `examples/` are run as tests too. `make check` checks the tests' style as well: code that breaks it on purpose, as a test of the form that the style rewrites, keeps it with `# fmt: skip` or `# fmt: off` (see [fmt](docs/reference/compiler.md#fmt)), and a file that does not parse starts with `# fmt: off`.
+- Every language feature gets run tests in `tests/`: a Lerta source and its expected output, as the top of `test/run.lerta` describes. Programs in `examples/` are run as tests too.
+- `make check` checks the tests' style too. Code that breaks it on purpose, as a test of a form that the style rewrites, keeps it with `# fmt: skip` or `# fmt: off` (see [fmt](docs/reference/compiler.md#fmt)). A file that does not parse starts with `# fmt: off`.
 
-The tests are written in Lerta: `test/main.lerta`, the driver, which minilerta builds into `bin/test`, as it builds `tools/embed.lerta`, so that a change to `compiler/` cannot break the harness that tests it. `make test` builds and runs it; it runs all the suites, or those named, and the top of `test/main.lerta` lists its options, such as `-k <text>` for the checks whose names hold the text, `--failed` for those that failed when they last ran, and `--target <triple>`, which builds the run tests for another target. A check that fails is run once more, alone, after the others, and passes if it passes then, as flaky; `--no-retry` turns that off:
+#### The driver
+
+- `test/main.lerta`, the driver, is built by minilerta into `bin/test`, as `tools/embed.lerta` is. Why: a change to `compiler/` cannot break the harness that tests it.
+- `make test` builds and runs it. It runs all the suites, or those named.
+- Its options are listed at the top of `test/main.lerta`: `-k <text>` (checks whose names hold the text), `--failed` (those that failed last time), `--target <triple>` (the run tests built for another target), and more.
+- A failed check runs once more, alone, after the others, and passes as flaky if it passes then. `--no-retry` turns that off.
 
 ```
 bin/test runtime            # the runtime checks alone
@@ -101,16 +134,28 @@ bin/test -k tests/string    # the checks whose names hold tests/string
 bin/test --failed           # the checks that failed when they last ran
 ```
 
-The suites:
+#### Suites
 
-- `run` (`test/run.lerta`): the run tests.
-- `cli` (`test/cli.lerta`, with its checks in `test/cli/*.lerta`): the command line.
-- `format` (`test/format.lerta`): the formatter, whose cases are the exact specification of the style.
-- `runtime` (`test/runtime.lerta`): what no Lerta program can trigger; each check links a C program of `test/runtime/`, which stands in for the generated code, with the runtime.
-- `leaks` (`test/leaks.lerta`): the compiler's own leaks and uses of dropped objects, which the bootstrap's stage2, built with the memory checks, reports when it runs `dump-llvm` and `fmt` on each source of the tests and examples.
-- `self` (`test/self.lerta`): the driver itself, run as a program, which must report the tests of `tests/harness/`, most of which must fail, each as it should, and take its options as it says.
+| Suite | File | Checks |
+|---|---|---|
+| `run` | `test/run.lerta` | The run tests |
+| `cli` | `test/cli.lerta`, checks in `test/cli/*.lerta` | The command line |
+| `format` | `test/format.lerta` | The formatter; its cases are the exact specification of the style |
+| `runtime` | `test/runtime.lerta` | What no Lerta program can trigger: each check links a C program of `test/runtime/`, standing in for generated code, with the runtime |
+| `leaks` | `test/leaks.lerta` | The compiler's own leaks and uses of dropped objects, which the bootstrap's stage2, built with the memory checks, reports while running `dump-llvm` and `fmt` on each test and example |
+| `self` | `test/self.lerta` | The driver itself: it must report the tests of `tests/harness/` (most of which must fail, each as it should) and take its options as it says |
 
-Their modules, in `test/lib/`, are `lerta` (where the repository and the compiler are, running it, the directories of the run and caching the runtimes before the tests), `report` (selecting, running and reporting checks), `expect` (what checks expect of the programs they run), `target` (`--target`), `wine` (running Windows programs under Wine), `cli` (running the compiler in directories of its own) and `lsp` (sessions with the language server).
+#### Modules
+
+| Module in `test/lib/` | Role |
+|---|---|
+| `lerta` | Where the repository and the compiler are; running it; the run's directories; caching the runtimes before the tests |
+| `report` | Selecting, running and reporting checks |
+| `expect` | What checks expect of the programs they run |
+| `target` | `--target` |
+| `wine` | Running Windows programs under Wine |
+| `cli` | Running the compiler in directories of its own |
+| `lsp` | Sessions with the language server |
 
 ### Changing the language
 

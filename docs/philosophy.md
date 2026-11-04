@@ -24,7 +24,13 @@ In priority order:
 
 ## Safety
 
-Safety means **zero undefined behavior** outside [C functions](reference/functions.md#c-functions), whose existence and types the compiler does not check: every operation returns a defined value or fails in a defined way. Nil safety comes from [optional types](reference/types.md#optional-values) and weak safety from [`weak!` fields](reference/objects.md#members), which throw once their object is gone; there are no data races because programs are single-threaded. Planned rules are in [the roadmap](roadmap/runtime.md#safety).
+Safety means **zero undefined behavior** outside [C functions](reference/functions.md#c-functions), whose existence and types the compiler does not check: every operation returns a defined value or fails in a defined way.
+
+- **Nil safety** comes from [optional types](reference/types.md#optional-values).
+- **Weak safety** comes from [`weak!` fields](reference/objects.md#weak-references), which throw once their object is gone.
+- **No data races,** because programs are single-threaded.
+
+Planned rules are in [the roadmap](roadmap/runtime.md#safety).
 
 ## Non-goals
 
@@ -56,5 +62,12 @@ Safety means **zero undefined behavior** outside [C functions](reference/functio
 
 Both are close, and much of Lerta is in them already. Lerta differs in what it leaves out.
 
-- **Nim** has the syntax and the memory management: its ARC is Lerta's reference counting, and its default, ORC, also collects cycles, which Lerta does not for now ([roadmap](roadmap/runtime.md#memory-management)). Nim also has several ways to write one thing: identifiers that differ only in `_` or in the case of letters after the first are one name, a call can be written `f(a, b)`, `a.f(b)` or `f a, b`, routines come in seven kinds, and templates and macros are central. Nil safety is a rule in Lerta; in Nim, `not nil` is experimental. Nim's syntax looks like Python's, but its conventions come from Pascal and its own: `$x` makes a string, `&` joins strings, and a routine returns the implicit `result`.
-- **Crystal** has the types: unions, `T?` as `T | Nil`, and narrowing. Lerta takes explicit parameter types over Crystal's parameters typed by each call, so that modules can be compiled apart ([roadmap](roadmap/programs.md#open-questions)); reference counting over a tracing GC; and no macros, which Crystal's standard library is built on.
+- **Nim** has the syntax and the memory management: its ARC is Lerta's reference counting. Lerta differs:
+  - Nim's default, ORC, also collects cycles, which Lerta does not for now ([roadmap](roadmap/runtime.md#memory-management)).
+  - Nim has several ways to write one thing: identifiers that differ only in `_` or in the case of letters after the first are one name; a call can be written `f(a, b)`, `a.f(b)` or `f a, b`; routines come in seven kinds; and templates and macros are central.
+  - Nil safety is a rule in Lerta; in Nim, `not nil` is experimental.
+  - Nim's syntax looks like Python's, but its conventions come from Pascal and its own: `$x` makes a string, `&` joins strings, and a routine returns the implicit `result`.
+- **Crystal** has the types: unions, `T?` as `T | Nil`, and narrowing. Lerta takes instead:
+  - explicit parameter types over Crystal's parameters typed by each call, so that modules can be compiled apart ([roadmap](roadmap/programs.md#open-questions));
+  - reference counting over a tracing GC;
+  - no macros, which Crystal's standard library is built on.
