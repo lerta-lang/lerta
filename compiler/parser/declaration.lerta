@@ -194,29 +194,17 @@ parse_member_modifier := (tokens: TokenStream) ->
   tokens.next() if is_weak_var
   modifier
 
-# `weak! name: Type`, the old spelling of `weak name: Type!`, which the seed compiler's source still
-# uses until the seed is refreshed.
-accept_legacy_weak_bang := (tokens: TokenStream) ->
-  is_legacy := tokens.at_word('weak') and is_attached_bang(tokens.peek_at(1))
-  if is_legacy
-    tokens.next()
-    tokens.next()
-  is_legacy
-
-is_attached_bang := (token: Token) -> token.kind == '!' and not token.spaced
-
 # `[modifier] name: Type[ = [default] value]`, `modifier name = [default] value` or
 # `name := [default] value`, as a local is declared, the modifier `var`, `weak` or `weak var`. A
 # weak field's type may be `Type!`, as a cast's is.
 parse_member := (tokens: TokenStream) ->
   token := tokens.peek()
-  is_legacy_bang := accept_legacy_weak_bang(tokens)
-  modifier := is_legacy_bang then MemberModifier.parse('weak') else parse_member_modifier(tokens)
+  modifier := parse_member_modifier(tokens)
   name := parse_identifier(tokens)
   type := parse_type_annotation(tokens)
-  is_typed_bang := type != nil and is_attached_bang(tokens.peek())
-  tokens.next() if is_typed_bang
-  throws := is_typed_bang or (is_legacy_bang and type != nil)
+  bang := tokens.peek()
+  throws := type != nil and bang.kind == '!' and not bang.spaced
+  tokens.next() if throws
   is_plain := modifier == nil and type == nil
   # It would read as an assignment, which a type body cannot hold.
   if is_plain and tokens.peek().kind == '='
