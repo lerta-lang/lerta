@@ -27,7 +27,7 @@ MAIN := compiler/main.lerta
 MINILERTA_MAIN := compiler/minilerta.lerta
 ifdef TARGET
 TARGET_FLAGS := --target $(TARGET)
-EXE := $(if $(filter %-w64-mingw32,$(TARGET)),.exe)
+EXE := $(if $(filter %-w64-mingw32 windows-%,$(TARGET)),.exe)
 COMPILER := bin/lerta-$(TARGET)$(EXE)
 else
 COMPILER := bin/lerta
@@ -175,7 +175,7 @@ endif
 
 ifdef TARGET
 test test-cross:
-	@echo 'make $@ does not take TARGET: run bin/test --target <triple>' >&2; exit 2
+	@echo 'make $@ does not take TARGET: run bin/test --target <target>' >&2; exit 2
 else
 # Every suite runs even if one before it fails. stage2 is built first, as the leak checks run it.
 test: bin/lerta bin/test $(STAGE2)

@@ -26,7 +26,7 @@ Early development. The compiler is written in Lerta and builds itself, starting 
 
 ## Getting started
 
-Requirements: make and `clang` (LLVM 15 or newer). The programs run on Linux, macOS and Windows; the compiler runs on Linux and macOS, and builds Windows programs with mingw-w64 (`--target x86_64-w64-mingw32`).
+Requirements: make and `clang` (LLVM 15 or newer). The programs run on Linux, macOS and Windows; the compiler runs on Linux and macOS, and builds Windows programs with mingw-w64 (`--target windows-amd64`).
 
 `make` builds the compiler, `bin/lerta` (see [Building and testing](#building-and-testing)). To compile a program:
 
@@ -89,7 +89,7 @@ The tests run on Linux and macOS.
 
 ```
 make                   # bin/lerta, the compiler, built from the seed
-make TARGET=<triple>   # bin/lerta-<triple>, the compiler for another target
+make TARGET=<target>   # bin/lerta-<target>, the compiler for another target
 make test-bootstrap    # the compiler builds itself to the same IR (TARGET builds the stages for it)
 make seed              # rewrites the seed, only when needed (see the bootstrap)
 make test              # builds bin/lerta, then runs the tests and test-bootstrap, on the host only
@@ -125,7 +125,7 @@ Where each runs:
 
 - `test/main.lerta`, the driver, is built by minilerta into `bin/test`, as `tools/embed.lerta` is. Why: a change to `compiler/` cannot break the harness that tests it.
 - `make test` builds and runs it. It runs all the suites, or those named.
-- Its options are listed at the top of `test/main.lerta`: `-k <text>` (checks whose names hold the text), `--failed` (those that failed last time), `--target <triple>` (the run tests built for another target), and more.
+- Its options are listed at the top of `test/main.lerta`: `-k <text>` (checks whose names hold the text), `--failed` (those that failed last time), `--target <target>` (the run tests built for another target), and more.
 - A failed check runs once more, alone, after the others, and passes as flaky if it passes then. `--no-retry` turns that off.
 
 ```

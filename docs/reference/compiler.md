@@ -30,7 +30,7 @@
 
 ```
 lerta build <source> [<file>...] [-o <output>] [-O] [--memory-checks] [-Werror] [--no-trace]
-            [--source-lines] [--eager-nan-checks] [--target <triple>]
+            [--source-lines] [--eager-nan-checks] [--target <target>]
 ```
 
 Builds an executable.
@@ -51,7 +51,7 @@ Usage errors:
 | [`--no-trace`](#--no-trace) | Leaves out the trace of an uncaught exception. |
 | [`--source-lines`](#--source-lines) | Adds debug information of source positions. |
 | [`--eager-nan-checks`](#--eager-nan-checks) | Checks each float operation for NaN. |
-| [`--target <triple>`](#--target-triple) | Builds for another target. |
+| [`--target <target>`](#--target-target) | Builds for another target. |
 
 #### Linked files
 
@@ -140,9 +140,22 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 - The program is slower, as it checks more.
 - It is there for finding where a NaN comes from.
 
-#### `--target <triple>`
+#### `--target <target>`
 
-- Has clang build the executable for that target, such as `i686-linux-gnu` or `x86_64-w64-mingw32`. Without it, the executable is for the host.
+- Has clang build the executable for that target. Without it, the executable is for the host.
+- The target is a short name, `<system>-<architecture>`, or else a triple, such as `i686-linux-gnu`, which clang takes as it is:
+
+| Short name | Triple |
+|---|---|
+| `linux-386` | `i686-linux-gnu` |
+| `linux-amd64` | `x86_64-linux-gnu` |
+| `linux-arm64` | `aarch64-linux-gnu` |
+| `macos-amd64` | `x86_64-apple-macos` |
+| `macos-arm64` | `arm64-apple-macos` |
+| `windows-386` | `i686-w64-mingw32` |
+| `windows-amd64` | `x86_64-w64-mingw32` |
+| `windows-arm64` | `aarch64-w64-mingw32` |
+
 - A Windows target (`*-w64-mingw32`) needs mingw-w64, and lld, which links it.
 - The runtime is built for these targets:
 

@@ -42,14 +42,26 @@ export run_command := (
   result := await exit_in_time(command, ran)
   CliRun status: result.code, stdout: stdout.to_binary(), stderr: stderr.to_binary()
 
-target_triple := ->
+clang_host_triple := ->
   ran := await run_command('clang', ['-print-target-triple'], '.')
   throw ValueError("clang -print-target-triple failed: #{ran.status}") if ran.status != 0
   ran.stdout_text().split("\n")[0]
 
-export host_triple := await at_import(target_triple)
+export host_triple := await at_import(clang_host_triple)
 export runtime_flags: String[][] = [[], ['-O'], ['--target', host_triple]]
 export host_platform := platform
+
+# The host's target by its short name (see compiler/clang_flags), `<platform>-<architecture>`, or
+# nil for an architecture that has none, where the checks of short names do not apply.
+host_target_name_of := (triple: String) ->
+  architecture :=
+    case triple.split('-')[0]
+      when 'x86_64' then 'amd64'
+      when 'aarch64', 'arm64' then 'arm64'
+      when 'i386', 'i486', 'i586', 'i686' then '386'
+      else return nil
+  "#{platform}-#{architecture}"
+export host_target_name := host_target_name_of(host_triple)
 
 # A check that does not apply on Windows.
 export posix_check := (name: String, run: () -> Promise<String[]?>) ->

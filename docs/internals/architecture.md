@@ -118,7 +118,7 @@ Every build so checks that the seed builds the current source.
 - `bin/lerta` and stage2 must print the same IR for the compiler with `dump-llvm`.
 - `bin/lerta` also builds `compiler/minilerta.lerta`, for the host, which nothing else builds until `make seed`; it must print the same IR too.
 - Only the IR is compared: the executables differ, since the linker writes a different identifier into each.
-- With `TARGET=<triple>`, stage2 and stage3 are built for that target, so that stage3's IR comes from the compiler running there (the tests do so for other targets, as the [README](../../README.md#building-and-testing) says).
+- With `TARGET=<target>`, stage2 and stage3 are built for that target, so that stage3's IR comes from the compiler running there (the tests do so for other targets, as the [README](../../README.md#building-and-testing) says).
 
 ### Refreshing the seed
 
