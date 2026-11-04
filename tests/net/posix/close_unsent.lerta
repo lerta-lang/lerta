@@ -1,0 +1,17 @@
+# A close fails the write that has not gone out, and an end after it does nothing. The write holds
+# more than the system takes at once, as no one reads it; Windows takes any such write at once.
+import connect_tcp, listen_tcp from 'std:net'
+import sleep from 'std:time'
+
+unread := listen_tcp('127.0.0.1')
+writer := await connect_tcp('127.0.0.1', unread.port)
+_reader := await unread.accept()
+writing := writer.write('x'.repeat(1024).repeat(64 * 1024))
+await sleep(0)
+writer.close()
+try
+  await writing
+  print 'no failure'
+catch error: IOError
+  print error.message.replace(":#{unread.port}", ':PORT')
+writer.end()

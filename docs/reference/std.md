@@ -542,7 +542,7 @@ xs := decode_json<Int[]>(text)
 | `floor(x: Float): Float`, `ceil(x: Float): Float` | The greatest integer not above `x`, and the least not below it, as `Float`s. `.to_int()` makes an `Int?` of one, nil beyond an `Int`. |
 | `round(x: Float): Float` | The nearest integer, half way between two away from zero: `round(2.5)` is `3.0`, `round(-2.5)` is `-3.0`. |
 | `sqrt(x: Float): Float` | The square root. Throws `square root of a negative number` for one below 0. |
-| `pow(x: Float, y: Float): Float` | `x` to the power `y`, as C's `pow` gives it: an infinity where the result is too large, or for 0 to a negative power. Throws `a negative number to a fractional power` for a finite negative `x` and a `y` that is no integer. |
+| `pow(x: Float, y: Float): Float` | `x` to the power `y`, as C's `pow` gives it: an infinity where the result is too large, or for 0 to a negative power. A result below the normal range may be one ulp off, as on 64-bit Windows. Throws `a negative number to a fractional power` for a finite negative `x` and a `y` that is no integer. |
 | `remainder(x: Float, y: Float): Float` | The remainder of `x` divided by `y` (below). |
 
 `remainder`:
