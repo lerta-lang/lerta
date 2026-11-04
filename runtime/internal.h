@@ -119,7 +119,7 @@ void lerta_retain_item(LertaItemKind kind, const void *item);
 void lerta_release_item(LertaItemKind kind, const void *item);
 void lerta_visit_item(LertaItemKind kind, const void *item, LertaVisitor visitor);
 // The item at the index of an array of any kind but interface values, as 8 bytes: an integer item
-// is extended by its sign, as the generated code widens it.
+// is extended by its sign, as the generated code widens it, and an optional item is its address.
 int64_t lerta_word_item(const LertaArray *array, int64_t index);
 // Arrays (array.c): the generated code pushes in place.
 void lerta_array_append(LertaArray *array, const void *item);

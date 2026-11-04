@@ -1,0 +1,59 @@
+# Arrays of optional values that are not references, made, sliced and converted.
+import decode_json, encode_json from 'std:json'
+import sleep from 'std:time'
+
+shown := <T: Stringable>(items: T?[]) -> [item?.to_string() ? 'nil' for item in items]
+
+none: Int? = nil
+filled := Array(3, none)
+print shown(filled)
+filled[1] = 5
+print shown(filled)
+print shown(filled[1..])
+print shown(filled.reversed())
+var appended: Int?[] = [1]
+appended.append filled
+print shown(appended)
+counts: Int?[] = [1, nil, 2]
+print encode_json(counts)
+print shown(decode_json<Int?[]>('[null, 4, null]'))
+flags := decode_json<Bool?[]>('[true, null]')
+print shown(flags)
+# An item read in a function that a value of the array outlives.
+last_of := (items: Float?[]) -> items[items.length - 1]?.to_string() ? 'none'
+print last_of([nil, 2.5])
+nested: Int?[][] = [[nil], [1, nil]]
+print [shown(items) for items in nested]
+# Items narrower than a word, moved by the runtime: popped, filled, appended, sliced, reversed,
+# compared, hashed, found and sorted.
+var small: Byte?[] = [1, nil, 3]
+print small.pop() ? 0
+print shown(small)
+small.append [nil, 9]
+print shown(small)
+print shown(small[1..])
+print shown(small.reversed())
+other: Byte?[] = [1, nil, nil, 8]
+print small == other
+print small.hash() == other.hash()
+print 9 in small
+print shown(small.sorted((x, y) -> (x ? 0).compare(y ? 0)))
+yes: Bool? = true
+flagged := Array(2, yes)
+print shown(flagged)
+chars: Char?[] = [nil, 'b']
+print shown(chars.reversed())
+halves: Float32?[] = [nil, 0.5]
+print shown(halves[1..])
+print shown([chars.pop(), chars.pop()])
+# A Promise of an optional value, held as such an item.
+maybe := (n: Int) ->
+  await sleep(0)
+  n > 0 then n
+print await maybe(4) ? 0
+print await maybe(0) ? 0
+empty: Int?[]
+try
+  print empty.pop() == nil
+catch error: IndexError
+  print 'pop of none'

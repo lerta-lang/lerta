@@ -10,6 +10,7 @@ int64_t lerta_item_size(LertaItemKind kind) {
   switch (kind) {
     case LERTA_INTERFACE_ITEMS: return 2 * (int64_t)sizeof(void *);
     case LERTA_NO_ITEMS: return 0;
+    case LERTA_OPTIONAL_ITEMS: return (int64_t)sizeof(LertaItem);
     default: return 8;
   }
 }
@@ -43,10 +44,12 @@ static uint8_t *item_at(const LertaArray *array, int64_t index) {
 }
 
 // The targets are all little-endian, so that an item narrower than a word is the word's first
-// bytes.
+// bytes. An optional item, wider than a word, is given by its address, which the generated code
+// reads it through (see compiler/codegen/array.lerta).
 int64_t lerta_word_item(const LertaArray *array, int64_t index) {
   LertaItemKind kind = array->item_kind;
   const uint8_t *item = item_at(array, index);
+  if (kind == LERTA_OPTIONAL_ITEMS) return (int64_t)(intptr_t)item;
   int64_t word;
   if (!(kind & LERTA_INTEGER_ITEMS)) {
     memcpy(&word, item, sizeof word);

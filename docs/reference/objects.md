@@ -116,7 +116,7 @@ A weak reference holds an object of a class without keeping it alive, so that ob
 
 #### Valid instances
 
-- The types that the type arguments make in the fields must be valid, as in a generic function's signature: `Stack<Int?>`, whose `items: T[]` would be an `Int?[]`, is an error where it is first written or constructed.
+- The types that the type arguments make in the fields must be valid, as in a generic function's signature: `Table<Int?>`, whose `entries: Map<Int, T>` would be a `Map<Int, Int?>`, is an error where it is first written or constructed.
 - The depth of type arguments and the number of instances are limited as for generic functions (see [generic functions](functions.md#generic-functions)). This stops members that make instances of ever deeper type arguments without a written type showing it, such as `b = Map<String, A<T[]>>()` in `A<T>`.
 
 #### Growing instances
@@ -319,7 +319,7 @@ print shape.area() for shape in shapes
 
 - `interface Source<T>` declares type parameters, which take no bound. Its type is written with as many type arguments: `Source<Int>`.
 - A type satisfies it with the type arguments in the members' types.
-- The types that the type arguments make in the members must be valid, as for a [generic class](#valid-instances): `Source<Int?>`, whose `items: () -> T[]` would give an `Int?[]`, is an error where it is first written.
+- The types that the type arguments make in the members must be valid, as for a [generic class](#valid-instances): `Source<Int?>`, whose `items: () -> Map<Int, T>` would give a `Map<Int, Int?>`, is an error where it is first written.
 - A member's type may not hold larger instances that lead back to it, as for a class (see [growing instances](#growing-instances)).
 
 ### Interface values

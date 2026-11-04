@@ -57,7 +57,8 @@ struct LertaString {
 // data, a reference, then its itab. LERTA_NO_ITEMS take no bytes, as the values of a set, a map
 // without values, do. An integer narrower than 8 bytes, a Bool or a Float32's bits, is
 // LERTA_INTEGER_ITEMS with its size in bytes in LERTA_ITEM_BYTES, and LERTA_SIGNED_ITEMS if it is
-// signed, and takes that size.
+// signed, and takes that size. LERTA_OPTIONAL_ITEMS are optional values that are not references,
+// a flag then the value, in the 16 bytes of a LertaItem.
 // C moves items only by memcpy, never as a C type: the generated code reads and writes them as a
 // type of their own in type-based alias analysis (see compiler/codegen/array.lerta).
 typedef enum {
@@ -66,6 +67,7 @@ typedef enum {
   LERTA_INTERFACE_ITEMS,
   // 3 was the kind of bytes, before the integer items; 4 stays, as the seed's IR passes it.
   LERTA_NO_ITEMS = 4,
+  LERTA_OPTIONAL_ITEMS = 5,
   // The mask and the flags of a kind, not kinds.
   LERTA_ITEM_BYTES = 0x0F,
   LERTA_INTEGER_ITEMS = 0x10,

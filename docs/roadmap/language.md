@@ -76,7 +76,6 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
   - In a union, such a value is still held in a box (see [internals](../internals/representation.md#objects)).
   - Counted before trying: of the 10.9M objects that the compiler's own `dump-llvm` allocates, such values are about 0.6M, against 4.8M strings and 2.3M arrays; less than 1% of its instructions by the cost of an allocation. The benchmarks in `bench/` allocate almost none (`bench/binary_trees` a class).
   - It waits until a program shows the need, as it touches every place that takes a value for one word: the IR types, reference counting, array items, map keys, union tests, equality and hashing.
-- **Arrays of optional numbers, `Bool`, `Char` and enums** (`Int?[]`), which have no item kind yet: an item kind for `{ i1, T }`, which fits in the room of an item (`LertaItem` in `runtime/lerta.h`). A map's value stays not optional, since a missing key reads as nil.
 
 ## Numeric types
 
