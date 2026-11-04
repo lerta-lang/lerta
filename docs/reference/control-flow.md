@@ -25,10 +25,13 @@ else if n < 0
 else
   print 'positive'
 while n > 0
+  print n
   n -= 1
 unless done
   print 'more'
+  done = true
 until n >= 10
+  print n
   n += 1
 ```
 
@@ -160,7 +163,8 @@ greeting := name then "hello #{name}"
 
 ```
 for i in 0...3
-  print i
+  square := i * i
+  print square
 ```
 
 ### What for goes through
@@ -238,10 +242,12 @@ case c
 A line of `when` alone takes its patterns from the indented block below, written as the items of a [bracketless block](syntax.md#bracketless-blocks) are. `then` follows at the indentation of `when`, with the body after it as it is after `else`: on its line or as an indented block.
 
 ```
-when
-  'const', 'var', 'if', 'else',
-  'while', 'for'
-then 'keyword'
+case w
+  when
+    'const', 'var', 'if', 'else', 'while', 'unless', 'until', 'for', 'break', 'continue', 'return',
+    'case'
+  then 'keyword'
+  else 'name'
 ```
 
 ### Type patterns

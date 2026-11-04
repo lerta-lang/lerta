@@ -106,9 +106,9 @@ When the last parameter is of a struct type, a call may give it as named argumen
 ```
 double := (x: Int) -> x * 2
 square := (x: Int) -> x * x
-apply := (f: (Int) -> Int, x: Int): Int -> f(x)
+apply := (f: (Int) -> Int, x: Int) -> f(x)
 print apply(double, 4)
-steps: ((Int) -> Int)[] = [double, square]
+steps := [double, square]
 ```
 
 ### Function types

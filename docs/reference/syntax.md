@@ -80,27 +80,17 @@ This is `"Usage:\n  build \"app\"\n"`.
 ## Continued lines
 
 ```
-keywords := [
-  'const'
-  'var', 'if',
-  'else'
-]
-print add(
-  1
-  2
-)
-total := 1 +
-  2 *
-  3
+total := first_operand_with_a_long_name +
+  second_operand_with_a_long_name * third_operand_with_a_long_name * fourth_operand_with_a_long_name
 doubled := xs.map((x) ->
   y := x * 2
   y + 1
 )
 ```
 
-- A line continues on the lines indented deeper than it when it ends where an operand or an item is to come: after an operator, a comma, `then`, `else` or an opening bracket, `(` `[` `{`.
+- A line continues on the lines indented deeper than it when it ends where an operand or an item is to come: after an operator, a comma, `then`, `else` or an opening bracket, `(` `[` `{`. So `keywords := ['const', 'var',` continues with the items on the lines below it.
   - Those lines are a block of their own, laid out by indentation as any block, inside brackets too.
-  - In that block, a line that ends where an operand is to come continues on the next line at its indentation, as `2 *` does above.
+  - In that block, a line that ends where an operand is to come continues on the next line at its indentation: in `total := 1 +`, then `2 *` and `3` on two lines indented below it, the `3` continues `2 *`.
   - The `<` `>` of type arguments are not brackets.
 - A line that continues the head of an `if`, a `while` or a `for` would be the block of its body. So a head that takes several lines does so inside brackets, whose closing bracket goes back to the head's indentation (`if f(`, the arguments, `) == 3`).
 
@@ -128,22 +118,25 @@ A closing bracket goes on the line of the last item, or at the start of the line
 ```
 config :=
   name: 'lerta'
+  description: 'A compiled language with reference counting, generics and async functions'
   targets:
-    'linux'
-    'macos'
-draw 'p'
+    'x86_64-unknown-linux-gnu'
+    'aarch64-apple-darwin'
+    'x86_64-w64-mingw32'
+    'i686-w64-mingw32'
+    'aarch64-unknown-linux-gnu'
+draw
+  'p'
   x: 10
   y: 20
-total := sum
-  1, 2
-  3
+  label: 'the starting point of the path, drawn before any of the other points are'
 ```
 
 ### Block literals
 
 After a trailing `=` or `:=` (of a declaration, a destructuring one among them, an assignment or a field), a trailing `key:` or a `return`, an indented block on the next lines is a literal.
 
-- Its items, one or more on each line separated by commas as in a list, decide its kind:
+- Its items, one or more on each line separated by commas as in a list (`x: 10, y: 20`), decide its kind:
 
   | Items | Literal |
   |---|---|
@@ -158,7 +151,7 @@ After a trailing `=` or `:=` (of a declaration, a destructuring one among them, 
 
 ### Arguments in a block
 
-A callee followed by an indented block gives the block as the call's arguments, after those on its line: `sum` above is `sum(1, 2, 3)`, and `draw 'p'` is `draw('p', x: 10, y: 20)`. The callee is the name, `@name` or member of a [call without parentheses](#calls), or a call.
+A callee followed by an indented block gives the block as the call's arguments, after those on its line: `draw` above is `draw('p', x: 10, y: 20, label: ...)`, and `draw 'p'` followed by a block of `x: 10` and `y: 20` is `draw('p', x: 10, y: 20)`. The callee is the name, `@name` or member of a [call without parentheses](#calls), or a call.
 
 - It is written as a statement, or as a whole value where a block literal may be: after `=`, `key:` or a `return`, and as the operand of `throw` or `yield`.
 - A callee inside an operation, as in `1 + f` or `await f`, takes no block.
@@ -216,13 +209,14 @@ A line that starts with `.` or `?.` continues a value with a member, so a method
 
 ```
 text :=
-  'a'
-  'b'
-.join('')
+  'the first part of a long text'
+  'the second part of the same long text'
+  'the third part'
+.join(' ')
 ```
 
 - The value is that of a declaration, an assignment, an item of a [bracketless block](#bracketless-blocks), a statement, or the operand of `return`, `throw` or `yield`. The line has the indentation of the line where the value starts.
-- The member applies to the whole value, however many lines it takes: `a + b` and then `.text` on the next line is `(a + b).text`, as `.join('')` above applies to the block.
+- The member applies to the whole value, however many lines it takes: `a + b` and then `.text` on the next line is `(a + b).text`, as `.join(' ')` above applies to the block.
 - The line holds members only. An operator after them, as in `.length + 1`, is an error, and so are arguments without parentheses, as in `.push x`, since the line does not start a statement (see [calls](#calls)).
 - A statement may still go on to an assignment: `p` and then `.x = 1` on the next line assigns to `p.x`.
 - Where several such values start on that line, the line continues the innermost one that ends before it:

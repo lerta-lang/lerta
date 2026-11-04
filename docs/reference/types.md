@@ -146,7 +146,7 @@ A signed type takes the rules of [`Int`](#int), an unsigned one those of [`Byte`
 ## Char
 
 ```
-kana := (c: Char) -> c >= 'ぁ' and c <= 'ゖ' then c + 0x60 else c
+kana := (c: Char) -> c in 'ぁ'..'ゖ' then c + 0x60 else c
 print [kana(c).to_string() for c in 'ひらがな'].join('')
 ```
 
@@ -427,7 +427,7 @@ print n + 1 if n := '42'.parse_int()
 
 ```
 xs := [3, 1, 2]
-names: String[] = []
+names: String[]
 names.push 'a'
 print xs[0] + xs.length
 ```
@@ -496,7 +496,7 @@ print xs[0] + xs.length
 
 ```
 ages := { 'ann': 31, 'bob': 27 }
-squares := Map<Int, Int>()
+squares: Map<Int, Int>
 squares[3] = 9
 print ages['ann'] ? 0
 ```
@@ -546,7 +546,7 @@ print ages['ann'] ? 0
 ## Set
 
 ```
-seen := Set<String>()
+seen: Set<String>
 seen.add 'a'
 primes := Set([2, 3, 5])
 print 4 in primes
@@ -692,8 +692,8 @@ type Expr = Num | Add | Mul
 - After a `=` that ends the line, the indented lines below are the members of a union, one or more on each line:
   ```
   type Shape =
-    Circle
-    Square | Triangle
+    Circle | Ellipse | Square | Rectangle | Triangle | Pentagon | Hexagon | Polygon | Star | Arrow
+    SpeechBubble
   ```
 
 ### Members
@@ -755,7 +755,8 @@ enum TokenKind
   '->'
 
 kind: TokenKind = INTEGER
-print kind == TokenKind.IDENTIFIER
+first := TokenKind.IDENTIFIER
+print kind == first
 print kind == '('
 ```
 
@@ -828,7 +829,7 @@ divide := (a: Int, b: Int): { quotient: Int, remainder: Int } ->
 ## Tuples
 
 ```
-swap := (t: (String, Int)): (Int, String) ->
+swap := (t: (String, Int)) ->
   (s, n) := t
   (n, s)
 ```
