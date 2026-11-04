@@ -775,11 +775,11 @@ print kind == '('
 
 - `Name.MEMBER` names a member by its name.
 - Where an enum is expected, a member stands alone, in its one spelling: its name, `INTEGER` above, or, for a member declared as a string literal, that literal, `'('`.
-- An enum is expected wherever an expected type reaches a literal (see [Byte](#literals-by-context)), and also:
+- An enum is expected wherever an expected type reaches a literal (see [Byte](#literals-by-context)), also where that type is a [union](#unions) that holds that enum and no other, as `stdout: CAPTURE` for a `stdout: Output | Writer | Pipe?` of [std:process](std.md#runoptions), and:
   - in the other operand of `==` and `!=`;
   - in the items of an array literal after `in`: `kind in ['(', '->']`;
   - in the patterns of a [`case`](control-flow.md#case-with-a-subject) on an enum.
-- A string literal there that is no such member is an error, `'INTEGER'` included. Where no enum is expected, it is a `String`.
+- A string literal there that is no such member is an error, `'INTEGER'` included. Where no enum is expected, it is a `String`, as it is where the union holds a `String` too; a member declared as a string literal then has no spelling but through `Name.parse`.
 - A member name alone cannot take the place of another name in scope, such as a local, a function or an import of the same name; it must be qualified there.
 - Without an expected enum, a member name alone is an undefined name.
 

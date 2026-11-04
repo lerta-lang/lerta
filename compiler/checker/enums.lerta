@@ -10,7 +10,8 @@ import EnumParse, EnumValue from './member_targets'
 import lookup, qualified_name, record_reference from './name'
 import Body, declared_symbol, has_declared_type, Shared from './shared'
 import
-  EnumMember, EnumType, FunctionType, inner_of_expected, optional_type, string_type, Type
+  EnumMember, EnumType, FunctionType, inner_of_expected, is_kind, optional_type, string_type, Type,
+  UnionType
 from '../types'
 
 # Registers the module's enums, after its classes and structs (see add_objects).
@@ -80,7 +81,7 @@ export type_of_elided_member := (body: Body, identifier: Identifier, expected: T
   type
 
 export type_of_literal_member := (body: Body, literal: StringLiteral, expected: Type?): Type? ->
-  type := expected_enum(expected) ? return nil
+  type := expected_literal_enum(expected) ? return nil
   text := literal.value
   no_member := ->
     hint := name_index(type, text) != nil then "; write #{text}" else ''
@@ -90,7 +91,20 @@ export type_of_literal_member := (body: Body, literal: StringLiteral, expected: 
   body.facts.enum_literals[literal] = index
   type
 
-expected_enum := (expected: Type?) -> inner_of_expected(expected) as EnumType?
+# The enum that the expected type is, or the only enum among the members of a union that it is: of
+# two, a member alone would be ambiguous.
+expected_enum := (expected: Type?) ->
+  inner := inner_of_expected(expected)
+  return inner if inner is EnumType
+  return nil unless inner is UnionType
+  enums := [member for member in inner.members when member is EnumType]
+  enums.length == 1 then enums[0]
+
+# As expected_enum, but none of a union that holds a String, which a literal would be then.
+expected_literal_enum := (expected: Type?) ->
+  inner := inner_of_expected(expected)
+  holds_string := inner is UnionType and inner.members.any((member) -> is_kind(member, 'String'))
+  holds_string then nil else expected_enum(expected)
 
 # An identifier that may stand for a member of an enum that the context expects: a name that
 # nothing takes. Such an operand of `==` is typed after the other one, which tells the enum.

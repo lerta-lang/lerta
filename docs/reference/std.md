@@ -623,7 +623,7 @@ Each option may be left out.
 | Option | |
 |---|---|
 | `stdin: Binary \| Reader \| Pipe?` | What the program reads as its standard input, through a pipe that is closed after it: the bytes, or what a `Reader` of [std:io](#stdio) gives until its end, or a `Pipe` of std:io. Else this program's standard input, which the two share. |
-| `stdout: Output \| Byte[] \| Writer \| Pipe?`, `stderr: Output \| Byte[] \| Writer \| Pipe?` | Where the program's standard output or error goes: `Output.CAPTURE`, kept for the `Exit`; `Output.DISCARD`, dropped; for `stderr` alone, `Output.STDOUT`, where the output goes; an array that it is appended to once the program ends; a `Writer` that it is written to as it comes; or a `Pipe` of std:io. Else it is shared with this program. |
+| `stdout: Output \| Byte[] \| Writer \| Pipe?`, `stderr: Output \| Byte[] \| Writer \| Pipe?` | Where the program's standard output or error goes: `CAPTURE`, kept for the `Exit`; `DISCARD`, dropped; for `stderr` alone, `STDOUT`, where the output goes; an array that it is appended to once the program ends; a `Writer` that it is written to as it comes; or a `Pipe` of std:io. Else it is shared with this program. |
 | `cwd: String?` | The directory the program runs in; else this program's. |
 | `env: Map<String, String>` | Variables set for the program, besides this program's, replacing those of the same names. |
 | `unset_env: String[]` | This program's variables that the program is not given. |
@@ -639,17 +639,17 @@ Each option may be left out.
   - A program that cannot start leaves the `Writer` as it was.
 - **Stream errors.** The error of the `Reader` or of a `Writer`, as a read of the program's output that fails, stops the program, and rejects the `Promise` once the program has ended.
   - Why: the program would otherwise go on with an input cut short, or wait for an output read no more.
-- **Errors as output.** `stderr: Output.STDOUT` gives the program's errors the very file of its output, as `2>&1` does, so the two are in the order the program writes them: with `stdout: Output.CAPTURE`, both are in the `Exit`'s `stdout`, and count together toward its `output_limit`.
+- **Errors as output.** `stderr: STDOUT` gives the program's errors the very file of its output, as `2>&1` does, so the two are in the order the program writes them: with `stdout: CAPTURE`, both are in the `Exit`'s `stdout`, and count together toward its `output_limit`.
 - **Both outputs.** One `Writer` may take both outputs, as `2>&1` does. `run` ends the `Writer`s once both outputs have ended, so such a `Writer` is ended twice.
 - **A waiting Writer.** A `run` given a `Writer` that waits for its reader, as a socket's does, must not be awaited before that reader reads, or a program that writes more than its pipe holds waits for ever.
 - On Windows, the names of variables are compared without case.
-- **Invalid options** throw a `ValueError`: `stdout: Output.STDOUT` (`stdout cannot be Output.STDOUT`), a name that is empty or holds `=` or a NUL byte, a name set twice (on Windows, in another case) or both set and removed, and a negative `output_limit` or `kill_after`.
+- **Invalid options** throw a `ValueError`: `stdout: STDOUT` (`stdout cannot be Output.STDOUT`), a name that is empty or holds `=` or a NUL byte, a name set twice (on Windows, in another case) or both set and removed, and a negative `output_limit` or `kill_after`.
 
 ### Exit
 
 - `code: Int`: the exit code, which a signal makes 128 plus its number, as shells do.
 - `signal: Int?`: that signal, on POSIX systems.
-- `stdout: Binary?`, `stderr: Binary?`: what the program wrote to each stream given as `Output.CAPTURE`, empty if nothing; else nil.
+- `stdout: Binary?`, `stderr: Binary?`: what the program wrote to each stream given as `CAPTURE`, empty if nothing; else nil.
 - On Windows, the code of a program that an exception or `TerminateProcess` ended is a non-negative 32-bit value, such as 3221225477 (0xC0000005) for an access violation.
 
 ## std:scanner

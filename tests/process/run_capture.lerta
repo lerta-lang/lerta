@@ -5,49 +5,49 @@ import Pipe, stdout from 'std:io'
 
 shown := (bytes: Binary?) -> bytes?.text()!.split("\n").join('|') ? 'nil'
 
-both := await run('print_both', stdout: Output.CAPTURE, stderr: Output.CAPTURE)
+both := await run('print_both', stdout: CAPTURE, stderr: CAPTURE)
 print "#{shown(both.stdout)} / #{shown(both.stderr)} / #{both.code}"
-merged := await run('print_both', stdout: Output.CAPTURE, stderr: Output.STDOUT)
+merged := await run('print_both', stdout: CAPTURE, stderr: STDOUT)
 print "#{shown(merged.stdout)} / #{shown(merged.stderr)}"
-quiet := await run('print_both', stdout: Output.DISCARD, stderr: Output.CAPTURE)
+quiet := await run('print_both', stdout: DISCARD, stderr: CAPTURE)
 print "#{shown(quiet.stdout)} / #{shown(quiet.stderr)}"
-none := await run('print_both', stdout: Output.DISCARD, stderr: Output.STDOUT)
+none := await run('print_both', stdout: DISCARD, stderr: STDOUT)
 print "#{shown(none.stdout)} / #{shown(none.stderr)}"
 # Errors sent to this program's own output, as the output is.
-await run('print_both', stderr: Output.STDOUT)
+await run('print_both', stderr: STDOUT)
 # Into a Pipe, which this program reads.
 pipe := Pipe()
-running := run('print_both', stdout: pipe, stderr: Output.STDOUT)
+running := run('print_both', stdout: pipe, stderr: STDOUT)
 print (await pipe.reader.read_all()).text()!.split("\n").join('|')
 await running
 # A program that writes nothing captures an empty Binary, not nil.
-print (await run('exit_with', '0', stdout: Output.CAPTURE)).stdout!.length
+print (await run('exit_with', '0', stdout: CAPTURE)).stdout!.length
 # The errors where the output goes, as an array or a Writer that this program copies it to.
 collected: Byte[]
-await run('print_both', stdout: collected, stderr: Output.STDOUT)
+await run('print_both', stdout: collected, stderr: STDOUT)
 print collected.to_binary().text()!.split("\n").join('|')
-await run('print_both', stdout: stdout, stderr: Output.STDOUT)
+await run('print_both', stdout: stdout, stderr: STDOUT)
 # Errors dropped, the output kept.
-kept := await run('print_both', stdout: Output.CAPTURE, stderr: Output.DISCARD)
+kept := await run('print_both', stdout: CAPTURE, stderr: DISCARD)
 print "#{shown(kept.stdout)} / #{shown(kept.stderr)}"
 # A capture past output_limit fails the run.
 try
-  await run('repeat', '20000', 'abcdefghi', stdout: Output.CAPTURE, output_limit: 1000)
+  await run('repeat', '20000', 'abcdefghi', stdout: CAPTURE, output_limit: 1000)
 catch error: IOError
   print error.message
 # Streams given otherwise are not captured.
 errors: Byte[]
-given := await run('print_both', stdout: Output.DISCARD, stderr: errors)
+given := await run('print_both', stdout: DISCARD, stderr: errors)
 print "#{shown(given.stdout)} / #{shown(given.stderr)} / #{errors.length}"
 # The limit holds for captured errors, and for the errors merged into a captured output.
 for stderr_output in [Output.CAPTURE, STDOUT]
   try
-    await run('print_both', stdout: Output.CAPTURE, stderr: stderr_output, output_limit: 12)
+    await run('print_both', stdout: CAPTURE, stderr: stderr_output, output_limit: 12)
     print 'within'
   catch error: IOError
     print error.message
 # Past the limit on the captured errors alone.
 try
-  await run('print_both', stdout: Output.DISCARD, stderr: Output.CAPTURE, output_limit: 5)
+  await run('print_both', stdout: DISCARD, stderr: CAPTURE, output_limit: 5)
 catch error: IOError
   print error.message
