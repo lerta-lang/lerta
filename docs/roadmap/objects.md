@@ -17,10 +17,6 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 
 - Values of `Int`, `Bool`, `Byte` and enums in interface values, which are not references: the itab then tells whether the data is one.
 
-## Generics
-
-- Generic function literals outside the top level.
-
 ## Equality
 
 - `==` on interface values, and interface values as `Map` keys, by the equality of the values they hold.
