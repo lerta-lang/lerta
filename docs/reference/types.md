@@ -174,7 +174,8 @@ print [kana(c).to_string() for c in 'ひらがな'].join('')
 - `c.to_string()`, which `print` and interpolation use, gives the `String` of the code point.
 - `c.to_int()` gives its number.
 - `n.to_char()`, of any integer type, gives the `Char` of a number as a `Char?`, nil for a number that is none; of a `Byte`, which always is one, a `Char`.
-- `c.is_digit()`, `c.is_letter()` and `c.is_space()` tell what those of a [`Byte`](#byte-methods) tell, so they are true only for ASCII: `'０'`, `'é'` and U+3000 are in no class.
+- `c.is_digit()`, `c.is_letter()` and `c.is_space()` tell what those of a [`Byte`](#byte-methods) tell, so they are true only for ASCII: `'０'`, `'é'` and U+3000 are in no class. So are `c.is_lower()` and `c.is_upper()`, of the ASCII letters of each case.
+- `c.to_upper()` and `c.to_lower()` change the case of an ASCII letter, as those of a `String` do, and give any other `Char` as it is; `c.hex_value()` gives what that of a `Byte` gives, or nil for a `Char` beyond the `Byte`s.
 
 ### Keys, items and JSON
 
@@ -284,6 +285,8 @@ So `not a number` may be reported at a line after the one that makes the NaN, an
 |---|---|
 | `s.split(separator)` | The pieces between the occurrences of `separator`, empty ones too, as a `String[]`: `'a,,b'.split(',')` is `['a', '', 'b']`, `''.split(',')` is `['']`. |
 | `s.split_once(separator)` | What comes before the first occurrence and after it, as a `(String, String)`, or nil: `'k = v = w'.split_once(' = ')` is `('k', 'v = w')`. |
+| `s.split_whitespace()` | The pieces between runs of the ASCII spaces, tabs, carriage returns and newlines, none empty: `' a  b '.split_whitespace()` is `['a', 'b']`. |
+| `s.lines()` | The lines of `s` without their `\n` or `\r\n`, and no empty line after a last `\n`: `"a\r\nb\n".lines()` is `['a', 'b']`, `''.lines()` is `[]`. |
 | `s.starts_with(prefix)`, `s.ends_with(suffix)` | Whether `s` begins or ends with those bytes. |
 | `s.without_prefix(prefix)` | What follows `prefix`, or nil if `s` does not begin with it: `'std:io'.without_prefix('std:')` is `'io'`. |
 | `s.without_suffix(suffix)` | What comes before `suffix`, or nil. |

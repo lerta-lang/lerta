@@ -161,7 +161,8 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `add(count: Int): Char`, `sub(count: Int): Char`
 - `to_string(): String`, `to_literal(): String`
 - `to_int(): Int`
-- `is_digit(): Bool`, `is_letter(): Bool`, `is_space(): Bool`
+- `is_digit(): Bool`, `is_letter(): Bool`, `is_space(): Bool`, `is_lower(): Bool`, `is_upper(): Bool`
+- `to_upper(): Char`, `to_lower(): Char`, `hex_value(): Int?`
 
 ### Float and Float32
 
@@ -193,7 +194,7 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `without_prefix(prefix: String): String?`, `without_suffix(suffix: String): String?`
 - `is_digits(): Bool`
 - `parse_int(): Int?`, `parse_float(): Float?`
-- `split(separator: String): String[]`, `split_once(separator: String): (String, String)?`
+- `split(separator: String): String[]`, `split_once(separator: String): (String, String)?`, `split_whitespace(): String[]`, `lines(): String[]`
 - `replace(part: String, by: String): String`
 - `trim(): String`, `trim_start(): String`, `trim_end(): String`
 - `repeat(count: Int): String`

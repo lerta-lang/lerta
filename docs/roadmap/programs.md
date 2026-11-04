@@ -73,10 +73,7 @@ See [the reference](../reference/std.md#stdprocess).
 
 - Random numbers, and formatting dates and times.
 - Text helpers:
-  - `Char.to_upper`, `Char.is_lower` and `Char.hex_value`, of ASCII, as those of `String` and `Byte` are;
   - `skip(count)` of a [Scanner](../reference/std.md#stdscanner);
-  - `split_whitespace` of a `String`;
-  - `s.lines()`: the lines of `s` without their `\n` or `\r\n`, and no empty line after a last `\n`;
   - `s.index_of(part)`: the byte offset of the first occurrence of `part`, or nil.
 - For tests: `assert(condition)`, which throws, and `assert_equal(actual, expected)`, which says both values as their [literals](../reference/builtins.md#literal).
 - `dbg(x)`, which prints the expression and its literal to stderr and gives `x`.
