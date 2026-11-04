@@ -47,7 +47,6 @@ See [the reference](../reference/std.md#stdio).
 
 See [the reference](../reference/std.md#stdprocess).
 
-- `Byte[]` as `stdout` and `stderr` of `run` removed, which `Output.CAPTURE` replaces, once the test harness, which the seed's std builds, has moved to it after a refresh of the seed.
 - The `Exit` of a Windows program that an exception or `TerminateProcess` ended, tested.
 
 ### std:async

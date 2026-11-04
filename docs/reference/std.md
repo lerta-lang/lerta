@@ -623,11 +623,11 @@ Each option may be left out.
 | Option | |
 |---|---|
 | `stdin: Binary \| Reader \| Pipe?` | What the program reads as its standard input, through a pipe that is closed after it: the bytes, or what a `Reader` of [std:io](#stdio) gives until its end, or a `Pipe` of std:io. Else this program's standard input, which the two share. |
-| `stdout: Output \| Byte[] \| Writer \| Pipe?`, `stderr: Output \| Byte[] \| Writer \| Pipe?` | Where the program's standard output or error goes: `CAPTURE`, kept for the `Exit`; `DISCARD`, dropped; for `stderr` alone, `STDOUT`, where the output goes; an array that it is appended to once the program ends; a `Writer` that it is written to as it comes; or a `Pipe` of std:io. Else it is shared with this program. |
+| `stdout: Output \| Writer \| Pipe?`, `stderr: Output \| Writer \| Pipe?` | Where the program's standard output or error goes: `CAPTURE`, kept for the `Exit`; `DISCARD`, dropped; for `stderr` alone, `STDOUT`, where the output goes; a `Writer` that it is written to as it comes; or a `Pipe` of std:io. Else it is shared with this program. |
 | `cwd: String?` | The directory the program runs in; else this program's. |
 | `env: Map<String, String>` | Variables set for the program, besides this program's, replacing those of the same names. |
 | `unset_env: String[]` | This program's variables that the program is not given. |
-| `output_limit: Int?` | The most bytes that the program may write to each of `stdout` and `stderr` given as `CAPTURE` or as arrays; else no limit. |
+| `output_limit: Int?` | The most bytes that the program may write to each of `stdout` and `stderr` given as `CAPTURE`; else no limit. |
 | `kill_after = 5.0` | The seconds that a cancel waits for the program to end before it kills it. |
 
 - **A shared stdin.** While a read of `stdin` of std:io waits for input, as one that was cancelled still does until input comes, the read and the program each take a part of what comes.

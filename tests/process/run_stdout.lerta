@@ -1,25 +1,18 @@
-# The command's standard output is appended to the array, after what it holds already, and its
-# exit code is returned as without one.
+# The command's standard output, captured, is in its Exit, as is its exit code.
 import run from 'std:process'
-output: Byte[] = ['>']
-print (await run('print_args', 'a', 'b c', stdout: output)).code
-print (await run('exit_with', '3', stdout: output)).code
-print output.to_binary().text()!
+printed := await run('print_args', 'a', 'b c', stdout: CAPTURE)
+print printed.code
+print printed.stdout!.text()!
+print (await run('exit_with', '3', stdout: CAPTURE)).code
 
-# A command that writes nothing appends nothing.
-empty: Byte[]
-await run('exit_with', '0', stdout: empty)
-print empty.length
+# A command that writes nothing captures nothing.
+print (await run('exit_with', '0', stdout: CAPTURE)).stdout!.length
 
 # More output than a pipe holds at once.
-long_output: Byte[]
-await run('repeat', '20000', 'abcdefghi', stdout: long_output)
-print long_output.length
+print (await run('repeat', '20000', 'abcdefghi', stdout: CAPTURE)).stdout!.length
 
-# A command that cannot start rejects the Promise, and leaves the array as it was.
-missing := run('lerta-no-such-command', stdout: output)
+# A command that cannot start rejects the Promise.
 try
-  await missing
+  await run('lerta-no-such-command', stdout: CAPTURE)
 catch error
   print error.message
-print output.length

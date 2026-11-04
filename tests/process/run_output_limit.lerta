@@ -1,54 +1,42 @@
-# Output up to the limit is read; past it, on either stream, the program is stopped, the output of
-# both dropped, and the run fails.
+# Output up to the limit is captured; past it, on either stream, the program is stopped and the
+# run fails.
 import Writer from 'std:io'
 import run from 'std:process'
 
-output: Byte[]
-await run('repeat', '100', 'abcdefghi', stdout: output, output_limit: 1000)
-print output.length
+print (await run('repeat', '100', 'abcdefghi', stdout: CAPTURE, output_limit: 1000)).stdout!.length
 
-too_much: Byte[]
 try
-  await run('repeat', '20000', 'abcdefghi', stdout: too_much, output_limit: 1000)
+  await run('repeat', '20000', 'abcdefghi', stdout: CAPTURE, output_limit: 1000)
 catch error: IOError
   print error.message
-print too_much.length
 
-# One byte past the limit, on stderr alone, drops stdout too.
-kept_output: Byte[]
-errors: Byte[]
+# One byte past the limit, on stderr alone, fails the run.
 try
-  await run('echo_input', 'a'.repeat(1000), stdout: kept_output, stderr: errors, output_limit: 1000)
+  await run('echo_input', 'a'.repeat(1000), stdout: CAPTURE, stderr: CAPTURE, output_limit: 1000)
 catch error: IOError
   print error.message
-print [kept_output.length, errors.length]
 
 # A limit of 0 lets a program that writes nothing run, and stops one that writes.
-nothing: Byte[]
-print (await run('exit_with', '0', stdout: nothing, output_limit: 0)).code
+print (await run('exit_with', '0', stdout: CAPTURE, output_limit: 0)).code
 try
-  await run('print_args', 'a', stdout: nothing, output_limit: 0)
+  await run('print_args', 'a', stdout: CAPTURE, output_limit: 0)
 catch error: IOError
   print error.message
-print nothing.length
 
 # The limit is of each stream: both at it pass; and stderr past it stops the program while stdout
 # is shared.
-both_output: Byte[]
-both_errors: Byte[]
 input := 'b'.repeat(1000).binary
 at_limit := await run(
   'echo_input'
   'a'.repeat(999)
   stdin: input
-  stdout: both_output
-  stderr: both_errors
+  stdout: CAPTURE
+  stderr: CAPTURE
   output_limit: 1000
 )
-print [at_limit.code, both_output.length, both_errors.length]
-only_errors: Byte[]
+print [at_limit.code, at_limit.stdout!.length, at_limit.stderr!.length]
 try
-  await run('echo_input', 'a'.repeat(1000), stderr: only_errors, output_limit: 1000)
+  await run('echo_input', 'a'.repeat(1000), stderr: CAPTURE, output_limit: 1000)
 catch error: IOError
   print error.message
 
@@ -56,13 +44,12 @@ catch error: IOError
 class FailingEnd: Writer
   write := (data: String | Binary): Promise -> return
   end := (): void -> throw IOError('cannot end')
-past_limit: Byte[]
 try
   await run(
     'repeat'
     '20000'
     'abcdefghi'
-    stdout: past_limit
+    stdout: CAPTURE
     stderr: FailingEnd()
     output_limit: 1000
   )

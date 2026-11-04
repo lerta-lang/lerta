@@ -3,19 +3,15 @@
 import run from 'std:process'
 import make_dir from 'std:io'
 
-output: Byte[]
-errors: Byte[]
 input := b"input\nlines"
-exit := await run('echo_input', 'a', 'b', stdin: input, stdout: output, stderr: errors)
+exit := await run('echo_input', 'a', 'b', stdin: input, stdout: CAPTURE, stderr: CAPTURE)
 print exit.code
 print exit.signal == nil
-print output.to_binary().text()!
-print errors.to_binary().text()!
+print exit.stdout!.text()!
+print exit.stderr!.text()!
 
 # Without input, the program reads this one's standard input, which is empty here.
-nothing: Byte[]
-await run('echo_input', stdout: nothing)
-print nothing.length
+print (await run('echo_input', stdout: CAPTURE)).stdout!.length
 
 make_dir 'place'
 await run('print_place', cwd: 'place')
@@ -28,13 +24,9 @@ names := ['LERTA_TEST_KEPT', 'LERTA_TEST_REPLACED', 'LERTA_TEST_REMOVED', 'LERTA
 await run('with_env', outer..., 'with_env', inner..., 'print_place', names...)
 
 # Errors alone are read, and an input larger than a pipe holds, or an empty one, is read whole.
-only_errors: Byte[]
-await run('echo_input', 'e', stdin: b'', stderr: only_errors)
-print only_errors.to_binary().text()!
+print (await run('echo_input', 'e', stdin: b'', stderr: CAPTURE)).stderr!.text()!
 large := 'abcdefghij'.repeat(100000).binary
-echoed: Byte[]
-await run('echo_input', stdin: large, stdout: echoed)
-print echoed.length
+print (await run('echo_input', stdin: large, stdout: CAPTURE)).stdout!.length
 
 # A program that ends with an exit code other than 0 has no signal.
 failed := await run('exit_with', '3')

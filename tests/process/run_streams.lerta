@@ -63,15 +63,14 @@ try
 catch error: IOError
   print "#{error.message}, ended #{ends.length}"
 
-# An array of stdout past its limit stops the program, and the Writer of stderr is ended.
-too_long: Byte[]
+# A capture of stdout past its limit stops the program, and the Writer of stderr is ended.
 stderr_writer := Collected('stderr')
 try
   await run(
     'echo_input'
     'a'
     stdin: 'b'.repeat(100).binary
-    stdout: too_long
+    stdout: CAPTURE
     stderr: stderr_writer
     output_limit: 10
   )
@@ -102,24 +101,17 @@ await run('echo_input', stdin: gaps, stdout: gapped)
 print gapped.report()
 
 # A command that cannot start leaves no pipe behind, and its Writer as it was.
-missing: Byte[]
 unstarted := Collected('unstarted')
 try
-  await run('no-such-command', stdin: b'x', stdout: missing, stderr: unstarted)
+  await run('no-such-command', stdin: b'x', stdout: CAPTURE, stderr: unstarted)
 catch error: IOError
   print "#{error.message}, ended: #{unstarted.ended}"
 
-# An array and a Writer together.
-mixed_output: Byte[]
+# A capture and a Writer together.
 mixed_errors := Collected('mixed')
-await run(
-  'echo_input'
-  'to stderr'
-  stdin: b'to stdout'
-  stdout: mixed_output
-  stderr: mixed_errors
-)
-print mixed_output.to_binary().text()!
+mixed :=
+  await run('echo_input', 'to stderr', stdin: b'to stdout', stdout: CAPTURE, stderr: mixed_errors)
+print mixed.stdout!.text()!
 print mixed_errors.report()
 
 # A program that ends while its Reader has yet to give a chunk ends the run all the same.

@@ -5,11 +5,11 @@ import Pipe from 'std:io'
 import run from 'std:process'
 
 shared := Pipe()
-output: Byte[]
 writing := run('repeat', '3', 'line', stdout: shared)
-reading := run('echo_input', stdin: shared, stdout: output)
+reading := run('echo_input', stdin: shared, stdout: CAPTURE)
 await all([writing, reading])
-print output.to_binary().text()!.trim().split("\n").join(' ')
+output := (await reading).stdout!
+print output.text()!.trim().split("\n").join(' ')
 
 # This program reads what a program writes, and writes what one reads.
 read_here := Pipe()
@@ -17,20 +17,18 @@ writes_there := run('repeat', '2', 'read here', stdout: read_here)
 print (await read_here.reader.read_all()).text()!.trim().split("\n").join(' ')
 await writes_there
 written_here := Pipe()
-copied: Byte[]
-reads_there := run('echo_input', stdin: written_here, stdout: copied)
+reads_there := run('echo_input', stdin: written_here, stdout: CAPTURE)
 await written_here.writer.write('written here')
 written_here.writer.end()
-await reads_there
-print copied.to_binary().text()!
+copied := (await reads_there).stdout!
+print copied.text()!
 
 # A Pipe used already is copied through, as its Reader and Writer are.
 used := Pipe()
 _early := used.writer.write('copied through')
 used.writer.end()
-through: Byte[]
-await run('echo_input', stdin: used, stdout: through)
-print through.to_binary().text()!
+through := await run('echo_input', stdin: used, stdout: CAPTURE)
+print through.stdout!.text()!
 
 # An end that a program has taken is gone: the writes fail, as a run that writes to it does, and
 # the reads read nil.
@@ -62,10 +60,9 @@ try
 catch error: IOError
   print error.message
 ended := Pipe()
-ended_output: Byte[]
-ended_run := run('echo_input', stdin: ended, stdout: ended_output)
+ended_run := run('echo_input', stdin: ended, stdout: CAPTURE)
 ended.writer.end()
-await ended_run
+ended_output := (await ended_run).stdout!
 print ended_output.length
 
 # A run that cannot start leaves the Pipe for the next.
@@ -80,13 +77,12 @@ await after_failure
 
 # An end lets the writes under way finish, and a second end, as a second close, does nothing.
 long := Pipe()
-long_output: Byte[]
-long_run := run('echo_input', stdin: long, stdout: long_output)
+long_run := run('echo_input', stdin: long, stdout: CAPTURE)
 long_write := long.writer.write('x'.repeat(1000000))
 long.writer.end()
 long.writer.end()
 await long_write
-await long_run
+long_output := (await long_run).stdout!
 print long_output.length
 try
   await long.writer.write('')
@@ -133,8 +129,7 @@ await silent_run
 
 # A write after the end fails while an earlier one is under way, which the end lets finish.
 late := Pipe()
-late_output: Byte[]
-late_run := run('echo_input', stdin: late, stdout: late_output)
+late_run := run('echo_input', stdin: late, stdout: CAPTURE)
 earlier := late.writer.write('y'.repeat(1000000))
 late.writer.end()
 try
@@ -142,7 +137,7 @@ try
 catch error: IOError
   print error.message
 await earlier
-await late_run
+late_output := (await late_run).stdout!
 print late_output.length
 
 # A Pipe given as stderr alone.
@@ -159,13 +154,12 @@ print (await pending_read)!.text()!.trim()
 
 # A program that reads a system pipe whose writer fails reads its end.
 failing := Pipe()
-failing_output: Byte[]
-failing_run := run('echo_input', stdin: failing, stdout: failing_output)
+failing_run := run('echo_input', stdin: failing, stdout: CAPTURE)
 await failing.writer.write('cut short')
 failing.writer.fail IOError('the writer fails')
 failing.writer.fail IOError('a second failure')
-await failing_run
-print failing_output.to_binary().text()!
+failing_output := (await failing_run).stdout!
+print failing_output.text()!
 
 # A writer whose end a program has taken does not fail, as it has ended here.
 taken_writer := Pipe()
@@ -176,12 +170,11 @@ await taken_run
 
 # A run given a Pipe that this program writes to already copies into it, and ends it.
 joined := Pipe()
-joined_output: Byte[]
-joined_run := run('echo_input', stdin: joined, stdout: joined_output)
+joined_run := run('echo_input', stdin: joined, stdout: CAPTURE)
 await joined.writer.write('from here, ')
 await run('repeat', '1', 'from a program', stdout: joined)
-await joined_run
-print joined_output.to_binary().text()!.trim()
+joined_output := (await joined_run).stdout!
+print joined_output.text()!.trim()
 
 # This program alone may use a system pipe that a run that could not start has made.
 alone := Pipe()

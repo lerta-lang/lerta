@@ -33,14 +33,13 @@ export enum Output
   STDOUT
 
 # How `run` runs a program: what it reads as its standard input, where its standard output and
-# error go, an array that they are appended to, a Writer that they are copied to as they come or an
-# Output, its directory, the environment variables set and removed, the most bytes that it may
-# write to each of those arrays and captures, and how long a cancel waits for it to end before it is
-# killed.
+# error go, a Writer that they are copied to as they come or an Output, its directory, the
+# environment variables set and removed, the most bytes that it may write to each stream captured,
+# and how long a cancel waits for it to end before it is killed.
 export struct RunOptions
   stdin: Binary | Reader | Pipe?
-  stdout: Output | Byte[] | Writer | Pipe?
-  stderr: Output | Byte[] | Writer | Pipe?
+  stdout: Output | Writer | Pipe?
+  stderr: Output | Writer | Pipe?
   cwd: String?
   env: Map<String, String> = default Map()
   unset_env: String[] = default []
@@ -106,15 +105,12 @@ export run := (command: String, args: String..., options: RunOptions) ->
   # open, so it is not waited for; an output read once the program has ended may still fail, and
   # stop it, which gives up the other output then, settled or not.
   await give_up(copies, nil, outputting, erroring) if copies.stopped
-  output_bytes := outputting and not copies.stopped then await outputting
-  error_bytes := erroring and not copies.stopped then await erroring
+  # Only a CAPTURE's copy gives bytes, for the Exit.
+  stdout := outputting and not copies.stopped then await outputting
+  stderr := erroring and not copies.stopped then await erroring
   await give_up(copies, nil, outputting, erroring) if copies.stopped
   end_writers output.sink, errors.sink, copies
   throw error if error := copies.error
-  append_to output.sink, output_bytes
-  append_to errors.sink, error_bytes
-  stdout := is_output(options.stdout, CAPTURE) then output_bytes
-  stderr := is_output(options.stderr, CAPTURE) then error_bytes
   return Exit(stdout, stderr, code: status) if status >= 0
   Exit stdout, stderr, code: 128 - status, signal: -status
 
@@ -144,11 +140,11 @@ pipe_of := (stream: String, command: String) ->
 
 # The file of the end of a Pipe that the program takes, if the Pipe is a system pipe or becomes
 # one; a Pipe that this program uses is read or written as its Reader or Writer instead.
-file_of := (stream: Binary | Reader | Output | Byte[] | Writer | Pipe?, reading: Bool) ->
+file_of := (stream: Binary | Reader | Output | Writer | Pipe?, reading: Bool) ->
   stream is Pipe then stream.writer.file_for(reading)
 
 # The program holds the end it has taken, which this program then closes.
-give := (stream: Binary | Reader | Output | Byte[] | Writer | Pipe?, reading: Bool) ->
+give := (stream: Binary | Reader | Output | Writer | Pipe?, reading: Bool) ->
   stream.writer.give reading if stream is Pipe
 
 # How the program takes its input: the `file` of a system pipe's end, or else a `pipe` that this
@@ -160,11 +156,11 @@ input_of := (stdin: Binary | Reader | Pipe?, command: String) ->
 
 # As input_of, for an output: the `file` of a system pipe's end, or else a `pipe` that this program
 # reads into its `sink`, or neither, for this program's own output, which it shares.
-# Only a CAPTURE of the Outputs is read, as an array is.
-output_of := (output: Output | Byte[] | Writer | Pipe?, stream: String, command: String) ->
+# Only a CAPTURE of the Outputs is read.
+output_of := (output: Output | Writer | Pipe?, stream: String, command: String) ->
   file := file_of(output, false)
   # Of the type written, so that a Pipe's writer counts as a Writer.
-  sink: Output | Byte[] | Writer? =
+  sink: Output | Writer? =
     case output
       when Pipe then not file then output.writer
       when Output then output == CAPTURE then output
@@ -175,7 +171,7 @@ output_of := (output: Output | Byte[] | Writer | Pipe?, stream: String, command:
 # AS_STDOUT for those Outputs, the values of DISCARDED_STREAM and AS_STDOUT_STREAM in
 # runtime/process.c, or 0 for the program's own stream, which the program shares. A handle is the
 # address of an object, never 1 or 2.
-stream_of := (pipe: Handle?, file: Int?, output: Output | Byte[] | Writer | Pipe? = nil) ->
+stream_of := (pipe: Handle?, file: Int?, output: Output | Writer | Pipe? = nil) ->
   return -1 - file if file
   return DISCARDED if is_output(output, DISCARD)
   return AS_STDOUT if is_output(output, STDOUT)
@@ -184,7 +180,7 @@ stream_of := (pipe: Handle?, file: Int?, output: Output | Byte[] | Writer | Pipe
 DISCARDED := 1
 AS_STDOUT := 2
 
-is_output := (stream: Output | Byte[] | Writer | Pipe?, output: Output) ->
+is_output := (stream: Output | Writer | Pipe?, output: Output) ->
   stream is Output and stream == output
 
 # The bytes of each read that a Reader gives the program at most.
@@ -217,10 +213,10 @@ written := (pipe: Handle, bytes: Binary) ->
   catch _: IOError
     false
 
-# What the program writes to the stream, as it comes: all of it, for an array, which takes it only
+# What the program writes to the stream, as it comes: all of it, for a CAPTURE, which the Exit takes
 # once the program has ended, or nil for a Writer, which run ends (see end_writers).
 copy_output := (
-  pipe: Handle, output: Output | Byte[] | Writer, limit: Int?, program: Program, copies: Copies
+  pipe: Handle, output: Output | Writer, limit: Int?, program: Program, copies: Copies
 ) ->
   reader := reader_of(pipe)
   var bytes = b''
@@ -249,9 +245,7 @@ failed_copy := (copies: Copies, error: Error, program: Program): Binary? ->
 
 # The Writers are ended once both copies have ended, as one Writer may take both outputs, as `2>&1`
 # does; it is then ended twice, which a Writer takes as once.
-end_writers := (
-  stdout: Output | Byte[] | Writer?, stderr: Output | Byte[] | Writer?, copies: Copies
-) ->
+end_writers := (stdout: Output | Writer?, stderr: Output | Writer?, copies: Copies) ->
   end_writer stdout, copies if stdout is Writer
   end_writer stderr, copies if stderr is Writer
 
@@ -288,11 +282,6 @@ ended := <T>(copy: Promise<T>) ->
     return
   catch _: CancelledError
     return
-
-append_to := (output: Output | Byte[] | Writer?, bytes: Binary?) ->
-  return unless bytes
-  if output is Byte[]
-    output.push byte for byte in bytes
 
 # This program's variables, as NAME=VALUE, but those that `set` names, which it gives, or that
 # `unset` names.
