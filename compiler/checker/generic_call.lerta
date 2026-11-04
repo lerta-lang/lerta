@@ -5,16 +5,18 @@ import Call, Member, Position, TypeParameter from '../ast'
 import check_argument_count, packed_arguments from './arguments'
 import fail, fail_cannot_infer from './diagnostics'
 import require_type from './expression'
-import methods_reachable_from from './extensions'
+import ExtensionMethod from './extensions'
+import members_for from './interfaces'
+import ExtensionSource, find_method, MethodSource, OwnMethod from './methods'
 import
   bindings, check_defaults, generic_of, GenericFunction, GenericRef, Instance, instantiate
 from './generics'
 import reject_unsatisfied from './satisfaction'
-import Body, InstanceLink from './shared'
+import Body, InstanceLink, ProgramWide from './shared'
 import infer_type_arguments, receiver_type_arguments, TypeBinding from './type_argument_inference'
-import substitute from './type_patterns'
+import infer, substitute from './type_patterns'
 import reject_invalid_type from './type_validity'
-import FunctionType, InterfaceType, Type from '../types'
+import FunctionType, InterfaceType, Type, type_key from '../types'
 
 # The result of a call of a generic function.
 export type_of_generic_call := (body: Body, call: Call, generic: GenericRef, expected: Type?) ->
@@ -71,10 +73,55 @@ instance_of_call := (
   check_defaults program, generic, instance, call.position if args.length < generic.params.length
   instance
 
-# The instance's body sees the extends in effect here of the types it may reach.
-instantiate_here := (body: Body, generic: GenericRef, type_arguments: Type[], at: Position) ->
-  methods := methods_reachable_from(body.program, body.extensions, type_arguments)
-  instantiate body.program, generic, type_arguments, methods, at
+# The instance's body, checked at its definition, reaches the type arguments only through their
+# bounds, so it sees the methods of the extends in effect here that satisfy them: the witnesses.
+instantiate_here := (body: Body, ref: GenericRef, type_arguments: Type[], at: Position) ->
+  { program } := body
+  generic := generic_of(program, ref)
+  witnesses := Witnesses()
+  add_witnesses body, generic, bindings(generic, type_arguments), witnesses
+  instantiate program, ref, type_arguments, witnesses.methods.to_array(), at
+
+# The methods found, and each generic method with the type it satisfies a bound for, which the
+# same generic method may do for several types, as `extend<U: B> U[]` for C[][] and C[].
+class Witnesses
+  methods: Set<ExtensionMethod> = Set()
+  visited: Set<String> = Set()
+
+# Adds the methods of extends that satisfy the bounds of the generic's type parameters, bound to
+# the types, and those that satisfy the bounds of a generic method that satisfies a bound's member
+# in turn, an extend's or a class's or struct's own.
+add_witnesses := (
+  body: Body, generic: GenericFunction, type_bindings: Map<String, Type>, witnesses: Witnesses
+): void ->
+  { program } := body
+  for (param, bound) in generic.type_params.zip(generic.bounds)
+    type := type_bindings[param.name.name] ? continue
+    written := bound ? continue
+    bound_type := substitute(written, type_bindings) as InterfaceType!
+    for member in members_for(program, bound_type, type)
+      source := find_method(program, type, member.name, body.extensions)
+      witnesses.methods.add source.method if source is ExtensionSource
+      ref := generic_method(source) ? continue
+      key := "#{ref.module_index}.#{ref.index} #{type_key(type)}"
+      continue unless witnesses.visited.add(key)
+      add_witnesses body, generic_of(program, ref), receiver_bindings(program, ref, type), witnesses
+
+# The generic method of the source, an extend's or a class's or struct's own, whose instance sees
+# the witnesses of its bounds too.
+generic_method := (source: MethodSource?) ->
+  case source
+    when ExtensionSource then source.method.generic
+    when OwnMethod then source.generic
+    else nil
+
+# The type arguments that the receiver of the generic method gives, matched against the type.
+receiver_bindings := (program: ProgramWide, ref: GenericRef, type: Type) ->
+  type_bindings: Map<String, Type>
+  receiver := generic_of(program, ref).receiver ? return type_bindings
+  bind := (name: String, bound: Type) -> type_bindings[name] = bound
+  infer receiver.type, type, bind
+  type_bindings
 
 # The type arguments in order, which must all be known and satisfy their bounds.
 type_arguments_of := (

@@ -578,6 +578,19 @@ dump_symbols_check := -> Check(name: 'lerta dump-llvm escapes module paths in sy
   ]
 )
 
+# Calls of a generic whose extends in effect differ only in what its bounds do not use share one
+# instance.
+dump_shared_instance_check := ->
+  Check name: 'lerta dump-llvm makes one instance of calls with the same witnesses', run: ->
+    source := "#{root_dir}/tests/generics/shared_instance.lerta"
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
+    is_instance := (line: String) -> line.starts_with('define ') and 'shown<Int>' in line
+    count :=
+      [line for line in dumped.result.stdout_text().split("\n") when is_instance(line)].length
+    reasons := expect_status(0, dumped.result.status)
+    reasons.push "#{count} instances of shown<Int>" if count != 1
+    reasons
+
 source_lines_check := -> Check(name: 'lerta run --source-lines runs a program', run: ->
   source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
   ran := await run_command(compiler, ['run', source, '--source-lines'], cli_work_dir)
@@ -706,6 +719,7 @@ export checks: Check[] = [
   dump_fixed_captures_check()
   dump_item_tag_check()
   dump_field_tag_check()
+  dump_shared_instance_check()
   item_tag_source_lines_check()
   source_lines_check()
   no_trace_check()

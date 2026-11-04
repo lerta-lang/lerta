@@ -20,10 +20,8 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 ## Generics
 
 - An instance of a generic function or method is **no longer checked**, its body being checked at its definition already (see [generic functions](../reference/functions.md#generic-functions)).
-  - A call checks that the type arguments satisfy the bounds and records which member satisfies each bound's member (the witnesses, as an itab's entries are found). An instance is the type arguments with those witnesses, which replace telling instances apart by the extends that the call sees.
-  - An instance's facts are the generic's with the type arguments put in and the bounds' members resolved by the witnesses, which codegen generates as it does now. A default is still checked for the instance of a call that leaves it out, and a type that the body writes is still checked to be valid for the type arguments, as `Set<T>` for a `T` without hash. Named arguments for a parameter of a type parameter's type, which only an instance tells to be a struct, need a way of their own.
-  - It shortens nothing: what goes (the per-instance checking, the variants by extends) is less than what comes (instances from the generic's facts). It is for one check of each body, and `lerta fmt` and the editor inside generic bodies.
-  - In steps that each keep the tests passing: instances by witnesses; then instances from the generic's facts in place of checking them.
+  - An instance's facts are the generic's with the type arguments put in and the bounds' members resolved by its witnesses (see [the reference](../reference/functions.md#generic-functions)), which codegen generates as it does now. A default is still checked for the instance of a call that leaves it out, and a type that the body writes is still checked to be valid for the type arguments, as `Set<T>` for a `T` without hash. Named arguments for a parameter of a type parameter's type, which only an instance tells to be a struct, need a way of their own.
+  - It is for one check of each body, and `lerta fmt` and the editor inside generic bodies.
 - Generic function literals outside the top level.
 
 ## Equality
