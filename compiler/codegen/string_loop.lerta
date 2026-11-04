@@ -1,0 +1,84 @@
+# Loops over a String that read its UTF-8 in place, as one over a Binary reads its bytes, rather
+# than through the Iter of its `iter()`, which allocates and calls through code pointers.
+import Call, Expression, Identifier, Member from '../ast'
+import generate, type_of from './expression'
+import generate_loop_body from './control_flow'
+import emit_exception_check from './exceptions'
+import hold, store_in_slot from './function'
+import CodegenLocal, deferred_value, Generator from './generator'
+import emit_when, IrBuilder from './ir_builder'
+import function_symbol from './lerta_ir'
+import emit_binary_get, emit_binary_length from './string'
+import char_type, is_kind, string_type from '../types'
+
+# The module of std that decodes the UTF-8 of a Char that is not ASCII, for every program.
+UTF8_MODULE := 'std:internal/utf8'
+
+# The String whose `iter()` the call is, if it is one.
+export iterated_string := (g: Generator, iterable: Expression) ->
+  call := iterable as Call ? return nil
+  return nil unless call.args.is_empty()
+  return nil unless call.named_args.is_empty()
+  member := call.callee as Member ? return nil
+  return nil if member.name.name != 'iter'
+  text := deferred_value(g, member.object)
+  is_kind(type_of(g, text), 'String') then text
+
+# The length of the sequence that a lead byte other than ASCII starts, in a String's valid UTF-8:
+# 4 from 0xF0, 3 from 0xE0, else 2, compared unsigned, where i8 0xF0 reads as -16 and 0xE0 as -32.
+emit_sequence_length := (ir: IrBuilder, lead: String) ->
+  is_four := ir.assign("icmp uge i8 #{lead}, -16")
+  is_three := ir.assign("icmp uge i8 #{lead}, -32")
+  three_or_two := ir.assign("select i1 #{is_three}, i64 3, i64 2")
+  ir.assign "select i1 #{is_four}, i64 4, i64 #{three_or_two}"
+
+# Runs the body for each Char of the String, held for the loop. An ASCII byte is its Char; another
+# lead byte is decoded by std's own `char_at`. The place of the next Char is stored before the
+# body runs, so that a `continue` goes on from it.
+export generate_string_loop := (
+  g: Generator, text: Expression, variable: Identifier,
+  define_index: (Map<String, CodegenLocal>, String) -> void, body: () -> void
+) ->
+  ir := g.ir
+  string := generate(g, text)
+  release := hold(g, string, string_type)
+  length := emit_binary_length(ir, string)
+  at := ir.alloca('i64')
+  ir.store 'i64', '0', at
+  counter := ir.alloca('i64')
+  ir.store 'i64', '0', counter
+  header_label := ir.fresh_label('chars.header')
+  body_label := ir.fresh_label('chars.body')
+  exit_label := ir.fresh_label('chars.exit')
+  ir.branch header_label
+
+  ir.start_block header_label
+  current := ir.load('i64', at)
+  ir.branch_if ir.assign("icmp slt i64 #{current}, #{length}"), body_label, exit_label
+
+  ir.start_block body_label
+  lead := emit_binary_get(ir, string, current)
+  char_slot := ir.alloca('i32')
+  ir.store 'i32', ir.assign("zext i8 #{lead} to i32"), char_slot
+  step_slot := ir.alloca('i64')
+  ir.store 'i64', '1', step_slot
+  # i8 128, the least byte that is not ASCII, reads as -128.
+  is_ascii := ir.assign("icmp ult i8 #{lead}, -128")
+  decode := ->
+    char_at := function_symbol(UTF8_MODULE, 'char_at')
+    ir.store 'i32', ir.assign("call i32 #{char_at}(ptr #{string}, i64 #{current})"), char_slot
+    emit_exception_check g
+    ir.store 'i64', emit_sequence_length(ir, lead), step_slot
+  emit_when ir, ir.negate(is_ascii), decode
+  char := ir.load('i32', char_slot)
+  ir.store 'i64', ir.assign("add i64 #{current}, #{ir.load('i64', step_slot)}"), at
+  place := ir.load('i64', counter)
+  ir.store 'i64', ir.assign("add i64 #{place}, 1"), counter
+  define := (scope: Map<String, CodegenLocal>) ->
+    scope[variable.name] = store_in_slot(g, char, char_type)
+    define_index scope, place
+  generate_loop_body g, body, exit_label, header_label, define
+  ir.branch header_label
+
+  ir.start_block exit_label
+  release()

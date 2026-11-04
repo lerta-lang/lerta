@@ -694,6 +694,7 @@ The C types of an extern, and the ownership of its arguments and result, are in 
   - the generator kind: see [functions that yield](#functions-that-yield).
 - A lazy comprehension is a `map` of its element's closure over its source, through a `filter` of its guard's closure if it has one. The methods `map` and `filter` are such comprehensions (see [builtins](#builtins)).
 - The started flag makes a second traversal throw (see [the reference](reference/types.md#iter)).
+- **Over a `String`.** A `for` or a comprehension over a `String`, or over its `iter()`, makes no `Iter`: it reads the UTF-8 in the loop, as one over a `Binary` reads its bytes (`compiler/codegen/string_loop.lerta`). An ASCII byte is its `Char`; another lead byte is decoded by std's `char_at`, and the length of its sequence is told from the byte in the loop. The place of the next `Char` is stored before the body runs, so that a `continue` goes on from it. A `for c in s` then takes about 11 instructions for each ASCII character, against 10 for `for b in s.binary`.
 
 #### Devirtualizing the chain
 

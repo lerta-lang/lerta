@@ -6,11 +6,6 @@ The planned design of `String` and `Binary` beyond [the reference](../reference/
 
 - **Graphemes.** A separate iterator for graphemes, besides the code points that a `String` gives (see [the reference](../reference/types.md#string)).
 - **Case.** `s.to_upper()` and `s.to_lower()` of every letter, through the case mappings of Unicode. They change the ASCII letters only so far.
-- **A fast `for` over a `String`,** as fast as one over its bytes.
-  - Now `for c in s` takes about 47 instructions for each ASCII character, against 10 for `for b in s.binary`: `s.iter()` allocates a `Chars` and the `Iter` it is given as, and each item goes through `has_next` and `next` by their code pointers, then `Chars.next`, none inlined.
-  - Ways:
-    - a `for` over a `String` built into the compiler, reading the UTF-8 in the loop as one over an array reads its items;
-    - or `iter` as a function that yields, with such a `for` fused as one over a call of it is (see [fused loops](../internals.md#fused-loops)).
 - **A `Char` in an interpolation,** `"#{c}"`, appended as `s + c` appends it, without its `to_string()`. `Char.to_string` would then need no `String` made for each ASCII character: as `'' + @` alone, it now takes 24% more instructions for an ASCII one, given to `to_string` or in an interpolation.
 - **Representations,** in priority order:
   1. Small strings (see [below](#small-strings))
