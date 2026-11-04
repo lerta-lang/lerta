@@ -251,32 +251,50 @@ checks := [
     ]
     [compare_text('stdout', lines(expected), outcome.stdout)..., expect_clean(outcome)...]
   )
-  Check(name: 'lerta_string_hash is SipHash-1-3 under a key of its own in each process', run: ->
+  Check(name: 'lerta_string_hash is wyhash under a seed and a secret made in each process', run: ->
     executable := await build('string_hash', true)
     first := await execute(executable)
     second := await execute(executable)
-    # SipHash-1-3, as Python 3.13 hashes bytes under the zero key with PYTHONHASHSEED=0; the empty
-    # bytes, which Python hashes as 0, and the key 0 to 15 by a SipHash in Python that gives these
-    # and, with 2 and 4 rounds, the reference's vector of the empty bytes, 726fdb47dd0e0e31.
+    # The way of i686, which has no 128-bit integers, on the host.
+    narrow := await build_and_run('string_hash', true, ['LERTA_NO_INT128'])
+    # wyhash, final version 4.3, as the reference's wyhash.h gives them, with its default secret and
+    # then with the secret that its make_secret makes from the seed 0; the first is the reference's
+    # vector of the empty bytes under the seed 0, and the secrets are make_secret's of 0 and 1.
     known :=
-      'd1fba762150c532c'
-      '68a914128e01e473'
-      '010bac45c41e3669'
-      '4d4c9a4a8ef6e0ad'
-      '7cc43f98813e4dbd'
-      '5abe2169dff36275'
-      'e3c25f87624f1cdb'
-      '2f098ab0c751325a'
-      'ead411e67ebe2eea'
-      '75927f9d95124362'
-      'af9f77a65ab51a1d'
-      'fe64ce8b6617fcff'
-      'a6baf4fb0f9fe1c2'
-      'a0cf3211850f8e0d'
-      '7f86049379fbfe67'
-      'f30eb725bb91c9ea'
-      '8972188433a5c5b7'
-      'd320d86d2a519956'
+      '93228a4de0eec5a2'
+      '8e6d4af7d310c8c4'
+      '5121ba5bc9a828b5'
+      '78c4aa0c972a522d'
+      'e08aeeb68058fb32'
+      '845a2c5da2318785'
+      'cd82974fce6df97f'
+      '094e98feb6055cc6'
+      'b4d6ac74d009e1d4'
+      'b42922e019b409be'
+      '17b9ead432120ac5'
+      'a51fa8a613d0e5b9'
+      '44a77a3d52394b70'
+      '031e7fc29c5b1c14'
+      '4b0bfbbf3d4d4343'
+      '87edaf96d89a08ef'
+      '305fdea0ed4a2619'
+      'd29ffdd201a46f9a'
+      '5b00c06ef7540f8f'
+      'e2cb58f6ab8e4419'
+      'ecbfb7ff9e3d9a97'
+      '0691f11bac523a91'
+      '948137d69794b570'
+      '77ed9a7dfb9ac9b7'
+      '2513bb3f4da95c04'
+      '39d43c5c4e3a724b'
+      '6596e14753cca38b'
+      'c68d954b2b339353'
+      '96b4a6e45c65aa55'
+      '0ff09999359563a5'
+      '2d6c35b48de81b2b'
+      'd2ca93c527b49c2b'
+      '47c3660fc5e1c9b1'
+      '63345c8f3d25085d'
     own_hash := (outcome: Outcome) ->
       printed := outcome.stdout.split("\n")
       printed.length > known.length then printed[known.length] else ''
@@ -284,6 +302,8 @@ checks := [
     [
       compare_text('stdout', lines([known..., own_hashes[0]]), first.stdout)...
       expect_clean(first)...
+      compare_text('stdout', lines([known..., own_hash(narrow)]), narrow.stdout)...
+      expect_clean(narrow)...
       expect_clean(second)...
       reason_unless(own_hashes[0] != own_hashes[1], 'two processes hashed "a" alike')...
     ]

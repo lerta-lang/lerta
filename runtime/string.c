@@ -191,51 +191,199 @@ LertaString *lerta_string_push(LertaString *s, uint32_t c) {
   return pushed_beyond_ascii(s, c);
 }
 
-uint64_t lerta_hash_key[2];
+uint64_t lerta_hash_seed;
+uint64_t lerta_hash_secret[4];
 
-static uint64_t rotated(uint64_t x, int bits) { return (x << bits) | (x >> (64 - bits)); }
-
-static void sip_round(uint64_t v[4]) {
-  v[0] += v[1];
-  v[1] = rotated(v[1], 13) ^ v[0];
-  v[0] = rotated(v[0], 32);
-  v[2] += v[3];
-  v[3] = rotated(v[3], 16) ^ v[2];
-  v[0] += v[3];
-  v[3] = rotated(v[3], 21) ^ v[0];
-  v[2] += v[1];
-  v[1] = rotated(v[1], 17) ^ v[2];
-  v[2] = rotated(v[2], 32);
-}
-
-static void sip_compress(uint64_t v[4], uint64_t word) {
-  v[3] ^= word;
-  sip_round(v);
-  v[0] ^= word;
-}
-
-static uint64_t little_endian_word(const uint8_t *bytes, int64_t count) {
-  uint64_t word = 0;
-  for (int64_t i = 0; i < count; i++) word |= (uint64_t)bytes[i] << (8 * i);
+// The targets are all little-endian, so that a load is the word of its bytes in order.
+static uint64_t load_word(const uint8_t *bytes) {
+  uint64_t word;
+  memcpy(&word, bytes, sizeof word);
   return word;
 }
 
-// SipHash-1-3 under lerta_hash_key, which is random per process, so that keys that collide cannot
-// be computed ahead of time to flood a map.
+static uint64_t load_half(const uint8_t *bytes) {
+  uint32_t half;
+  memcpy(&half, bytes, sizeof half);
+  return half;
+}
+
+// The 128 bits of the product of a and b, the low half in a and the high in b; from four products
+// of 32 bits where the target has no 128-bit integers, as i686, or LERTA_NO_INT128 is defined, as a
+// check of the runtime defines it to take the way of i686 on the host.
+static void multiply_wide(uint64_t *a, uint64_t *b) {
+#if defined(__SIZEOF_INT128__) && !defined(LERTA_NO_INT128)
+  __uint128_t product = (__uint128_t)*a * *b;
+  *a = (uint64_t)product;
+  *b = (uint64_t)(product >> 64);
+#else
+  uint64_t a_high = *a >> 32, a_low = (uint32_t)*a, b_high = *b >> 32, b_low = (uint32_t)*b;
+  uint64_t high = a_high * b_high, middle_a = a_high * b_low, middle_b = b_high * a_low;
+  uint64_t low = a_low * b_low;
+  uint64_t partial = low + (middle_a << 32);
+  uint64_t carry = partial < low;
+  uint64_t result = partial + (middle_b << 32);
+  carry += result < partial;
+  *a = result;
+  *b = high + (middle_a >> 32) + (middle_b >> 32) + carry;
+#endif
+}
+
+static uint64_t mixed(uint64_t a, uint64_t b) {
+  multiply_wide(&a, &b);
+  return a ^ b;
+}
+
+// wyhash's random numbers, which make_secret draws from.
+static uint64_t next_random(uint64_t *seed) {
+  *seed += 0x2d358dccaa6c78a5u;
+  return mixed(*seed, *seed ^ 0x8bb84b93962eacc9u);
+}
+
+// a * b modulo m, as wyhash's mul_mod gives it. Making the secret runs at every start, so this
+// takes one remainder of 128 bits where the target has them; else, as on i686, where a remainder
+// of 64 bits is a call, one of the product's high word, and then shifts in the low word's bits one
+// by one, each reduced by a subtraction.
+static uint64_t multiply_mod(uint64_t a, uint64_t b, uint64_t m) {
+#if defined(__SIZEOF_INT128__) && !defined(LERTA_NO_INT128)
+  return (uint64_t)((__uint128_t)a * b % m);
+#else
+  multiply_wide(&a, &b);
+  uint64_t r = b % m;
+  for (int bit = 63; bit >= 0; bit--) {
+    uint64_t carry = r >> 63;
+    r = r << 1 | (a >> bit & 1);
+    if (carry || r >= m) r -= m;
+  }
+  return r;
+#endif
+}
+
+static uint64_t power_mod(uint64_t a, uint64_t b, uint64_t m) {
+  uint64_t r = 1;
+  while (b) {
+    if (b & 1) r = multiply_mod(r, a, m);
+    b >>= 1;
+    if (b) a = multiply_mod(a, a, m);
+  }
+  return r;
+}
+
+// Whether the odd n is a strong probable prime to the base a, as wyhash's sprp.
+static bool is_strong_probable_prime(uint64_t n, uint64_t a) {
+  uint64_t d = n - 1;
+  unsigned s = 0;
+  while (!(d & 1)) {
+    d >>= 1;
+    s++;
+  }
+  uint64_t b = power_mod(a, d, n);
+  if (b == 1 || b == n - 1) return true;
+  for (unsigned r = 1; r < s; r++) {
+    b = multiply_mod(b, b, n);
+    if (b <= 1) return false;
+    if (b == n - 1) return true;
+  }
+  return false;
+}
+
+// Whether the odd n is prime, as wyhash's is_prime: the bases up to 37 decide it for every 64-bit
+// n, and 2 alone below 2047. The primes up to 47 come first: they divide about 70% of the odd
+// numbers that make_secret draws, which they reject without the costlier tests, which took most of
+// the time of making a secret on i686.
+static bool is_prime(uint64_t n) {
+  static const uint64_t small_primes[] = {3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47};
+  static const uint64_t bases[] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37};
+  if (n < 2 || !(n & 1)) return false;
+  if (n < 4) return true;
+  for (size_t i = 0; i < sizeof small_primes / sizeof *small_primes; i++) {
+    if (n % small_primes[i] == 0) return n == small_primes[i];
+  }
+  for (size_t i = 0; i < sizeof bases / sizeof *bases; i++) {
+    if (!is_strong_probable_prime(n, bases[i])) return false;
+    if (n < 2047) return true;
+  }
+  return true;
+}
+
+__attribute__((noinline, cold)) void lerta_make_hash_secret(uint64_t seed, uint64_t secret[4]) {
+  // The bytes of four set bits, of which each word of the secret is made.
+  static const uint8_t bytes[] = {
+      15,  23,  27,  29,  30,  39,  43,  45,  46,  51,  53,  54,  57,  58,  60,  71,  75,  77,
+      78,  83,  85,  86,  89,  90,  92,  99,  101, 102, 105, 106, 108, 113, 114, 116, 120, 135,
+      139, 141, 142, 147, 149, 150, 153, 154, 156, 163, 165, 166, 169, 170, 172, 177, 178, 180,
+      184, 195, 197, 198, 201, 202, 204, 209, 210, 212, 216, 225, 226, 228, 232, 240};
+  for (size_t i = 0; i < 4; i++) {
+    bool ok;
+    do {
+      ok = true;
+      secret[i] = 0;
+      for (size_t j = 0; j < 64; j += 8) {
+        secret[i] |= (uint64_t)bytes[next_random(&seed) % sizeof bytes] << j;
+      }
+      if (secret[i] % 2 == 0) {
+        ok = false;
+        continue;
+      }
+      for (size_t j = 0; j < i; j++) {
+        if (__builtin_popcountll(secret[j] ^ secret[i]) != 32) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok && !is_prime(secret[i])) ok = false;
+    } while (!ok);
+  }
+}
+
+// wyhash (final version 4.3) under lerta_hash_seed and lerta_hash_secret (see
+// docs/internals/representation.md#maps).
 uint64_t lerta_string_hash(const LertaString *s) {
-  uint64_t v[4] = {
-      lerta_hash_key[0] ^ 0x736F6D6570736575u,
-      lerta_hash_key[1] ^ 0x646F72616E646F6Du,
-      lerta_hash_key[0] ^ 0x6C7967656E657261u,
-      lerta_hash_key[1] ^ 0x7465646279746573u,
-  };
-  int64_t whole = s->length & ~(int64_t)7;
-  for (int64_t i = 0; i < whole; i += 8) sip_compress(v, little_endian_word(s->bytes + i, 8));
-  uint64_t last = little_endian_word(s->bytes + whole, s->length - whole);
-  sip_compress(v, last | (uint64_t)s->length << 56);
-  v[2] ^= 0xFF;
-  for (int i = 0; i < 3; i++) sip_round(v);
-  return v[0] ^ v[1] ^ v[2] ^ v[3];
+  // Made at the first hash, as making it costs a program on i686 a few milliseconds at start, which
+  // one that hashes no String need not pay; a secret is odd, so 0 marks none made yet.
+  if (__builtin_expect(lerta_hash_secret[0] == 0, 0)) {
+    lerta_make_hash_secret(lerta_hash_seed, lerta_hash_secret);
+  }
+  const uint64_t *secret = lerta_hash_secret;
+  const uint8_t *p = s->bytes;
+  uint64_t length = (uint64_t)s->length;
+  uint64_t seed = lerta_hash_seed ^ mixed(lerta_hash_seed ^ secret[0], secret[1]);
+  uint64_t a, b;
+  if (length <= 16) {
+    if (length >= 4) {
+      uint64_t step = (length >> 3) << 2;
+      a = load_half(p) << 32 | load_half(p + step);
+      b = load_half(p + length - 4) << 32 | load_half(p + length - 4 - step);
+    } else if (length > 0) {
+      a = (uint64_t)p[0] << 16 | (uint64_t)p[length >> 1] << 8 | p[length - 1];
+      b = 0;
+    } else {
+      a = b = 0;
+    }
+  } else {
+    uint64_t left = length;
+    if (left >= 48) {
+      uint64_t seed1 = seed, seed2 = seed;
+      do {
+        seed = mixed(load_word(p) ^ secret[1], load_word(p + 8) ^ seed);
+        seed1 = mixed(load_word(p + 16) ^ secret[2], load_word(p + 24) ^ seed1);
+        seed2 = mixed(load_word(p + 32) ^ secret[3], load_word(p + 40) ^ seed2);
+        p += 48;
+        left -= 48;
+      } while (left >= 48);
+      seed ^= seed1 ^ seed2;
+    }
+    while (left > 16) {
+      seed = mixed(load_word(p) ^ secret[1], load_word(p + 8) ^ seed);
+      p += 16;
+      left -= 16;
+    }
+    a = load_word(p + left - 16);
+    b = load_word(p + left - 8);
+  }
+  a ^= secret[1];
+  b ^= seed;
+  multiply_wide(&a, &b);
+  return mixed(a ^ secret[0] ^ length, b ^ secret[1]);
 }
 
 bool lerta_string_equals(const LertaString *a, const LertaString *b) {

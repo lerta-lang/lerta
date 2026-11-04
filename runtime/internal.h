@@ -211,8 +211,12 @@ _Noreturn void lerta_panic_with_exception(const char *prefix);
 // arguments are NUL-terminated UTF-8, and a false or NULL result is a failure.
 // Stack overflow: reported as a panic. Called first thing in main.
 void lerta_stack_init(void);
-// The key of lerta_string_hash, which lerta_hash_init makes random for each process.
-extern uint64_t lerta_hash_key[2];
+// The seed and the secret of lerta_string_hash: lerta_hash_init makes the seed random for each
+// process, and lerta_string_hash makes the secret from it at its first call, as wyhash's make_secret
+// does (lerta_make_hash_secret); the secret is all 0 until then.
+extern uint64_t lerta_hash_seed;
+extern uint64_t lerta_hash_secret[4];
+void lerta_make_hash_secret(uint64_t seed, uint64_t secret[4]);
 void lerta_hash_init(void);
 // Gives main's arguments as the system's bytes, which are UTF-8 on Windows: POSIX leaves them as
 // they are, and Windows replaces them with ones read from its UTF-16 command line.
