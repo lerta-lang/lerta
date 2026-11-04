@@ -42,25 +42,41 @@ static size_t entry_size(const LertaMap *map) {
   return (sizeof(LertaMapEntry) + value_size(map) + 7) & ~(size_t)7;
 }
 
+// The entry at the position, where each entry takes `size` bytes from `entries`.
+static LertaMapEntry *entry_in(uint8_t *entries, size_t size, int64_t position) {
+  return (LertaMapEntry *)(entries + (size_t)position * size);
+}
+
 static LertaMapEntry *entry_at(const LertaMap *map, int64_t position) {
-  return (LertaMapEntry *)(map->entries + (size_t)position * entry_size(map));
+  return entry_in(map->entries, entry_size(map), position);
 }
 
 static void *value_of(LertaMapEntry *entry) { return (uint8_t *)entry + sizeof(LertaMapEntry); }
 
-static inline void visit_entry(const LertaMap *map, LertaMapEntry *entry, LertaVisitor visitor) {
-  if (keys_are_references(map)) visitor((void *)(intptr_t)entry->key);
-  lerta_visit_item(map->value_kind, value_of(entry), visitor);
+// The references of an entry of a map whose keys are references if `keys` and whose values are of
+// the kind.
+static inline void visit_entry(bool keys, LertaItemKind kind, LertaMapEntry *entry,
+                               LertaVisitor visitor) {
+  if (keys) visitor((void *)(intptr_t)entry->key);
+  lerta_visit_item(kind, value_of(entry), visitor);
 }
 
 static void release_entry(const LertaMap *map, LertaMapEntry *entry) {
-  visit_entry(map, entry, lerta_release);
+  visit_entry(keys_are_references(map), map->value_kind, entry, lerta_release);
 }
 
+// What the loop needs of the map is read before it, as LLVM would read it again after each call
+// of the visitor, which might change the map as far as it knows.
 static inline void visit_map(void *object, LertaVisitor visitor) {
   LertaMap *map = object;
-  for (int64_t i = 0; i < map->entry_count; i++) {
-    if (entry_at(map, i)->live) visit_entry(map, entry_at(map, i), visitor);
+  int64_t count = map->entry_count;
+  uint8_t *entries = map->entries;
+  size_t size = entry_size(map);
+  bool keys = keys_are_references(map);
+  LertaItemKind kind = map->value_kind;
+  for (int64_t i = 0; i < count; i++) {
+    LertaMapEntry *entry = entry_in(entries, size, i);
+    if (entry->live) visit_entry(keys, kind, entry, visitor);
   }
 }
 
