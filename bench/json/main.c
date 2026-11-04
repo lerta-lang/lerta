@@ -1,5 +1,5 @@
+#include <inttypes.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,22 +23,22 @@ typedef struct {
 // An object's fields, in a hash table of open addressing, as the maps of the other languages are.
 typedef struct {
   Field *slots;
-  long capacity, length;
+  int64_t capacity, length;
 } Fields;
 
 typedef struct {
   Json **items;
-  long capacity, length;
+  int64_t capacity, length;
 } Items;
 
 struct Json {
   Kind kind;
   union {
-    long integer;
+    int64_t integer;
     bool boolean;
     struct {
       char *bytes;
-      long length;
+      int64_t length;
     } string;
     Items array;
     Fields object;
@@ -46,32 +46,32 @@ struct Json {
 };
 
 // MINSTD, whose products fit in the integers of every language compared.
-static long seed = 1;
-static long next_random(void) {
+static int64_t seed = 1;
+static int64_t next_random(void) {
   seed = seed * 48271 % 2147483647;
   return seed;
 }
 
 typedef struct {
   char *bytes;
-  long length, capacity;
+  int64_t length, capacity;
 } Text;
 
-static void reserve(Text *text, long room) {
+static void reserve(Text *text, int64_t room) {
   if (text->length + room <= text->capacity) return;
   text->capacity = (text->length + room) * 2;
   text->bytes = realloc(text->bytes, text->capacity);
 }
 
 static void append(Text *text, const char *literal) {
-  long length = strlen(literal);
+  int64_t length = strlen(literal);
   reserve(text, length + 1);
   memcpy(text->bytes + text->length, literal, length + 1);
   text->length += length;
 }
 
 // Appends the format with the number, which it holds once.
-static void append_number(Text *text, const char *format, long value) {
+static void append_number(Text *text, const char *format, int64_t value) {
   reserve(text, strlen(format) + 20);
   text->length += sprintf(text->bytes + text->length, format, value);
 }
@@ -79,16 +79,16 @@ static void append_number(Text *text, const char *format, long value) {
 static Text make_text(void) {
   Text text = {malloc(16), 0, 16};
   append(&text, "[");
-  for (long i = 0; i < OBJECTS; i++) {
+  for (int64_t i = 0; i < OBJECTS; i++) {
     if (i > 0) append(&text, ", ");
-    long id = next_random() % 1000000;
-    long name = next_random() % 5000;
-    append_number(&text, "{\"id\": %ld, ", id);
-    append_number(&text, "\"name\": \"w%ld\", \"tags\": [", name);
-    long tags = next_random() % 4;
-    for (long t = 0; t < tags; t++) {
+    int64_t id = next_random() % 1000000;
+    int64_t name = next_random() % 5000;
+    append_number(&text, "{\"id\": %" PRId64 ", ", id);
+    append_number(&text, "\"name\": \"w%" PRId64 "\", \"tags\": [", name);
+    int64_t tags = next_random() % 4;
+    for (int64_t t = 0; t < tags; t++) {
       if (t > 0) append(&text, ", ");
-      append_number(&text, "\"t%ld\"", next_random() % 100);
+      append_number(&text, "\"t%" PRId64 "\"", next_random() % 100);
     }
     bool active = next_random() % 2 == 0;
     append(&text, active ? "], \"active\": true}" : "], \"active\": false}");
@@ -118,8 +118,8 @@ static uint64_t hash(const char *key) {
 }
 
 static void put_slot(Fields *fields, char *key, Json *value) {
-  long mask = fields->capacity - 1;
-  long i = hash(key) & mask;
+  int64_t mask = fields->capacity - 1;
+  int64_t i = hash(key) & mask;
   while (fields->slots[i].key != NULL && strcmp(fields->slots[i].key, key) != 0) i = (i + 1) & mask;
   if (fields->slots[i].key == NULL) fields->length++;
   fields->slots[i] = (Field){key, value};
@@ -129,7 +129,7 @@ static void put(Fields *fields, char *key, Json *value) {
   if ((fields->length + 1) * 4 > fields->capacity * 3) {
     Fields grown = {calloc(fields->capacity == 0 ? 8 : fields->capacity * 2, sizeof(Field)),
                     fields->capacity == 0 ? 8 : fields->capacity * 2, 0};
-    for (long i = 0; i < fields->capacity; i++)
+    for (int64_t i = 0; i < fields->capacity; i++)
       if (fields->slots[i].key != NULL) put_slot(&grown, fields->slots[i].key, fields->slots[i].value);
     free(fields->slots);
     *fields = grown;
@@ -140,7 +140,7 @@ static void put(Fields *fields, char *key, Json *value) {
 // Each part read skips the spaces after it, so that the next starts at its first byte.
 typedef struct {
   const char *bytes;
-  long length, position;
+  int64_t length, position;
 } Parser;
 
 static void skip_spaces(Parser *p) {
@@ -155,7 +155,7 @@ static void skip_byte(Parser *p) {
 
 static Json *parse_value(Parser *p);
 
-static Json *parse_word(Parser *p, long length, bool value) {
+static Json *parse_word(Parser *p, int64_t length, bool value) {
   p->position += length;
   skip_spaces(p);
   Json *json = new_json(BOOL);
@@ -178,7 +178,7 @@ static Json *parse_array(Parser *p) {
 }
 
 static char *parse_key(Parser *p) {
-  long start = p->position + 1;
+  int64_t start = p->position + 1;
   p->position = start;
   while (p->bytes[p->position] != '"') p->position++;
   char *key = strndup(p->bytes + start, p->position - start);
@@ -215,7 +215,7 @@ static Json *parse_string(Parser *p) {
 }
 
 static Json *parse_int(Parser *p) {
-  long value = 0;
+  int64_t value = 0;
   while (p->bytes[p->position] >= '0' && p->bytes[p->position] <= '9') {
     value = value * 10 + (p->bytes[p->position] - '0');
     p->position++;
@@ -238,19 +238,19 @@ static Json *parse_value(Parser *p) {
 }
 
 // The integers, the lengths of the strings, the true booleans and the items and fields, added up.
-static long sum(const Json *json) {
+static int64_t sum(const Json *json) {
   switch (json->kind) {
   case INT: return json->integer;
   case STRING: return json->string.length;
   case BOOL: return json->boolean ? 1 : 0;
   case ARRAY: {
-    long total = json->array.length;
-    for (long i = 0; i < json->array.length; i++) total += sum(json->array.items[i]);
+    int64_t total = json->array.length;
+    for (int64_t i = 0; i < json->array.length; i++) total += sum(json->array.items[i]);
     return total;
   }
   case OBJECT: {
-    long total = json->object.length;
-    for (long i = 0; i < json->object.capacity; i++)
+    int64_t total = json->object.length;
+    for (int64_t i = 0; i < json->object.capacity; i++)
       if (json->object.slots[i].key != NULL) total += sum(json->object.slots[i].value);
     return total;
   }
@@ -262,11 +262,11 @@ static void drop(Json *json) {
   switch (json->kind) {
   case STRING: free(json->string.bytes); break;
   case ARRAY:
-    for (long i = 0; i < json->array.length; i++) drop(json->array.items[i]);
+    for (int64_t i = 0; i < json->array.length; i++) drop(json->array.items[i]);
     free(json->array.items);
     break;
   case OBJECT:
-    for (long i = 0; i < json->object.capacity; i++) {
+    for (int64_t i = 0; i < json->object.capacity; i++) {
       if (json->object.slots[i].key == NULL) continue;
       free(json->object.slots[i].key);
       drop(json->object.slots[i].value);
@@ -280,14 +280,14 @@ static void drop(Json *json) {
 
 int main(void) {
   Text text = make_text();
-  long total = 0;
+  int64_t total = 0;
   for (int i = 0; i < PARSES; i++) {
     Parser parser = {text.bytes, text.length, 0};
     Json *json = parse_value(&parser);
     total += sum(json);
     drop(json);
   }
-  printf("%ld\n", total);
+  printf("%" PRId64 "\n", total);
   free(text.bytes);
   return 0;
 }

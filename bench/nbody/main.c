@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <math.h>
 #include <stdio.h>
 
@@ -82,12 +83,12 @@ static double energy(void) {
   return e;
 }
 
-static long in_billionths(double e) { return lround(e * 1e9); }
+static int64_t in_billionths(double e) { return llround(e * 1e9); }
 
 int main(void) {
   offset_momentum();
-  printf("%ld\n", in_billionths(energy()));
+  printf("%" PRId64 "\n", in_billionths(energy()));
   for (int i = 0; i < STEPS; i++) advance(0.01);
-  printf("%ld\n", in_billionths(energy()));
+  printf("%" PRId64 "\n", in_billionths(energy()));
   return 0;
 }

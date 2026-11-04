@@ -1,10 +1,11 @@
+#include <inttypes.h>
 #include <stdio.h>
 
 // Counts the points of a size × size grid that stay in the Mandelbrot set for 100 iterations.
-static long mandelbrot(long size) {
-  long inside = 0;
-  for (long y = 0; y < size; y++) {
-    for (long x = 0; x < size; x++) {
+static int64_t mandelbrot(int64_t size) {
+  int64_t inside = 0;
+  for (int64_t y = 0; y < size; y++) {
+    for (int64_t x = 0; x < size; x++) {
       double cr = 2.0 * x / size - 1.5;
       double ci = 2.0 * y / size - 1.0;
       double zr = 0, zi = 0;
@@ -22,5 +23,5 @@ static long mandelbrot(long size) {
 }
 
 int main(void) {
-  printf("%ld\n", mandelbrot(2000));
+  printf("%" PRId64 "\n", mandelbrot(2000));
 }
