@@ -2,7 +2,7 @@
 # the member of a name that an interface reads.
 import Call, FunctionLiteral, Identifier, Member, This from '../ast'
 import check_arguments from './arguments'
-import BuiltinMethod from './builtins'
+import builtin_method, BuiltinMethod from './builtins'
 import COMPLETION_NAME, probe_member from './completion_probe'
 import warn_if_kept from './cycles'
 import fail from './diagnostics'
@@ -86,8 +86,12 @@ type_of_method := (body: Body, member: Member, receiver: Type, source: MethodSou
   record_member body, member, from_source then Method(source!) else Property(FIELD)
   set_type body, member, method
 
-find := (body: Body, receiver: Type, name: Identifier) ->
-  return union_method(body, receiver, name) if receiver is UnionType
+find := (body: Body, receiver: Type, name: Identifier): MethodSource? ->
+  # A union whose members' methods of the name differ in type, as their equals and hash do, has
+  # the builtin ones, which `==` and map keys use.
+  if receiver is UnionType
+    return found if found := union_method(body, receiver, name)
+    return builtin_method(body.program, receiver, name.name)
   find_method body.program, receiver, name.name, body.extensions
 
 # The method of the name that every member of the union has, of one type, or nil.
