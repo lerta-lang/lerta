@@ -21,6 +21,7 @@ The planned design of modules, FFI, the standard library and tools.
 ## Standard library
 
 - In [std:json](../reference/std.md#stdjson), unions with an array, a map, a tuple or an anonymous struct as a member: an array and a tuple are written as JSON arrays, and a map and an anonymous struct as objects, so decoding tells apart one of each kind, as it does a class from the others.
+- In [std:json](../reference/std.md#stdjson), conversion of its own for a class or struct, through a `Jsonable` type `J`: a method `to_json := (): J` and a [static member](objects.md#classes-and-structs) `from_json := (json: J): Self`, as a `Date` written as an ISO 8601 string. The code that the compiler generates converts `J` and calls them, wherever the type is a part, as a field; a `from_json` that throws gives a `JsonError` with the path, `$.at: <message>`.
 - In [std:json](../reference/std.md#stdjson), unions of objects told apart by a field, as `kind`, and a dynamic JSON value type wait until a program needs them: a message whose fields depend on another field is decoded twice, first as a type with only that field, then as the type it names.
 - Random numbers, and formatting dates and times.
 - In [std:process](../reference/std.md#stdprocess), a `run` that gathers both outputs and gives them with the `Exit`, so that a caller does not declare a `Byte[]` for each and convert it back.
