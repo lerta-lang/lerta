@@ -55,16 +55,16 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
   - `flatten` needs an extend whose type parameter appears only in the bound of another, as `T` in `extend<T, I: Iterable<T>> Iterable<I>`, which the language does not allow yet ([extend](../reference/objects.md#extend)).
 - **`to_string`** of arrays of other items, as of a class with a `to_string`, and of maps, sets, tuples and anonymous structs. Now an array is `Stringable` only when the compiler can write its items ([the reference](../reference/builtins.md#stringable)).
 - **Nested comprehensions.** A comprehension may have several `for`s, the later nested in the earlier: `[f(x, y) for x in xs for y in ys]`.
-- **`contains` and `all` through `@any`.** `contains` of an array and `all` of an Iterable are to be written through `@any`, rather than as loops of their own, once that costs nothing. A literal given to a method generated in place is generated in place where the method calls it ([internals](../internals.md#inlined-methods)), yet, over an array of 64 `Int`s:
+- **`contains` and `all` through `@any`.** `contains` of an array and `all` of an Iterable are to be written through `@any`, rather than as loops of their own, once that costs nothing. A literal given to a method generated in place is generated in place where the method calls it ([internals](../internals/iteration.md#inlined-methods)), yet, over an array of 64 `Int`s:
   - `contains` as `@any((each) -> each == item)` ran 14% more instructions: LLVM works out the result after the loop, from the index, at an extra move per item.
   - `all` as `not @any((x) -> not test(x))` ran 81% more: the literal captures `test`, which then counts as escaping (`escaping_locals`), so the function given to `all` is a closure on the heap, called through its pointer. A parameter captured only by literals that are themselves generated in place would have to count as only called.
-- **`Iter<T>` in std.** `Iter<T>` is to be a generic class of `std/builtins/collections.lerta` that holds such a value and the started flag, so that the compiler no longer builds `Iter`s itself (see [internals](../internals.md#iter)).
+- **`Iter<T>` in std.** `Iter<T>` is to be a generic class of `std/builtins/collections.lerta` that holds such a value and the started flag, so that the compiler no longer builds `Iter`s itself (see [internals](../internals/iteration.md#iter)).
   - It waits until a call through an interface value can become a direct one.
   - Measured: a range, a `filter` and a `map` written as classes with `has_next` and `next`, each converted to an `Iter` and consumed by a `for`, ran 4.1G instructions for 20 rounds of a million items. A lazy comprehension made and consumed in one function, which LLVM inlines whole, ran 0.25G; one made and consumed by functions of their own, 1.5G. Each item goes through a call of the itab at each step, which nothing inlines.
 
 ## Types
 
-- **Unions of array types** (`Int[] | String[]`) or of map types, which [the reference](../reference/types.md#unions) refuses. Every array has one type in its header, whatever its items, so a union tells only one array apart by it (see [internals](../internals.md#objects)). Either:
+- **Unions of array types** (`Int[] | String[]`) or of map types, which [the reference](../reference/types.md#unions) refuses. Every array has one type in its header, whatever its items, so a union tells only one array apart by it (see [internals](../internals/representation.md#objects)). Either:
   - the arrays of such a union are held in boxes, as the numbers and `String` are; or
   - each array gets the type of its item type in its header, which the runtime's arrays, made by item kind, do not know.
 - **Shared members of unions** read through the union when a member is an array, a map, a tuple or an anonymous struct: `length` of `Int[] | String`. A field that every member declares is read so now.
@@ -73,7 +73,7 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
 - **Array literal types.** An array literal's element type is one that every item fits, rather than that of the first item that gives one ([the reference](../reference/types.md#array)): `[import, statements...]`, of an `Import` and the items of a `Statement[]`, is a `Statement[]`, as `Import` is a member of that union.
 - **Small values unboxed.** Structs, anonymous structs and tuples of at most 16 bytes as values rather than heap objects: in registers and in the room of an item (`LertaItem`), at most the two words of an interface value.
   - Gain: `for (k, v) in m.entries()` and a `Position` of a line and a column allocate nothing. They cannot be changed, so the representation does not show in what a program does.
-  - In a union, such a value is still held in a box (see [internals](../internals.md#objects)).
+  - In a union, such a value is still held in a box (see [internals](../internals/representation.md#objects)).
   - Counted before trying: of the 10.9M objects that the compiler's own `dump-llvm` allocates, such values are about 0.6M, against 4.8M strings and 2.3M arrays; less than 1% of its instructions by the cost of an allocation. The benchmarks in `bench/` allocate almost none (`bench/binary_trees` a class).
   - It waits until a program shows the need, as it touches every place that takes a value for one word: the IR types, reference counting, array items, map keys, union tests, equality and hashing.
 - **Arrays of optional numbers, `Bool`, `Char` and enums** (`Int?[]`), which have no item kind yet: an item kind for `{ i1, T }`, which fits in the room of an item (`LertaItem` in `runtime/lerta.h`). A map's value stays not optional, since a missing key reads as nil.
@@ -94,7 +94,7 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
 - Renaming in destructuring (`{ a: x } := value`).
 - Notation for an array inside an array without brackets (CoffeeScript has one).
 - An index in an Iter comprehension, `(f(x, i) for x, i in xs)`.
-- How an Iter gives an item in one call rather than two (`has_next` and `next`, each through a pointer to code now; see [internals](../internals.md#iter)):
+- How an Iter gives an item in one call rather than two (`has_next` and `next`, each through a pointer to code now; see [internals](../internals/iteration.md#iter)):
   - `next` giving the item with whether there was one, as Rust's `Option` and Swift's optional. Its `{ i1, T }` in IR can be that for the Iters the compiler generates, but an Iter written in Lerta, `{ has_next, next }`, cannot write `next: () -> T?` for an `Iter<T?>`.
   - Or the end signalled as an exception, as Python's `StopIteration`, which the check after each call that Lerta has anyway would carry.
 - Whether `as` also widens a value to a type it fits, as Swift's `nil as String?` or `x as Shape`, for a value in the middle of an expression. A `const` with a type annotation does it now. It would sit beside the casts that may fail, `as T?` and `as T!`, which `as T` alone is not allowed to be.

@@ -9,7 +9,7 @@ The planned design of modules, FFI, the standard library and tools.
   - As a result, it is returned on Windows and on 32-bit x86 through a pointer to a place that the caller gives, which the `{ i1, i64 }` that the IR returns does not match. So std has two externs where one would give `Int?`, as for `to_int`.
 - **C variables.** An `extern` declaration may also refer to a C variable.
 - **Generic externs,** `extern lerta_map_remove: <K, V>(Map<K, V>, K) -> void`, for C functions that take a value of any type as a pointer, as an array, a map or a String is.
-  - With them, the method `remove`, built into the compiler now (see [internals](../internals.md#builtins)), moves to `std/builtins/`, and so would the properties `length` and `s.binary` with extern properties (see [open questions](#open-questions)).
+  - With them, the method `remove`, built into the compiler now (see [internals](../internals/representation.md#builtins)), moves to `std/builtins/`, and so would the properties `length` and `s.binary` with extern properties (see [open questions](#open-questions)).
   - `push`, `pop` and indexing stay built in, since their code depends on the items' kind.
   - Using them in std needs a seed refresh.
 - **Tuple results.** An extern may return a tuple or an anonymous struct, which C writes through the runtime's header. Now `lerta_status_fields` fills an `Int[]` of three, which `stat` reads by place.
@@ -131,7 +131,7 @@ The rest of [`lerta lsp`](../reference/compiler.md#lsp):
 
 ### Tests of the compiler
 
-- The command-line checks (`test/cli.lerta`) run on Windows too, through `make test-cross` (the bootstrap runs there already: see [platforms](../internals.md#platforms)), with those that run a shell made to run without one.
+- The command-line checks (`test/cli.lerta`) run on Windows too, through `make test-cross` (the bootstrap runs there already: see [platforms](../internals/platforms.md#platforms)), with those that run a shell made to run without one.
 
 ## Open questions
 
@@ -157,7 +157,7 @@ The rest of [`lerta lsp`](../reference/compiler.md#lsp):
 - Extern properties, `extern lerta_array_length as length: Int` in an extend, which read a property by calling a C function with the receiver. They would move `length` and `s.binary` to std, but they are getters written in C, which [philosophy](../philosophy.md#non-goals) leaves out; allowing them only in `std:` modules, as a builtin special case, keeps that for users.
 - How a small string ([strings](strings.md#small-strings)) crosses the FFI boundary: made flat for the call, or passed as the word, which a C function then reads through the runtime.
 - What a C function declared to return `Float` does when it returns NaN: throw at the boundary, as an operation does, or leave it to the caller.
-- How to keep the repository small as the seed is refreshed (`seed/minilerta.ll`, see [bootstrap](../internals.md#bootstrap)): refreshing only at milestones, or keeping the seed outside the history, as with Git LFS or as a release asset.
+- How to keep the repository small as the seed is refreshed (`seed/minilerta.ll`, see [bootstrap](../internals/architecture.md#bootstrap)): refreshing only at milestones, or keeping the seed outside the history, as with Git LFS or as a release asset.
 - How to hold type information for separate compilation (interface files).
 
 ### Tools

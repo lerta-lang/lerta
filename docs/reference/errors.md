@@ -95,7 +95,7 @@ The trace tells where the exception was thrown and the calls and the `await`s it
 - Any other `throw` starts a new trace, even of an object thrown before.
 - The trace keeps the 32 entries nearest to the throw and the 32 outermost. Between them, `  ... <n> more` tells how many it leaves out.
 - A program built with `--no-trace` prints the message alone (see [the compiler](compiler.md#build)).
-- Why exceptions propagate as a pending exception checked after each call, rather than by unwinding the machine stack: see [internals](../internals.md#exceptions).
+- Why exceptions propagate as a pending exception checked after each call, rather than by unwinding the machine stack: see [internals](../internals/execution.md#exceptions).
 
 ## Panics
 

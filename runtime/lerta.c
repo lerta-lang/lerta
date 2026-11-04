@@ -4,7 +4,7 @@
 #include "internal.h"
 
 // The entry module's top-level code, which the compiler generates (see
-// docs/internals.md#per-module-output); the runtime wraps it with setup and exit.
+// docs/internals/architecture.md#per-module-output); the runtime wraps it with setup and exit.
 void lerta_main(void);
 
 LertaException lerta_exception = {NULL, NULL};

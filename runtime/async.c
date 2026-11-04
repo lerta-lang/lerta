@@ -174,9 +174,9 @@ void *lerta_promise_result_in(LertaPromise *promise, LertaPromise *own) {
   own->awaiting = NULL;
   if (!own->cancel_requested) return lerta_promise_result(promise);
   own->cancel_requested = false;
-  // The cancel takes the place of what the promise holds, which is given up: a rejection that nothing
-  // takes would otherwise end the program once the promise is dropped. Another await may still take
-  // it.
+  // The cancel takes the place of what the promise holds, which is given up: a rejection that
+  // nothing takes would otherwise end the program once the promise is dropped. Another await may
+  // still take it.
   promise->observed = true;
   raise_cancelled();
   return promise->value;

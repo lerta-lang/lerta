@@ -2,7 +2,7 @@
 
 Lerta is a safe, single-threaded, event-driven language. It targets both native executables and [scripts](roadmap/programs.md#tools).
 
-Lerta's stance is that **cost is visible**: what a line does shows in it, beyond [reference counting](internals.md#memory-management) and [exception checks](internals.md#exceptions).
+Lerta's stance is that **cost is visible**: what a line does shows in it, beyond [reference counting](internals/memory.md) and [exception checks](internals/execution.md#exceptions).
 
 ## Design principles
 

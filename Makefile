@@ -1,6 +1,6 @@
 # Builds the compiler from the seed, the compiler's own LLVM IR, and checks and tests it. See
-# README.md for the targets and docs/internals.md#bootstrap for the bootstrap. Written for GNU make
-# 3.81, the one macOS has.
+# README.md for the targets and docs/internals/architecture.md#bootstrap for the bootstrap. Written
+# for GNU make 3.81, the one macOS has.
 
 # What third_party/libuv.txt lists of the kind $(1) for the host's system, on which the compiler
 # runs: macOS or Linux, by the rule of is_for in compiler/libuv.lerta.
@@ -44,8 +44,9 @@ all: $(COMPILER)
 .DELETE_ON_ERROR:
 
 # Rewrites llvm.coro.end for the host's LLVM, and is empty when there is nothing to rewrite (see
-# docs/internals.md#bootstrap). It is worked out again on each run, as clang may have changed, but
-# replaced only when it differs, so that what depends on it is not made again for nothing.
+# docs/internals/architecture.md#bootstrap). It is worked out again on each run, as clang may have
+# changed, but replaced only when it differs, so that what depends on it is not made again for
+# nothing.
 CORO_END_PROBE = extern "C" void f(void *handle) { __builtin_coro_end(handle, 0); }
 # The new one is written under a name of its own, as builds for several targets may run it at once.
 build/host_llvm.sed: FORCE
@@ -86,7 +87,7 @@ build/libuv/built: $(LIBUV)
 	touch $@
 
 # Each rule that runs minilerta depends on std/ and runtime/ too, which it reads (see
-# docs/internals.md#bootstrap).
+# docs/internals/architecture.md#bootstrap).
 build/embed.ll: build/minilerta build/host_llvm.sed tools/embed.lerta $(EMBEDDED)
 	$(call minilerta_ir,tools/embed.lerta,$@)
 

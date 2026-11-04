@@ -367,7 +367,7 @@ Its type gives its parameters and result:
 | `Bool?`, `Byte?`, `Float?`, `Float32?` | none: rejected |
 
 - Arguments are borrowed, and a returned reference is owned.
-- The result may be `void`, or `never` for a C function that does not return, or returns only after throwing (see [lerta_raise](../internals.md#exceptions)), as `exit` of a code out of range does.
+- The result may be `void`, or `never` for a C function that does not return, or returns only after throwing (see [lerta_raise](../internals/execution.md#exceptions)), as `exit` of a code out of range does.
 
 ### Agreement
 

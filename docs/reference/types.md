@@ -319,7 +319,7 @@ These throw a `ValueError`:
 - Code points rather than bytes or graphemes: a `Binary` already gives the bytes, and code points are what UTF-8 encodes, while graphemes need Unicode's tables.
 - UTF-8: a PEP 393 style variable-width representation was considered, but it costs a conversion at every I/O boundary.
 - No integer indexing `s[i]`, which could be taken for a character.
-- No StringBuilder, since `+=` appends in place (see [internals](../internals.md#strings)).
+- No StringBuilder, since `+=` appends in place (see [internals](../internals/representation.md#strings)).
 
 ## Binary
 

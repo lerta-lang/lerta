@@ -2,7 +2,7 @@
 
 #include "internal.h"
 
-// See docs/internals.md#allocation.
+// See docs/internals/memory.md#allocation.
 typedef struct Region Region;
 typedef struct Place {
   int64_t count;

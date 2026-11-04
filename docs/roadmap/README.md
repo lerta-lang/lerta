@@ -2,7 +2,7 @@
 
 This directory holds the planned design of what is not implemented yet, by area. The parts are in no order; an order within one area is stated in its file. What is implemented is in [the reference](../reference/README.md).
 
-When a feature is implemented, its description moves to [the reference](../reference/README.md), or for the internal design to [the internals](../internals.md), and is removed from here.
+When a feature is implemented, its description moves to [the reference](../reference/README.md), or for the internal design to [the internals](../internals/README.md), and is removed from here.
 
 | File | Area |
 |---|---|

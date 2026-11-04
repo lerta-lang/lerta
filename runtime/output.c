@@ -6,7 +6,7 @@
 
 #include "internal.h"
 
-// The buffer of stdout and stderr and its write out (see docs/internals.md#output).
+// The buffer of stdout and stderr and its write out (see docs/internals/platforms.md#output).
 
 LERTA_STATIC_STRING(cannot_write_stdout, "cannot write to stdout");
 LERTA_STATIC_STRING(cannot_write_stderr, "cannot write to stderr");

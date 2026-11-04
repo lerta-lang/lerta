@@ -99,8 +99,8 @@ LertaString *lerta_string_new(int64_t length);
 enum { LERTA_INT_TEXT_MAX = 20 };  // 19 digits and a sign
 // Writes the decimal text of n at the end of buffer and returns where it starts.
 int64_t lerta_format_int(int64_t n, uint8_t buffer[LERTA_INT_TEXT_MAX]);
-// The string as a NUL-terminated C string, which the caller frees. It must hold no NUL byte, which C
-// would take as its end: std refuses those first.
+// The string as a NUL-terminated C string, which the caller frees. It must hold no NUL byte, which
+// C would take as its end: std refuses those first.
 char *lerta_c_string(const LertaString *s);
 // Calls `call` with both strings as C strings, as lerta_c_string makes them, and frees them after.
 bool lerta_with_c_strings(const LertaString *a, const LertaString *b,
@@ -155,7 +155,8 @@ static inline int64_t lerta_io_chunk(int64_t length) {
 // Process (process.c): main's arguments, without the program name.
 void lerta_set_arguments(int argc, char **argv);
 
-// Output (output.c), buffered for stdout and stderr together (see docs/internals.md#output).
+// Output (output.c), buffered for stdout and stderr together (see
+// docs/internals/platforms.md#output).
 enum { STDOUT_FD = 1, STDERR_FD = 2 };
 void lerta_output_init(void);
 // Appends the bytes for STDOUT_FD or STDERR_FD. The promise is rejected at once if the stream has
@@ -172,8 +173,8 @@ void lerta_output_write_now(int fd, const uint8_t *bytes, int64_t length);
 // the writes.
 void lerta_output_flush(void);
 // The same, for a program that ends, which settles no promise: settling one may throw, and the end
-// may come while an exception is pending. A panic does not lock (see output.c). Returns false if any
-// output to stdout has failed.
+// may come while an exception is pending. A panic does not lock (see output.c). Returns false if
+// any output to stdout has failed.
 bool lerta_output_flush_at_end(bool panicking);
 // Writes to stderr at once, for reports, whose failure cannot be reported (io.c).
 void lerta_stderr_write(const uint8_t *bytes, int64_t length);
@@ -205,9 +206,9 @@ _Noreturn void lerta_panic_with(const char *prefix, const LertaString *message);
 // Panics with the prefix and the pending exception's message, and its trace.
 _Noreturn void lerta_panic_with_exception(const char *prefix);
 
-// What differs between systems (see docs/internals.md#platforms): platform.c implements through
-// libuv what it can, and platform_posix.c or platform_windows.c the rest. Paths and arguments are
-// NUL-terminated UTF-8, and a false or NULL result is a failure.
+// What differs between systems (see docs/internals/platforms.md#platforms): platform.c implements
+// through libuv what it can, and platform_posix.c or platform_windows.c the rest. Paths and
+// arguments are NUL-terminated UTF-8, and a false or NULL result is a failure.
 // Stack overflow: reported as a panic. Called first thing in main.
 void lerta_stack_init(void);
 // The key of lerta_string_hash, which lerta_hash_init makes random for each process.
@@ -219,8 +220,8 @@ void lerta_os_arguments(int *argc, char ***argv);
 // Writes all the bytes to stdout (1) or stderr (2); on POSIX, to any file descriptor.
 bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length);
 // Has a write of lerta_os_write to a pipe whose reader is gone end the program, as SIGPIPE does by
-// default on POSIX, whatever the parent left it as (see docs/reference/std.md#stdio), while one to a
-// socket fails; Windows has no such signal. A closed stdin reads as empty.
+// default on POSIX, whatever the parent left it as (see docs/reference/std.md#stdio), while one to
+// a socket fails; Windows has no such signal. A closed stdin reads as empty.
 void lerta_os_stdio_init(void);
 // Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
 double lerta_os_unix_time(void);
@@ -268,8 +269,8 @@ int lerta_os_stat(const char *path, LertaFileStatus *status);
 bool lerta_os_make_link(const char *target, const char *path);
 // Copies the contents of a file, replacing a file at `to`.
 bool lerta_os_copy_file(const char *from, const char *to);
-// Appends the names of the entries of the directory, without `.` and `..`, in no order, to the array
-// of Binaries.
+// Appends the names of the entries of the directory, without `.` and `..`, in no order, to the
+// array of Binaries.
 bool lerta_os_list_dir(const char *path, LertaArray *names);
 // The absolute path with no links, which the caller frees.
 char *lerta_os_real_path(const char *path);
@@ -302,10 +303,10 @@ int64_t lerta_os_process_id(void);
 bool lerta_os_is_running(int id);
 // Whether two names of environment variables name the same variable.
 bool lerta_os_same_env_name(const char *a, const char *b);
-// The file of a command for a program that run starts, which on Windows is searched for on PATH if it
-// holds no directory, as libuv would look in the directory that the program runs in first (see
-// docs/reference/std.md#stdprocess); NULL if there is none, or if it is a batch file on Windows. The
-// caller frees it.
+// The file of a command for a program that run starts, which on Windows is searched for on PATH if
+// it holds no directory, as libuv would look in the directory that the program runs in first (see
+// docs/reference/std.md#stdprocess); NULL if there is none, or if it is a batch file on Windows.
+// The caller frees it.
 char *lerta_os_program_file(const char *command);
 
 #endif

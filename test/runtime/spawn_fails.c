@@ -1,7 +1,7 @@
 // libuv 1.53.0 took the handle of a spawn that failed while it made the stdio off the loop's queue,
 // and uv_close, which its docs ask for even then, took it off again: with a handle made in between,
-// the loop never ended (see docs/internals.md, on libuv). A TCP handle given as a pipe to make makes
-// uv_spawn fail there.
+// the loop never ended (see docs/internals/platforms.md#libuv). A TCP handle given as a pipe to
+// make makes uv_spawn fail there.
 #include <stdio.h>
 #include <uv.h>
 #include "lerta.h"

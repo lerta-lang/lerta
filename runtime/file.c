@@ -56,9 +56,9 @@ LertaString *lerta_make_temp_dir(void) {
   return lerta_string_from_os(lerta_os_make_temp_dir());
 }
 
-// A read, write, copy or removal on libuv's thread pool (see docs/internals.md#files), whose promise
-// gives what was read, or NULL, or whether it succeeded. It holds the promise and the data until
-// it is done; the worker touches only `name`, the data's bytes, which stay as they are,
+// A read, write, copy or removal on libuv's thread pool (see docs/internals/platforms.md#files),
+// whose promise gives what was read, or NULL, or whether it succeeded. It holds the promise and the
+// data until it is done; the worker touches only `name`, the data's bytes, which stay as they are,
 // as a String or a Binary is immutable and the task keeps it alive, and what it reads, allocated
 // with malloc.
 typedef struct {

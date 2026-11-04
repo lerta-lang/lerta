@@ -22,7 +22,7 @@ print "area: #{Circle(r: 2).area}"
 
 ## Status
 
-Early development. The compiler is written in Lerta and builds itself, starting from a seed of LLVM IR (see [the bootstrap](docs/internals.md#bootstrap)). What is left is in [the roadmap](docs/roadmap/README.md).
+Early development. The compiler is written in Lerta and builds itself, starting from a seed of LLVM IR (see [the bootstrap](docs/internals/architecture.md#bootstrap)). What is left is in [the roadmap](docs/roadmap/README.md).
 
 ## Getting started
 
@@ -42,7 +42,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 |---|---|
 | [docs/philosophy.md](docs/philosophy.md) | Design principles and the reasons behind major decisions |
 | [docs/reference/](docs/reference/README.md) | The external specification as implemented: the language, the standard modules and the commands, as a program and its user observe them. It grows with the implementation |
-| [docs/internals.md](docs/internals.md) | The internal specification as implemented: execution model, memory management, the LLVM interface, the runtime and the bootstrap |
+| [docs/internals/](docs/internals/README.md) | The internal specification as implemented: the architecture, the runtime rules and the bootstrap, the compiler, execution, memory, the representation of values, iteration and awaiting, input and output and the platforms |
 | [docs/roadmap/](docs/roadmap/README.md) | What is planned and not implemented yet, both external and internal, and open questions |
 | [docs/issues.md](docs/issues.md) | Known defects, with their severity and fix |
 
@@ -55,7 +55,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `compiler/` | The compiler (see [below](#the-compiler)) |
 | `std/` | The standard modules, in Lerta, which the compiler embeds |
 | `runtime/` | The C runtime, which the compiler embeds |
-| `seed/` | The seed, from which `make` builds the compiler (see [the bootstrap](docs/internals.md#bootstrap)) |
+| `seed/` | The seed, from which `make` builds the compiler (see [the bootstrap](docs/internals/architecture.md#bootstrap)) |
 | `third_party/` | libuv and its license; `libuv.txt` says how the runtime builds it for each system. The license notice goes with the compiler and the programs it builds (see [the reference](docs/reference/compiler.md)) |
 | `tools/` | `embed.lerta`, which writes the module that embeds `std/` and `runtime/` into the compiler; `test_cross.sh`, which `make test-cross` runs; `docker/`, its Docker images, with `run.sh` to run a command (bash by default) in one |
 | `test/` | The test driver and suites (see [Tests](#tests)) |
@@ -159,9 +159,9 @@ bin/test --failed           # the checks that failed when they last ran
 
 ### Changing the language
 
-- Implement a feature as [the roadmap](docs/roadmap/README.md) specifies it. When it is implemented, move its description to [the reference](docs/reference/README.md) or [the internals](docs/internals.md) and remove it from the roadmap.
+- Implement a feature as [the roadmap](docs/roadmap/README.md) specifies it. When it is implemented, move its description to [the reference](docs/reference/README.md) or [the internals](docs/internals/README.md) and remove it from the roadmap.
 - When a design question is not covered, apply [the principles](docs/philosophy.md) in priority order.
-- Follow [the runtime rules](docs/internals.md#runtime-rules), and [the bootstrap](docs/internals.md#bootstrap) for which features the compiler may use.
+- Follow [the runtime rules](docs/internals/architecture.md#runtime-rules), and [the bootstrap](docs/internals/architecture.md#bootstrap) for which features the compiler may use.
 
 ### Coding style
 

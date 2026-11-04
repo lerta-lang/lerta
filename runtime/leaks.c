@@ -1,5 +1,5 @@
-// The debug runtime's leak check (see docs/internals.md#leak-checking). It runs as the program ends
-// and spends the counts of the objects alive, which nothing may use after it.
+// The debug runtime's leak check (see docs/internals/memory.md#leak-checking). It runs as the
+// program ends and spends the counts of the objects alive, which nothing may use after it.
 #include <stdlib.h>
 
 #include "internal.h"

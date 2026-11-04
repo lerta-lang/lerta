@@ -7,7 +7,7 @@ The planned design of safety, errors and exceptions, memory management, concurre
 The definition of safety is in [philosophy](../philosophy.md#safety). Planned:
 
 - FFI and raw pointer operations only inside `unsafe` blocks.
-- A panic prints a stack trace besides its message, perhaps through a **frame record** per function, linked to a global `current_frame` (the LLVM shadow stack approach). Exceptions need none: their traces are made as they unwind ([internals](../internals.md#exception-traces)).
+- A panic prints a stack trace besides its message, perhaps through a **frame record** per function, linked to a global `current_frame` (the LLVM shadow stack approach). Exceptions need none: their traces are made as they unwind ([internals](../internals/execution.md#exception-traces)).
 
 ## Index checks
 
@@ -61,9 +61,9 @@ For now, cycles stay uncollected ([objects](../reference/objects.md#reference-co
 
 ### Reference count operations
 
-Every expression of a reference type yields an owned reference for now, except the values that [internals](../internals.md#memory-management) lists as borrowed, such as a `const` local passed as an argument. So passing another value to a call, as a captured or top-level `var` or a field read (`f(a.b)`), retains and releases it around the call. The plan is to borrow those too where the value cannot go away meanwhile, and emit no retain and release there.
+Every expression of a reference type yields an owned reference for now, except the values that [internals](../internals/memory.md) lists as borrowed, such as a `const` local passed as an argument. So passing another value to a call, as a captured or top-level `var` or a field read (`f(a.b)`), retains and releases it around the call. The plan is to borrow those too where the value cannot go away meanwhile, and emit no retain and release there.
 
-Field reads are borrowed now where nothing runs while they are used ([internals](../internals.md#memory-management)), which took 5% of the instructions of the compiler's own `dump-llvm`.
+Field reads are borrowed now where nothing runs while they are used ([internals](../internals/memory.md)), which took 5% of the instructions of the compiler's own `dump-llvm`.
 
 - **First count.** Counted at run time there before, the pairs left were mostly of field reads as an argument or the object of a call, 28M, against 46M that the borrowing in place removed. Borrowing those needs to know that the call cannot replace the field. Since borrowed:
   - fields that hold the same value as long as their objects live (0.4%);
@@ -86,7 +86,7 @@ Field reads are borrowed now where nothing runs while they are used ([internals]
 
 ### Objects on the stack
 
-The closure of a function literal declared as a local that only its own function calls is on the stack, immortal, already ([internals](../internals.md#objects)).
+The closure of a function literal declared as a local that only its own function calls is on the stack, immortal, already ([internals](../internals/representation.md#objects)).
 
 - **Plan.** The same for any object that a local holds and that never leaves its function: a class or struct object, a tuple, an anonymous struct, or an array of a small length, as the digits that `Int.to_string` builds.
 - As for closures, an object held weakly, or kept across a `yield` or an `await`, stays on the heap.
@@ -97,7 +97,7 @@ The closure of a function literal declared as a local that only its own function
 
 ### Allocation
 
-The size classes of the allocator ([internals](../internals.md#allocation)), the limits of 256 bytes and 16 KiB, and the number of empty slabs kept are settled by measuring the benchmarks in `bench/` and the compiler's own build.
+The size classes of the allocator ([internals](../internals/memory.md#allocation)), the limits of 256 bytes and 16 KiB, and the number of empty slabs kept are settled by measuring the benchmarks in `bench/` and the compiler's own build.
 
 ## Concurrency
 
@@ -117,14 +117,14 @@ The size classes of the allocator ([internals](../internals.md#allocation)), the
 
 - Microcontrollers as targets (STM32 / Cortex-M, ESP32-C3/C6 / RISC-V; Xtensa-based chips after upstream LLVM support matures).
   - `Int` stays fixed at 64 bits (TinyGo's environment-dependent `int` is not adopted). Hot spots use `Int32` explicitly.
-  - The [event loop](../internals.md#functions-that-await) runs there on an interrupt-driven scheduler or FreeRTOS/Zephyr, in place of the runtime's files that use libuv's loop.
-  - The platform functions are replaced, as the allocator's regions are by a static heap (see [allocation](../internals.md#allocation)). The rest of the runtime needs only what [the runtime rules](../internals.md#runtime-rules) allow of the C library.
+  - The [event loop](../internals/iteration.md#functions-that-await) runs there on an interrupt-driven scheduler or FreeRTOS/Zephyr, in place of the runtime's files that use libuv's loop.
+  - The platform functions are replaced, as the allocator's regions are by a static heap (see [allocation](../internals/memory.md#allocation)). The rest of the runtime needs only what [the runtime rules](../internals/architecture.md#runtime-rules) allow of the C library.
   - Beware of code bloat from monomorphization. Remedies when needed: merging instances with identical machine code at link time (LLVM mergefunc, lld ICF), and a build option to switch to dispatch through interfaces.
   - Where there is no guard page, the remaining stack is checked at function entry (the Go approach).
 
 ## Open questions
 
-- Whether stack overflow should be an exception that can be caught, instead of a panic. That needs the remaining stack checked at function entry instead of [the guard page](../internals.md#stack-overflow), as on the targets without one, such as [microcontrollers](#platforms). Catching it then works like any throw, since the handler runs after unwinding.
+- Whether stack overflow should be an exception that can be caught, instead of a panic. That needs the remaining stack checked at function entry instead of [the guard page](../internals/execution.md#stack-overflow), as on the targets without one, such as [microcontrollers](#platforms). Catching it then works like any throw, since the handler runs after unwinding.
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
 - Whether the runtime should collect cycles (as Nim's ORC does by trial deletion). It is decided by the leak check's report of cycles on a few event-driven programs, of the size of `examples/editor.lerta` or larger, written for it. Decide before the APIs that keep callbacks are designed, as they set their shape, rather than after async/await is complete.
 - How to pass values to workers (candidates: deep copy only + sharing immutable `Binary` / run-time moves like JS transfer).

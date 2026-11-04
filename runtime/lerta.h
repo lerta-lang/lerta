@@ -93,9 +93,9 @@ typedef struct {
   bool live;
 } LertaMapEntry;
 
-// How a map treats its keys (see docs/internals.md#maps). Int keys are words, an Int, a UInt64, a
-// Float or an enum, compared as they are; so are integer keys narrower than a word,
-// LERTA_INTEGER_KEYS with their size and sign, as in LertaItemKind.
+// How a map treats its keys (see docs/internals/representation.md#maps). Int keys are words, an
+// Int, a UInt64, a Float or an enum, compared as they are; so are integer keys narrower than a
+// word, LERTA_INTEGER_KEYS with their size and sign, as in LertaItemKind.
 typedef enum {
   LERTA_INT_KEYS,
   LERTA_STRING_KEYS,
@@ -108,7 +108,7 @@ typedef enum {
 typedef uint64_t (*LertaHash)(int64_t item);
 typedef bool (*LertaEquals)(int64_t a, int64_t b);
 
-// See docs/internals.md#maps.
+// See docs/internals/representation.md#maps.
 typedef struct {
   LertaHeader header;
   int64_t length;  // live entries
@@ -188,8 +188,8 @@ LertaString *lerta_string_concat(int64_t count, ...);
 // As lerta_string_concat, of arguments that it takes; it extends in place the longest that nothing
 // else holds and whose place has room for the result, if any.
 LertaString *lerta_string_concat_taken(int64_t count, ...);
-// `s + part` and `s + byte` of a String or a Binary, which take `s` and borrow `part`: the bytes are
-// appended in place when nothing else holds `s`, so that a loop of `+=` is O(n).
+// `s + part` and `s + byte` of a String or a Binary, which take `s` and borrow `part`: the bytes
+// are appended in place when nothing else holds `s`, so that a loop of `+=` is O(n).
 LertaString *lerta_string_extend(LertaString *s, const LertaString *part);
 LertaString *lerta_binary_push(LertaString *binary, uint8_t byte);
 LertaString *lerta_string_push(LertaString *s, uint32_t c);
@@ -209,7 +209,8 @@ LertaString *lerta_string_slice(const LertaString *s, int64_t start, int64_t end
 LertaString *lerta_binary_text(LertaString *binary);
 // Arrays (array.c). Items are passed through pointers to them. Items in are borrowed; pop writes
 // the item owned.
-// The type of every array, whatever its items, which a union tests (see docs/internals.md#objects).
+// The type of every array, whatever its items, which a union tests (see
+// docs/internals/representation.md#objects).
 extern const LertaType lerta_array_type;
 LertaArray *lerta_array_create(LertaItemKind item_kind);
 // An array of `length` copies of the item, borrowed, each retained; a negative length throws.
@@ -393,7 +394,7 @@ void lerta_handle_end(int64_t pointer);
 
 // Output (io.c), by file descriptor: 1 for stdout or 2 for stderr, the only ones that std:io gives.
 // Its writes go through a buffer, written out on the event loop (output.c; see
-// docs/internals.md#output).
+// docs/internals/platforms.md#output).
 LertaPromise *lerta_stream_write(int64_t fd, const LertaString *bytes);
 LertaPromise *lerta_stream_flush(int64_t fd);
 bool lerta_stream_is_terminal(int64_t fd);
@@ -402,8 +403,8 @@ void lerta_print_stderr(const LertaString *text);
 // Stdin (stdin.c): up to 64 KiB of what it has, read on a thread of its own, or NULL at its end.
 LertaPromise *lerta_stdin_read(void);
 
-// The exception being thrown (see docs/internals.md#exceptions); its data is null while there is
-// none. The first entry of an Error's itab gives its message.
+// The exception being thrown (see docs/internals/execution.md#exceptions); its data is null while
+// there is none. The first entry of an Error's itab gives its message.
 typedef struct {
   void *data;
   void *const *itab;
@@ -413,10 +414,10 @@ typedef struct {
 // register to hold its address across calls.
 extern __attribute__((visibility("hidden"))) LertaException lerta_exception;
 
-// The trace of the pending exception (see docs/internals.md#exception-traces), printed if it is
-// uncaught: the sites where it was thrown, and of the calls it has gone through, innermost first,
-// which the compiler emits as constants. `start` starts a new trace, for a new throw; `push` adds
-// to the trace, or starts one if the trace is of another exception, so that a caught exception
+// The trace of the pending exception (see docs/internals/execution.md#exception-traces), printed if
+// it is uncaught: the sites where it was thrown, and of the calls it has gone through, innermost
+// first, which the compiler emits as constants. `start` starts a new trace, for a new throw; `push`
+// adds to the trace, or starts one if the trace is of another exception, so that a caught exception
 // thrown again goes on with its own. A saved trace is a copy, for while the exception is set
 // aside: `load` copies it back, and `restore` does and frees it.
 typedef struct {
@@ -458,8 +459,8 @@ typedef enum {
   LERTA_CANCELLED_ERROR
 } LertaErrorKind;
 
-// Throws an error of the kind with the message, borrowed (see docs/internals.md#exceptions): the
-// caller returns at once.
+// Throws an error of the kind with the message, borrowed (see
+// docs/internals/execution.md#exceptions): the caller returns at once.
 void lerta_raise(LertaErrorKind kind, const LertaString *message);
 void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message));
 

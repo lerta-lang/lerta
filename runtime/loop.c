@@ -4,7 +4,7 @@
 
 #include "internal.h"
 
-// See docs/internals.md#functions-that-await.
+// See docs/internals/iteration.md#functions-that-await.
 
 bool lerta_loop_wait(void) {
   uv_loop_t *loop = uv_default_loop();

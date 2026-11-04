@@ -134,7 +134,7 @@ The least and the greatest [Int](types.md#int): `-9223372036854775808` and `9223
 
 ## Methods of the builtin types
 
-The signatures of the methods of the builtin types, by type. What each does is in the type's section of [types](types.md); how each is written is in [internals](../internals.md#builtins).
+The signatures of the methods of the builtin types, by type. What each does is in the type's section of [types](types.md); how each is written is in [internals](../internals/representation.md#builtins).
 
 - Every type here that `==` compares has `equals(other: Self): Bool`, and every one that can be a map key `hash(): Int` (see [Equatable and Hashable](#equatable-comparable-and-hashable)); the lists leave them out.
 - Any [Iterable](#iterable) also has the methods that Iterable gives.

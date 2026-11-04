@@ -40,8 +40,8 @@ static LertaHeader *allocate_object(int64_t size) {
 static void free_object(void *object) {
   lerta_trace_forget(object);
 #ifdef LERTA_DEBUG
-  // The allocator keeps the count of a free place at 0 (see docs/internals.md#allocation), but the
-  // prefix comes first in it.
+  // The allocator keeps the count of a free place at 0 (see docs/internals/memory.md#allocation),
+  // but the prefix comes first in it.
   ((LertaHeader *)object)->ref_count = 0;
   LertaPrefix *prefix = (LertaPrefix *)object - 1;
   lerta_untrack(prefix);
@@ -99,7 +99,7 @@ void lerta_frame_free(void *frame) {
 #endif
 }
 
-// See docs/internals.md#allocation.
+// See docs/internals/memory.md#allocation.
 static void check_not_dropped(const LertaHeader *header, const char *message) {
 #ifdef LERTA_DEBUG
   if (header->ref_count <= 0) lerta_panic(message);

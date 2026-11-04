@@ -6,7 +6,7 @@
 #include "internal.h"
 
 // The platform functions that libuv makes the same on every system, through its synchronous file
-// system calls, which take no loop and no callback (see docs/internals.md#platforms).
+// system calls, which take no loop and no callback (see docs/internals/platforms.md#platforms).
 
 static uv_file open_file(const char *path, int flags, int mode) {
   uv_fs_t request;
@@ -245,8 +245,8 @@ bool lerta_os_rename(const char *from, const char *to) {
 
 // libuv lists the entries without `.` and `..`, and all at once, so they may be removed while
 // they are read.
-// A directory is listed by its real path: on Windows, a drive alone, as C:, names the drive's current
-// directory, but libuv lists the drive's root for it.
+// A directory is listed by its real path: on Windows, a drive alone, as C:, names the drive's
+// current directory, but libuv lists the drive's root for it.
 bool lerta_os_list_dir(const char *path, LertaArray *names) {
   char *dir = lerta_os_real_path(path);
   if (dir == NULL) return false;
