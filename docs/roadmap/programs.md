@@ -39,7 +39,6 @@ See [the reference](../reference/std.md#stdjson).
 
 See [the reference](../reference/std.md#stdio).
 
-- `write_file` takes `String | Binary`, as `Writer.write` does.
 - The other modes of `open`: `READ`, whose `File` has a `reader`, a `Reader`; and `APPEND`, whose writes go after what the file holds.
 - Later: the position of a stream, and a mode that reads and writes at given places, as a database does, through methods of the `File` of their own.
 - `make_link` followed on Windows itself. Wine, which the tests run under, makes the links but does not follow them.

@@ -274,7 +274,7 @@ These responses, and the 500 below, have an empty body.
 |---|---|
 | `read_file(path: String): Promise<Binary>` | The contents of a file. Rejected with `cannot read file: <path>` on failure, including for a path that holds a NUL byte and for a file that is not regular, such as a FIFO or a device. |
 | `read_text(path: String): Promise<String?>` | The contents as a `String`, read as `read_file` reads them, or nil if they are not valid UTF-8. Rejected as `read_file` is. |
-| `write_file(path: String, data: Binary): Promise` | Replaces the contents of a file, creating it if needed. Rejected with `cannot write file: <path>` on failure. |
+| `write_file(path: String, data: String \| Binary): Promise` | Replaces the contents of a file, creating it if needed, with the data: a Binary's bytes, or a String's UTF-8. Rejected with `cannot write file: <path>` on failure. |
 | `copy_file(from: String, to: String): Promise` | Copies the contents of a file, replacing a file at `to` (below). |
 | `remove_tree(path: String): Promise` | Removes a file, or a directory with everything in it (below). |
 | `is_file(path: String): Bool` | Whether the path names a regular file, through symbolic links. False for a directory, a missing file or a path that holds a NUL byte. |
