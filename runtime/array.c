@@ -144,7 +144,13 @@ LertaArray *lerta_array_slice(const LertaArray *array, int64_t start, int64_t en
 }
 
 uint8_t *lerta_array_checked_items(const LertaArray *array, int64_t index) {
-  if ((uint64_t)index < (uint64_t)array->length) return array->items;
+  if ((uint64_t)index < (uint64_t)array->length) {
+    // An array with any items has them allocated, so items is not NULL here. Telling LLVM so drops
+    // the generated code's check of the result for NULL, its sign of the exception, from the loops
+    // that index arrays.
+    __builtin_assume(array->items != NULL);
+    return array->items;
+  }
   lerta_raise_index_out_of_range();
   return NULL;
 }
