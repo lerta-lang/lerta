@@ -1,7 +1,7 @@
 # Where the tests find the repository and the compiler they check, bin/lerta, which `make` builds,
 # how they run it, and what they need of it before they start. The tests run from the repository's
 # root, as the Makefile runs them.
-import is_file, make_dir, make_temp_dir, read_text, real_path, remove_tree, open from 'std:io'
+import is_file, make_dir, make_temp_dir, read_text, real_path, remove_tree from 'std:io'
 import exit, Exit, platform, run from 'std:process'
 import timeout, TimeoutError from 'std:async'
 
@@ -83,10 +83,7 @@ export struct FileRun
   failure: String
   errors: String
 
-null_device := platform == 'windows' then 'NUL' else '/dev/null'
-
 export run_file := (file: String, args: String[], cwd: String) ->
-  errors: Byte[]
   env := { 'LERTA_CACHE_DIR': cache_dir }
   ran := run
     file
@@ -94,12 +91,12 @@ export run_file := (file: String, args: String[], cwd: String) ->
     cwd: cwd
     env: env
     # Its standard output is dropped, as nothing that it would print there is checked.
-    stdout: open(null_device, WRITE).writer
-    stderr: errors
+    stdout: DISCARD
+    stderr: CAPTURE
     output_limit: OUTPUT_LIMIT
   exit := await exit_in_time(file, ran)
   failure := exit.signal then "signal #{exit.signal}" else "exit status #{exit.code}"
-  FileRun failure, status: exit.code, errors: shown_text(errors.to_binary())
+  FileRun failure, status: exit.code, errors: shown_text(exit.stderr!)
 
 # The error of a step that the tests need, such as a build, or of a program that did not end in
 # time: it fails the check that it is thrown in, or the whole run where no check holds it.
