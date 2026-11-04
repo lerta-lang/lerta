@@ -357,6 +357,16 @@ dump_unchecked_methods_check := ->
         reasons.push "#{name} #{expected then 'does not read' else 'reads'} the pending exception"
     reasons
 
+# The pending exception is declared hidden, as the runtime declares it, so that the checks read it
+# directly rather than through the table of addresses (see runtime/lerta.h).
+dump_hidden_exception_check := ->
+  Check name: 'lerta dump-llvm declares the pending exception hidden', run: ->
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', UNCHECKED_METHODS])
+    reasons := expect_status(0, dumped.result.status)
+    declaration := '@lerta_exception = external hidden global'
+    reasons.push 'no hidden declaration' unless declaration in dumped.result.stdout_text()
+    reasons
+
 # The float operations that the ranges of Floats show give no NaN check for none, and those that a
 # rule of the ranges almost applies to still check (see tests/float/ranges.lerta).
 dump_float_ranges_check := ->
@@ -713,6 +723,7 @@ export checks: Check[] = [
   dump_seldom_check()
   dump_joined_literals_check()
   dump_unchecked_methods_check()
+  dump_hidden_exception_check()
   dump_float_ranges_check()
   dump_compound_tree_check()
   dump_batched_writes_check()

@@ -408,7 +408,10 @@ typedef struct {
   void *data;
   void *const *itab;
 } LertaException;
-extern LertaException lerta_exception;
+// Hidden, so that the generated code, whose declaration says so too, reads it directly, rather than
+// through the table of addresses that a symbol another library might define needs, which costs a
+// register to hold its address across calls.
+extern __attribute__((visibility("hidden"))) LertaException lerta_exception;
 
 // The trace of the pending exception (see docs/internals.md#exception-traces), printed if it is
 // uncaught: the sites where it was thrown, and of the calls it has gone through, innermost first,
