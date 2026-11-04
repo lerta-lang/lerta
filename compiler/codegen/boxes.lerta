@@ -5,8 +5,8 @@ import
   define_heap_object, emit_heap_allocate, emit_heap_field_pointer, value_field
 from './heap_object'
 import IrBuilder, IrModule from './ir_builder'
-import ir_type, quoted_name from './lerta_ir'
-import format_type, is_boxed, type_key, Type from '../types'
+import ir_type, LERTA_IMMORTAL, quoted_name from './lerta_ir'
+import format_type, is_boxed, is_kind, type_key, Type from '../types'
 
 # The type of the boxes of the type, the same in every module, since a box may be made in one and
 # tested in another: each defines it, and the linker keeps one.
@@ -20,12 +20,22 @@ box_layout := (ir: IrBuilder, type: Type) ->
     define_heap_object module, layout, box_type(type), 'linkonce_odr ', [value_field(type)], name
   ir.module.named "box #{type_key(type)}", '%lerta.box', define
 
-# A box that takes over the value, owned.
+# A box that takes over the value, owned. A Bool's is one of two immortal boxes, which every module
+# shares, so that boxing one allocates nothing.
 export emit_box := (ir: IrBuilder, value: String, type: Type) ->
   layout := box_layout(ir, type)
+  return emit_bool_box(ir, value, layout, box_type(type)) if is_kind(type, 'Bool')
   box := emit_heap_allocate(ir, layout, box_type(type))
   ir.store ir_type(type), value, emit_heap_field_pointer(ir, layout, box, 0)
   box
+
+emit_bool_box := (ir: IrBuilder, value: String, layout: String, type: String) ->
+  box := (bool: String) -> "@lerta.box.Bool.#{bool}"
+  ir.module.define_once 'bool boxes', (module) ->
+    for bool in ['true', 'false']
+      initial := "{ i64 #{LERTA_IMMORTAL}, ptr #{type}, i1 #{bool} }"
+      module.define_global box(bool), "linkonce_odr global #{layout} #{initial}"
+  ir.assign "select i1 #{value}, ptr #{box('true')}, ptr #{box('false')}"
 
 # The value of the box, borrowed as the box is.
 export emit_unbox := (ir: IrBuilder, box: String, type: Type) ->
