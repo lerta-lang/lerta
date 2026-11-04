@@ -49,7 +49,6 @@ These apply when a value in statement position is not captured, beyond [the refe
 What is implemented, `throw` of `Error` values and `try`/`catch`/`finally`, is in [the reference](../reference/errors.md#exceptions). Planned:
 
 - No `throws` annotation is needed; if written, it is type-checked. No `try` is attached to calls (as in Swift).
-- For servers, exceptions are caught at the task boundary of the event loop, and only that task is discarded.
 
 ## Memory management
 
@@ -111,7 +110,7 @@ The size classes of the allocator ([internals](../internals/memory.md#allocation
 - **Event loop queues.** The queues of the tasks that are ready and of the writers that wait for the output's buffer (`LertaQueue` in `runtime/internal.h`) move their items to the front whenever they are full and the front has room. So a queue kept just under its capacity moves them all at almost every push. A queue should instead:
   - move them only once the front holds at least as many places as the items, and grow otherwise;
   - start again at the front once it is empty.
-- **Task errors.** An error of a task that `spawn` of [std:async](../reference/std.md#stdasync) starts is to end at its task (see [exceptions](#exceptions)), rather than ending the program as now. Until then, std:http catches its tasks' errors itself.
+- **Not planned:** errors that end at their task. An error of a task that `spawn` of [std:async](../reference/std.md#stdasync) starts ends the program, as now: of its uses, a connection's work is to go on after an error, but a loop such as std:http's accepting, or a `spawn main()`, is to end the program, which a supervisor restarts, rather than stop alone. A task that is to go on catches its own errors, as std:http's `serve_connection` does.
 
 ## Platforms
 
