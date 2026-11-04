@@ -227,8 +227,8 @@ export union_of := (types: Type[]): Type? ->
   optional then optional_type(union) else union
 
 # A type whose values a union may hold: an object, as a class, a struct, an array, a map, a tuple or
-# an anonymous struct, as it is, or a value of the others, which a union holds boxed (see codegen
-# boxes).
+# an anonymous struct, or a String, as it is, or a value of the others, which a union holds boxed
+# (see is_boxed).
 export is_union_member := (type: Type) ->
   return true if type is EnumType or type is InterfaceType
   is_object_member(type) or is_one_of_kinds(type, UNION_VALUE_KINDS)
@@ -358,8 +358,11 @@ export iterable_item := (type: Type): Type? ->
 export members_of := (type: Type): Type[] -> type is UnionType then type.members else [type]
 
 # Whether a union holds a value of the type, one of its members, in a box (see codegen boxes): one
-# that is no object of its own.
+# that is no object of its own, but a String: its header's type is null, which no other member's
+# object or box has, so that a union tells it by that. A Binary's is null too, as it shares a
+# String's representation, so it stays boxed.
 export is_boxed := (member: Type) ->
+  return false if is_kind(member, 'String')
   not is_object_member(member) and member is not UnionType and member is not OptionalType
 
 # Whether a value of the type, a T or a T?, fits where the union, or an optional one, is expected

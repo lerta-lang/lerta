@@ -1,0 +1,80 @@
+import decode_json, encode_json from 'std:json'
+
+# A union holds a String as it holds an object, and tells it apart from every other member: a
+# Binary, even one that holds the same bytes or that the String was made from, an array, a map, an
+# object, an interface value, a box of a number and nil.
+struct Point
+  x: Int
+
+interface Named
+  name: () -> String
+
+struct Pet
+  label: String
+
+  name := -> @label
+
+describe := (value: String | Binary | Int[] | Map<String, Int> | Point | Named | Int?) ->
+  return "array #{value.length}" if value is Int[]
+  return "map #{value.length}" if value is Map<String, Int>
+  case value
+    when String then "string #{value}"
+    when Binary then "binary #{value.length}"
+    when Point then "point #{value.x}"
+    when Named then "named #{value.name()}"
+    when Int then "int #{value}"
+    else 'nil'
+
+bytes := b'ab'
+text := bytes.text()!
+print describe(text)
+print describe(bytes)
+print describe(text.binary)
+print describe([1, 2])
+print describe({ 'a': 1 })
+print describe(Point(3))
+print describe(Pet(label: 'rex'))
+print describe(7)
+print describe(nil)
+pair: (String | Binary)[] = ['ab', b'ab']
+print pair[0] == 'ab'
+print pair[0] == pair[1]
+print pair[1] is Binary
+keys := Set<String | Int>(['a', 1, 'a', 'b' + '', 1])
+print keys.length
+by_value: Map<String | Int, String> = { 'k': 'string', 3: 'int' }
+print "#{by_value['k']!} #{by_value[3]!}"
+mixed: String | Int = 'z'
+print mixed as String ? 'none'
+print (mixed as Int ? 0) + 1
+# A method of the union, a String inside text, a case on a String's value, JSON read into a union,
+# and Strings made as the program runs, the empty one too.
+words: (String | Int)[] = ['', "w#{mixed}", 4, ['x', 'y'].join('-')]
+print [word.to_string() for word in words].join('|')
+print "#{words[1]} and #{words[2]}"
+for word in words
+  text_of := word as String ? continue
+  case text_of
+    when '' then print('empty')
+    when 'x-y' then print('joined')
+    else print("other #{text_of}")
+decoded := decode_json<(String | Int)[]>('["a", 1, ""]')
+print [item is String then "string '#{item}'" else 'int' for item in decoded].join(', ')
+print words[3] as String ? 'none'
+print encode_json(words)
+# A field of a union narrowed to its String, a String that outlives the union it was taken out of,
+# and an optional union compared with nil and with a String.
+struct Labeled
+  label: String | Int
+
+labeled := Labeled(label: "l#{words.length}")
+print labeled.label.binary.length if labeled.label is String
+var kept = ''
+if true
+  held: String | Int = "k#{words.length}"
+  kept = held as String ? ''
+print kept
+var maybe: (String | Int)? = nil
+print "#{maybe == nil} #{maybe == 'm'}"
+maybe = 'm'
+print "#{maybe == nil} #{maybe == 'm'}"
