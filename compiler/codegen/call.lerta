@@ -14,7 +14,7 @@ import Instance from '../checker/generics'
 import arguments_of from '../checker/shared'
 import info_of, is_argument from '../checker/object_types'
 import call_builtin_method, may_leave_exception, takes_object from './builtins'
-import emit_array_filled from './array'
+import emit_array_filled, emit_assume_length from './array'
 import emit_conversion from './checked_int'
 import emit_member_value from './boxes'
 import emit_closure_call, function_type_of from './closure'
@@ -100,10 +100,14 @@ generate_new_map := (g: Generator, call: Call, map_type: MapType) ->
 
 # `Array(n, value)`.
 generate_filled_array := (g: Generator, call: Call, type: ArrayType) ->
-  fill := (operands: String[]) -> emit_array_filled(g.ir, operands[0], operands[1], type.element)
-  array := borrowing_all(g, call.args, fill)
-  emit_exception_check g
-  array
+  fill := (operands: String[]) ->
+    array := emit_array_filled(g.ir, operands[0], operands[1], type.element)
+    # After the check: a negative length throws and gives no array, which the assumption would
+    # then not hold of.
+    emit_exception_check g
+    emit_assume_length g.ir, array, operands[0]
+    array
+  borrowing_all g, call.args, fill
 
 # The writer or reader is the first argument, and the value written the second.
 generate_json_conversion := (g: Generator, call: Call, conversion: JsonConversion) ->

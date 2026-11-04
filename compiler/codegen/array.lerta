@@ -5,7 +5,7 @@
 # docs/internals/representation.md#builtins states; map keys, and the items that the runtime hashes
 # and compares, are words: 8 bytes, a narrower value extended by its sign (see to_item).
 import item_tag from './alias_tags'
-import emit_branch, emit_when, IrBuilder from './ir_builder'
+import emit_assume, emit_branch, emit_when, IrBuilder from './ir_builder'
 import emit_release_value, emit_retain_value, ir_type, ownership from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import narrowed_from_word, scalar_of, widened_to_word from './scalar'
@@ -86,9 +86,7 @@ export emit_load_item := (ir: IrBuilder, pointer: String, type: Type) ->
 # null; LLVM is told so, so that a retain or release of it inlined checks none.
 load_indexed_item := (ir: IrBuilder, address: String, type: Type) ->
   item := emit_load_item(ir, address, type)
-  if is_reference_type(type) and type is not OptionalType
-    ir.module.declare 'llvm.assume', 'declare void @llvm.assume(i1)'
-    ir.emit "call void @llvm.assume(i1 #{ir.is_not_null(item)})"
+  emit_assume ir, ir.is_not_null(item) if is_reference_type(type) and type is not OptionalType
   item
 
 export emit_array_new := (ir: IrBuilder, element: Type) ->
@@ -101,6 +99,11 @@ export emit_array_filled := (ir: IrBuilder, length: String, value: String, eleme
   emit_store_item ir, item, value, element
   args := "i32 #{item_kind(element)}, i64 #{length}, ptr #{item}"
   call_runtime ir, 'ptr @lerta_array_filled(i32, i64, ptr)', args
+
+# Tells LLVM that the array that Array(n, v) made has the length n, so that a loop whose bound is n
+# needs no comparison with the length of its own to check an index.
+export emit_assume_length := (ir: IrBuilder, array: String, length: String) ->
+  emit_assume ir, ir.assign("icmp eq i64 #{emit_length(ir, array)}, #{length}")
 
 # A new array of the items from `start` up to `end`, which it retains; a range out of the array's
 # throws.

@@ -367,6 +367,23 @@ dump_hidden_exception_check := ->
     reasons.push 'no hidden declaration' unless declaration in dumped.result.stdout_text()
     reasons
 
+# The array that Array(n, v) makes is assumed to have the length n, but only after the check for
+# the exception that a negative n throws.
+dump_filled_length_check := ->
+  Check name: 'lerta dump-llvm assumes the length of Array(n, v) once it has not thrown', run: ->
+    source := "#{root_dir}/tests/array/filled_bound.lerta"
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
+    reasons := expect_status(0, dumped.result.status)
+    lines := dumped.result.stdout_text().split("\n")
+    body := function_body(lines, 'marked') ? return [reasons..., 'no function marked']
+    at := (text: String) -> body.find_index((line) -> text in line) ? -1
+    filled := at('@lerta_array_filled(')
+    checked := at('load ptr, ptr @lerta_exception')
+    assumed := at('call void @llvm.assume(')
+    in_order := filled in 0...checked and checked < assumed
+    reasons.push 'no assumption after the check' unless in_order
+    reasons
+
 # The float operations that the ranges of Floats show give no NaN check for none, and those that a
 # rule of the ranges almost applies to still check (see tests/float/ranges.lerta).
 dump_float_ranges_check := ->
@@ -723,6 +740,7 @@ export checks: Check[] = [
   dump_seldom_check()
   dump_joined_literals_check()
   dump_unchecked_methods_check()
+  dump_filled_length_check()
   dump_hidden_exception_check()
   dump_float_ranges_check()
   dump_compound_tree_check()
