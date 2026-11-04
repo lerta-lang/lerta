@@ -28,15 +28,15 @@ fail 'no C compiler: cc is not found' unless await is_found('cc')
 has_swift := await is_found('swiftc')
 has_go := await is_found('go')
 
-# Runs the command, which must succeed (see run_failure).
-run_checked := (label: String, command: Command, output: Byte[]? = nil) ->
-  fail failure if failure := await run_failure(label, command, output)
+# Runs the command, which must succeed, and gives what it printed if `capture` (see run_failure).
+run_checked := (label: String, command: Command, capture = false) ->
+  (failure, output) := await run_failure(label, command, capture)
+  fail failure if failure
+  output.text() ? fail("#{label} printed what is not UTF-8")
 
 # The first line that the shell command prints, to stdout or stderr.
 first_line := (label: String, command: String) ->
-  bytes: Byte[]
-  await run_checked(label, { program: 'sh', args: ['-c', "#{command} 2>&1"] }, bytes)
-  text := bytes.to_binary().text() ? fail("#{label} printed what is not UTF-8")
+  text := await run_checked(label, { program: 'sh', args: ['-c', "#{command} 2>&1"] }, true)
   text.split("\n")[0]
 
 # The version of the language, the commit for Lerta.
@@ -75,11 +75,9 @@ measure := (label: String, command: Command) ->
   times: Float[]
   var printed = ''
   for i in 0...RUNS
-    bytes: Byte[]
     start := monotonic()
-    await run_checked(label, command, bytes)
+    output := await run_checked(label, command, true)
     times.push monotonic() - start
-    output := bytes.to_binary().text() ? fail("#{label} printed what is not UTF-8")
     fail "#{label} printed differently in two runs" if i > 0 and output != printed
     printed = output
   (times.min()!, printed)

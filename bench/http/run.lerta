@@ -24,8 +24,10 @@ fail := (message: String) -> throw IOError(message)
 
 has_go := await is_found('go')
 
-run_checked := (label: String, command: Command, output: Byte[]? = nil) ->
-  fail failure if failure := await run_failure(label, command, output)
+run_checked := (label: String, command: Command, capture = false) ->
+  (failure, output) := await run_failure(label, command, capture)
+  fail failure if failure
+  output.text() ? fail("#{label} printed what is not UTF-8")
 
 # The command that runs the server in the language, built first if it is compiled; nil where the
 # language's compiler is missing.
@@ -56,9 +58,7 @@ measure := (label: String, port: String, path: String) ->
     throw error
 
 load_count := (label: String, args: String[]) ->
-  output: Byte[]
-  await run_checked(label, { program: LOAD, args }, output)
-  text := output.to_binary().text() ? fail("#{label} printed what is not UTF-8")
+  text := await run_checked(label, { program: LOAD, args }, true)
   text.trim().parse_int() ? fail("#{label} printed no count: #{text}")
 
 stop := (serving: Promise<Exit>) ->

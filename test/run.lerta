@@ -201,6 +201,29 @@ build_commands := ->
       message := "the build of #{COMMANDS_DIR}/#{name} failed (#{built.failure}):\n#{built.errors}"
       throw SetupError(message)
 
+# The benchmarks (see bench/run.lerta) are only built, as running them takes long and needs other
+# languages: each source must build without a diagnostic.
+BENCH_DIR := 'bench'
+
+bench_check := (dir: String, name: String) ->
+  label := "#{dir}/#{name}"
+  executable := "#{work_dir}/#{label.replace('/', '_')}#{target.executable_suffix}"
+  args := ['build', "#{name}.lerta", '-o', executable, target.args...]
+  build := (): Promise<String[]?> ->
+    built := await run_file(compiler, args, "#{root_dir}/#{dir}")
+    reasons: String[]
+    if built.status != 0 or not built.errors.is_empty()
+      reasons.push "the build failed (#{built.failure}):\n#{built.errors}"
+    reasons
+  Check name: label, run: build
+
+bench_checks := ->
+  checks: Check[]
+  return checks if self_check_dir
+  for dir in directory_tree(BENCH_DIR, [])
+    checks.push bench_check(dir, name) for name in names_with_extension(dir, 'lerta')
+  checks
+
 # Wine runs a Windows program in a prefix of its own, when there are such prefixes (see lib/wine).
 var wine_prefixes = no_wine_prefixes()
 
@@ -322,6 +345,7 @@ export suite := (given: Target) ->
     for test in await collect(group)
       all_checks.push { name: test.label, run: -> await run_test(test, false) }
       all_checks.push optimized_check(test)
+  all_checks.append bench_checks()
   checks := select(title, all_checks) ? return 0
   # Not in work_dir itself, which is on the PATH of the tested programs.
   runtime_dir := "#{work_dir}/runtime"

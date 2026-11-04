@@ -8,11 +8,12 @@ export struct Command
 export is_found := (command: String) ->
   (await run('sh', '-c', "command -v #{command} >/dev/null")).code == 0
 
-# Runs the command; with `output`, its standard output is appended to it. Gives why it failed, or
-# nil if it succeeded.
-export run_failure := (label: String, command: Command, output: Byte[]? = nil) ->
-  code := (await run(command.program, command.args..., stdout: output)).code
-  code != 0 then "#{label} failed with exit code #{code}"
+# Runs the command, its standard output captured if `capture`. Gives why it failed, or nil if it
+# succeeded, and what it printed, empty if not captured.
+export run_failure := (label: String, command: Command, capture = false) ->
+  exit := await run(command.program, command.args..., stdout: capture then CAPTURE)
+  failure := exit.code != 0 then "#{label} failed with exit code #{exit.code}"
+  (failure, exit.stdout ? b'')
 
 # Where the programs are built.
 export OUT := 'build/bench'
