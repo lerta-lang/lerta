@@ -2,21 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## `in` of an optional item and array literals fails
-
-Severity: Low.
-
-`expected_container` (compiler/checker/operator.lerta) expects the array literal after `in` to hold the item's type without nil, but the item is then passed as it is to `contains`, which takes that type, so
-
-```
-w: Int8? = 1
-print w in [1]
-```
-
-reports `2:7: expected Int8, got Int8?`.
-
-Fix: either test a nil item as not in the array, or reject an optional item with a message that says so.
-
 ## `lerta fmt` reports two differences in one hunk under the rule of the later one
 
 Severity: Low.

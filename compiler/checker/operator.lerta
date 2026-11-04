@@ -14,9 +14,9 @@ import range_part from './loop'
 import where_right_operand from './narrowing'
 import Body from './shared'
 import
-  ArrayType, bool_type, FLOAT_KINDS, format_type, inner_of, inner_of_expected, INTEGER_KINDS,
-  is_identity_type, is_kind, is_one_of_kinds, members_of, NUMBER_KINDS, ObjectType, OptionalType,
-  SIGNED_INTEGER_KINDS, string_type, Type, TypeKind
+  ArrayType, bool_type, FLOAT_KINDS, format_type, FunctionType, inner_of, inner_of_expected,
+  INTEGER_KINDS, is_identity_type, is_kind, is_one_of_kinds, members_of, NUMBER_KINDS, ObjectType,
+  OptionalType, SIGNED_INTEGER_KINDS, string_type, Type, TypeKind
 from '../types'
 
 EQUALITY_KINDS: TypeKind[] = [NUMBER_KINDS..., 'Char', 'Bool', 'String', 'Binary', ENUM]
@@ -161,9 +161,11 @@ type_of_in_test := (body: Body, binary: BinaryOperation) ->
   # The call of contains types the literal again, and takes its type from here.
   body.in_test_arrays[right] = expected if expected and right is ArrayLiteral
   container := type_of(body, right, expected)
-  if member_type_by_name(body, container, Identifier(position, name: 'contains')) == nil
+  contains := member_type_by_name(body, container, Identifier(position, name: 'contains'))
+  unless contains
     message := "#{format_type(container)} has no contains, by which `in` applies"
     fail body.program, right.position, message
+  reject_optional_item body, left, contains
   # The item is typed by the call, as the parameter's type may decide it, as of `[]`, but for the
   # Char that a String takes.
   text := is_kind(container, 'String') then char_as_text(container, type_of(body, left), left)
@@ -174,8 +176,21 @@ type_of_in_test := (body: Body, binary: BinaryOperation) ->
     fail body.program, position, "contains gives #{format_type(result)}, but `in` needs a Bool"
   bool_type
 
+# An optional item where contains takes no nil, as of an array, which holds none, is reported as
+# such, rather than as an argument of the wrong type. An item that may take its type from the
+# parameter, as one from the context or an array literal does, is left to the call, which types it;
+# so is one of a contains that is not a function, which the call reports.
+reject_optional_item := (body: Body, item: Expression, contains: Type) ->
+  return unless contains is FunctionType
+  return if contains.params.first() is OptionalType
+  return if takes_context(body, item) or item is ArrayLiteral
+  item_type := type_of(body, item)
+  if item_type is OptionalType
+    message := "#{format_type(item_type)} cannot be tested by `in`; unwrap it first"
+    fail body.program, item.position, message
+
 # The type that `x in [...]` expects of an array literal whose items all take their type from the
-# context: the array of the type of `x` without nil, which an array does not hold, as the other
+# context: the array of the type of `x`, which `in` takes only without nil, as the other
 # operand of `==` takes the type of the first. Nil if `x` takes its type from the context too, and
 # is then typed by the parameter of contains; nil for any other test.
 expected_container := (body: Body, binary: BinaryOperation) ->
