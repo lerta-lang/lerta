@@ -7,7 +7,7 @@ Read the documents before changing behavior. Ask before implementing a feature t
 ## Workflow
 
 1. **Plan first.** Before implementing, explain the approach and get the user's agreement.
-2. **Implement with tests,** as [Tests](README.md#tests) describes.
+2. **Implement with tests,** as [Testing](README.md#testing) describes.
 3. **Review.** After implementing, run an adversarial review with a subagent that follows `.agents/reviewer.md`.
    - Run `make check`, fix what it reports, then run `make test`, yourself before each review, and check that each exits with 0; the reviewer does not. A change that the compiler's source can use only after a seed refresh (see [the bootstrap](docs/internals/architecture.md#bootstrap)) may leave `make check` reporting the places in `compiler/` that its new style rule rewrites: check that it reports nothing else, and rewrite them after the refresh, in a commit of their own.
    - Show the reviewer only the code and the tests. Do not pass the intent, the background or your design decisions.

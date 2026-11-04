@@ -26,9 +26,7 @@ Early development. The compiler is written in Lerta and builds itself, starting 
 
 ## Getting started
 
-Requirements: make and `clang` (LLVM 15 or newer). The programs run on Linux, macOS and Windows; the compiler runs on Linux and macOS, and builds Windows programs with mingw-w64 (`--target windows-amd64`).
-
-`make` builds the compiler, `bin/lerta` (see [Building and testing](#building-and-testing)). To compile a program:
+`make` builds the compiler, `bin/lerta`, from the seed; what it needs is in [Building](#building). The programs run on Linux, macOS and Windows. To compile a program:
 
 ```
 bin/lerta build examples/hello.lerta [-o hello] [-O]
@@ -58,10 +56,10 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `seed/` | The seed, from which `make` builds the compiler (see [the bootstrap](docs/internals/architecture.md#bootstrap)) |
 | `third_party/` | libuv and its license; `libuv.txt` says how the runtime builds it for each system. The license notice goes with the compiler and the programs it builds (see [the reference](docs/reference/compiler.md)) |
 | `tools/` | `embed.lerta`, which writes the module that embeds `std/` and `runtime/` into the compiler; `test_cross.sh`, which `make test-cross` runs; `docker/`, its Docker images, with `run.sh` to run a command (bash by default) in one |
-| `test/` | The test driver and suites (see [Tests](#tests)) |
+| `test/` | The test driver and suites (see [Testing](#testing)) |
 | `tests/` | The run tests: Lerta sources and their expected output; also the CLI checks' files (`tests/cli/`) and the formatter cases (`tests/format/`) |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
-| `bench/` | Benchmarks (see [below](#benchmarks)) |
+| `bench/` | Benchmarks (see [Benchmarks](#benchmarks)) |
 | `editors/` | Editor support for VS Code and Vim; each subdirectory's README says how to install it |
 
 #### The compiler
@@ -76,32 +74,39 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `main.lerta` | The commands |
 | `minilerta.lerta` | The entry the seed is made from |
 
-#### Benchmarks
+### Building
 
-- Each benchmark in `bench/` is written in Lerta, Swift, Go, JavaScript and C; C is the reference.
-- `bench/run.lerta` (`make bench`) builds them and prints each language's version, their times side by side and each language's geometric mean. Where stdout is colored, the fastest other than C is bold.
-- `bench/http/` holds an HTTP server in Lerta, Go and JavaScript. Its `run.lerta` (`make bench-http`) loads each with `load.lerta` and prints their requests per second.
-- `bench/shared.lerta` holds what both runners use.
-- The run tests build each Lerta source in `bench/`, but do not run it.
+What the compiler is built and runs with, on each host:
 
-### Building and testing
+| Host | Needs |
+|---|---|
+| Linux, macOS | make and `clang` (LLVM 15 or newer) |
+| Windows | The shell of [Git for Windows](https://gitforwindows.org/), which `make` runs in; GNU make (such as `winget install ezwinports.make`); and a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s), both on the `PATH`. The compiler is `bin/lerta.exe` |
 
-The tests run on Linux and macOS.
+The compiler builds programs for other targets with `--target` (see [the reference](docs/reference/compiler.md)): Windows programs with mingw-w64 and lld.
 
 ```
 make                   # bin/lerta, the compiler, built from the seed
 make TARGET=<target>   # bin/lerta-<target>, the compiler for another target
 make test-bootstrap    # the compiler builds itself to the same IR (TARGET builds the stages for it)
 make seed              # rewrites the seed, only when needed (see the bootstrap)
-make test              # builds bin/lerta, then runs the tests and test-bootstrap, on the host only
-make test-cross        # the tests for every environment but the host's own (see below)
-make check             # the code in the style (lerta fmt)
-make bench             # the benchmarks' times (see Benchmarks)
-make bench-http        # the HTTP server's requests per second
 make clean
 ```
 
 `make` rebuilds only when what the compiler is built from changes: the seed, `compiler/`, `std/`, `runtime/`, `third_party/libuv` or `tools/embed.lerta`.
+
+### Testing
+
+The tests run on Linux and macOS; on Windows, only `make` and `make test-bootstrap` do.
+
+```
+make test              # builds bin/lerta, then runs the tests and test-bootstrap, on the host only
+make test-cross        # the tests for every environment but the host's own (see below)
+make check             # the code in the style (lerta fmt)
+```
+
+- Every language feature gets run tests in `tests/`: a Lerta source and its expected output, as the top of `test/run.lerta` describes. Programs in `examples/` are run as tests too.
+- `make check` checks the tests' style too. Code that breaks it on purpose, as a test of a form that the style rewrites, keeps it with `# fmt: skip` or `# fmt: off` (see [fmt](docs/reference/compiler.md#fmt)). A file that does not parse starts with `# fmt: off`.
 
 #### Cross testing
 
@@ -116,11 +121,6 @@ Where each runs:
 - On the host if it can, otherwise in Docker when Docker runs it without emulation. The 32-bit and Windows programs then need an x86-64 host.
 - The targets run one after another. It ends with what ran and what was skipped, and why. What a container skips, such as the Windows bootstrap in the Wine image without a clang for Windows, shows only in its output.
 - For example, on an Apple silicon Mac it runs Linux in Docker and skips 32-bit Linux. Windows runs only with mingw-w64, lld and Wine installed; the Windows bootstrap also needs a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s) on Wine's `PATH` (`WINEPATH`).
-
-### Tests
-
-- Every language feature gets run tests in `tests/`: a Lerta source and its expected output, as the top of `test/run.lerta` describes. Programs in `examples/` are run as tests too.
-- `make check` checks the tests' style too. Code that breaks it on purpose, as a test of a form that the style rewrites, keeps it with `# fmt: skip` or `# fmt: off` (see [fmt](docs/reference/compiler.md#fmt)). A file that does not parse starts with `# fmt: off`.
 
 #### The driver
 
@@ -157,6 +157,19 @@ bin/test --failed           # the checks that failed when they last ran
 | `wine` | Running Windows programs under Wine |
 | `cli` | Running the compiler in directories of its own |
 | `lsp` | Sessions with the language server |
+
+### Benchmarks
+
+```
+make bench             # the benchmarks' times
+make bench-http        # the HTTP server's requests per second
+```
+
+- Each benchmark in `bench/` is written in Lerta, Swift, Go, JavaScript and C; C is the reference.
+- `bench/run.lerta` (`make bench`) builds them and prints each language's version, their times side by side and each language's geometric mean. Where stdout is colored, the fastest other than C is bold.
+- `bench/http/` holds an HTTP server in Lerta, Go and JavaScript. Its `run.lerta` (`make bench-http`) loads each with `load.lerta` and prints their requests per second.
+- `bench/shared.lerta` holds what both runners use.
+- The run tests build each Lerta source in `bench/`, but do not run it.
 
 ### Changing the language
 

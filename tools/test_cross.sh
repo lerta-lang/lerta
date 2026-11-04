@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs the tests for every environment but the host's own (see README.md#building-and-testing).
+# Runs the tests for every environment but the host's own (see README.md#cross-testing).
 #
 # The targets run one after another, each container's and the host's own. The summary at the end
 # leaves out what a container skips, which only its output tells.
