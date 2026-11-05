@@ -3,7 +3,8 @@
 # language, the best wall-clock time of each in seconds, and last the geometric mean of those of
 # each language.
 # In each row, the least time of the languages but C is in bold where stdout is colored. C is built
-# with cc; Swift only where swiftc is, Go only where go is; Node.js, 22 or later, must be there.
+# with the system's own compiler, cl on Windows and cc elsewhere; Swift only where swiftc is, Go
+# only where go is; Node.js, 22 or later, must be there.
 # Run it from the repository's root, as `make bench` does after building bin/lerta; the programs go
 # to build/bench/.
 import is_dir, list_dir, make_dir, read_text, stdout from 'std:io'
@@ -27,7 +28,13 @@ fail := (message: String) ->
   print_error message
   exit 1
 
-fail 'no C compiler: cc is not found' unless await is_found('cc')
+# cl is on the PATH where vcvars64.bat has run (see README.md).
+MSVC := platform == 'windows'
+C_COMPILER := MSVC then 'cl' else 'cc'
+# cl prints its version on the first line of its banner, in English with VSLANG=1033; the usage
+# after it stays in the system's code page, which need not be UTF-8.
+C_VERSION := MSVC then 'VSLANG=1033 cl 2>&1 | head -1' else 'cc --version'
+fail "no C compiler: #{C_COMPILER} is not found" unless await is_found(C_COMPILER)
 has_swift := await is_found('swiftc')
 has_go := await is_found('go')
 
@@ -52,7 +59,7 @@ version := (language: String) ->
       when 'swift' then 'swiftc --version'
       when 'go' then 'go version'
       when 'node' then 'node --version'
-      else 'cc --version'
+      else C_VERSION
   await first_line("the version of #{language}", command)
 
 # The command that runs the benchmark in the language, built first if it is compiled; nil where the
@@ -67,11 +74,18 @@ build := (name: String, language: String) ->
   compile :=
     case language
       when 'lerta' then Command(program: 'bin/lerta', args: ['build', source, '-O', output...])
-      when 'c' then Command(program: 'cc', args: ['-O2', source, '-lm', output...])
+      when 'c' then Command(program: C_COMPILER, args: c_args(source, executable))
       when 'go' then Command(program: 'go', args: ['build', output..., source])
       else Command(program: 'swiftc', args: ['-O', source, SWIFT_LIBM..., output...])
   await build_quietly("building #{name} in #{language}", compile)
   Command program: executable, args: []
+
+# cl takes its options with `-`, as `/` would start a path that Git Bash's sh rewrites.
+c_args := (source: String, executable: String) ->
+  if MSVC
+    ['-nologo', '-O2', source, "-Fe:#{executable}", "-Fo:#{executable}.obj"]
+  else
+    ['-O2', source, '-lm', '-o', executable]
 
 # Runs the build, which must succeed, and shows its output, stderr in order with stdout, only if it
 # fails: MSVC's linker, which swiftc runs on Windows, prints a line for each import library.

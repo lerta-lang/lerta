@@ -181,7 +181,10 @@ static char *parse_key(Parser *p) {
   int64_t start = p->position + 1;
   p->position = start;
   while (p->bytes[p->position] != '"') p->position++;
-  char *key = strndup(p->bytes + start, p->position - start);
+  int64_t length = p->position - start;
+  char *key = malloc(length + 1);
+  memcpy(key, p->bytes + start, length);
+  key[length] = '\0';
   skip_byte(p);
   return key;
 }
