@@ -54,7 +54,8 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `std/` | The standard modules, in Lerta, which the compiler embeds |
 | `runtime/` | The C runtime, which the compiler embeds |
 | `seed/` | The seed, from which `make` builds the compiler (see [the bootstrap](docs/internals/architecture.md#bootstrap)) |
-| `third_party/` | libuv and its license; `libuv.txt` says how the runtime builds it for each system. The license notice goes with the compiler and the programs it builds (see [the reference](docs/reference/compiler.md)) |
+| `LICENSE-MIT`, `LICENSE-APACHE` | Lerta's licenses (see [License](#license)) |
+| `third_party/` | libuv and its license; `libuv.txt` says how the runtime builds it for each system. Its license notice goes with the compiler and the programs it builds (see [License](#license)) |
 | `tools/` | `embed.lerta`, which writes the module that embeds `std/` and `runtime/` into the compiler; `test_cross.sh`, which `make test-cross` runs; `docker/`, its Docker images, with `run.sh` to run a command (bash by default) in one |
 | `test/` | The test driver and suites (see [Testing](#testing)) |
 | `tests/` | The run tests: Lerta sources and their expected output; also the CLI checks' files (`tests/cli/`) and the formatter cases (`tests/format/`) |
@@ -197,3 +198,7 @@ Let the code speak instead of relying on comments:
 Documentation follows the same rules: no redundancy, no duplication, and a clear structure. State each fact in one place and point to it from elsewhere.
 
 The style of Lerta code is in [the reference](docs/reference/style.md).
+
+## License
+
+Lerta is licensed under either of the [MIT License](LICENSE-MIT) or the [Apache License, Version 2.0](LICENSE-APACHE), at your option. Programs that the compiler builds hold Lerta's runtime and standard modules, and libuv; what goes with them is in [the reference](docs/reference/compiler.md#cache). How contributions are licensed is in [CONTRIBUTING.md](CONTRIBUTING.md).

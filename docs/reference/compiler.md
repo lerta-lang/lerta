@@ -542,7 +542,7 @@ lerta clean
 ## Cache
 
 - The runtime, with [libuv](../internals/platforms.md#platforms), whose sources the compiler carries, is compiled once for each kind of build and kept in a cache. A build only links it, with the system's libraries that libuv needs.
-- An executable so holds libuv: given to others, it goes with libuv's license notice, `third_party/libuv/LICENSE`.
+- An executable holds Lerta's runtime and standard modules, and libuv: given to others, it goes with the notice of whichever of Lerta's licenses its distributor follows, `LICENSE-MIT` or `LICENSE-APACHE`, and libuv's, `third_party/libuv/LICENSE`.
 - An optimized build keeps what ThinLTO optimizes there too.
 
 ### Where
