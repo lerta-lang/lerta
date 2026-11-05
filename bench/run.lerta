@@ -1,11 +1,12 @@
 # Builds each benchmark in Lerta, Swift, Go, JavaScript (Node.js) and C, runs each 3 times, checks
-# that every run of every language prints the same, and prints the version of each language, the
-# best wall-clock time of each in seconds, and last the geometric mean of those of each language.
+# that every run of every language prints the benchmark's main.out, and prints the version of each
+# language, the best wall-clock time of each in seconds, and last the geometric mean of those of
+# each language.
 # In each row, the least time of the languages but C is in bold where stdout is colored. C is built
 # with cc; Swift only where swiftc is, Go only where go is; Node.js, 22 or later, must be there.
 # Run it from the repository's root, as `make bench` does after building bin/lerta; the programs go
 # to build/bench/.
-import is_dir, list_dir, make_dir, stdout from 'std:io'
+import is_dir, list_dir, make_dir, read_text, stdout from 'std:io'
 import pow from 'std:math'
 import exit from 'std:process'
 import monotonic from 'std:time'
@@ -76,7 +77,8 @@ measure := (label: String, command: Command) ->
   var printed = ''
   for i in 0...RUNS
     start := monotonic()
-    output := await run_checked(label, command, true)
+    # C on Windows ends its lines with CRLF.
+    output := (await run_checked(label, command, true)).replace("\r\n", "\n")
     times.push monotonic() - start
     fail "#{label} printed differently in two runs" if i > 0 and output != printed
     printed = output
@@ -102,19 +104,15 @@ print_rule LANGUAGES.length, COLUMN
 # The times of each language, one for each benchmark; none for a language whose compiler is missing.
 times: Map<String, Float[]>
 for name in BENCHMARKS
-  # What the first language that ran printed, which every other must print.
-  var expected: { language: String, output: String }?
+  expected_path := "bench/#{name}/main.out"
+  expected := await read_text(expected_path) ? fail("#{expected_path} is not UTF-8")
   row: Map<String, Float>
   for language in LANGUAGES
     command := await build(name, language)
     continue if command == nil
     label := "#{name} in #{language}"
     (seconds, output) := await measure(label, command)
-    if first := expected
-      if output != first.output
-        fail "#{label} printed:\n#{output}#{first.language} printed:\n#{first.output}"
-    else
-      expected = { language, output }
+    fail "#{label} printed:\n#{output}#{expected_path} holds:\n#{expected}" if output != expected
     times[language, default: []].push(seconds)
     row[language] = seconds
   print_times name, row

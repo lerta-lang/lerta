@@ -165,11 +165,11 @@ make bench             # the benchmarks' times
 make bench-http        # the HTTP server's requests per second
 ```
 
-- Each benchmark in `bench/` is written in Lerta, Swift, Go, JavaScript and C; C is the reference.
+- Each benchmark in `bench/` is written in Lerta, Swift, Go, JavaScript and C; C is the reference. Each prints its `main.out`.
 - `bench/run.lerta` (`make bench`) builds them and prints each language's version, their times side by side and each language's geometric mean. Where stdout is colored, the fastest other than C is bold.
 - `bench/http/` holds an HTTP server in Lerta, Go and JavaScript. Its `run.lerta` (`make bench-http`) loads each with `load.lerta` and prints their requests per second.
 - `bench/shared.lerta` holds what both runners use.
-- The run tests build each Lerta source in `bench/`, but do not run it.
+- The run tests build each Lerta source in `bench/`, and run each benchmark's `main.lerta`, whose stdout must be its `main.out`.
 
 ### Changing the language
 

@@ -201,21 +201,30 @@ build_commands := ->
       message := "the build of #{COMMANDS_DIR}/#{name} failed (#{built.failure}):\n#{built.errors}"
       throw SetupError(message)
 
-# The benchmarks (see bench/run.lerta) are only built, as running them takes long and needs other
-# languages: each source must build without a diagnostic.
+# The benchmarks (see bench/run.lerta): each source must build without a diagnostic. Each
+# benchmark's main.lerta must then run and print its main.out; the other sources, such as the
+# runners and the HTTP server, are only built.
 BENCH_DIR := 'bench'
 
 bench_check := (dir: String, name: String) ->
   label := "#{dir}/#{name}"
   executable := "#{work_dir}/#{label.replace('/', '_')}#{target.executable_suffix}"
   args := ['build', "#{name}.lerta", '-o', executable, target.args...]
-  build := (): Promise<String[]?> ->
+  build_and_run := (): Promise<String[]?> ->
     built := await run_file(compiler, args, "#{root_dir}/#{dir}")
-    reasons: String[]
     if built.status != 0 or not built.errors.is_empty()
-      reasons.push "the build failed (#{built.failure}):\n#{built.errors}"
-    reasons
-  Check name: label, run: build
+      return ["the build failed (#{built.failure}):\n#{built.errors}"]
+    return [] unless name == 'main'
+    expected_path := "#{root_dir}/#{dir}/main.out"
+    return ["needs main.out in #{dir}"] unless is_file(expected_path)
+    expected := await read_file(expected_path)
+    ran := await run_program(executable)
+    [
+      compare_output('stdout', expected, ran.stdout)...
+      compare_output('stderr', b'', ran.stderr)...
+      (ran.exit.code == 0 then [] else ["expected the run to succeed, but #{ending(ran.exit)}"])...
+    ]
+  Check name: label, run: build_and_run
 
 bench_checks := ->
   checks: Check[]
