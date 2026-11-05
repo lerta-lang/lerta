@@ -140,12 +140,6 @@ typedef struct LertaIter {
   bool started;
 } LertaIter;
 
-// An Int? as C functions take and return it: whether there is a value, and the value.
-typedef struct {
-  bool present;
-  int64_t value;
-} LertaOptionalInt;
-
 // Memory (memory.c). lerta_new makes an object of the type, which is NULL for one that holds
 // nothing. Release frees an object when its count reaches zero. Retain and release accept NULL,
 // which is how nil is represented.

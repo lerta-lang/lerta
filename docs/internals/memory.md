@@ -19,7 +19,7 @@
 ## nil
 
 - nil is a null pointer for an optional reference.
-- For an optional `Int`, `Float`, `Byte`, `Bool` or enum value, it is `{ i1, T }` with a false flag. `T` is then unspecified, as in one that comes from C, so it is read only where the flag is set.
+- For an optional `Int`, `Float`, `Byte`, `Bool` or enum value, it is `{ i1, T }` with a false flag. `T` is then unspecified, so it is read only where the flag is set.
 
 ## Weak references
 

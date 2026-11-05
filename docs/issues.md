@@ -22,10 +22,6 @@ A call whose arguments fit on its line but for a `case`, as `x := label` over `t
 
 `lerta_status_fields` (`runtime/file.c`) gives `false` where the status cannot be read, but its extern in `std/io.lerta` is declared `void`, and `stat` gives nil from an empty `fields` either way. It cannot become `void` in the runtime before a seed refresh, as the seed is compiled from a std that declared it to give `Bool`, which reads a result that the runtime would then not give: `is_file` of the seed's minilerta gives false. Fix: once the seed is refreshed, make it `void` in `runtime/file.c` and `runtime/lerta.h`.
 
-## An extern C function that returns a struct crashes on 64-bit Windows
-
-`tests/extern/lib/dirty_nil.lerta`, linked with `dirty_nil.c`, whose function returns a `LertaOptionalInt`, ends with a segmentation fault on 64-bit Windows, so its case lives in `tests/cli/posix` until this is fixed. The cause is likely the ABI: the generated code takes the 16-byte struct back in registers, but the Windows x64 convention returns a struct larger than 8 bytes through a pointer that the caller passes. Fix: lower an extern's struct result as the target's C ABI does, as clang would, and move the case back to `tests/cli`.
-
 ## lerta run fails on a Windows program's exit status above 255
 
 `build_then` (`compiler/build.lerta`) passes the status of the program that `lerta run` ran to `exit`, which takes 0 to 255. A Windows program that crashes ends with an NTSTATUS such as 3221225477 (`0xC0000005`), so `lerta run` throws `exit code out of range (0 to 255)` instead. Fix: exit with a status within that range for one outside it, such as 255 or the low byte that a POSIX shell shows.

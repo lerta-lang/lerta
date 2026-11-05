@@ -4,9 +4,7 @@ The planned design of modules, FFI, the standard library and tools.
 
 ## C ABI / FFI
 
-- **`Int?` across the ABI.** An `Int?` is a `LertaOptionalInt` of 16 bytes.
-  - As a parameter of an extern, it is to be passed as C takes it on Windows, by a pointer to a copy. Now it is passed by value, which a C function there misreads, so std passes none: `run` applies its `output_limit` in Lerta. The x86-64 ABI of the other systems takes it by value, in two registers.
-  - As a result, it is returned on Windows and on 32-bit x86 through a pointer to a place that the caller gives, which the `{ i1, i64 }` that the IR returns does not match. So std has two externs where one would give `Int?`, as for `to_int`.
+- **`Int?` across the ABI.** An extern takes and returns no `Int?` now. As a C struct of a `bool` and an `int64_t`, it would be passed by a pointer to a copy on 64-bit Windows, and returned through a pointer to a place that the caller gives on 64-bit Windows and on 32-bit x86, which target-independent IR cannot write. So std has two externs where one would give `Int?`, as for `to_int`, and `run` applies its `output_limit` in Lerta.
 - **C variables.** An `extern` declaration may also refer to a C variable.
 - **Generic externs,** `extern lerta_map_remove: <K, V>(Map<K, V>, K) -> void`, for C functions that take a value of any type as a pointer, as an array, a map or a String is.
   - With them, the method `remove`, built into the compiler now (see [internals](../internals/representation.md#builtins)), moves to `std/builtins/`, and so would the properties `length` and `s.binary` with extern properties (see [open questions](#open-questions)).

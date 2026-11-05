@@ -362,9 +362,8 @@ Its type gives its parameters and result:
 | `Float32` | `float`, which must not be NaN either |
 | `Byte` | `uint8_t` |
 | `Bool` | `bool` |
-| `Int?` | `LertaOptionalInt`: a `bool present` and an `int64_t value`, in `runtime/lerta.h` |
 | a reference | a pointer; an optional one is NULL for nil |
-| `Bool?`, `Byte?`, `Float?`, `Float32?` | none: rejected |
+| any other optional value, such as `Int?` or `Bool?` | none: rejected |
 
 - Arguments are borrowed, and a returned reference is owned.
 - The result may be `void`, or `never` for a C function that does not return, or returns only after throwing (see [lerta_raise](../internals/execution.md#exceptions)), as `exit` of a code out of range does.

@@ -33,19 +33,14 @@ reject_types_without_c_type := (program: ProgramWide, type: FunctionType, at: Po
     if is_kind(inner_of(value_type), INTERFACE)
       message := "a C function cannot take or return the type #{format_type(value_type)}"
       fail program, at, "#{message}: an interface value has no C type"
-    if value_type is OptionalType
-      has_c_type := is_reference_type(value_type) or is_kind(value_type.inner, 'Int')
-      unless has_c_type
-        reason := 'of the optional values, only references and Int? have a C type'
-        message :=
-          "a C function cannot take or return the type #{format_type(value_type)}; #{reason}"
-        fail program, at, message
+    if value_type is OptionalType and not is_reference_type(value_type)
+      reason := 'of the optional values, only references have a C type'
+      message := "a C function cannot take or return the type #{format_type(value_type)}; #{reason}"
+      fail program, at, message
 
 value_types := (type: FunctionType) -> [type.params..., type.result]
 
-c_type := (type: Type): String ->
-  return 'pointer' if is_reference_type(type)
-  type is OptionalType then "#{c_type(type.inner)}?" else kind_of(type).to_string()
+c_type := (type: Type) -> is_reference_type(type) then 'pointer' else kind_of(type).to_string()
 
 c_signature := (type: Type) ->
   if type is FunctionType
