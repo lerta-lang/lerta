@@ -186,7 +186,7 @@ lerta run <source> [<file>...] [-O] [--memory-checks] [-Werror] [--no-trace] [--
 - It builds the program as [`build`](#build) does, from the same source, files and options, in the temporary directory, for the host.
 - It runs it in the current directory, with the arguments after `--`, which go to the program as they are, even those that look like options. The program shares the standard streams.
 - It then removes the directory, as `build` does.
-- It exits with the program's exit code, or, if a signal ended it, 128 plus the signal number (see `run` in [std:process](std.md#stdprocess)).
+- It exits with the program's exit code, or, if a signal ended it, 128 plus the signal number (see `run` in [std:process](std.md#stdprocess)). An exit code outside 0 to 255, as the NTSTATUS of a Windows program that crashes, becomes 255.
 - Usage errors: `-o`, `--target`, and an argument for the program without `--`.
 - A compile error or a failure of clang is reported as by `build`, and nothing runs.
 
