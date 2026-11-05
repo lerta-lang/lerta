@@ -19,7 +19,7 @@ export type TemplatePart = TextPart | CodePart
 # its parts and the index after it.
 export scan_double_quoted := (line: SourceLine, start: Int, is_binary: Bool) ->
   template := Template()
-  at_end := (i: Int) -> i == line.length or line.bytes[i] == '"'
+  at_end := (i: Int) -> i == line.length or line.bytes[i] == b'"'
   close := read_template(line, start + 1, template, is_binary, at_end)
   line.fail 'unterminated string literal', start if close == line.length
   { parts: template.finish(), end: close + 1 }
@@ -34,7 +34,7 @@ export struct MultilineLiteral
 # Its text is that of the lines after it, up to its closing quotes, without their common
 # indentation, joined by line feeds.
 export scan_multiline := (lines: SourceLine[], first: Int, start: Int) ->
-  is_raw := lines[first].bytes[start] == "'"
+  is_raw := lines[first].bytes[start] == b"'"
   var last = first
   var close: Int?
   while close == nil
@@ -62,11 +62,11 @@ export common_indentation := (lines: String[]) ->
 
 # Whether the line of a `"""` or `'''` literal is blank, which makes it empty, whatever its
 # indentation.
-export is_blank := (line: String) -> line.binary.all((byte) -> byte == ' ')
+export is_blank := (line: String) -> line.binary.all((byte) -> byte == b' ')
 
 leading_spaces := (line: String) ->
   var count = 0
-  count += 1 while count < line.binary.length and line.binary[count] == ' '
+  count += 1 while count < line.binary.length and line.binary[count] == b' '
   count
 
 # The index of the `'''` that closes a `'''` literal on the line, if one does: the first there.
@@ -82,7 +82,7 @@ closing_quotes := (line: SourceLine) ->
       brace := find_interpolation_end(line, i + 2)
       i = (brace ? line.fail('unterminated interpolation', i)) + 1
     else
-      i += line.bytes[i] == '\' then 2 else 1
+      i += line.bytes[i] == b'\' then 2 else 1
   nil
 
 # The parts of a literal as they are read.
@@ -112,13 +112,13 @@ read_template := (
   until at_end(i)
     c := line.bytes[i]
     case
-      when c == '\'
+      when c == b'\'
         escape := read_escape(line, i, is_binary)
         template.bytes += line.bytes[plain...i]
         template.bytes += escape.value
         i = escape.end
         plain = i
-      when c == '#' and line.bytes.occurs_at(i + 1, b'{')
+      when c == b'#' and line.bytes.occurs_at(i + 1, b'{')
         brace := find_interpolation_end(line, i + 2)
         close := brace ? line.fail('unterminated interpolation', i)
         template.bytes += line.bytes[plain...i]
@@ -135,9 +135,9 @@ read_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
   kind := line.bytes.get(start + 1) ? 0
   simple := simple_escape(kind)
   return { value: simple.binary, end: start + 2 } if simple
-  return read_byte_escape(line, start, is_binary) if kind == 'x'
+  return read_byte_escape(line, start, is_binary) if kind == b'x'
   line.fail 'invalid escape sequence', start unless line.bytes.occurs_at(start + 1, b'u{')
-  close := line.index_of('}', start + 3) ? line.fail('invalid unicode escape', start)
+  close := line.index_of(b'}', start + 3) ? line.fail('invalid unicode escape', start)
   digits := line.bytes[(start + 3)...close]
   char := parse_char(digits) ? line.fail('invalid unicode escape', start)
   { value: char.to_string().binary, end: close + 1 }
@@ -159,13 +159,13 @@ export parse_byte := (digits: Binary) ->
 
 simple_escape := (kind: Byte) ->
   case kind
-    when 'n' then "\n"
-    when 't' then "\t"
-    when 'r' then "\r"
-    when '0' then "\0"
-    when '\' then '\'
-    when '"' then '"'
-    when '#' then '#'
+    when b'n' then "\n"
+    when b't' then "\t"
+    when b'r' then "\r"
+    when b'0' then "\0"
+    when b'\' then '\'
+    when b'"' then '"'
+    when b'#' then '#'
     else nil
 
 # The Char that 1 to 6 hexadecimal digits give, or nil if they give none.
@@ -193,19 +193,19 @@ export find_interpolation_end := (line: SourceLine, start: Int) ->
     byte := line.bytes[i]
     level := levels.last()!
     if level.string_start != nil
-      if byte == '\'
+      if byte == b'\'
         i += 1
-      else if byte == '"'
+      else if byte == b'"'
         level.string_start = nil
-      else if byte == '#' and line.bytes.occurs_at(i + 1, b'{')
+      else if byte == b'#' and line.bytes.occurs_at(i + 1, b'{')
         levels.push InterpolationLevel()
         i += 1
     else
       case byte
-        when '"' then level.string_start = i
-        when "'" then i = line.index_of("'", i + 1) ? return nil
-        when '{' then level.braces += 1
-        when '}'
+        when b'"' then level.string_start = i
+        when b"'" then i = line.index_of(b"'", i + 1) ? return nil
+        when b'{' then level.braces += 1
+        when b'}'
           if level.braces > 0
             level.braces -= 1
           else

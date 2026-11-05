@@ -144,10 +144,10 @@ export lex := (source: String, path: String) ->
     continue if line.number <= literal_end
     indent := line.scan_while(0, is_space)
     continue if indent == line.length
-    if line.bytes[indent] == '#'
+    if line.bytes[indent] == b'#'
       comments.push { own_line: true, line: line.number, column: line.column(indent) }
       continue
-    line.fail 'tabs are not allowed in indentation', indent if line.bytes[indent] == "\t"
+    line.fail 'tabs are not allowed in indentation', indent if line.bytes[indent] == b"\t"
     layout.start_line line, indent
     var scanner = LineScanner(line, position: indent)
     while true
@@ -232,8 +232,8 @@ class LineScanner
     while @position < @line.length
       c := @line.bytes[@position]
       case
-        when c == ' ' then @position += 1
-        when c == '#'
+        when c == b' ' then @position += 1
+        when c == b'#'
           @comment_index = @position
           break
         when @at_multiline_quotes()
@@ -245,8 +245,8 @@ class LineScanner
           break
         when @at_binary_literal() then @scan_binary()
         when is_identifier_start(c) then @scan_word()
-        when c == "'" then @scan_raw_string()
-        when c == '"' then @read_double_quoted()
+        when c == b"'" then @scan_raw_string()
+        when c == b'"' then @read_double_quoted()
         when c.is_digit() then @scan_number()
         else @scan_punctuation()
     @tokens
@@ -258,13 +258,13 @@ class LineScanner
   # `b` before a quote.
   at_binary_literal := ->
     next := @line.bytes.get(@position + 1)
-    @line.bytes[@position] == 'b' and (next == "'" or next == '"')
+    @line.bytes[@position] == b'b' and (next == b"'" or next == b'"')
 
   scan_binary := ->
     quote := @position + 1
     if @line.bytes.occurs_at(quote, b"'''") or @line.bytes.occurs_at(quote, b'"""')
       @line.fail 'a Binary literal spans one line', @position
-    if @line.bytes[quote] == "'"
+    if @line.bytes[quote] == b"'"
       close := @raw_string_end(quote)
       parts: TemplatePart[] = [TextPart(@line.bytes[(quote + 1)...close])]
       @add BINARY, '', close + 1, parts
@@ -275,7 +275,7 @@ class LineScanner
   # Adds the token that starts at the position, and moves to `end`, after it.
   add := (kind: TokenKind, text: String, end: Int, parts: TemplatePart[]?) ->
     start := @position
-    spaced := start == 0 or @line.bytes[start - 1] == ' '
+    spaced := start == 0 or @line.bytes[start - 1] == b' '
     column := @line.column(start)
     end_column := @line.column(end)
     @tokens.push { kind, text, spaced, parts, column, end_column, line: @line.number }
@@ -292,7 +292,7 @@ class LineScanner
 
   # The index of the `'` that closes the `'...'` literal whose opening quote is at `start`.
   raw_string_end := (start: Int) ->
-    @line.index_of("'", start + 1) ? @line.fail('unterminated string literal', start)
+    @line.index_of(b"'", start + 1) ? @line.fail('unterminated string literal', start)
 
   read_double_quoted := ->
     { parts, end } := scan_double_quoted(@line, @position, false)
@@ -308,13 +308,13 @@ class LineScanner
     var end = after_digits(@position)
     is_decimal := not @line.text(@position, end).starts_with('0x')
     # What looks like a fraction is taken whole (see Float literals in docs/reference/syntax.md).
-    at_dot := end + 1 < @line.length and bytes[end] == '.'
-    after_dot: Byte = at_dot then bytes[end + 1] else ' '
-    has_fraction := after_dot.is_digit() or after_dot == '_'
+    at_dot := end + 1 < @line.length and bytes[end] == b'.'
+    after_dot: Byte = at_dot then bytes[end + 1] else b' '
+    has_fraction := after_dot.is_digit() or after_dot == b'_'
     end = after_digits(end + 1) if has_fraction
-    ends_with_exponent := bytes[end - 1] == 'e' or bytes[end - 1] == 'E'
+    ends_with_exponent := bytes[end - 1] == b'e' or bytes[end - 1] == b'E'
     # The sign is taken even with no digit after it, so that a diagnostic shows it.
-    sign_follows := end < @line.length and (bytes[end] == '+' or bytes[end] == '-')
+    sign_follows := end < @line.length and (bytes[end] == b'+' or bytes[end] == b'-')
     end = after_digits(end + 1) if is_decimal and ends_with_exponent and sign_follows
     text := @line.text(@position, end)
     digits := text.replace('_', '')
@@ -355,7 +355,7 @@ multiline_token := (line: SourceLine, start: Int, literal: MultilineLiteral) ->
     kind
     parts
     text: plain ? ''
-    spaced: start == 0 or line.bytes[start - 1] == ' '
+    spaced: start == 0 or line.bytes[start - 1] == b' '
     line: line.number
     column: line.column(start)
     end_line: literal.line.number
@@ -376,8 +376,8 @@ keyword_kind := (word: String) ->
       nil
     else kind
 
-is_space := (c: Byte) -> c == ' '
-is_identifier_start := (c: Byte) -> c.is_letter() or c == '_'
+is_space := (c: Byte) -> c == b' '
+is_identifier_start := (c: Byte) -> c.is_letter() or c == b'_'
 is_identifier_part := (c: Byte) -> is_identifier_start(c) or c.is_digit()
 
 is_float_literal := (text: String) ->
@@ -397,7 +397,7 @@ is_digit_run := (text: String) ->
   return false if bytes.is_empty() or not bytes[0].is_digit()
   for i in 1...bytes.length
     c := bytes[i]
-    separates_digits := c == '_' and i + 1 < bytes.length and bytes[i + 1].is_digit()
+    separates_digits := c == b'_' and i + 1 < bytes.length and bytes[i + 1].is_digit()
     return false if not c.is_digit() and not separates_digits
   true
 
