@@ -1,21 +1,20 @@
 # Runtime caches are isolated, complete, reused, and selected from the documented environment.
 import LTO_CACHE, lto_link_flags from '../../compiler/clang_flags'
+import join from '../../compiler/paths'
 import texts_hash from '../../compiler/runtime_cache'
-import Check from '../lib/report'
+import Check, posix_check from '../lib/report'
 import compare_text, expect_status, reason_unless from '../lib/expect'
-import compiler, host_libuv, host_systems, read_text_or_throw, root_dir from '../lib/lerta'
 import
-  CliRun, cli_work_dir, host_executable_suffix, expect_left, expect_success, succeed, host_platform,
-  host_triple, posix_check, new_cli_dir, new_cli_dirs, run_command, run_in_dir, run_in_new_dir
+  compiler, host_libuv, host_systems, read_text_or_throw, root_dir, host_executable_suffix
+from '../lib/lerta'
+import
+  CliRun, cli_work_dir, expect_left, expect_success, succeed, host_platform, host_triple,
+  new_cli_dir, new_cli_dirs, run_command, run_in_dir, run_in_new_dir
 from '../lib/cli'
 import is_dir, list_dir, make_dir, remove_tree, stat, write_file from 'std:io'
 import process_id from 'std:process'
 
 hello := "#{root_dir}/examples/hello.lerta"
-
-# A path as the compiler prints it, which joins its parts with one `/` where the work directory,
-# under a TMPDIR that ends in `/`, has two.
-printed_path := (path: String) -> path.replace('//', '/')
 
 # What a cache holds but the linker's ThinLTO cache, which only optimized builds have.
 runtimes_in := (cache: String) -> [entry for entry in list_dir(cache) when entry != LTO_CACHE]
@@ -151,7 +150,7 @@ incomplete_runtime_check := (flags: String[], kind: String) ->
     succeed 'build', first.result
     entries := runtimes_in(cache)
     return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
-    dir := printed_path("#{cache}/#{entries[0]}")
+    dir := join(cache, entries[0])
     await remove_tree("#{dir}/function_attributes.txt")
     second := await build_in_cache(cache, flags)
     [
@@ -311,8 +310,9 @@ concurrent_builds_check := ->
     return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
     [runtime_name_reasons(entries[0], 'debug')..., await complete_runtime(cache, entries[0])...]
 
+# Windows renames no directory onto another, even an empty one.
 empty_runtime_directory_check := ->
-  Check name: 'lerta build fills an empty directory named for the runtime', run: ->
+  posix_check 'lerta build fills an empty directory named for the runtime', ->
     cache := new_cli_dir('cache-empty-runtime')
     name := await debug_runtime_name()
     make_dir "#{cache}/#{name}"
@@ -324,7 +324,7 @@ occupied_runtime_directory_check := ->
   Check name: 'lerta build reports a runtime cache directory with other files', run: ->
     cache := new_cli_dir('cache-occupied-runtime')
     name := await debug_runtime_name()
-    dir := printed_path("#{cache}/#{name}")
+    dir := join(cache, name)
     make_dir dir
     await write_file("#{dir}/other", b'')
     built := await build_in_cache(cache, [])
@@ -431,7 +431,7 @@ clean_check := ->
     env := { 'LERTA_CACHE_DIR': cache }
     cleaned := await run_in_new_dir(compiler, ['clean'], b'', env)
     in_order := [made..., 'runtime-file'].sorted((a, b) -> a.compare(b))
-    removed := ["removed #{printed_path("#{cache}/#{name}")}\n" for name in in_order].join('')
+    removed := ["removed #{join(cache, name)}\n" for name in in_order].join('')
     missing := "#{cache}/missing"
     env['LERTA_CACHE_DIR'] = missing
     none := await run_in_new_dir(compiler, ['clean'], b'', env)

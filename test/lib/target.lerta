@@ -1,21 +1,25 @@
 # The target that the run tests build their programs for: the host, or another given by `--target`
 # (see main), such as linux-386 for the 32-bit programs that an x86-64 host can run, or
-# windows-amd64 for Windows programs, which Wine runs.
+# windows-amd64 for Windows programs, which Wine runs on a host other than Windows.
 import executable_suffix, is_mingw, target_triple from '../../compiler/clang_flags'
+import platform from 'std:process'
 
-# The arguments to pass to the compiler's build, whether the programs are Windows ones, and what
-# the name of one ends with.
+# The arguments to pass to the compiler's build, whether the programs are Windows ones, whether
+# Wine runs them, and what the name of one ends with.
 export struct Target
   args: String[]
   windows: Bool
+  wine: Bool
   executable_suffix: String
 
 # The target of the short name or triple, or the host's without one.
 export target_of := (target: String?) ->
   triple := target then target_triple(target)
+  windows := triple then is_mingw(triple) else platform == 'windows'
   Target
     args: triple then ['--target', triple] else []
-    windows: triple != nil and is_mingw(triple)
+    windows: windows
+    wine: windows and platform != 'windows'
     executable_suffix: executable_suffix(triple)
 
 export host_target := target_of(nil)

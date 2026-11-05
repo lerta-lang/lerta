@@ -1,14 +1,14 @@
 # Self checks: the driver, bin/test, run as a program of its own, must report the tests of
 # tests/harness, most of which must fail, each as it should (see run.lerta), and must take its
 # arguments and keep the failed checks as main.lerta says.
-import at_once, Check, CheckFailed, run_checks, run_one, select from './lib/report'
+import at_once, Check, CheckFailed, posix_check, run_checks, run_one, select from './lib/report'
 import compare_text, expect_status, lines, reason_unless from './lib/expect'
 import host_target_name from './lib/cli'
 import
   exit_in_time, OUTPUT_LIMIT, read_text_or_throw, root_dir, shown_text, suite_dir
 from './lib/lerta'
 import list_dir, write_file from 'std:io'
-import run from 'std:process'
+import platform, run from 'std:process'
 
 work_dir := suite_dir('self')
 driver := "#{root_dir}/bin/test"
@@ -74,10 +74,11 @@ did_not_compile := 'expected the run to succeed, but it did not compile'
 needs_expected := (name: String) ->
   "needs #{name}.out or #{name}.err or #{name}.warn in tests/harness"
 
-# How the driver reports each test of tests/harness, in order. The (-O) check of a test that fails
-# to compile does not apply, so it is not reported; the optimized build does not report leaks, so
-# the leak that the unoptimized one reports as expected makes it fail.
-harness_results: HarnessResult[] =
+# How the driver reports each test of tests/harness, in order, those of tests/harness/posix last and
+# not on Windows. The (-O) check of a test that fails to compile does not apply, so it is not
+# reported; the optimized build does not report leaks, so the leak that the unoptimized one reports
+# as expected makes it fail.
+top_harness_results: HarnessResult[] =
   { name: 'tests/harness/stray.out', reasons: ['stray file: no test reads it'] }
   { name: 'tests/harness/aborts', reasons: [stderr_differs, threw] }
   { name: 'tests/harness/aborts (-O)', reasons: [stderr_differs, threw] }
@@ -86,8 +87,6 @@ harness_results: HarnessResult[] =
   # it passes.
   { name: 'tests/harness/flaky', reasons: ['stdout differs from line 1', threw] }
   passes('tests/harness/flaky (-O)')
-  { name: 'tests/harness/killed', reasons: [killed] }
-  { name: 'tests/harness/killed (-O)', reasons: [killed] }
   passes('tests/harness/leaks')
   { name: 'tests/harness/leaks (-O)', reasons: [stderr_differs, did_not_fail] }
   { name: 'tests/harness/no_expected', reasons: [needs_expected('no_expected')] }
@@ -106,6 +105,15 @@ harness_results: HarnessResult[] =
   { name: 'tests/harness/wrong_stdout (-O)', reasons: ['stdout differs from line 1'] }
   { name: 'tests/harness/wrong_warning', reasons: ['warnings differs from line 1'] }
   { name: 'tests/harness/wrong_warning (-O)', reasons: ['warnings differs from line 1'] }
+
+posix_harness_results: HarnessResult[] =
+  { name: 'tests/harness/posix/killed', reasons: [killed] }
+  { name: 'tests/harness/posix/killed (-O)', reasons: [killed] }
+
+harness_results := [
+  top_harness_results...
+  (platform == 'windows' then [] else posix_harness_results)...
+]
 
 failed_names := [result.name for result in harness_results when result.reasons.length > 0]
 
@@ -152,12 +160,16 @@ harness_check := Check
 
 # Each source of tests/harness is in harness_results, so that a test added there is checked.
 harness_listed_check := Check(name: 'every test of tests/harness has its expected result', run: ->
-  listed := [result.name for result in harness_results]
+  listed := [result.name for result in [top_harness_results..., posix_harness_results...]]
+  sources_in := (dir: String) ->
+    [
+      "#{dir}/#{file.without_suffix('.lerta')!}"
+      for file in list_dir("#{root_dir}/#{dir}")
+      when file.ends_with('.lerta')
+    ]
+  sources := [sources_in(harness_dir)..., sources_in("#{harness_dir}/posix")...]
   at_once [
-    "tests/harness/#{file} is not in harness_results"
-    for file in list_dir("#{root_dir}/#{harness_dir}")
-    when file.ends_with('.lerta') and
-      not listed.contains("tests/harness/#{file.without_suffix('.lerta')!}")
+    "#{source}.lerta is not in harness_results" for source in sources when source not in listed
   ]
 )
 
@@ -313,7 +325,7 @@ driver_checks :=
 # The leak checks of tests/empty with a compiler that is a shell script of `body`, which must fail
 # them exactly when `fails`.
 leak_check := (what: String, body: String, fails: Bool) ->
-  Check name: "bin/test leaks #{fails then 'fails' else 'passes'} #{what}", run: ->
+  posix_check "bin/test leaks #{fails then 'fails' else 'passes'} #{what}", ->
     compiler := "#{work_dir}/compiler-#{what.replace(' ', '-')}"
     await write_file(compiler, b"#!/bin/sh\n#{body}\n")
     await run('chmod', '+x', compiler)

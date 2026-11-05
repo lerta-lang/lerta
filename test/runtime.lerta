@@ -1,10 +1,10 @@
 # Runtime checks that no Lerta program can trigger: a C program of test/runtime stands in for the
 # generated code and is linked with the runtime as `build` links it.
 import build_flags from '../compiler/clang_flags'
-import Check, run_checks, select from './lib/report'
+import Check, posix_check, run_checks, select from './lib/report'
 import compare_text, expect_status, lines, reason_unless from './lib/expect'
 import
-  exit_in_time, host_libuv, host_systems, root_dir, SetupError, shown_text, suite_dir
+  exit_in_time, host_libuv, host_systems, OUTPUT_LIMIT, root_dir, SetupError, shown_text, suite_dir
 from './lib/lerta'
 import timeout from 'std:async'
 import encode_json from 'std:json'
@@ -17,10 +17,6 @@ runtime_dir := "#{root_dir}/runtime"
 sources_dir := "#{root_dir}/test/runtime"
 libuv_dir := "#{root_dir}/third_party/libuv"
 work_dir := suite_dir('runtime')
-
-# The most output kept of each stream of a program, more than the 1 MiB that write_non_blocking.c
-# writes.
-OUTPUT_LIMIT := 2 * 1024 * 1024
 
 # The seconds that a check whose program could hang waits for it.
 HANG_SECONDS := 10.0
@@ -98,6 +94,7 @@ runtime_clang_args := (optimize: Bool) ->
     libuv.objects...
     # libm, as compiler/build.lerta links it.
     ("-l#{library}" for library in ['m', libuv.libraries...])...
+    (platform == 'windows' then ["#{sources_dir}/binary_stdout.c"] else [])...
   ]
 
 var build_count = 0
@@ -181,14 +178,17 @@ remove_tree_check := Check
     ]
 
 # In a directory of its own, where it makes the long one, removed after.
-long_temp_dir_check := Check
-  name: 'lerta_os_make_temp_dir makes one in a TMPDIR longer than its first buffer for it'
-  run: ->
+long_temp_dir_check :=
+  posix_check('lerta_os_make_temp_dir makes one in a TMPDIR longer than its first buffer for it', ->
     dir := make_temp_dir().text()!
     try
       expect_clean await execute(await build('long_temp_dir', false), [], dir)
     finally
       await remove_tree(dir)
+  )
+
+# A check of what only POSIX systems have, such as /dev/null, fcntl and `script`.
+on_posix := (check: Check) -> posix_check(check.name, check.run)
 
 checks := [
   remove_tree_check
@@ -304,23 +304,27 @@ checks := [
     ]
   )
   clean_check('the optimized runtime does not count objects', 'leak', true)
-  clean_check('a write of more than 2 GiB is done whole', 'write_large', false)
-  clean_check('print_error drops its output once stderr has failed', 'print_error_failed', false)
-  clean_check(
-    'print_error drops its output once a write to stderr has failed'
-    'print_error_failed'
-    false
-    ['FAIL_BY_WRITE']
+  on_posix(clean_check('a write of more than 2 GiB is done whole', 'write_large', false))
+  on_posix(
+    clean_check('print_error drops its output once stderr has failed', 'print_error_failed', false)
+  )
+  on_posix(
+    clean_check(
+      'print_error drops its output once a write to stderr has failed'
+      'print_error_failed'
+      false
+      ['FAIL_BY_WRITE']
+    )
   )
   # The write is rejected, which no one awaits, so the program reports it and exits with 1.
-  Check(name: 'a write to stderr is rejected once print_error has failed', run: ->
+  posix_check('a write to stderr is rejected once print_error has failed', ->
     outcome := await build_and_run('print_error_failed', false, ['DROP_BY_WRITE'])
     [
       compare_text('stderr', "cannot write to stderr\n", outcome.stderr)...
       expect_status(1, outcome.status)...
     ]
   )
-  Check(name: 'output is written out while every thread of the pool is busy', run: ->
+  posix_check('output is written out while every thread of the pool is busy', ->
     executable := await build('write_busy_pool', false)
     outcome := await timeout(execute(executable), HANG_SECONDS)
     [
@@ -328,7 +332,7 @@ checks := [
       expect_status(0, outcome.status)...
     ]
   )
-  Check(name: 'a write to a non-blocking pipe waits while the pipe is full', run: ->
+  posix_check('a write to a non-blocking pipe waits while the pipe is full', ->
     outcome := await build_and_run('write_non_blocking', false)
     length := outcome.stdout.binary.length
     [
@@ -336,13 +340,13 @@ checks := [
       expect_status(0, outcome.status)...
     ]
   )
-  Check(name: 'a read of a non-blocking stdin waits while the pipe is empty', run: ->
+  posix_check('a read of a non-blocking stdin waits while the pipe is empty', ->
     executable := await build('read_non_blocking', false)
     script := '{ sleep 0.3; printf hi; } | "$0"'
     outcome := await timeout(execute('sh', ['-c', script, executable]), HANG_SECONDS)
     expect_status 0, outcome.status
   )
-  Check(name: "libuv's uv_spawn leaves a handle that it fails to spawn to uv_close", run: ->
+  posix_check("libuv's uv_spawn leaves a handle that it fails to spawn to uv_close", ->
     executable := await build('spawn_fails', false)
     outcome := await timeout(execute(executable), HANG_SECONDS)
     [
@@ -356,14 +360,12 @@ checks := [
       outcome := await build_and_run('interleaved_writes', false, ['EXIT_AT_ONCE'])
       [compare_text('stdout', '', outcome.stdout)..., compare_text('stderr', '', outcome.stderr)...]
   )
-  Check(
-    name: 'the buffer is written out at exit, to a terminal too, in the order of the writes'
-    run: ->
-      shown := await run_on_terminal(await build('interleaved_writes', false))
-      expected := "first\r\nsecond\r\nthird\r\n"
-      reason :=
-        "expected the terminal to end with #{encode_json(expected)}, got #{encode_json(shown)}"
-      reason_unless shown.ends_with(expected), reason
+  posix_check('the buffer is written out at exit, to a terminal too, in the order of the writes', ->
+    shown := await run_on_terminal(await build('interleaved_writes', false))
+    expected := "first\r\nsecond\r\nthird\r\n"
+    reason :=
+      "expected the terminal to end with #{encode_json(expected)}, got #{encode_json(shown)}"
+    reason_unless shown.ends_with(expected), reason
   )
 ]
 

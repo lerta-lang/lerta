@@ -156,14 +156,14 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 | `windows-amd64` | `x86_64-w64-mingw32` |
 | `windows-arm64` | `aarch64-w64-mingw32` |
 
-- A Windows target (`*-w64-mingw32`) needs mingw-w64, and lld, which links it.
+- A Windows target (`*-w64-mingw32`, or `*-w64-windows-gnu` as llvm-mingw names it) needs mingw-w64, and lld, which links it.
 - The runtime is built for these targets:
 
 | System | Triples |
 |---|---|
 | Linux, with glibc or musl | `*-linux`, `*-linux-gnu*`, `*-linux-musl*` |
 | macOS | `*-darwin*`, `*-macos*` |
-| Windows | `*-w64-mingw32` |
+| Windows | `*-w64-mingw32`, `*-w64-windows-gnu` |
 
 - Another, such as `x86_64-unknown-freebsd` or `aarch64-linux-android`, is reported as `not a target that the runtime is built for: <triple>`, and the build exits with code 1.
 - This tells only the system; what else a target lacks, such as its C library's headers, clang reports.

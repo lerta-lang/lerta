@@ -97,7 +97,7 @@ make clean
 
 ### Testing
 
-The tests run on Linux and macOS; on Windows, only `make` and `make test-bootstrap` do.
+The tests run on Linux, macOS and Windows. A check of what only POSIX systems have, such as signals, does not run on Windows; nor do the tests of a `posix/` directory.
 
 ```
 make test              # builds bin/lerta, then runs the tests and test-bootstrap, on the host only

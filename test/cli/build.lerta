@@ -1,13 +1,12 @@
 # Building programs, and checking the files a build leaves.
-import Check from '../lib/report'
+import Check, posix_check from '../lib/report'
 import compare_output, compare_text, expect_status from '../lib/expect'
-import compiler, root_dir from '../lib/lerta'
+import compiler, root_dir, host_executable_suffix from '../lib/lerta'
 import
-  host_executable_suffix, expect_left, expect_success, succeed, hello_output, run_command,
-  run_in_dir, run_in_new_dir, cli_work_dir, new_cli_dir, new_cli_dirs, runtime_flags, host_platform,
-  posix_check, host_target_name
+  expect_left, expect_success, succeed, hello_output, run_command, run_in_dir, run_in_new_dir,
+  cli_work_dir, new_cli_dir, new_cli_dirs, runtime_flags, host_platform, host_target_name
 from '../lib/cli'
-import is_file, list_dir, make_dir, make_link, read_file, write_file from 'std:io'
+import copy_file, is_file, list_dir, make_dir, make_link, read_file, write_file from 'std:io'
 import env from 'std:process'
 
 hello := "#{root_dir}/examples/hello.lerta"
@@ -232,7 +231,12 @@ optimized_runtime_check := ->
     )
     succeed 'build', built.result
     executable := "#{built.cwd}/split#{host_executable_suffix}"
-    disassembler := host_platform == 'macos' then 'otool' else 'objdump'
+    # llvm-mingw has LLVM's objdump but not GNU's.
+    disassembler :=
+      case host_platform
+        when 'macos' then 'otool'
+        when 'windows' then 'llvm-objdump'
+        else 'objdump'
     # Without the bytes of each instruction, which the check does not read, objdump's output stays
     # under the limit that the tests put on a command's output.
     objdump_args := ['-d', '--no-show-raw-insn', executable]
@@ -585,9 +589,33 @@ item_tag_source_lines_check := ->
     expected := await read_file(ITEM_WRITES.without_suffix('.lerta')! + '.out')
     [expect_status(0, ran.status)..., compare_output('stdout', expected, ran.stdout)...]
 
-dump_symbols_check := -> Check(name: 'lerta dump-llvm escapes module paths in symbol names', run: ->
-  source := "#{root_dir}/tests/module/escaped_path.lerta"
-  dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
+# The programs of test/cli/escaped_path, which import a module whose path has characters that
+# symbols escape, and which Windows has in no file name: test/cli/escaped_path/lib/escaped.lerta,
+# copied under that name into a directory of the check's own.
+ESCAPED_NAME := '名前 "a\b".lerta'
+
+copy_escaped_path := (dir: String) ->
+  from := "#{root_dir}/test/cli/escaped_path"
+  make_dir "#{dir}/lib"
+  make_dir "#{dir}/sub"
+  for file in ['escaped_path.lerta', 'sub/parent_path.lerta']
+    await copy_file("#{from}/#{file}", "#{dir}/#{file}")
+  await copy_file("#{from}/lib/escaped.lerta", "#{dir}/lib/#{ESCAPED_NAME}")
+
+escaped_run_check := (program: String, flags: String[]) ->
+  title := ['lerta run', flags..., "test/cli/escaped_path/#{program}.lerta"].join(' ')
+  posix_check "#{title} imports an escaped path", ->
+    dir := new_cli_dir("escaped-run-#{program.replace('/', '-')}#{flags.join('')}")
+    await copy_escaped_path(dir)
+    ran := await run_command(compiler, ['run', flags..., "#{program}.lerta"], dir)
+    expected := await read_file("#{root_dir}/test/cli/escaped_path/#{program}.out")
+    [expect_status(0, ran.status)..., compare_output('stdout', expected, ran.stdout)...]
+
+dump_symbols_check := -> posix_check('lerta dump-llvm escapes module paths in symbol names', ->
+  (dir, temp) := new_cli_dirs()
+  await copy_escaped_path(dir)
+  copied := list_dir(dir)
+  dumped := await run_in_dir(compiler, ['dump-llvm', 'escaped_path.lerta'], dir, temp)
   ir := dumped.result.stdout_text()
   symbols :=
     '@"lerta.fn.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.describe"'
@@ -600,7 +628,7 @@ dump_symbols_check := -> Check(name: 'lerta dump-llvm escapes module paths in sy
   [
     expect_status(0, dumped.result.status)...
     ["no #{symbol}" for symbol in symbols when symbol not in ir]...
-    expect_left('files left', [], dumped.left)...
+    expect_left('files left', copied, dumped.left)...
     expect_left('files left in the temporary directory', [], dumped.left_in_temp)...
   ]
 )
@@ -737,6 +765,9 @@ export checks: Check[] = [
   failed_target_check()
   optimized_runtime_check()
   dump_llvm_check()
+  escaped_run_check('escaped_path', no_build_flags)
+  escaped_run_check('escaped_path', ['-O'])
+  escaped_run_check('sub/parent_path', no_build_flags)
   dump_symbols_check()
   dump_seldom_check()
   dump_joined_literals_check()

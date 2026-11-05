@@ -8,6 +8,8 @@
 #   <name>.err     the expected stderr; none means empty
 #   status.txt     invocations checked only by their exit status, one per line: the status, then
 #                  the arguments, separated by spaces
+# Those of tests/cli/posix, but status.txt, are of what only POSIX systems have, such as signals,
+# and are not run on Windows.
 # In the files of arguments, empty lines are skipped and lines that start with `#` are comments,
 # so no argument is empty or starts with `#`, and none in status.txt has a space. In the arguments
 # and the expected output, <root> stands for the repository, <tmp> for the work directory and
@@ -19,6 +21,7 @@ import
 from './lib/cli'
 import build_runtimes, compiler, read_text_or, read_text_or_throw, root_dir from './lib/lerta'
 import list_dir, make_dir from 'std:io'
+import platform from 'std:process'
 import checks as std_checks from './cli/std'
 import checks as embed_checks from './cli/embed'
 import checks as build_checks from './cli/build'
@@ -42,8 +45,15 @@ parse_status := (text: String, where: String) ->
   status := is_one_line and parts[0].is_digits() then parts[0].parse_int()
   status ? throw ValueError("not an exit status in #{where}: #{text}")
 
-case_names :=
-  [file.without_suffix('.args')! for file in list_dir(cases_dir) when file.ends_with('.args')]
+# The files of tests/cli, with those of tests/cli/posix as `posix/<file>`.
+case_files := [
+  (file for file in list_dir(cases_dir) when file != 'posix')...
+  ("posix/#{file}" for file in list_dir("#{cases_dir}/posix"))...
+]
+
+case_names := [file.without_suffix('.args')! for file in case_files when file.ends_with('.args')]
+
+applies := (name: String) -> platform != 'windows' or not name.starts_with('posix/')
 
 struct FileCase
   # The invocation as the files give it, with <root> and the others unexpanded.
@@ -100,10 +110,9 @@ status_checks := ->
   checks
 
 stray_files := ->
-  files := list_dir(cases_dir)
   [
     "stray file: tests/cli/#{file}"
-    for file in files
+    for file in case_files
     when file != 'status.txt' and
       not case_names.any((name) ->
         ['args', 'in', 'status', 'out', 'err'].any((extension) -> file == "#{name}.#{extension}")
@@ -114,7 +123,7 @@ stray_files := ->
 # check of its own reports a failure of.
 export suite := ->
   title := 'CLI checks'
-  cases := [await file_case(name) for name in case_names]
+  cases := [await file_case(name) for name in case_names when applies(name)]
   var runtime_setup_errors: String[] = []
   extras: Check[] =
     { name: 'CLI runtime setup', run: -> await at_once(runtime_setup_errors) }
