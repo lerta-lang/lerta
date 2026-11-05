@@ -1,0 +1,99 @@
+# Lerta code as HTML, its tokens in spans of a class each, as the compiler's lexer reads them, so
+# that the colors never disagree with the language.
+import CompileError from '../compiler/errors'
+import lex, Token, TokenKind from '../compiler/lexer/tokens'
+import escape_html from './html'
+
+# A part of the code to color: from a line and a column to another, each from 1, the column in
+# code points, the end excluded.
+struct Span
+  line: Int
+  column: Int
+  end_line: Int
+  end_column: Int
+  class_name: String
+
+# The code as HTML, or nil if the lexer rejects it.
+export highlight := (code: String) ->
+  lexed :=
+    try
+      lex code, 'code'
+    catch _: CompileError
+      return nil
+  token_spans: Span[]
+  for token in lexed.tokens
+    token_spans.push span if span := token_span(token)
+  comment_spans := [
+    Span(
+      line: comment.line
+      column: comment.column
+      # Up to the start of the next line, so that it closes at its line end.
+      end_line: comment.line + 1
+      end_column: 0
+      class_name: 'comment'
+    )
+    for comment in lexed.comments
+  ]
+  spans := [token_spans..., comment_spans...].sorted_by((span) -> position(span.line, span.column))
+  render code, spans
+
+# Wider than any line, so that a line and a column sort as one number.
+LINE_WIDTH := 1000000
+
+position := (line: Int, column: Int) -> line * LINE_WIDTH + column
+
+token_span := (token: Token): Span? ->
+  class_name := token_class(token) ? return nil
+  {
+    class_name
+    line: token.line
+    column: token.column
+    end_line: token.end_line
+    end_column: token.end_column
+  }
+
+token_class := (token: Token) ->
+  case token.kind
+    when INTEGER, FLOAT then 'number'
+    # An interpolation is colored as the string around it, as the lexer gives it in one token.
+    when STRING, INTERPOLATED, BINARY then 'string'
+    when IDENTIFIER then is_type_name(token.text) then 'type'
+    else is_keyword(token.kind) then 'keyword'
+
+# The kinds named by a word in lower case, as `if` and `true`, are those of the keywords; the others
+# are named by their punctuation or in capitals.
+is_keyword := (kind: TokenKind) -> is_lower(kind.to_string().binary[0])
+
+is_lower := (byte: Byte) -> byte in b'a'..b'z'
+
+# PascalCase, as the style names types, not SCREAMING_CASE.
+is_type_name := (name: String) ->
+  first := name.binary.first() ? return false
+  first in b'A'..b'Z' and name != name.to_upper()
+
+render := (code: String, spans: Span[]) ->
+  var html = ''
+  var next = 0
+  var open: Span?
+  var line = 1
+  var column = 1
+  for c in code
+    at := position(line, column)
+    if span := open
+      if at >= position(span.end_line, span.end_column)
+        html += '</span>'
+        open = nil
+    # A span that starts inside another, which the lexer never gives, is left without color.
+    next += 1 while next < spans.length and position(spans[next].line, spans[next].column) < at
+    if open == nil and next < spans.length and position(spans[next].line, spans[next].column) == at
+      html += "<span class=\"#{spans[next].class_name}\">"
+      open = spans[next]
+      next += 1
+    html += escape_html(c.to_string())
+    if c == "\n"
+      line += 1
+      column = 1
+    else
+      column += 1
+  html += '</span>' if open
+  html

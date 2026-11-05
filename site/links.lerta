@@ -1,0 +1,43 @@
+# Where the links of the site's pages go. A page is at its path as from docs/, and the site is
+# served at the root of its domain, so that a link is the same from every page.
+export REPOSITORY := 'https://github.com/lerta-lang/lerta'
+export DOCS_DIR := 'docs'
+
+# Where the page of a Markdown file is, as from the site's root.
+export html_path := (path: String) ->
+  return "#{directory_of(path)}index.html" if path == 'README.md' or path.ends_with('/README.md')
+  "#{path.without_suffix('.md')!}.html"
+
+# The directory of a path, with its `/`, or '' for one at the root.
+export directory_of := (path: String) ->
+  parts := path.split('/')
+  parts.pop()
+  [(part + '/' for part in parts)...].join('')
+
+# A relative path from the directory, as from the repository's root, without `.` and `..`; a
+# directory keeps its trailing `/`.
+resolve := (directory: String, relative: String) ->
+  parts := [part for part in "#{directory}#{relative}".split('/') when part != '.']
+  resolved: String[]
+  for part, index in parts
+    if part == '..'
+      throw ValueError("a link above the repository: #{relative}") if resolved.is_empty()
+      resolved.pop()
+    else if not part.is_empty() or index == parts.length - 1
+      resolved.push part
+  resolved.join '/'
+
+is_external := (target: String) ->
+  ['http://', 'https://', 'mailto:', '#'].any((prefix) -> target.starts_with(prefix))
+
+# The target to write for a link of the page at `from`, as from docs/, to `target`.
+export link_target := (from: String, target: String, paths: Set<String>) ->
+  return target if is_external(target)
+  (file, fragment) := target.split_once('#') ? (target, '')
+  anchor := fragment.is_empty() then '' else "##{fragment}"
+  path := resolve("#{DOCS_DIR}/#{directory_of(from)}", file)
+  if docs_path := path.without_prefix("#{DOCS_DIR}/")
+    return "/#{html_path(docs_path)}#{anchor}" if docs_path in paths
+    return "/#{docs_path}#{anchor}" if docs_path.ends_with('/') and "#{docs_path}README.md" in paths
+  kind := path.ends_with('/') or path.is_empty() then 'tree' else 'blob'
+  "#{REPOSITORY}/#{kind}/main/#{path}#{anchor}"

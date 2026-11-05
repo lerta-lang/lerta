@@ -1,0 +1,456 @@
+# Markdown into HTML, as far as docs/ writes it: headings, paragraphs, lists, tables and fenced
+# code; code spans, emphasis and links. Beyond that, a block is an error rather than a guess, so
+# that a page never comes out other than as it reads on GitHub.
+import escape_html from './html'
+import highlight from './highlight'
+
+export struct MarkdownError: Error
+  message: String
+
+# Markdown inside a block that is not rendered, which fails as MarkdownError at the block's line.
+struct InlineError: Error
+  message: String
+
+# A page: its title, that of its heading of level 1; its HTML; the targets of its links, as they
+# are written, in order; and what it rendered otherwise than written, without failing.
+export struct Page
+  title: String
+  html: String
+  links: String[]
+  warnings: String[]
+
+# `rewrite` gives the target to write for that of a link, or throws a ValueError for one that it
+# cannot take, which fails as the line of the link.
+export render_markdown := (source: String, rewrite: (String) -> String) ->
+  renderer := Renderer(rewrite)
+  lines := [Line(text, number: index + 1) for text, index in source.lines()]
+  html := renderer.blocks(lines, false)
+  title := renderer.title ? throw MarkdownError('no heading of level 1')
+  Page title, html, links: renderer.links, warnings: renderer.warnings
+
+# A line of the source, the indentation of the blocks it is in taken off.
+struct Line
+  number: Int
+  text: String
+
+# Where a list item starts: its number, in an ordered list, and the width of its marker, which the
+# lines of its content are indented by.
+struct Marker
+  ordered: Bool
+  number: Int
+  width: Int
+
+class Renderer
+  rewrite: (String) -> String
+  var title: String? = nil
+  links: String[] = []
+  warnings: String[] = []
+  # How many headings have taken each slug, so that a later one takes a suffix, as on GitHub.
+  slugs: Map<String, Int> = Map()
+  # The anchors given, so that a suffixed one does not take that of a heading written so.
+  anchors: Set<String> = Set()
+
+  # The blocks of the lines. Those of a `tight` list item have their paragraphs without `<p>`.
+  blocks := (lines: Line[], tight: Bool) ->
+    var html = ''
+    var at = 0
+    while at < lines.length
+      if is_blank(lines[at].text)
+        at += 1
+        continue
+      (block, next) :=
+        try
+          @block lines, at, tight
+        catch error: InlineError
+          fail lines[at], error.message
+      html += block
+      at = next
+    html
+
+  # The block that starts at `at`, and the index of the line after it.
+  block := (lines: Line[], at: Int, tight: Bool): (String, Int) ->
+    line := lines[at]
+    text := line.text
+    fail line, 'unexpected indentation' if text.starts_with(' ')
+    fail line, unsupported if unsupported := unsupported_block(text)
+    return @fence(lines, at) if text.starts_with('```')
+    return (@heading(line), at + 1) if text.starts_with('#')
+    return @table(lines, at) if text.starts_with('|')
+    return @list(lines, at) if list_marker(text)
+    @paragraph lines, at, tight
+
+  fence := (lines: Line[], at: Int) ->
+    opening := lines[at]
+    language := opening.text.without_prefix('```')!.trim()
+    var end = at + 1
+    end += 1 while end < lines.length and lines[end].text != '```'
+    fail opening, 'a code block is not closed' if end == lines.length
+    code := [lines[index].text for index in (at + 1)...end].join("\n")
+    (@code_block(code, language, opening), end + 1)
+
+  code_block := (code: String, language: String, opening: Line) ->
+    body :=
+      case language
+        when '' then escape_html(code)
+        when 'lerta' then highlight(code) ? @unlexed(code, opening)
+        else fail(opening, "a code block of an unknown language: #{language}")
+    class_attribute := language.is_empty() then '' else " class=\"language-#{language}\""
+    "<pre><code#{class_attribute}>#{body}</code></pre>\n"
+
+  # Code that the lexer rejects, as that of a feature planned but not implemented, is shown
+  # without colors.
+  unlexed := (code: String, opening: Line) ->
+    @warnings.push "line #{opening.number}: the lexer rejects the code block"
+    escape_html code
+
+  heading := (line: Line) ->
+    level := line.text.binary.iter().take_while((byte) -> byte == b'#').count()
+    rest := line.text.binary.text(level)!
+    fail line, 'a heading needs a space after its #' unless rest.starts_with(' ')
+    fail line, 'a heading closed by #' if is_closing_sequence(rest.trim().split(' ').last()!)
+    fail line, 'a heading of a level above 6' if level > 6
+    html := @inline(rest.trim())
+    text := plain_text(html)
+    @title = text if level == 1 and @title == nil
+    "<h#{level} id=\"#{@slug(text)}\">#{html}</h#{level}>\n"
+
+  # GitHub's anchor for a heading of the text.
+  slug := (text: String) ->
+    var base = ''
+    for c in text.to_lower()
+      if c == ' '
+        base += '-'
+      else if c.is_letter() or c.is_digit() or c == '-' or c == '_'
+        base += c.to_string()
+    var count = @slugs[base] ? 0
+    var anchor = base
+    while true
+      anchor = count == 0 then base else "#{base}-#{count}"
+      count += 1
+      break if @anchors.add(anchor)
+    @slugs[base] = count
+    anchor
+
+  table := (lines: Line[], at: Int) ->
+    var end = at
+    end += 1 while end < lines.length and lines[end].text.starts_with('|')
+    if not (end - at >= 2 and is_delimiter_row(table_cells(lines[at + 1])))
+      fail lines[at], 'a table needs a row of dashes under its head'
+    head := @row(lines[at], 'th')
+    body := [@row(lines[index], 'td') for index in (at + 2)...end].join('')
+    ("<table>\n<thead>\n#{head}</thead>\n<tbody>\n#{body}</tbody>\n</table>\n", end)
+
+  row := (line: Line, tag: String) ->
+    cells := ["<#{tag}>#{@inline(cell)}</#{tag}>" for cell in table_cells(line)]
+    "<tr>#{cells.join('')}</tr>\n"
+
+  list := (lines: Line[], at: Int): (String, Int) ->
+    first := list_marker(lines[at].text)!
+    # The lines of each item, after its marker's width.
+    item_lines: (Line[], Int)[]
+    # A list is loose, its items' paragraphs in `<p>`, if a blank line is between its items or
+    # between the blocks of one, as on GitHub.
+    var loose = false
+    var next = at
+    while next < lines.length
+      marker := list_marker(lines[next].text) ? break
+      break if marker.ordered != first.ordered
+      end := item_end(lines, next, marker.width)
+      item := lines[next...end]
+      loose = true if has_blank_between_blocks(item, marker.width)
+      item_lines.push (item, marker.width)
+      next = end
+      next += 1 while next < lines.length and is_blank(lines[next].text)
+      following := next < lines.length then list_marker(lines[next].text)
+      loose = true if next > end and following?.ordered == first.ordered
+    items := [@item(item, width, not loose) for (item, width) in item_lines].join('')
+    start_attribute := first.ordered and first.number != 1 then " start=\"#{first.number}\"" else ''
+    html :=
+      first.ordered then "<ol#{start_attribute}>\n#{items}</ol>\n" else "<ul>\n#{items}</ul>\n"
+    (html, next)
+
+  # The item of the lines, the first of which starts with its marker, `width` wide.
+  item := (lines: Line[], width: Int, tight: Bool) ->
+    marked := lines[0]
+    content := [
+      Line(text: marked.text.binary.text(width)!, number: marked.number)
+      (Line(text: dedent(line.text, width), number: line.number) for line in lines[1..])...
+    ]
+    "<li>#{@blocks(content, tight)}</li>\n"
+
+  paragraph := (lines: Line[], at: Int, tight: Bool) ->
+    var end = at + 1
+    end += 1 while end < lines.length and continues_paragraph(lines[end].text)
+    for index in at...(end - 1)
+      fail lines[index], 'a hard line break' if lines[index].text.ends_with('  ')
+    html := @inline([lines[index].text.trim() for index in at...end].join("\n"))
+    (tight then "#{html}\n" else "<p>#{html}</p>\n", end)
+
+  # The HTML of the text of a block.
+  inline := (text: String) ->
+    bytes := text.binary
+    var html = ''
+    # Where the text not yet written starts.
+    var plain = 0
+    var at = 0
+    while at < bytes.length
+      if found := @inline_part(bytes, at)
+        (part, next) := found
+        html += escape_html(bytes.text(plain, at)!) + part
+        plain = next
+        at = next
+      else
+        at += 1
+    html + escape_html(bytes.text(plain)!)
+
+  # The HTML of the part of the text at `at`, as a code span, and the offset after it; or nil if
+  # it is plain text.
+  inline_part := (bytes: Binary, at: Int): (String, Int)? ->
+    case bytes[at]
+      when b'\'
+        escaped := bytes.get(at + 1) ? return nil
+        throw InlineError('a hard line break') if escaped == b"\n"
+        return nil unless is_ascii_punctuation(escaped)
+        (escape_html(escaped.to_char().to_string()), at + 2)
+      when b'`'
+        if span := code_span(bytes, at)
+          (code, end) := span
+          return ("<code>#{escape_html(code)}</code>", end)
+        # A run that nothing closes is text, all of it, so that none of its backticks opens a span.
+        end := at + run_length(bytes, at, b'`')
+        (bytes.text(at, end)!, end)
+      when b'*' then @emphasis(bytes, at)
+      when b'[' then @link(bytes, at)
+      else
+        unsupported := unsupported_inline(bytes, at) ? return nil
+        throw InlineError(unsupported)
+
+  emphasis := (bytes: Binary, at: Int): (String, Int)? ->
+    delimiter := bytes.occurs_at(at, b'**') then b'**' else b'*'
+    tag := delimiter.length == 2 then 'strong' else 'em'
+    start := at + delimiter.length
+    return nil if start >= bytes.length or bytes[start] == b' '
+    end := closing_emphasis(bytes, start, delimiter) ? return nil
+    ("<#{tag}>#{@inline(bytes.text(start, end)!)}</#{tag}>", end + delimiter.length)
+
+  # A link, `[text](target)`.
+  link := (bytes: Binary, at: Int): (String, Int)? ->
+    text_end := closing_bracket(bytes, at + 1) ? return nil
+    throw InlineError('a reference link') if bytes.occurs_at(text_end + 1, b'[')
+    return nil unless bytes.occurs_at(text_end + 1, b'(')
+    target_end := bytes.index_of(b')', text_end + 2) ? return nil
+    target := bytes.text(text_end + 2, target_end)!
+    throw InlineError('a link target with parentheses') if '(' in target
+    throw InlineError('a link title') if ' ' in target
+    @links.push target
+    text := @inline(bytes.text(at + 1, text_end)!)
+    href :=
+      try
+        @rewrite target
+      catch error: ValueError
+        throw InlineError(error.message)
+    ("<a href=\"#{escape_html(href)}\">#{text}</a>", target_end + 1)
+
+fail := (line: Line, message: String) -> throw MarkdownError("line #{line.number}: #{message}")
+
+is_blank := (text: String) -> text.trim().is_empty()
+
+indentation := (text: String) -> text.binary.iter().take_while((byte) -> byte == b' ').count()
+
+dedent := (text: String, width: Int) ->
+  is_blank(text) then '' else text.binary.text(min(width, indentation(text)))!
+
+list_marker := (text: String): Marker? ->
+  return { ordered: false, number: 0, width: 2 } if text.starts_with('- ')
+  bytes := text.binary
+  digits := bytes.iter().take_while((byte) -> byte.is_digit()).count()
+  return nil if digits == 0 or not bytes.occurs_at(digits, b'. ')
+  { ordered: true, number: bytes.text(0, digits)!.parse_int()!, width: digits + 2 }
+
+# The index of the first line after the item that starts at `start`: those after its first are
+# blank or indented by its marker's width, and it ends before the blank lines that end it.
+item_end := (lines: Line[], start: Int, width: Int) ->
+  var end = start + 1
+  var next = start + 1
+  while next < lines.length
+    text := lines[next].text
+    next += 1
+    continue if is_blank(text)
+    break if indentation(text) < width
+    end = next
+  end
+
+# Whether a blank line of the item, whose content is indented by `width`, is followed by a line of
+# its own blocks, not by one inside a code block or deeper, as a nested list's.
+has_blank_between_blocks := (lines: Line[], width: Int) ->
+  var in_code = false
+  var after_blank = false
+  for line in lines[1..]
+    text := line.text
+    if is_blank(text)
+      after_blank = not in_code
+      continue
+    own := indentation(text) == width
+    return true if after_blank and own
+    after_blank = false
+    in_code = not in_code if own and text.trim().starts_with('```')
+  false
+
+# Whether the last word of a heading is a run of `#`, which GitHub drops.
+is_closing_sequence := (word: String) -> word.binary.iter().all((byte) -> byte == b'#')
+
+# Why a line starts a block that is not rendered, or nil.
+unsupported_block := (text: String) ->
+  return 'a block quote' if text.starts_with('>')
+  return 'a link reference definition' if text.starts_with('[') and ']:' in text
+  return 'a list marked by * or +' if text.starts_with('* ') or text.starts_with('+ ')
+  return 'a thematic break or a setext heading' if is_rule(text)
+  nil
+
+# A line of three or more of `-`, `*`, `_` or `=` alone, which GitHub takes as a thematic break or
+# the underline of a heading.
+is_rule := (text: String) ->
+  bytes := text.trim().binary
+  first := bytes.first() ? return false
+  first in [b'-', b'*', b'_', b'='] and
+    bytes.length >= 3 and
+    bytes.iter().all((byte) -> byte == first)
+
+# Why the text at `at` is Markdown that is not rendered, or nil.
+unsupported_inline := (bytes: Binary, at: Int) ->
+  next := bytes.get(at + 1) ? return nil
+  case bytes[at]
+    when b'!' then next == b'[' then 'an image'
+    when b'<' then is_tag(bytes, at + 1) then 'HTML'
+    when b'&' then is_entity(bytes, at + 1) then 'an HTML entity'
+    when b'_'
+      starts_word := at == 0 or not is_word_byte(bytes[at - 1])
+      starts_word and is_word_byte(next) then 'emphasis by _'
+    else nil
+
+# Whether an `&` before `start` starts an entity, as `&copy;` or `&#169;`, which GitHub shows as
+# its character.
+is_entity := (bytes: Binary, start: Int) ->
+  var end = start
+  end += 1 while end < bytes.length and (is_word_byte(bytes[end]) or bytes[end] == b'#')
+  end > start and bytes.get(end) == b';'
+
+# Whether a `<` before `start` opens an HTML tag, as GitHub reads one: an optional `/`, a name,
+# then a space, `>` or `/`. So `Iter<T>` outside code is text, and `<name>` is a tag.
+is_tag := (bytes: Binary, start: Int) ->
+  name_start := bytes.get(start) == b'/' then start + 1 else start
+  return false unless bytes.get(name_start)?.is_letter() == true
+  var end = name_start
+  end += 1 while end < bytes.length and (is_word_byte(bytes[end]) or bytes[end] == b'-')
+  after := bytes.get(end) ? return false
+  # `:` makes it an autolink, as `<https://lerta.org>`, which is not rendered either.
+  after in [b' ', b'>', b'/', b':', b"\n"]
+
+is_word_byte := (byte: Byte) -> byte.is_letter() or byte.is_digit()
+
+continues_paragraph := (text: String) ->
+  starts_block := text.starts_with('```') or text.starts_with('#') or text.starts_with('|')
+  # An ordered list starts in a paragraph only from 1, as on GitHub, so that a line such as
+  # `1999. It rained.` goes on the paragraph.
+  marker := list_marker(text)
+  starts_list := marker != nil and (not marker.ordered or marker.number == 1)
+  starts_other := starts_list or unsupported_block(text) != nil
+  not is_blank(text) and not text.starts_with(' ') and not starts_block and not starts_other
+
+# The cells of a table row, each trimmed, with `\|` read as a `|` of the cell, as on GitHub, also
+# in a code span.
+table_cells := (line: Line) ->
+  inner := line.text.trim().without_prefix('|')!.without_suffix('|') ? fail(
+    line
+    'a table row needs a | at its end'
+  )
+  cells: String[]
+  var cell = ''
+  for piece in inner.split('|')
+    if piece.ends_with('\')
+      cell += piece.without_suffix('\')! + '|'
+    else
+      cells.push (cell + piece).trim()
+      cell = ''
+  cells
+
+is_delimiter_row := (cells: String[]) ->
+  cells.all (cell) -> not cell.is_empty() and cell.binary.iter().all((byte) -> byte == b'-')
+
+# The text of a code span at `at`, without the spaces that pad it, and the offset after it; or nil
+# if no run of as many backticks closes it.
+code_span := (bytes: Binary, at: Int) ->
+  width := run_length(bytes, at, b'`')
+  var next = at + width
+  while next < bytes.length
+    unless bytes[next] == b'`'
+      next += 1
+      continue
+    run := run_length(bytes, next, b'`')
+    if run == width
+      code := bytes.text(at + width, next)!.replace("\n", ' ')
+      padded := code.starts_with(' ') and code.ends_with(' ') and not is_blank(code)
+      return (padded then code.binary.text(1, code.binary.length - 1)! else code, next + run)
+    next += run
+  nil
+
+# The offset after the code span at `at`, or after its backticks if nothing closes it.
+past_code := (bytes: Binary, at: Int) ->
+  span := code_span(bytes, at) ? return at + run_length(bytes, at, b'`')
+  (_, end) := span
+  end
+
+run_length := (bytes: Binary, at: Int, byte: Byte) ->
+  var end = at
+  end += 1 while end < bytes.length and bytes[end] == byte
+  end - at
+
+# Where the emphasis that `delimiter` opens before `start` closes, past code spans; or nil.
+closing_emphasis := (bytes: Binary, start: Int, delimiter: Binary) ->
+  var next = start
+  while next < bytes.length
+    if bytes[next] == b'`'
+      next = past_code(bytes, next)
+      continue
+    unless bytes[next] == b'*'
+      next += 1
+      continue
+    # Only a run of as many asterisks closes it, so that `*` does not close at half of a `**`.
+    run := run_length(bytes, next, b'*')
+    return next if run == delimiter.length and bytes[next - 1] != b' '
+    next += run
+  nil
+
+# The index of the `]` that closes a `[` before `start`, past code spans and nested brackets; or
+# nil.
+closing_bracket := (bytes: Binary, start: Int) ->
+  var depth = 0
+  var next = start
+  while next < bytes.length
+    byte := bytes[next]
+    if byte == b'`'
+      next = past_code(bytes, next)
+      continue
+    if byte == b']'
+      return next if depth == 0
+      depth -= 1
+    else if byte == b'['
+      depth += 1
+    next += 1
+  nil
+
+is_ascii_punctuation := (byte: Byte) ->
+  byte > b' ' and byte < 0x7F.to_byte()! and not byte.is_letter() and not byte.is_digit()
+
+# The text of HTML that `inline` wrote, as GitHub takes that of a heading for its anchor.
+plain_text := (html: String) ->
+  var text = ''
+  var in_tag = false
+  for c in html
+    if c == '<'
+      in_tag = true
+    else if c == '>'
+      in_tag = false
+    else if not in_tag
+      text += c.to_string()
+  text.replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"').replace('&amp;', '&')

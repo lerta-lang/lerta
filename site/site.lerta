@@ -1,0 +1,59 @@
+# Writes the website into a directory, from the repository's root: `lerta run site/site.lerta --
+# <output>`. Its pages are index.md, here, and those of docs/ but roadmap/ and issues.md, each at
+# its path in docs/, as HTML, so that their links stay as GitHub reads them; a link to what is not
+# on the site, as the roadmap, goes to GitHub.
+import copy_file, list_dir, make_dir, read_text, write_file from 'std:io'
+import argv, exit from 'std:process'
+import lay_out, SECTIONS from './layout'
+import DOCS_DIR, directory_of, html_path, link_target from './links'
+import MarkdownError, Page, render_markdown from './markdown'
+
+SITE_DIR := 'site'
+
+# A page to write: its path as from docs/, and the file it is written from.
+struct Source
+  path: String
+  file: String
+
+struct Rendered
+  source: Source
+  page: Page
+
+sources := ->
+  all :=
+    Source(path: 'index.md', file: "#{SITE_DIR}/index.md")
+    Source(path: 'philosophy.md', file: "#{DOCS_DIR}/philosophy.md")
+  for section in SECTIONS
+    for name in list_dir("#{DOCS_DIR}/#{section}")
+      path := "#{section}/#{name}"
+      all.push { path, file: "#{DOCS_DIR}/#{path}" } if name.ends_with('.md')
+  all
+
+render := (source: Source, paths: Set<String>): Promise<Rendered?> ->
+  markdown := await read_text(source.file) ? throw ValueError("not UTF-8: #{source.file}")
+  try
+    page := render_markdown(markdown, (target) -> link_target(source.path, target, paths))
+    print_error "#{source.file}: warning: #{warning}" for warning in page.warnings
+    { source, page }
+  catch error: MarkdownError
+    print_error "#{source.file}: #{error.message}"
+    nil
+
+main := ->
+  output := argv.first() ? throw ValueError('usage: site <output directory>')
+  all_sources := sources()
+  paths := Set([source.path for source in all_sources])
+  rendered := [await render(source, paths) for source in all_sources]
+  exit 1 if rendered.any((each) -> each == nil)
+  pages: Map<String, Page>
+  pages[each!.source.path] = each!.page for each in rendered
+  template := (await read_text("#{SITE_DIR}/template.html"))!
+  for each in rendered
+    source := each!.source
+    html := lay_out(template, source.path, pages)
+    file := "#{output}/#{html_path(source.path)}"
+    make_dir directory_of(file)
+    await write_file(file, html)
+  await copy_file("#{SITE_DIR}/style.css", "#{output}/style.css")
+
+await main()

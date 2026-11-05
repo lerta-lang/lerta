@@ -62,6 +62,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
 | `bench/` | Benchmarks (see [Benchmarks](#benchmarks)) |
 | `editors/` | Editor support for VS Code and Vim; each subdirectory's README says how to install it |
+| `site/` | The website, written from `docs/` (see [Website](#website)) |
 
 #### The compiler
 
@@ -172,6 +173,19 @@ make bench-http        # the HTTP server's requests per second
 - `bench/http/` holds an HTTP server in Lerta, Go and JavaScript. Its `run.lerta` (`make bench-http`) loads each with `load.lerta` and prints their requests per second.
 - `bench/shared.lerta` holds what both runners use.
 - The run tests build each Lerta source in `bench/`, and run each benchmark's `main.lerta`, whose stdout must be its `main.out`.
+
+### Website
+
+```
+make site              # build/site, the website
+make site-serve        # serves it at http://127.0.0.1:8000/ to look at
+```
+
+- `site/site.lerta` writes its pages: `site/index.md`, the top page, whose links are written as from `docs/`, and those of `docs/` but `roadmap/` and `issues.md`, each at its path in `docs/`, so that their links work as on GitHub. A link to what is not on the site goes to GitHub (`site/links.lerta`).
+- The site is served at the root of its domain: its links start with `/`.
+- `site/markdown.lerta` takes only the Markdown that `docs/` writes: headings, paragraphs, lists, tables and fenced code; code spans, emphasis and links. Anything else fails the build with its line.
+- A ```` ```lerta ```` block is colored by the compiler's lexer (`site/highlight.lerta`); one that the lexer rejects, as code of a planned feature, is shown without colors, with a warning.
+- The run tests write the site, which must give no warning, and the tests in `tests/site/` check the Markdown and the colors.
 
 ### Changing the language
 

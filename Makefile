@@ -211,7 +211,15 @@ bench: bin/lerta$(HOST_EXE)
 bench-http: bin/lerta$(HOST_EXE)
 	@bin/lerta run bench/http/run.lerta
 
+# The website, written afresh each time, as it is quick to write (see site/site.lerta).
+site: bin/lerta$(HOST_EXE)
+	rm -rf build/site
+	bin/lerta run site/site.lerta -- build/site
+
+site-serve: site
+	bin/lerta run site/serve.lerta -- build/site
+
 clean:
 	rm -rf build bin
 
-.PHONY: all bench bench-http check seed test test-bootstrap test-cross clean
+.PHONY: all bench bench-http check seed site site-serve test test-bootstrap test-cross clean

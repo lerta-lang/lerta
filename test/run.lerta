@@ -233,6 +233,25 @@ bench_checks := ->
     checks.push bench_check(dir, name) for name in names_with_extension(dir, 'lerta')
   checks
 
+# The website (see site/site.lerta): it must be written from docs/ without a diagnostic or a
+# warning, and its server must build without one. They run on the host only, as nothing of them
+# depends on the target.
+site_check := (label: String, args: String[]) ->
+  check := (): Promise<String[]?> ->
+    ran := await run_file(compiler, args, root_dir)
+    return [] if ran.status == 0 and ran.errors.is_empty()
+    ["#{label} failed (#{ran.failure}):\n#{ran.errors}"]
+  Check name: label, run: check
+
+site_checks := ->
+  checks: Check[]
+  return checks if self_check_dir or not target.args.is_empty()
+  site_dir := "#{work_dir}/site"
+  checks.push site_check('site/site.lerta', ['run', 'site/site.lerta', '--', site_dir])
+  serve := "#{work_dir}/serve#{host_target.executable_suffix}"
+  checks.push site_check('site/serve.lerta', ['build', 'site/serve.lerta', '-o', serve])
+  checks
+
 # Wine runs a Windows program in a prefix of its own, when there are such prefixes (see lib/wine).
 var wine_prefixes = no_wine_prefixes()
 
@@ -355,6 +374,7 @@ export suite := (given: Target) ->
       all_checks.push { name: test.label, run: -> await run_test(test, false) }
       all_checks.push optimized_check(test)
   all_checks.append bench_checks()
+  all_checks.append site_checks()
   checks := select(title, all_checks) ? return 0
   # Not in work_dir itself, which is on the PATH of the tested programs.
   runtime_dir := "#{work_dir}/runtime"

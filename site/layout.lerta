@@ -1,0 +1,59 @@
+# A page of the site as a whole: the template filled with its title, the navigation, the sidebar
+# of its section and its content.
+import escape_html from './html'
+import directory_of, html_path, REPOSITORY from './links'
+import Page from './markdown'
+
+# The directories of docs/ that the site holds, in the order of its navigation.
+export SECTIONS := ['reference', 'internals']
+
+# The HTML of the page at `path`, as from docs/, among the site's pages by their paths. Each
+# `{{name}}` of the template is filled in one pass, so that what one puts in is not filled again.
+export lay_out := (template: String, path: String, pages: Map<String, Page>) ->
+  page := pages[path]!
+  title := path == 'index.md' then 'Lerta' else "#{page.title} · Lerta"
+  parts :=
+    'title': escape_html(title)
+    'navigation': navigation(path)
+    'sidebar': sidebar(path, pages)
+    'content': page.html
+  pieces := template.split('{{')
+  filled := [pieces[0]]
+  for piece in pieces[1..]
+    (name, rest) := piece.split_once('}}') ? throw ValueError('an unclosed {{ in the template')
+    part := parts[name] ? throw ValueError("an unknown part of the template: #{name}")
+    filled.push part + rest
+  filled.join ''
+
+# The navigation of the site, with the section or the page at the top of the path marked.
+navigation := (path: String) ->
+  top := path.split('/')[0]
+  section_entries := [("#{section}/README.md", title_case(section)) for section in SECTIONS]
+  entries := [('philosophy.md', 'Philosophy'), section_entries...]
+  links := [page_link(target, label, target.split('/')[0] == top) for (target, label) in entries]
+  [links..., "<a href=\"#{REPOSITORY}\">GitHub</a>"].join("\n")
+
+# A link to the page at `path`, marked if it is the current one or holds it.
+page_link := (path: String, label: String, current: Bool) ->
+  class_attribute := current then ' class="current"' else ''
+  "<a href=\"/#{html_path(path)}\"#{class_attribute}>#{label}</a>"
+
+title_case := (word: String) -> word.binary.text(0, 1)!.to_upper() + word.binary.text(1)!
+
+# The pages of the section of the page at `path`: its README, then those its README links to, in
+# that order, each once; empty for a page outside the sections.
+sidebar := (path: String, pages: Map<String, Page>) ->
+  section := directory_of(path)
+  return '' if section.is_empty()
+  readme := "#{section}README.md"
+  listed := [readme]
+  for target in pages[readme]!.links
+    (file, _) := target.split_once('#') ? (target, '')
+    name := file.without_prefix('./') ? file
+    page_path := "#{section}#{name}"
+    is_listed := page_path in pages and page_path not in listed
+    listed.push page_path if '/' not in name and is_listed
+  items := [
+    "<li>#{page_link(each, escape_html(pages[each]!.title), each == path)}</li>" for each in listed
+  ]
+  "<ul>\n#{items.join("\n")}\n</ul>"
