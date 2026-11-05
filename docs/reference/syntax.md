@@ -53,7 +53,7 @@
 
 ### Multiline literals
 
-```
+```lerta
 name := 'app'
 usage := """
   Usage:
@@ -80,7 +80,7 @@ This is `"Usage:\n  build \"app\"\n"`.
 
 ## Continued lines
 
-```
+```lerta
 total := first_operand_with_a_long_name +
   second_operand_with_a_long_name * third_operand_with_a_long_name * fourth_operand_with_a_long_name
 doubled := xs.map((x) ->
@@ -116,7 +116,7 @@ A closing bracket goes on the line of the last item, or at the start of the line
 
 ## Bracketless blocks
 
-```
+```lerta
 config :=
   name: 'lerta'
   description: 'A compiled language with reference counting, generics and async functions'
@@ -208,7 +208,7 @@ A callee followed by an indented block gives the block as the call's arguments, 
 
 A line that starts with `.` or `?.` continues a value with a member, so a method chain may be split across lines.
 
-```
+```lerta
 text :=
   'the first part of a long text'
   'the second part of the same long text'

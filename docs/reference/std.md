@@ -61,7 +61,7 @@
 
 An HTTP/1.1 server and client over [std:net](#stdnet). The server's handler takes a `Request` and gives a `Response`, and the client's `fetch` gives a `Response`, as in JavaScript.
 
-```
+```lerta
 import fetch, Request, Response, serve from 'std:http'
 
 handle := (request: Request) -> Response(body: "hello, #{request.url}")
@@ -460,7 +460,7 @@ A struct, exported, of a `writer` and a `reader`, a `Reader` that reads what the
 
 ## std:json
 
-```
+```lerta
 import decode_json, encode_json from 'std:json'
 
 text := encode_json([1, 2])  # '[1,2]'

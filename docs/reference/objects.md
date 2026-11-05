@@ -2,7 +2,7 @@
 
 ## Classes and structs
 
-```
+```lerta
 struct Point
   x: Int
   y: Int
@@ -188,7 +188,7 @@ An arithmetic or bitwise operator on a value of a type it does not otherwise app
 
 ## deinit
 
-```
+```lerta
 class File
   path: String
   deinit := -> print("closing #{@path}")
@@ -203,7 +203,7 @@ class File
 
 ## extend
 
-```
+```lerta
 extend String
   shout := (): String -> @ + '!'
 
@@ -269,7 +269,7 @@ print [1, 2].second()
 
 ## Interfaces
 
-```
+```lerta
 interface Shape
   area: () -> Int
   name: String

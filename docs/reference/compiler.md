@@ -374,7 +374,7 @@ Besides:
 
 #### Code kept as written
 
-```
+```lerta
 identity := [  # fmt: skip
   1, 0
   0, 1

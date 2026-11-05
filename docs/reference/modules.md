@@ -1,6 +1,6 @@
 # Modules
 
-```
+```lerta
 import read_file, stdout from 'std:io'
 import argv, exit from 'std:process'
 ```
@@ -36,7 +36,7 @@ import argv, exit from 'std:process'
 - The names are separated by commas, and the last one, which no comma follows, by `from`, so `from` itself can be imported.
 - An imported name that is never used is a warning (see [unused names](errors.md#unused-names)).
 - The names may also be an indented block on the lines below `import`, separated as the items of a [bracketless block](syntax.md#bracketless-blocks), with `from 'module'` on the line after it:
-  ```
+  ```lerta
   import
     ArrayLiteral, Assignment, BinaryOperation, Call, Conditional, FunctionLiteral, Identifier,
     Await as wait
@@ -56,7 +56,7 @@ import argv, exit from 'std:process'
 
 ## Exports
 
-```
+```lerta
 export struct Point
   x: Int
   y: Int

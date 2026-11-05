@@ -2,7 +2,7 @@
 
 ## Exceptions
 
-```
+```lerta
 struct NotFound: Error
 
 find := (key: String) ->

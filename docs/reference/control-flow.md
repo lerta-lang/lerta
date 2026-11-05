@@ -17,7 +17,7 @@
 
 ## if and while
 
-```
+```lerta
 if n == 0
   print 'zero'
 else if n < 0
@@ -136,7 +136,7 @@ The value of an assignment is read before it, where the `var` is still narrowed,
 
 ## then and else
 
-```
+```lerta
 sign := n < 0 then 'negative' else n == 0 then 'zero' else 'positive'
 label := name then "hello #{name}" else 'nobody'
 greeting := name then "hello #{name}"
@@ -161,7 +161,7 @@ greeting := name then "hello #{name}"
 
 ## for and ranges
 
-```
+```lerta
 for i in 0...3
   square := i * i
   print square
@@ -222,7 +222,7 @@ for i in 0...3
 
 ## case with a subject
 
-```
+```lerta
 case e
   when Num then e.value
   when Add then eval(e.left) + eval(e.right)
@@ -241,7 +241,7 @@ case c
 
 A line of `when` alone takes its patterns from the indented block below, written as the items of a [bracketless block](syntax.md#bracketless-blocks) are. `then` follows at the indentation of `when`, with the body after it as it is after `else`: on its line or as an indented block.
 
-```
+```lerta
 case w
   when
     'const', 'var', 'if', 'else', 'while', 'unless', 'until', 'for', 'break', 'continue', 'return',
@@ -272,7 +272,7 @@ case w
 
 ## case without a subject
 
-```
+```lerta
 print case
   when i % 15 == 0 then 'FizzBuzz'
   when i % 3 == 0 then 'Fizz'
@@ -287,7 +287,7 @@ print case
 ### Arms
 
 - An arm's body follows `then` on the same line (`when c then x`; for `else`, directly: `else x`), or is an indented block on the next lines:
-  ```
+  ```lerta
   when n < 0
     magnitude := -n
     "minus #{magnitude}"

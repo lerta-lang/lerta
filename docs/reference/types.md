@@ -96,7 +96,7 @@ The expected type reaches literals:
 
 ## Sized integers
 
-```
+```lerta
 flags: UInt16 = 0x8001
 offset: Int32 = -4
 print (flags >> 15).to_int() + offset.to_int()
@@ -145,7 +145,7 @@ A signed type takes the rules of [`Int`](#int), an unsigned one those of [`Byte`
 
 ## Char
 
-```
+```lerta
 kana := (c: Char) -> c in 'ぁ'..'ゖ' then c + 0x60 else c
 print [kana(c).to_string() for c in 'ひらがな'].join('')
 ```
@@ -378,7 +378,7 @@ The operators are the arithmetic and bitwise ones of integers, prefix `-` among 
 
 ## Optional values
 
-```
+```lerta
 var name: String?
 print name ? 'nobody'
 print n + 1 if n := '42'.parse_int()
@@ -429,7 +429,7 @@ print n + 1 if n := '42'.parse_int()
 
 ## Array
 
-```
+```lerta
 xs := [3, 1, 2]
 names: String[]
 names.push 'a'
@@ -498,7 +498,7 @@ print xs[0] + xs.length
 
 ## Map
 
-```
+```lerta
 ages := { 'ann': 31, 'bob': 27 }
 squares: Map<Int, Int>
 squares[3] = 9
@@ -549,7 +549,7 @@ print ages['ann'] ? 0
 
 ## Set
 
-```
+```lerta
 seen: Set<String>
 seen.add 'a'
 primes := Set([2, 3, 5])
@@ -591,7 +591,7 @@ print 4 in primes
 
 ## Iter
 
-```
+```lerta
 squares := (x * x for x in 0...10 when x % 2 == 0)
 print square for square in squares.take(3)
 shouts := ['hi', 'yo'].map((w) -> w + '!').to_array()
@@ -656,7 +656,7 @@ These methods of an Iterable go through its items and give a result:
 
 A value of a type with `has_next(): Bool` and `next(): T` converts to an `Iter<T>` where one is expected, as a value converts to an [interface type](objects.md#interfaces), so it must be a reference. The `Iter` gives the items that its `has_next` and `next` give. The state is typically a `var` that the two functions capture:
 
-```
+```lerta
 countdown := (n: Int): Iter<Int> ->
   var i = n
   has_next := -> i > 0
@@ -682,7 +682,7 @@ countdown := (n: Int): Iter<Int> ->
 
 ## Unions
 
-```
+```lerta
 type Expr = Num | Add | Mul
 ```
 
@@ -694,7 +694,7 @@ type Expr = Num | Add | Mul
 - `type Name = ...` names a type at the top level.
 - An alias may refer to types and aliases declared later, but not to itself.
 - After a `=` that ends the line, the indented lines below are the members of a union, one or more on each line:
-  ```
+  ```lerta
   type Shape =
     Circle | Ellipse | Square | Rectangle | Triangle | Pentagon | Hexagon | Polygon | Star | Arrow
     SpeechBubble
@@ -751,7 +751,7 @@ type Expr = Num | Add | Mul
 
 ## Enums
 
-```
+```lerta
 enum TokenKind
   IDENTIFIER
   INTEGER
@@ -793,7 +793,7 @@ print kind == '('
 
 ## Anonymous structs
 
-```
+```lerta
 divide := (a: Int, b: Int): { quotient: Int, remainder: Int } ->
   { quotient: a / b, remainder: a % b }
 { quotient, remainder } := divide(17, 5)
@@ -832,7 +832,7 @@ divide := (a: Int, b: Int): { quotient: Int, remainder: Int } ->
 
 ## Tuples
 
-```
+```lerta
 swap := (t: (String, Int)) ->
   (s, n) := t
   (n, s)

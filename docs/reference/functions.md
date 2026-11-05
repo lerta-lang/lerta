@@ -2,7 +2,7 @@
 
 ## Declaring functions
 
-```
+```lerta
 gcd := (a: Int, b: Int): Int ->
   return a if b == 0
   gcd b, a % b
@@ -103,7 +103,7 @@ When the last parameter is of a struct type, a call may give it as named argumen
 
 ## Function values
 
-```
+```lerta
 double := (x: Int) -> x * 2
 square := (x: Int) -> x * x
 apply := (f: (Int) -> Int, x: Int) -> f(x)
@@ -134,7 +134,7 @@ steps := [double, square]
 
 ## Function literals
 
-```
+```lerta
 make_adder := (n: Int): ((Int) -> Int) -> (x) -> x + n
 print [1, 2, 3].map((x) -> x * x).to_array().length
 ```
@@ -164,7 +164,7 @@ print [1, 2, 3].map((x) -> x * x).to_array().length
 
 ## Functions that yield
 
-```
+```lerta
 countdown := (n: Int) ->
   var i = n
   while i > 0
@@ -187,7 +187,7 @@ print x for x in countdown(3)
 
 ## Functions that await
 
-```
+```lerta
 import sleep from 'std:time'
 
 fetch := (name: String) ->
@@ -257,7 +257,7 @@ A function that does not await, but whose return type is a `Promise`, written or
 
 ## Generic functions
 
-```
+```lerta
 struct Point
   x: Int
   y: Int
@@ -341,7 +341,7 @@ The function is also checked once for each distinct set of type arguments, with 
 
 ## C functions
 
-```
+```lerta
 extern lerta_float_to_string as text_of: (Float) -> String
 export extern lerta_unix_time as time: () -> Float
 ```
