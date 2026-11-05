@@ -82,7 +82,7 @@
 
 ### Literals by context
 
-**The type of a literal is decided by context.** Where a `Byte` or a `Byte?` is expected, an integer literal from 0 to 255 is a `Byte`, and so are a `Binary` literal of one byte (`b'a'`) and a string literal of one byte (`'a'`); a `Binary` literal on the left of `+` stays a `Binary`, so that `b'a' + c` appends a byte, while `c + b'a'` adds. Without such a context, `b'a'` is a `Binary`, `'a'` a `String` and `1` an `Int`.
+**The type of a literal is decided by context.** Where a `Byte` or a `Byte?` is expected, an integer literal from 0 to 255 is a `Byte`, and so is a `Binary` literal of one byte (`b'a'`), but not a string literal (`'a'`), whose bytes are text; a `Binary` literal on the left of `+` stays a `Binary`, so that `b'a' + c` appends a byte, while `c + b'a'` adds. Without such a context, `b'a'` is a `Binary`, `'a'` a `String` and `1` an `Int`.
 
 The expected type reaches literals:
 
@@ -90,9 +90,9 @@ The expected type reaches literals:
 - inside arithmetic: `c == 1 + 2`;
 - in `case` arms and return values;
 - in an array literal spread in another: `[[1, 2]..., c]`;
-- in an operand of `+`, `==`, `<` and so on whose type comes from the context, which is expected to have the type of the other operand: `c >= '0'` and `'0' <= c` compare two `Byte`s when `c` is one;
+- in an operand of `+`, `==`, `<` and so on whose type comes from the context, which is expected to have the type of the other operand: `c >= b'0'` and `b'0' <= c` compare two `Byte`s when `c` is one;
 - in the items of an array literal, which take the type of the first item whose type does not come from the context: `[1, c]` is a `Byte[]` (see [array literals](#array-literals));
-- in the items of an array literal after `in`, when all of them take their type from the context and the item tested does not, and is of a type that `==` compares: `c in ['a', 'b']` tests a `Byte[]`.
+- in the items of an array literal after `in`, when all of them take their type from the context and the item tested does not, and is of a type that `==` compares: `c in [b'a', b'b']` tests a `Byte[]`.
 
 ## Sized integers
 
