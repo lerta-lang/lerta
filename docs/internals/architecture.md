@@ -89,9 +89,13 @@ Compiling the runtime once takes 3.7 s more on the Mac. The benchmarks run as fa
 
 Given a source, minilerta prints its IR, as `dump-llvm` does. Only make and clang are needed.
 
+- The Makefile builds minilerta from the seed, and with it `tools/build.lerta` into `build/build`, which builds the rest for the goals of `make`, each of which runs it.
+- `build/build` makes again, as make does, what is missing or older than what it is made from.
+
 | Step | Built by | With |
 |---|---|---|
 | `build/minilerta` | clang, from the seed | the debug runtime |
+| `build/build` | clang, from minilerta's IR of `tools/build.lerta` | the debug runtime |
 | `build/stage1` | clang, from minilerta's IR of `compiler/` | the debug runtime |
 | `bin/lerta` | stage1 | optimized, without the memory checks (see [leak checking](memory.md#leak-checking)) |
 
@@ -100,14 +104,14 @@ Every build so checks that the seed builds the current source.
 ### Embedded files
 
 - The compiler carries `std/*.lerta`, `runtime/*.c` and `runtime/*.h` as string constants of the generated module `build/embedded.lerta`.
-- clang builds `tools/embed.lerta` from minilerta's IR, and it writes the module from the files that the Makefile lists, so no list of them is written by hand.
+- `build/build` writes the module (`tools/build/embed.lerta`) from the files that it finds in those directories, so no list of them is written by hand.
 - The loader reads a standard module from it, and `build` writes the runtime from it for clang to compile into [the cache](../reference/compiler.md#cache).
 
 ### Seed mode
 
-- The seed is built in seed mode (`embed --seed`). Its `embedded.lerta` holds neither the files nor their paths.
+- The seed is built in seed mode. Its `embedded.lerta` holds neither the files nor their paths.
   - It finds the files of `std/` as the compiler starts, with `list_dir`, and reads them all with `read_file`, which awaits, so that `embedded_source` is the same function in both modes.
-  - The paths are relative to the current directory, so minilerta must run from the repository's root, as the Makefile runs it.
+  - The paths are relative to the current directory, so minilerta must run from the repository's root, as the Makefile and `build/build` run it.
   - It holds nothing of the runtime and libuv, which minilerta, printing IR only, does not use.
 - So stage1 is built with the working tree's std and runtime, and the seed does not hold them.
 - `make seed` writes such a module beside a copy of `compiler/`, in `build/seed/`, so that the build's own one stays as it is.

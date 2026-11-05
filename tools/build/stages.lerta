@@ -1,0 +1,194 @@
+# The compiler's stages, from minilerta, which the Makefile builds from the seed, to the
+# bootstrap's check that the compiler builds itself to the same IR (see
+# docs/internals/architecture.md#bootstrap).
+import
+  copy_file, is_dir, is_file, list_dir, make_dir, read_file, read_text, remove_tree, write_file
+from 'std:io'
+import platform from 'std:process'
+import executable_suffix, target_triple from '../../compiler/clang_flags'
+import dirname from '../../compiler/paths'
+import embedded_module, write_seed_embedded from './embed'
+import files_under, is_stale from './files'
+import EMBEDDED_MODULE, HOST_EXE, inputs from './inputs'
+import BuildError, captured, step, step_to_file from './steps'
+
+MAIN := 'compiler/main.lerta'
+MINILERTA_MAIN := 'compiler/minilerta.lerta'
+MINILERTA := "build/minilerta#{HOST_EXE}"
+# What the Makefile writes to rewrite llvm.coro.end for the host's LLVM, empty when there is
+# nothing to rewrite.
+HOST_LLVM_SED := 'build/host_llvm.sed'
+LIBUV_BUILT := 'build/libuv/built'
+STAGE1 := "build/stage1#{HOST_EXE}"
+export HOST_COMPILER := "bin/lerta#{HOST_EXE}"
+export HARNESS_PROGRAM := "bin/test#{HOST_EXE}"
+# This program, as the Makefile builds it.
+export BUILD_TOOL := "build/build#{HOST_EXE}"
+
+# What minilerta prints for the source, into the IR file `output`, rewritten for the host's LLVM.
+minilerta_ir := (source: String, output: String) ->
+  print "#{MINILERTA} #{source} > #{output}"
+  ir := await captured(MINILERTA, [source], b'')
+  await write_file(output, await captured('sed', ['-f', HOST_LLVM_SED], ir))
+
+# Links the IR into `output` with the debug runtime, as the compiler's own unoptimized build does:
+# clang compiles the IR far faster without optimization than the program loses running
+# unoptimized, and each such program runs little.
+link_debug := (ir: String, output: String) ->
+  { host_libuv, runtime_c } := await inputs()
+  # The objects that the Makefile compiles into build/libuv, which it empties first, so that it
+  # holds those of the description alone.
+  libuv_objects :=
+    ["build/libuv/#{name}" for name in list_dir('build/libuv') when name.ends_with('.o')]
+  libraries := ["-l#{library}" for library in ['m', host_libuv.libraries...]]
+  await step(
+    'clang'
+    '-Wno-override-module'
+    ir
+    '-D'
+    'LERTA_DEBUG'
+    '-Ithird_party/libuv/include'
+    runtime_c...
+    libuv_objects.sorted((a, b) -> a.compare(b))...
+    libraries...
+    '-o'
+    output
+  )
+
+# A program that minilerta builds from the source, with the IR in `ir` and the inputs besides
+# minilerta's own that change it.
+minilerta_program := (source: String, ir: String, output: String, sources: String[]) ->
+  { embedded, runtime } := await inputs()
+  if is_stale(ir, [MINILERTA, HOST_LLVM_SED, sources..., embedded...])
+    await minilerta_ir(source, ir)
+  await link_debug(ir, output) if is_stale(output, [ir, runtime..., LIBUV_BUILT])
+
+# The module is written afresh each time and compared, as its files' times cannot tell one removed
+# or renamed; one the same as before is left as it is, so that what is built from it is not built
+# again for nothing, as the Makefile leaves host_llvm.sed.
+export make_embedded_module := ->
+  module := await embedded_module((await inputs()).embedded)
+  return if is_file(EMBEDDED_MODULE) and await read_text(EMBEDDED_MODULE) == module
+  print "write #{EMBEDDED_MODULE}"
+  await write_file(EMBEDDED_MODULE, module)
+
+# The test harness, which minilerta builds, as it builds this program, so that a change to the
+# compiler cannot break the harness that tests it (see docs/roadmap/programs.md#tools).
+export make_harness := ->
+  await make_embedded_module()
+  make_dir 'bin' unless is_dir('bin')
+  # The harness imports modules of the compiler, and those of this program that it checks.
+  { harness, sources } := await inputs()
+  build_tool := files_under('tools/build', ['.lerta'])
+  await minilerta_program(
+    'test/main.lerta'
+    'build/test.ll'
+    HARNESS_PROGRAM
+    [harness..., sources..., build_tool...]
+  )
+
+# The compiler for the host, which stage1 builds optimized. The compiler's own leaks are found by
+# the stage2 of the bootstrap, which keeps the memory checks (see test/leaks.lerta).
+export make_host_compiler := ->
+  await make_embedded_module()
+  await minilerta_program(MAIN, 'build/stage1.ll', STAGE1, (await inputs()).sources)
+  return unless is_stale(HOST_COMPILER, [STAGE1])
+  make_dir 'bin' unless is_dir('bin')
+  await step(STAGE1, 'build', MAIN, '-o', HOST_COMPILER, '-O', '-Werror')
+
+# What builds and checks the compiler for a target, or for the host: the flags that the compiler
+# is given, what a program ends with, the compiler that `make` builds, the bootstrap's directory,
+# and its stage2 and what runs it: a Windows one under Wine, or directly on a Windows host.
+export struct Bootstrap
+  target_flags: String[]
+  exe: String
+  compiler: String
+  dir: String
+  stage2: String
+  run_stage2: String[]
+
+export bootstrap_for := (target: String?) ->
+  name := target ? return bootstrap_of([], HOST_EXE, HOST_COMPILER, 'build/bootstrap')
+  exe := executable_suffix(target_triple(name))
+  bootstrap_of ['--target', name], exe, "bin/lerta-#{name}#{exe}", "build/bootstrap-#{name}"
+
+bootstrap_of := (target_flags: String[], exe: String, compiler: String, dir: String) ->
+  stage2 := "#{dir}/stage2#{exe}"
+  under_wine := not exe.is_empty() and platform != 'windows'
+  run_stage2 := under_wine then ['wine', stage2] else [stage2]
+  Bootstrap target_flags, exe, compiler, dir, stage2, run_stage2
+
+# The compiler for the bootstrap's target, which the host's builds, or the host's own.
+export make_compiler := (bootstrap: Bootstrap) ->
+  await make_host_compiler()
+  compiler := bootstrap.compiler
+  return if compiler == HOST_COMPILER or not is_stale(compiler, [HOST_COMPILER])
+  await step(
+    HOST_COMPILER
+    'build'
+    MAIN
+    '-o'
+    compiler
+    '-O'
+    '-Werror'
+    bootstrap.target_flags...
+  )
+
+# stage2 is unoptimized, which clang builds far faster, and so keeps the memory checks: its runs,
+# which build stage3 and print its IR, and those of the leak checks (see test/leaks.lerta) find
+# the compiler's own leaks.
+export make_stage2 := (bootstrap: Bootstrap) ->
+  await make_host_compiler()
+  stage2 := bootstrap.stage2
+  return unless is_stale(stage2, [HOST_COMPILER])
+  make_dir bootstrap.dir unless is_dir(bootstrap.dir)
+  await step(HOST_COMPILER, 'build', MAIN, '-o', stage2, '-Werror', bootstrap.target_flags...)
+
+# Checks that stage2 and stage3 print the same IR for the compiler, and that minilerta, which
+# bin/lerta builds for the host, as the seed is only ever built there, prints it too.
+export test_bootstrap := (bootstrap: Bootstrap) ->
+  await make_stage2(bootstrap)
+  dir := bootstrap.dir
+  stage2 := bootstrap.stage2
+  run_stage2 := bootstrap.run_stage2
+  stage2_ir := "#{dir}/stage2.ll"
+  stage3_ir := "#{dir}/stage3.ll"
+  stage3 := "#{dir}/stage3#{bootstrap.exe}"
+  minilerta_ir := "#{dir}/minilerta.ll"
+  if is_stale(stage2_ir, [HOST_COMPILER])
+    await step_to_file(stage2_ir, HOST_COMPILER, 'dump-llvm', MAIN)
+  if is_stale(stage3_ir, [stage2])
+    await step_to_file(stage3_ir, run_stage2[0], run_stage2[1..]..., 'dump-llvm', MAIN)
+  if is_stale(stage3, [stage2])
+    stage3_args := ['build', MAIN, '-o', stage3, '-Werror', bootstrap.target_flags...]
+    await step(run_stage2[0], run_stage2[1..]..., stage3_args...)
+  if is_stale(minilerta_ir, [HOST_COMPILER])
+    minilerta := "#{dir}/minilerta#{HOST_EXE}"
+    await step(HOST_COMPILER, 'build', MINILERTA_MAIN, '-o', minilerta, '-Werror')
+    await step_to_file(minilerta_ir, minilerta, MAIN)
+  stage2_text := await read_file(stage2_ir)
+  if stage2_text != await read_file(stage3_ir)
+    throw BuildError(message: 'bootstrap: stage2 and stage3 have different IR')
+  if stage2_text != await read_file(minilerta_ir)
+    throw BuildError(message: "bootstrap: minilerta's entry and dump-llvm print different IR")
+  print "bootstrap: stage2, stage3 and minilerta's entry print the same IR"
+
+# Writes the seed from the IR that test_bootstrap has found to be a fixed point, into build/seed
+# first, so that a failed dump leaves the seed as it is.
+export make_seed := ->
+  await test_bootstrap(bootstrap_for(nil))
+  await remove_tree('build/seed') if is_dir('build/seed')
+  make_dir 'build/seed/build'
+  print 'copy compiler to build/seed/compiler'
+  await copy_tree('compiler', 'build/seed/compiler')
+  print 'write build/seed/build/embedded.lerta'
+  await write_seed_embedded('build/seed/build/embedded.lerta')
+  seed_ir := 'build/seed/minilerta.ll'
+  await step_to_file(seed_ir, HOST_COMPILER, 'dump-llvm', "build/seed/#{MINILERTA_MAIN}")
+  await copy_file(seed_ir, 'seed/minilerta.ll')
+
+copy_tree := (from: String, to: String) ->
+  for path in files_under(from, [''])
+    target := "#{to}#{path.without_prefix(from)!}"
+    make_dir dirname(target) unless is_dir(dirname(target))
+    await copy_file(path, target)

@@ -1,0 +1,48 @@
+# Runs the commands of the build: a step prints its command first, as make prints a recipe, and
+# ends the build if it fails.
+import write_file from 'std:io'
+import run from 'std:process'
+
+# What ends the build: a step that failed, with code 1, or a usage error, with code 2, as make's.
+export struct BuildError: Error
+  code := default 1
+
+# The arguments in batches whose bytes, each with one for the space before it, add up to no more
+# than `limit`, but for an argument longer than that alone, which has a batch of its own.
+export command_line_batches := (args: String[], limit: Int) ->
+  batches: String[][]
+  var batch: String[] = []
+  var length = 0
+  for arg in args
+    if length + arg.binary.length + 1 > limit and not batch.is_empty()
+      batches.push batch
+      batch = []
+      length = 0
+    batch.push arg
+    length += arg.binary.length + 1
+  batches.push batch unless batch.is_empty()
+  batches
+
+# The line that a step prints for the command.
+command_line := (command: String, args: String[]) -> [command, args...].join(' ')
+
+# Runs the command, its output and errors going where the build's go, and gives its exit code.
+export call := (command: String, args: String...) -> (await run(command, args...)).code
+
+# Runs the command, printed first, and ends the build if it fails.
+export step := (command: String, args: String...) ->
+  print command_line(command, args)
+  code := await call(command, args...)
+  throw BuildError(message: "#{command} exited with #{code}") if code != 0
+
+# Runs the command, printed first, and writes what it prints to `output`, only once it succeeds,
+# so that a step that fails leaves no output that a later build would take as up to date.
+export step_to_file := (output: String, command: String, args: String...) ->
+  print "#{command_line(command, args)} > #{output}"
+  await write_file(output, await captured(command, args, b''))
+
+# What the command prints, given `input`; the build ends if it fails.
+export captured := (command: String, args: String[], input: Binary) ->
+  ran := await run(command, args..., stdin: input, stdout: CAPTURE)
+  throw BuildError(message: "#{command} exited with #{ran.code}") if ran.code != 0
+  ran.stdout!

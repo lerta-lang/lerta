@@ -1,4 +1,4 @@
-# tools/embed.lerta, which make builds into build/embed, writes a module whose embedded_source gives
+# `build/build embed` (see tools/build/embed.lerta) writes a module whose embedded_source gives
 # each file exactly, whatever its path and contents hold.
 import Check, posix_check from '../lib/report'
 import compare_output, expect_status from '../lib/expect'
@@ -22,7 +22,11 @@ embed_round_trip := (dir_name: String, path: String, printed: String) ->
   dir := new_cli_dir(dir_name)
   await write_file("#{dir}/#{path}", CONTENTS)
   await write_file("#{dir}/main.lerta", PROGRAM)
-  embedded := await run_command("#{root_dir}/build/embed", ['embedded.lerta', path], dir)
+  embedded := await run_command(
+    "#{root_dir}/build/build#{host_executable_suffix}"
+    ['embed', 'embedded.lerta', path]
+    dir
+  )
   succeed 'embed', embedded
   executable := "#{dir}/main#{host_executable_suffix}"
   built := await run_command(compiler, ['build', 'main.lerta', '-o', executable], dir)
@@ -33,7 +37,30 @@ embed_round_trip := (dir_name: String, path: String, printed: String) ->
     compare_output('stdout', b"[#{printed}]\ntrue\n", ran.stdout)...
   ]
 
+EMPTY_PROGRAM := """
+  import embedded_source, EMBEDDED_PATHS from './embedded'
+
+  print EMBEDDED_PATHS
+  print embedded_source('main.lerta') == nil
+  """
+
+# Embeds no file: the module holds no path, and gives nothing for one.
+embed_nothing := ->
+  dir := new_cli_dir('embed-nothing')
+  await write_file("#{dir}/main.lerta", EMPTY_PROGRAM)
+  embedded := await run_command(
+    "#{root_dir}/build/build#{host_executable_suffix}"
+    ['embed', 'embedded.lerta']
+    dir
+  )
+  succeed 'embed', embedded
+  executable := "#{dir}/main#{host_executable_suffix}"
+  succeed 'build', await run_command(compiler, ['build', 'main.lerta', '-o', executable], dir)
+  ran := await run_command(executable, [], dir)
+  [expect_status(0, ran.status)..., compare_output('stdout', b"[]\ntrue\n", ran.stdout)...]
+
 export checks :=
+  Check(name: 'embed writes a module of no file', run: -> await embed_nothing())
   Check(
     name: 'embed gives back a file whose path holds a quote'
     run: -> await embed_round_trip('embed-quote', "it's.txt", "\"it's.txt\"")

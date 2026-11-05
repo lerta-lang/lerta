@@ -1,0 +1,31 @@
+# The files that the build reads and makes: which there are, and which of those it makes are out of
+# date, as make tells.
+import is_dir, list_dir, stat from 'std:io'
+import BuildError from './steps'
+
+# The files under `dir`, at any depth, whose names end with one of `suffixes`, as paths from it.
+export files_under := (dir: String, suffixes: String[]): String[] ->
+  files: String[]
+  for name in list_dir(dir)
+    path := "#{dir}/#{name}"
+    if is_dir(path)
+      files.append files_under(path, suffixes)
+    else if suffixes.any(name.ends_with)
+      files.push path
+  files
+
+# The paths in order, each once, as make's sort gives them.
+export sorted_once := (paths: String[]) ->
+  sorted := paths.sorted((a, b) -> a.compare(b))
+  [path for path, i in sorted when i == 0 or path != sorted[i - 1]]
+
+modified_time := (path: String) ->
+  status := stat(path) ? return nil
+  status.modified_time
+
+# Whether `output` is to be made: it is missing, or older than one of `inputs`, which must be there.
+export is_stale := (output: String, inputs: String[]) ->
+  made := modified_time(output) ? return true
+  inputs.any (input) ->
+    time := modified_time(input) ? throw BuildError(message: "missing input: #{input}")
+    time > made

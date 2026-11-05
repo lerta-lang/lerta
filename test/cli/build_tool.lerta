@@ -1,0 +1,202 @@
+# tools/build.lerta, which the Makefile builds into build/build: the usage errors that end it before
+# it builds anything, and the parts of it that a build cannot reach on purpose.
+import Check from '../lib/report'
+import compare_output, compare_text, expect_status from '../lib/expect'
+import host_executable_suffix, root_dir from '../lib/lerta'
+import new_cli_dir, run_command from '../lib/cli'
+import write_file from 'std:io'
+import platform from 'std:process'
+import sleep from 'std:time'
+import is_stale, sorted_once from '../../tools/build/files'
+import bootstrap_for from '../../tools/build/stages'
+import CompileError from '../../compiler/errors'
+import described_build, described_sources from '../../compiler/libuv_description'
+import BuildError, command_line_batches from '../../tools/build/steps'
+
+BUILD_TOOL := "#{root_dir}/build/build#{host_executable_suffix}"
+USAGE := 'usage: build <goal> [--target <target>] | build embed <output> <path>...'
+
+# A run that ends with code 2 and prints `message`, as make does for a usage error.
+usage_check := (name: String, dir_name: String, args: String[], message: String) ->
+  Check name: "build/build #{name} is a usage error", run: ->
+    ran := await run_command(BUILD_TOOL, args, new_cli_dir(dir_name))
+    [expect_status(2, ran.status)..., compare_output('stderr', b"#{message}\n", ran.stderr)...]
+
+batches_check := (name: String, args: String[], limit: Int, expected: String) ->
+  Check
+    name: "command_line_batches #{name}"
+    run: -> compare_text('batches', expected, "#{command_line_batches(args, limit)}")
+
+missing_input_check := Check(name: 'is_stale ends the build on an input that is missing', run: ->
+  dir := new_cli_dir('build-tool-missing-input')
+  output := "#{dir}/output"
+  await write_file(output, 'made')
+  message :=
+    try
+      is_stale output, ["#{dir}/missing"]
+      'no error'
+    catch error: BuildError
+      error.message
+  compare_text 'error', "missing input: #{dir}/missing", message
+)
+
+# An output is stale once an input is newer than it, and not before. The pause outlasts the file
+# times of the file systems that the tests run on, APFS, ext4 and NTFS, though not a coarser one
+# such as FAT's.
+order_check := Check(name: 'is_stale tells an output older than an input', run: ->
+  dir := new_cli_dir('build-tool-order')
+  input := "#{dir}/input"
+  output := "#{dir}/output"
+  await write_file(input, 'read')
+  await sleep(0.05)
+  await write_file(output, 'made')
+  fresh := is_stale(output, [input])
+  await sleep(0.05)
+  await write_file(input, 'read again')
+  compare_text 'stale', 'false true', "#{fresh} #{is_stale(output, [input])}"
+)
+
+# What the bootstrap for the target builds and runs, as one line.
+bootstrap_lines := (target: String?) ->
+  { target_flags, exe, compiler, dir, stage2, run_stage2 } := bootstrap_for(target)
+  ["#{target_flags}", exe, compiler, dir, stage2, "#{run_stage2}"].join("\n")
+
+# A Windows target's stage2 runs under Wine but on Windows.
+bootstrap_check := Check(name: 'bootstrap_for names the stages of a target', run: ->
+  windows_dir := 'build/bootstrap-windows-amd64'
+  windows_stage2 := "#{windows_dir}/stage2.exe"
+  windows_run :=
+    platform == 'windows' then "['#{windows_stage2}']" else "['wine', '#{windows_stage2}']"
+  windows :=
+    "['--target', 'windows-amd64']"
+    '.exe'
+    'bin/lerta-windows-amd64.exe'
+    windows_dir
+    windows_stage2
+    windows_run
+  linux_stage2 := 'build/bootstrap-linux-amd64/stage2'
+  linux :=
+    "['--target', 'linux-amd64']"
+    ''
+    'bin/lerta-linux-amd64'
+    'build/bootstrap-linux-amd64'
+    linux_stage2
+    "['#{linux_stage2}']"
+  [
+    compare_text('windows-amd64', windows.join("\n"), bootstrap_lines('windows-amd64'))...
+    compare_text('linux-amd64', linux.join("\n"), bootstrap_lines('linux-amd64'))...
+  ]
+)
+
+# A file to embed that is not UTF-8 ends the build with a message, as other failed steps do.
+not_utf8_check := Check(name: 'build/build embed reports a file that is not UTF-8', run: ->
+  dir := new_cli_dir('build-tool-not-utf8')
+  await write_file("#{dir}/bad.txt", b"\xFF")
+  ran := await run_command(BUILD_TOOL, ['embed', 'embedded.lerta', 'bad.txt'], dir)
+  [
+    expect_status(1, ran.status)...
+    compare_output('stderr', b"'bad.txt' is not valid UTF-8\n", ran.stderr)...
+  ]
+)
+
+# A file to embed that is missing ends the build with a message, as other failed steps do.
+missing_embed_check := Check(name: 'build/build embed reports a file that is missing', run: ->
+  ran := await run_command(
+    BUILD_TOOL
+    ['embed', 'embedded.lerta', 'missing.txt']
+    new_cli_dir('build-tool-missing')
+  )
+  [
+    expect_status(1, ran.status)...
+    compare_output('stderr', b"cannot read file: missing.txt\n", ran.stderr)...
+  ]
+)
+
+DESCRIPTION := "# a comment\nall source a.c\nposix flag -x\nwindows library w\nlinux source l.c\n"
+
+# What the description gives a system, as one line.
+described_line := (system: String) ->
+  { sources, flags, libraries } := described_build(DESCRIPTION, system)
+  "#{sources} #{flags} #{libraries}"
+
+description_check := Check
+  name: 'described_build takes the lines for the system'
+  run: ->
+    [
+      compare_text('linux', "['a.c', 'l.c'] ['-x'] []", described_line('linux'))...
+      compare_text('macos', "['a.c'] ['-x'] []", described_line('macos'))...
+      compare_text('windows', "['a.c'] [] ['w']", described_line('windows'))...
+      compare_text('sources', "['a.c', 'l.c']", "#{described_sources(DESCRIPTION)}")...
+    ]
+
+# The error that the description gives, or `no error`.
+description_error := (description: String) ->
+  try
+    described_sources description
+    'no error'
+  catch error: CompileError
+    error.message
+
+description_error_check := Check
+  name: 'described_sources reports a line that is not one'
+  run: ->
+    [
+      compare_text(
+        'two words'
+        'third_party/libuv.txt: not a build line: all source'
+        description_error("all source\n")
+      )...
+      compare_text(
+        'no such kind'
+        'third_party/libuv.txt: not a kind of line: thing'
+        description_error("all thing x\n")
+      )...
+    ]
+
+export checks :=
+  usage_check('with no argument', 'build-tool-none', [], USAGE)
+  usage_check('with no such goal', 'build-tool-goal', ['nonsense'], "no goal nonsense: #{USAGE}")
+  usage_check('with an option but --target', 'build-tool-option', ['all', '-x', 'y'], USAGE)
+  usage_check('with --target and no target', 'build-tool-no-target', ['all', '--target'], USAGE)
+  usage_check(
+    'test --target'
+    'build-tool-test-target'
+    ['test', '--target', 'x']
+    'make test does not take TARGET: run bin/test --target <target>'
+  )
+  usage_check(
+    'test-cross --target'
+    'build-tool-test-cross-target'
+    ['test-cross', '--target', 'x']
+    'make test-cross does not take TARGET: run bin/test --target <target>'
+  )
+  usage_check('embed with no output', 'build-tool-embed', ['embed'], "no goal embed: #{USAGE}")
+  usage_check(
+    'seed --target'
+    'build-tool-seed-target'
+    ['seed', '--target', 'x']
+    'make seed does not take TARGET'
+  )
+  batches_check('splits before the limit', ['aaa', 'bbb', 'c'], 8, "[['aaa', 'bbb'], ['c']]")
+  batches_check(
+    'gives a long argument a batch of its own'
+    ['a', 'toolong', 'b']
+    3
+    "[['a'], ['toolong'], ['b']]"
+  )
+  batches_check('gives no batch of no argument', [], 8, '[]')
+  Check(
+    name: 'is_stale makes an output that is missing'
+    run: -> compare_text('stale', 'true', "#{is_stale("#{root_dir}/build/no-such-output", [])}")
+  )
+  missing_input_check
+  order_check
+  bootstrap_check
+  not_utf8_check
+  missing_embed_check
+  description_check
+  description_error_check
+  Check(
+    name: 'sorted_once sorts the paths and keeps each once'
+    run: -> compare_text('paths', "['a', 'b', 'c']", "#{sorted_once(['c', 'a', 'b', 'a', 'c'])}")
+  )

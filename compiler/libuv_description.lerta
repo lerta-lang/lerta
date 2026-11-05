@@ -1,0 +1,71 @@
+# What third_party/libuv.txt describes: which of libuv's sources, with which flags and libraries,
+# each system builds the runtime with. Apart from compiler/libuv.lerta, which reads the description
+# from the files that the compiler carries, so that tools/build.lerta, which writes those, reads it
+# too.
+import platform from 'std:process'
+import is_mingw from './clang_flags'
+import CompileError from './errors'
+
+export DESCRIPTION_PATH := 'third_party/libuv.txt'
+
+# What one system, as target_system names it, builds libuv with: its source files, relative to
+# libuv's root, the flags of the compiler, and the libraries to link with.
+export struct LibuvBuild
+  system: String
+  sources: String[]
+  flags: String[]
+  libraries: String[]
+
+# What the description, the text of third_party/libuv.txt, gives the system.
+export described_build := (description: String, system: String) ->
+  lines := [line for line in build_lines(description) when is_for(line.systems, system)]
+  values_of := (kind: String) -> [line.value for line in lines when line.kind == kind]
+  LibuvBuild
+    system
+    sources: values_of('source')
+    flags: values_of('flag')
+    libraries: values_of('library')
+
+# The source files that the description lists for any system, relative to libuv's root.
+export described_sources := (description: String) ->
+  [line.value for line in build_lines(description) when line.kind == 'source']
+
+# A line of the description: the systems that it is for, what it gives, and its value.
+struct BuildLine
+  systems: String
+  kind: String
+  value: String
+
+KINDS := ['source', 'flag', 'library']
+
+build_lines := (description: String) ->
+  lines: BuildLine[]
+  for line in description.lines()
+    continue if line.is_empty() or line.starts_with('#')
+    words := line.split(' ')
+    throw CompileError("#{DESCRIPTION_PATH}: not a build line: #{line}") if words.length != 3
+    unless words[1] in KINDS
+      throw CompileError("#{DESCRIPTION_PATH}: not a kind of line: #{words[1]}")
+    lines.push { systems: words[0], kind: words[1], value: words[2] }
+  lines
+
+# The system of a target triple, as `platform` names the host's: one of those that
+# third_party/libuv.txt describes.
+export target_system := (target: String?) ->
+  triple := target ? return platform
+  parts := triple.split('-')
+  has_part := (prefix: String) -> parts.any((part) -> part.starts_with(prefix))
+  return 'windows' if is_mingw(triple)
+  return 'macos' if has_part('darwin') or has_part('macos')
+  # A Linux target's environment, after `linux`, is left out for glibc, or names glibc or musl.
+  if at := parts.index_of('linux')
+    environment := parts.get(at + 1) ? 'gnu'
+    return 'linux' if environment.starts_with('gnu') or environment.starts_with('musl')
+  throw CompileError("not a target that the runtime is built for: #{triple}")
+
+# Whether `systems`, as a line of third_party/libuv.txt names them, take in `system`.
+export is_for := (systems: String, system: String) ->
+  case systems
+    when 'all' then true
+    when 'posix' then system != 'windows'
+    else systems == system

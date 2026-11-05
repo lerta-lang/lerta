@@ -1,6 +1,7 @@
-# Builds the compiler from the seed, the compiler's own LLVM IR, and checks and tests it. See
-# README.md for the targets and docs/internals/architecture.md#bootstrap for the bootstrap. Written
-# for GNU make 3.81, the one macOS has.
+# Builds minilerta from the seed, the compiler's own LLVM IR, and with it tools/build.lerta, which
+# builds the compiler, and checks and tests it. See README.md for the goals and
+# docs/internals/architecture.md#bootstrap for the bootstrap. Written for GNU make 3.81, the one
+# macOS has.
 
 # The host's system, on which the compiler runs: macOS, Linux, or Windows, where make runs in the
 # shell of Git for Windows, whose uname names MINGW64_NT-<version>, or in MSYS2's, MSYS_NT-<version>.
@@ -10,7 +11,7 @@ HOST_WINDOWS := $(filter windows,$(HOST_SYSTEM))
 # What a program built for the host ends with; that shell runs it without.
 HOST_EXE := $(if $(HOST_WINDOWS),.exe)
 # What third_party/libuv.txt lists of the kind $(1) for the host's system, by the rule of is_for in
-# compiler/libuv.lerta.
+# compiler/libuv_description.lerta.
 HOST_LIBUV_SYSTEMS := all $(if $(HOST_WINDOWS),,posix) $(HOST_SYSTEM)
 host_libuv = $(shell awk -v kind=$(1) -v systems='$(HOST_LIBUV_SYSTEMS)' \
   'BEGIN { split(systems, list, " "); for (i in list) wanted[list[i]] = 1 } \
@@ -20,34 +21,29 @@ host_libuv = $(shell awk -v kind=$(1) -v systems='$(HOST_LIBUV_SYSTEMS)' \
 LIBUV_HEADERS := $(shell find third_party/libuv/include third_party/libuv/src -name '*.h')
 LIBUV_SOURCES := $(shell awk '$$2 == "source" { print "third_party/libuv/" $$3 }' third_party/libuv.txt)
 LIBUV := third_party/libuv.txt $(LIBUV_HEADERS) $(LIBUV_SOURCES)
-# The files that the compiler carries in build/embedded.lerta, which tools/embed.lerta writes.
-# std's files at any depth, as the seed finds them (see tools/embed.lerta).
-EMBEDDED := $(sort $(shell find std -name '*.lerta') $(wildcard runtime/*.c runtime/*.h) $(LIBUV))
-SOURCES := $(shell find compiler -name '*.lerta') build/embedded.lerta
 # The host's: platform_<systems>.c only for the host's systems, as compiler/runtime_cache.lerta
 # takes them.
 RUNTIME_C := $(filter-out runtime/platform_%.c,$(wildcard runtime/*.c)) \
   $(foreach systems,$(HOST_LIBUV_SYSTEMS),$(wildcard runtime/platform_$(systems).c))
 RUNTIME := $(wildcard runtime/*.c runtime/*.h)
-MAIN := compiler/main.lerta
-MINILERTA_MAIN := compiler/minilerta.lerta
-ifdef TARGET
-TARGET_FLAGS := --target $(TARGET)
-EXE := $(if $(filter %-w64-mingw32 windows-%,$(TARGET)),.exe)
-COMPILER := bin/lerta-$(TARGET)$(EXE)
-else
-EXE := $(HOST_EXE)
-COMPILER := bin/lerta$(EXE)
-endif
-BOOTSTRAP := build/bootstrap$(if $(TARGET),-$(TARGET))
-# stage2 runs for its target: a Windows one under Wine, or directly on a Windows host.
-STAGE2 := $(BOOTSTRAP)/stage2$(EXE)
-RUN_STAGE2 := $(if $(EXE),$(if $(HOST_WINDOWS),,wine ))$(STAGE2)
+# What tools/build.lerta is built from: itself, the compiler's modules, some of which it imports,
+# and std, which minilerta reads.
+BUILD_TOOL_SOURCES := tools/build.lerta $(shell find tools/build compiler std -name '*.lerta')
 
-all: $(COMPILER)
+# The goals, which tools/build.lerta builds once the Makefile has built it from the seed: see
+# README.md. Each runs it, as it finds what to make again itself.
+GOALS := all bin/lerta bin/test test test-bootstrap seed check bench bench-http site site-serve \
+  test-cross
 
-# So that a failed rule, such as `dump-llvm > $@`, leaves no partial target that the next run would
-# take as up to date.
+$(GOALS): build/build$(HOST_EXE)
+	@build/build $@ $(if $(TARGET),--target $(TARGET))
+
+# Goals run one at a time, even under -j, as each run of build/build makes what it needs in build/
+# and bin/, which another run would make at the same time.
+.NOTPARALLEL:
+
+# So that a failed rule, such as `minilerta ... > $@`, leaves no partial target that the next run
+# would take as up to date.
 .DELETE_ON_ERROR:
 
 # Rewrites llvm.coro.end for the host's LLVM, and is empty when there is nothing to rewrite (see
@@ -93,133 +89,13 @@ build/libuv/built: $(LIBUV)
 	  $(addprefix $(CURDIR)/third_party/libuv/,$(call host_libuv,source))
 	touch $@
 
-# Each rule that runs minilerta depends on std/ and runtime/ too, which it reads (see
-# docs/internals/architecture.md#bootstrap).
-build/embed.ll: build/minilerta$(HOST_EXE) build/host_llvm.sed tools/embed.lerta $(EMBEDDED)
-	$(call minilerta_ir,tools/embed.lerta,$@)
+build/build.ll: build/minilerta$(HOST_EXE) build/host_llvm.sed $(BUILD_TOOL_SOURCES)
+	$(call minilerta_ir,tools/build.lerta,$@)
 
-build/embed$(HOST_EXE): build/embed.ll $(RUNTIME) build/libuv/built
+build/build$(HOST_EXE): build/build.ll $(RUNTIME) build/libuv/built
 	$(call link_debug,$<,$@)
-
-build/embedded.lerta: build/embed$(HOST_EXE) $(EMBEDDED)
-	build/embed $@ $(EMBEDDED)
-
-# The Lerta test harnesses, which minilerta builds, as it builds the embedder, so that a change to
-# the compiler cannot break the harness that tests it (see docs/roadmap/programs.md#tools).
-HARNESS := $(shell find test -name '*.lerta')
-
-build/test.ll: build/minilerta$(HOST_EXE) build/host_llvm.sed $(HARNESS) compiler/clang_flags.lerta $(EMBEDDED)
-	$(call minilerta_ir,test/main.lerta,$@)
-
-bin/test$(HOST_EXE): build/test.ll $(RUNTIME) build/libuv/built
-	@mkdir -p bin
-	$(call link_debug,$<,$@)
-
-build/stage1.ll: build/minilerta$(HOST_EXE) build/host_llvm.sed $(SOURCES) $(EMBEDDED)
-	$(call minilerta_ir,$(MAIN),$@)
-
-build/stage1$(HOST_EXE): build/stage1.ll $(RUNTIME) build/libuv/built
-	$(call link_debug,$<,$@)
-
-# The compiler's own leaks are found by the stage2 of the bootstrap, which keeps the memory checks
-# (see test/leaks.lerta).
-bin/lerta$(HOST_EXE): build/stage1$(HOST_EXE)
-	@mkdir -p bin
-	build/stage1 build $(MAIN) -o $@ -O -Werror
-
-ifdef TARGET
-$(COMPILER): bin/lerta$(HOST_EXE)
-	bin/lerta build $(MAIN) -o $@ -O -Werror $(TARGET_FLAGS)
-endif
-
-# stage2 is unoptimized, which clang builds far faster, and so keeps the memory checks: its runs,
-# which build stage3 and print its IR, and those of the leak checks (see test/leaks.lerta) find the
-# compiler's own leaks.
-$(STAGE2): bin/lerta$(HOST_EXE)
-	@mkdir -p $(BOOTSTRAP)
-	bin/lerta build $(MAIN) -o $@ -Werror $(TARGET_FLAGS)
-
-$(BOOTSTRAP)/stage2.ll: bin/lerta$(HOST_EXE)
-	@mkdir -p $(BOOTSTRAP)
-	bin/lerta dump-llvm $(MAIN) > $@
-
-$(BOOTSTRAP)/stage3$(EXE): $(STAGE2)
-	$(RUN_STAGE2) build $(MAIN) -o $@ -Werror $(TARGET_FLAGS)
-
-$(BOOTSTRAP)/stage3.ll: $(STAGE2)
-	$(RUN_STAGE2) dump-llvm $(MAIN) > $@
-
-# Built for the host, as the seed is only ever built there.
-$(BOOTSTRAP)/minilerta.ll: bin/lerta$(HOST_EXE)
-	@mkdir -p $(BOOTSTRAP)
-	bin/lerta build $(MINILERTA_MAIN) -o $(BOOTSTRAP)/minilerta -Werror
-	$(BOOTSTRAP)/minilerta $(MAIN) > $@
-
-test-bootstrap: $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll $(BOOTSTRAP)/stage3$(EXE) \
-  $(BOOTSTRAP)/minilerta.ll
-	@cmp -s $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/stage3.ll \
-	  || { echo 'bootstrap: stage2 and stage3 have different IR' >&2; exit 1; }
-	@cmp -s $(BOOTSTRAP)/stage2.ll $(BOOTSTRAP)/minilerta.ll \
-	  || { echo "bootstrap: minilerta's entry and dump-llvm print different IR" >&2; exit 1; }
-	@echo "bootstrap: stage2, stage3 and minilerta's entry print the same IR"
-
-# Written only from IR that test-bootstrap has found to be a fixed point.
-# The seed is written from the host's bootstrap only, so that a target given by mistake cannot
-# change it.
-ifdef TARGET
-seed:
-	@echo 'make seed does not take TARGET' >&2; exit 2
-else
-# The IR is written into build/seed first, so that a failed dump leaves the seed as it is.
-seed: test-bootstrap
-	rm -rf build/seed
-	mkdir -p build/seed/build
-	cp -R compiler build/seed/compiler
-	build/embed --seed build/seed/build/embedded.lerta
-	bin/lerta dump-llvm build/seed/$(MINILERTA_MAIN) > build/seed/minilerta.ll
-	cp build/seed/minilerta.ll seed/minilerta.ll
-endif
-
-ifdef TARGET
-test test-cross:
-	@echo 'make $@ does not take TARGET: run bin/test --target <target>' >&2; exit 2
-else
-# Every suite runs even if one before it fails. stage2 is built first, as the leak checks run it.
-test: bin/lerta$(HOST_EXE) bin/test$(HOST_EXE) $(STAGE2)
-	@status=0; \
-	nice bin/test || status=1; \
-	nice $(MAKE) --no-print-directory test-bootstrap || status=1; \
-	exit $$status
-
-test-cross:
-	@tools/test_cross.sh
-endif
-
-# check checks that the .lerta files that git lists, those not added yet included, are in the style,
-# tests/ too, where `# fmt: skip` and `# fmt: off` keep the code that breaks it on purpose. A file
-# deleted but not yet from git (test -e) is left out. The files go to one run of lerta fmt, which
-# checks a program once for the files it holds; xargs splits a list that is too long into more runs.
-check: bin/lerta$(HOST_EXE)
-	@git ls-files -z --cached --others --exclude-standard -- '*.lerta' \
-	  | xargs -0 sh -c 'for f; do test -e "$$f" && printf "%s\0" "$$f"; done' sh \
-	  | nice xargs -0 bin/lerta fmt
-
-# Not under nice, as test and check are, which would slow the programs that bench times.
-bench: bin/lerta$(HOST_EXE)
-	@bin/lerta run bench/run.lerta
-
-bench-http: bin/lerta$(HOST_EXE)
-	@bin/lerta run bench/http/run.lerta
-
-# The website, written afresh each time, as it is quick to write (see site/site.lerta).
-site: bin/lerta$(HOST_EXE)
-	rm -rf build/site
-	bin/lerta run site/site.lerta -- build/site
-
-site-serve: site
-	bin/lerta run site/serve.lerta -- build/site
 
 clean:
 	rm -rf build bin
 
-.PHONY: all bench bench-http check seed site site-serve test test-bootstrap test-cross clean
+.PHONY: $(GOALS) clean

@@ -1,0 +1,105 @@
+# Builds the compiler, and checks and tests it, as the Makefile asks: `build <goal> [--target
+# <target>]`, where the goals are those that the Makefile names in GOALS. The Makefile builds
+# this program with minilerta, from the seed, so that only make and clang are needed (see
+# docs/internals/architecture.md#bootstrap). `build embed <output> <path>...` writes the module
+# that embeds the files, as the build writes build/embedded.lerta, for the tests of it.
+import is_dir, remove_tree, stat from 'std:io'
+import argv, exit from 'std:process'
+import
+  bootstrap_for, BUILD_TOOL, HARNESS_PROGRAM, HOST_COMPILER, make_compiler, make_harness,
+  make_host_compiler, make_seed, make_stage2, test_bootstrap
+from './build/stages'
+import write_embedded from './build/embed'
+import BuildError, call, captured, command_line_batches, step from './build/steps'
+
+USAGE := 'usage: build <goal> [--target <target>] | build embed <output> <path>...'
+
+struct Arguments
+  goal: String
+  target: String?
+
+parse_arguments := ->
+  throw BuildError(message: USAGE, code: 2) if argv.is_empty()
+  return Arguments(goal: argv[0]) if argv.length == 1
+  throw BuildError(message: USAGE, code: 2) if argv.length != 3 or argv[1] != '--target'
+  Arguments goal: argv[0], target: argv[2]
+
+# Every suite runs even if one before it fails. stage2 is built first, as the leak checks run it.
+# Both run under nice, as check does, so that the machine stays usable.
+test := ->
+  await make_host_compiler()
+  await make_harness()
+  await make_stage2(bootstrap_for(nil))
+  harness_code := await call('nice', HARNESS_PROGRAM)
+  bootstrap_code := await call('nice', BUILD_TOOL, 'test-bootstrap')
+  exit harness_code == 0 and bootstrap_code == 0 then 0 else 1
+
+# The .lerta files that git lists, those not added yet included, but those deleted and not yet
+# from git, are in the style, tests/ too, where `# fmt: skip` and `# fmt: off` keep the code that
+# breaks it on purpose. They go to as few runs of lerta fmt as a command line holds, as it checks a
+# program once for the files it holds.
+check := ->
+  await make_host_compiler()
+  git_args := ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', '*.lerta']
+  listed := (await captured('git', git_args, b'')).text()!.split("\0")
+  files := [file for file in listed when not file.is_empty() and stat(file) != nil]
+  var code = 0
+  for batch in command_line_batches(files, COMMAND_LINE_LIMIT)
+    code = 1 if await call('nice', HOST_COMPILER, 'fmt', batch...) != 0
+  exit code
+
+# What a command line of Windows, the shortest, holds, with room for the command.
+COMMAND_LINE_LIMIT := 30000
+
+# The website, written afresh each time, as it is quick to write (see site/site.lerta).
+site := ->
+  await make_host_compiler()
+  await remove_tree('build/site') if is_dir('build/site')
+  await step(HOST_COMPILER, 'run', 'site/site.lerta', '--', 'build/site')
+
+# Runs the program with the host's compiler, and ends with its exit code. Not under nice, as test
+# and check are, which would slow the programs that bench times.
+run_program := (source: String, args: String...) ->
+  await make_host_compiler()
+  exit await call(HOST_COMPILER, 'run', source, args...)
+
+# The goals that take no target: the tests and the seed run for the host only, the seed so that a
+# target given by mistake cannot change it.
+HOST_ONLY := ['test', 'test-cross', 'seed']
+
+run_goal := (goal: String, target: String?) ->
+  if target != nil and goal in HOST_ONLY
+    hint := goal == 'seed' then '' else ': run bin/test --target <target>'
+    throw BuildError(message: "make #{goal} does not take TARGET#{hint}", code: 2)
+  bootstrap := bootstrap_for(target)
+  case goal
+    when 'all' then await make_compiler(bootstrap)
+    when 'bin/lerta' then await make_host_compiler()
+    when 'bin/test' then await make_harness()
+    when 'test-bootstrap' then await test_bootstrap(bootstrap)
+    when 'seed' then await make_seed()
+    when 'test' then await test()
+    when 'test-cross' then exit(await call('sh', 'tools/test_cross.sh'))
+    when 'check' then await check()
+    when 'bench' then await run_program('bench/run.lerta')
+    when 'bench-http' then await run_program('bench/http/run.lerta')
+    when 'site' then await site()
+    when 'site-serve'
+      await site()
+      await run_program('site/serve.lerta', '--', 'build/site')
+    else throw BuildError(message: "no goal #{goal}: #{USAGE}", code: 2)
+
+try
+  if argv.length >= 2 and argv[0] == 'embed'
+    await write_embedded(argv[1], argv[2..])
+  else
+    { goal, target } := parse_arguments()
+    await run_goal(goal, target)
+catch error: BuildError
+  print_error error.message
+  exit error.code
+# A file that cannot be read or written, or a command that cannot be started, ends it as a failed
+# step does.
+catch error: IOError
+  print_error error.message
+  exit 1

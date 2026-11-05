@@ -56,7 +56,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `seed/` | The seed, from which `make` builds the compiler (see [the bootstrap](docs/internals/architecture.md#bootstrap)) |
 | `LICENSE-MIT`, `LICENSE-APACHE` | Lerta's licenses (see [License](#license)) |
 | `third_party/` | libuv and its license; `libuv.txt` says how the runtime builds it for each system. Its license notice goes with the compiler and the programs it builds (see [License](#license)) |
-| `tools/` | `embed.lerta`, which writes the module that embeds `std/` and `runtime/` into the compiler; `test_cross.sh`, which `make test-cross` runs; `docker/`, its Docker images, with `run.sh` to run a command (bash by default) in one |
+| `tools/` | `build.lerta` and `build/`, which build the compiler, and check and test it, for the goals of `make` (see [the bootstrap](docs/internals/architecture.md#bootstrap)); `test_cross.sh`, which `make test-cross` runs; `docker/`, its Docker images, with `run.sh` to run a command (bash by default) in one |
 | `test/` | The test driver and suites (see [Testing](#testing)) |
 | `tests/` | The run tests: Lerta sources and their expected output; also the CLI checks' files (`tests/cli/`) and the formatter cases (`tests/format/`) |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
@@ -95,7 +95,7 @@ make seed              # rewrites the seed, only when needed (see the bootstrap)
 make clean
 ```
 
-`make` rebuilds only when what the compiler is built from changes: the seed, `compiler/`, `std/`, `runtime/`, `third_party/libuv` or `tools/embed.lerta`.
+`make` rebuilds only when what the compiler is built from changes: the seed, `compiler/`, `std/`, `runtime/`, `third_party/libuv`, `tools/build.lerta` or `tools/build/`.
 
 ### Testing
 
@@ -126,7 +126,7 @@ Where each runs:
 
 #### The driver
 
-- `test/main.lerta`, the driver, is built by minilerta into `bin/test`, as `tools/embed.lerta` is. Why: a change to `compiler/` cannot break the harness that tests it.
+- `test/main.lerta`, the driver, is built by minilerta into `bin/test`, as `tools/build.lerta` is. Why: a change to `compiler/` cannot break the harness that tests it.
 - `make test` builds and runs it. It runs all the suites, or those named.
 - Its options are listed at the top of `test/main.lerta`: `-k <text>` (checks whose names hold the text), `--failed` (those that failed last time), `--target <target>` (the run tests built for another target), and more.
 - A failed check runs once more, alone, after the others, and passes as flaky if it passes then. `--no-retry` turns that off.

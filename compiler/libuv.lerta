@@ -1,65 +1,19 @@
-# libuv, which the runtime is built with, from the sources that the compiler carries (see
-# third_party/libuv.txt): which of them, with which flags and libraries, each system takes.
+# libuv, which the runtime is built with, from the sources that the compiler carries, as
+# compiler/libuv_description.lerta reads them.
 import make_dir, write_file from 'std:io'
-import platform from 'std:process'
-import is_mingw from './clang_flags'
 import embedded_source, EMBEDDED_PATHS from '../build/embedded'
-import CompileError from './errors'
+import described_build, DESCRIPTION_PATH, target_system from './libuv_description'
 import dirname, join from './paths'
 
-DESCRIPTION_PATH := 'third_party/libuv.txt'
 SOURCE_ROOT := 'third_party/libuv/'
 
 # Every file that the build of libuv reads, the description included.
 export LIBUV_PATHS :=
   [path for path in EMBEDDED_PATHS when path == DESCRIPTION_PATH or path.starts_with(SOURCE_ROOT)]
 
-# What one system, as target_system names it, builds libuv with: its source files, relative to
-# libuv's root, the flags of the compiler, and the libraries to link with.
-export struct LibuvBuild
-  system: String
-  sources: String[]
-  flags: String[]
-  libraries: String[]
-
 # The build for the target, or for the host without one.
 export libuv_build := (target: String?) ->
-  system := target_system(target)
-  sources: String[]
-  flags: String[]
-  libraries: String[]
-  for line in embedded_source(DESCRIPTION_PATH)!.lines()
-    continue if line.is_empty() or line.starts_with('#')
-    words := line.split(' ')
-    throw CompileError("#{DESCRIPTION_PATH}: not a build line: #{line}") if words.length != 3
-    continue unless is_for(words[0], system)
-    case words[1]
-      when 'source' then sources.push(words[2])
-      when 'flag' then flags.push(words[2])
-      when 'library' then libraries.push(words[2])
-      else throw CompileError("#{DESCRIPTION_PATH}: not a kind of line: #{words[1]}")
-  LibuvBuild system, sources, flags, libraries
-
-# The system of a target triple, as `platform` names the host's: one of those that
-# third_party/libuv.txt describes.
-export target_system := (target: String?) ->
-  triple := target ? return platform
-  parts := triple.split('-')
-  has_part := (prefix: String) -> parts.any((part) -> part.starts_with(prefix))
-  return 'windows' if is_mingw(triple)
-  return 'macos' if has_part('darwin') or has_part('macos')
-  # A Linux target's environment, after `linux`, is left out for glibc, or names glibc or musl.
-  if at := parts.index_of('linux')
-    environment := parts.get(at + 1) ? 'gnu'
-    return 'linux' if environment.starts_with('gnu') or environment.starts_with('musl')
-  throw CompileError("not a target that the runtime is built for: #{triple}")
-
-# Whether `systems`, as a line of third_party/libuv.txt names them, take in `system`.
-export is_for := (systems: String, system: String) ->
-  case systems
-    when 'all' then true
-    when 'posix' then system != 'windows'
-    else systems == system
+  described_build embedded_source(DESCRIPTION_PATH)!, target_system(target)
 
 # Writes libuv's files under `dir`, as they are under its root, and gives the flags that find its
 # headers there.
