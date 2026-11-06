@@ -30,7 +30,7 @@
 
 ```
 lerta build <source> [<file>...] [-o <output>] [-O] [--memory-checks] [-Werror] [--no-trace]
-            [--source-lines] [--eager-nan-checks] [--target <target>]
+            [--source-lines] [--eager-nan-checks] [--target <target>] [--linker-flag <flag>...]
 ```
 
 Builds an executable.
@@ -52,6 +52,7 @@ Usage errors:
 | [`--source-lines`](#--source-lines) | Adds debug information of source positions. |
 | [`--eager-nan-checks`](#--eager-nan-checks) | Checks each float operation for NaN. |
 | [`--target <target>`](#--target-target) | Builds for another target. |
+| [`--linker-flag <flag>`](#--linker-flag-flag) | Passes a flag to the linker. |
 
 #### Linked files
 
@@ -60,11 +61,14 @@ Usage errors:
 | Kind | Extensions |
 |---|---|
 | C | `.c` |
+| Objective-C, for macOS | `.m` |
 | LLVM IR | `.ll` |
 | Objects | `.o`, `.obj` |
 | Archives | `.a`, `.lib` |
 
-- With `-O`, clang compiles `.c` and `.ll` files with `-O2 -flto=thin` as it does the program. Objects and archives built without it link too.
+- With `-O`, clang compiles `.c`, `.m` and `.ll` files with `-O2 -flto=thin` as it does the program. Objects and archives built without it link too.
+- clang compiles `.m` files without ARC, as it is given no `-fobjc-arc`. The frameworks they use are linked with [`--linker-flag`](#--linker-flag-flag), as `--linker-flag -framework,AVFoundation`.
+- A `.m` file for a target other than macOS is not compiled: the build prints `'<file>' is Objective-C, which links only for macOS` and exits with code 1.
 
 #### `-o <output>`
 
@@ -76,7 +80,7 @@ Usage errors:
 
 - Optimizes, including across the modules and the runtime (link-time optimization, ThinLTO), each module on a thread of its own.
 - The linker keeps what it has optimized in [the cache](#cache), so that a build optimizes again only the modules that have changed, and those that inline from them.
-- A `.c` or `.ll` file linked with the program is an exception: clang compiles it into a temporary file of its own, which every build optimizes again, as it does what inlines from it.
+- A `.c`, `.m` or `.ll` file linked with the program is an exception: clang compiles it into a temporary file of its own, which every build optimizes again, as it does what inlines from it.
 
 #### Memory checks
 
@@ -168,6 +172,12 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 - Another, such as `x86_64-unknown-freebsd` or `aarch64-linux-android`, is reported as `not a target that the runtime is built for: <triple>`, and the build exits with code 1.
 - This tells only the system; what else a target lacks, such as its C library's headers, clang reports.
 
+#### `--linker-flag <flag>`
+
+- Passes the flag to the linker, as clang's `-Wl,<flag>` does, so that a comma splits it into arguments: `--linker-flag -framework,AVFoundation` passes `-framework` and `AVFoundation`.
+- It may be given more than once; the flags go to the linker in the order given, after the program, the runtime and the [linked files](#linked-files), before the libraries.
+- What a flag means is the linker's own, the one that clang uses by default (see [ThinLTO](#thinlto)).
+
 #### Temporary files
 
 - The build leaves no other file but [the cache](#cache).
@@ -179,7 +189,7 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 
 ```
 lerta run <source> [<file>...] [-O] [--memory-checks] [-Werror] [--no-trace] [--source-lines]
-          [--eager-nan-checks] [-- <arg>...]
+          [--eager-nan-checks] [--linker-flag <flag>...] [-- <arg>...]
 ```
 
 - It is provisional, until it runs the program directly with JIT (see [the roadmap](../roadmap/programs.md#tools)).

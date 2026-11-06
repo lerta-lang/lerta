@@ -14,10 +14,12 @@ import real_path_text from './loader'
 import cache_dir, cached_runtime from './runtime_cache'
 
 # What to build: the executable `output`, or one in the temporary directory if nil, of `kind`,
-# linked with `linked_files`, such as C files that define the program's externs.
+# linked with `linked_files`, such as C files that define the program's externs, and given
+# `linker_flags`, each passed to the linker as `-Wl,<flag>`.
 export struct BuildRequest
   source: String
   linked_files: String[]
+  linker_flags: String[]
   output: String?
   kind: BuildKind
   # `-Werror`: a warning stops the build, as an error does.
@@ -43,6 +45,7 @@ export build_and_run := (request: BuildRequest, args: String[]) -> build_then(re
 build_then := (request: BuildRequest, run_args: String[]?) ->
   program := await check_program(request.source, request.warnings_as_errors)
   reject_input_as_output request, program
+  reject_objective_c_off_macos request
   not_utf8 := CompileError('the temporary directory is not valid UTF-8')
   dir := make_temp_dir().text() ? throw not_utf8
   code :=
@@ -64,6 +67,12 @@ reject_input_as_output := (request: BuildRequest, program: ProgramWide) ->
   inputs := [[module.key for module in program.modules]..., linked...]
   return unless inputs.any((input) -> input == real_output)
   throw CompileError("the output '#{output}' is an input of the build")
+
+# clang compiles Objective-C for other systems too, but links it only with Apple's runtime.
+reject_objective_c_off_macos := (request: BuildRequest) ->
+  file := request.linked_files.find((file) -> file.ends_with('.m')) ? return
+  return if target_system(request.kind.target) == 'macos'
+  throw CompileError("'#{file}' is Objective-C, which links only for macOS")
 
 # What build_then exits with: 1 if clang fails.
 build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_args: String[]?) ->
@@ -102,6 +111,7 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
     lto_objects...
     [real_path_text(object) for object in runtime.objects]...
     [link_path(cwd, file) for file in request.linked_files]...
+    ["-Wl,#{flag}" for flag in request.linker_flags]...
     # Last, as GNU ld with --as-needed drops a library that nothing before it on the line needs.
     libraries...
     '-o'

@@ -19,8 +19,9 @@ import dump_tokens from './token_dump'
 USAGE := """
   usage: lerta build <source> [<file>...] [-o <output>] [-O] [--memory-checks] [-Werror]
                      [--no-trace] [--source-lines] [--eager-nan-checks] [--target <target>]
+                     [--linker-flag <flag>...]
          lerta run <source> [<file>...] [-O] [--memory-checks] [-Werror] [--no-trace]
-                   [--source-lines] [--eager-nan-checks] [-- <arg>...]
+                   [--source-lines] [--eager-nan-checks] [--linker-flag <flag>...] [-- <arg>...]
          lerta fmt [--fix] <path>...
          lerta lsp
          lerta clean
@@ -46,7 +47,7 @@ run_dump := (args: String[], dump: (String) -> Promise<String>) ->
   await stdout.write(await dump(args[0]))
 
 # The files that clang links with the program, as it takes them.
-LINKED_EXTENSIONS := ['.c', '.o', '.ll', '.a', '.obj', '.lib']
+LINKED_EXTENSIONS := ['.c', '.m', '.o', '.ll', '.a', '.obj', '.lib']
 
 is_linked_file := (path: String) -> LINKED_EXTENSIONS.any(path.ends_with)
 
@@ -63,6 +64,7 @@ SWITCHES :=
 parse_build_arguments := (args: String[]) ->
   var source: String?
   linked_files: String[]
+  linker_flags: String[]
   var output: String?
   var target: String?
   switches: Set<String>
@@ -78,6 +80,7 @@ parse_build_arguments := (args: String[]) ->
     case arg
       when '-o' then output = take_value(output)
       when '--target' then target = target_triple(take_value(target))
+      when '--linker-flag' then linker_flags.push(take_value(nil))
       when '--'
         program_args = args[(i + 1)..]
         break
@@ -97,6 +100,7 @@ parse_build_arguments := (args: String[]) ->
   memory_checks := '--memory-checks' in switches or not optimize
   request := BuildRequest
     linked_files
+    linker_flags
     output
     source: given_source
     kind: { optimize, memory_checks, target }

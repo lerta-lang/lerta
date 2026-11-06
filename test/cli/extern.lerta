@@ -1,9 +1,11 @@
-# A Lerta program links with a C function given as source, IR, an object or an archive.
+# A Lerta program links with a C function given as C or Objective-C source, IR, an object or an
+# archive.
 import Check, posix_check from '../lib/report'
-import compare_text, expect_status from '../lib/expect'
+import compare_text, expect_status, reason_unless from '../lib/expect'
 import compiler, root_dir, host_executable_suffix from '../lib/lerta'
-import expect_success, succeed, run_command, new_cli_dir from '../lib/cli'
+import expect_success, succeed, run_command, run_in_new_dir, new_cli_dir from '../lib/cli'
 import make_dir, make_link, read_file, write_file from 'std:io'
+import platform from 'std:process'
 
 source_dir := "#{root_dir}/tests/extern/lib"
 source := "#{source_dir}/twice.lerta"
@@ -43,6 +45,50 @@ link_check := (extension: String, flags: String[]) ->
     file := await input_file(extension, "input-#{flags.join('_')}", dir)
     await build_twice(file, flags, dir, "twice-#{extension}-#{flags.join('_')}")
 
+# The Objective-C source needs Foundation, which `--linker-flag` links.
+objective_c_check := (optimization: String[]) ->
+  flags := ['--linker-flag', '-framework,Foundation', optimization...]
+  name := optimization.join('_')
+  Check name: "lerta build <source> <file.m> #{flags.join(' ')} links the file", run: ->
+    return nil unless platform == 'macos'
+    dir := new_cli_dir("extern-objc-#{name}")
+    await build_twice("#{source_dir}/twice.m", flags, dir, "twice-objc-#{name}")
+
+# Each `--linker-flag` reaches the linker, in order: `-framework` and then its name.
+split_linker_flags_check := ->
+  flags := ['--linker-flag', '-framework', '--linker-flag', 'Foundation']
+  Check name: "lerta run <source> <file.m> #{flags.join(' ')} links the file", run: ->
+    return nil unless platform == 'macos'
+    dir := new_cli_dir('extern-objc-split')
+    ran := await run_command(compiler, ['run', source, "#{source_dir}/twice.m", flags...], dir)
+    [compare_text('stdout', "42\n", ran.stdout_text())..., expect_success('run', ran)...]
+
+# Without Foundation, which only `--linker-flag` links, the link fails.
+objective_c_without_framework_check := ->
+  Check name: 'lerta build <source> <file.m> fails to link without its framework', run: ->
+    return nil unless platform == 'macos'
+    built :=
+      await run_in_new_dir(compiler, ['build', source, "#{source_dir}/twice.m", '-o', 'prog'])
+    # The class that twice.m uses, which the linker reports as undefined.
+    symbol := '_OBJC_CLASS_$_NSNumber'
+    [
+      expect_status(1, built.result.status)...
+      reason_unless(built.result.stderr_text().contains(symbol), "no '#{symbol}' on stderr")...
+    ]
+
+objective_c_off_macos_check := ->
+  Check name: 'lerta build rejects an Objective-C file for a target other than macOS', run: ->
+    objective_c := "#{source_dir}/twice.m"
+    built := await run_in_new_dir(
+      compiler
+      ['build', source, objective_c, '-o', 'prog', '--target', 'linux-amd64']
+    )
+    message := "'#{objective_c}' is Objective-C, which links only for macOS"
+    [
+      expect_status(1, built.result.status)...
+      reason_unless(built.result.stderr_text().contains(message), "no '#{message}' on stderr")...
+    ]
+
 inputs := ['.c', '.o', '.ll', '.a']
 optimizations: String[][] = [[], ['-O']]
 relative_link_check := -> Check(name: 'lerta build links a file given by a relative path', run: ->
@@ -78,6 +124,10 @@ missing_link_check := ->
 export checks: Check[]
 for extension in inputs
   checks.push link_check(extension, flags) for flags in optimizations
+checks.push objective_c_check(flags) for flags in optimizations
+checks.push split_linker_flags_check()
+checks.push objective_c_without_framework_check()
+checks.push objective_c_off_macos_check()
 checks.push relative_link_check()
 checks.push symlink_link_check()
 checks.push missing_link_check()
