@@ -8,7 +8,7 @@ import
   TupleItem, TypeAlias, TypeDeclaration, TypeName, UnaryOperation, UnionTypeName, While
 from '../ast'
 import
-  Doc, first_line_choice, has_line_feed, join, line_feed, rule, separated, text, token
+  Doc, first_line_choice, join, line_feed, rule, separated, takes_lines, text, token
 from './doc'
 import declaration_doc, exported from './print_declaration'
 import SourceText from './source'
@@ -222,8 +222,9 @@ call_statement := (call: Call, context: Context) ->
   head := rule(CALLS_WITHOUT_PARENTHESES, join([expression_doc(call.callee, context), text(' ')]))
   command_of := (docs: Doc[]) -> join([head, separated(docs, text(', '))])
   leading := [item.doc for item in items[..(items.length - 1)]]
-  # A block before the last argument ends its line, which the comma after it cannot follow.
-  return with_parentheses if leading.any(has_line_feed)
+  # A block, or a `"""` or `'''` literal with its closing quotes, before the last argument ends its
+  # line, which the comma after it cannot follow.
+  return with_parentheses if leading.any(takes_lines)
   # A function literal last takes the lines below for its body, which parentheses could not hold.
   last_arg := call.named_args.is_empty() then call.args.last()
   if last_arg is FunctionLiteral

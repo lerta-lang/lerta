@@ -25,7 +25,3 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 ## The main run loop stays off for CoreFoundation loaded after the first wait
 
 `uses_run_loop` (`runtime/loop.c`) looks for CoreFoundation once, at the program's first wait (see [the main run loop](internals/iteration.md#the-main-run-loop)). A program that waits, then loads a framework with `dlopen` and has it post a block to the main dispatch queue, never runs the block. Fix: look again at later waits while it is not found, if that costs a waiting program little.
-
-## fmt puts arguments after a `'''` literal on its closing line
-
-`value_after` (`compiler/format/print_literal.lerta`) keeps a call's arguments on the line of the call where the first line fits (`first_line_choice`), and a `'''` literal holds no line feed for `has_line_feed`, as its lines are `LiteralLines`. `labeled := label`, over `text: '''`, its lines and `size: 'a'`, is rewritten to `labeled := label(text: '''`, the lines, and `''', size: 'a')`, an argument after the closing quotes. Fix: take the arguments in a block where an argument but the last is a `'''` literal.

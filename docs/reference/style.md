@@ -133,6 +133,7 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 - A line holding several items ends with a comma, except the last line of the list. A line holding one item does not.
   - Why: a comma and a line end would look like two kinds of separator.
 - A function whose body takes lines of its own inside brackets ends the list on the line where the brackets open if it is the last item, with the closing bracket on a line of its own (`xs.map((x) ->`, the body, `)`). Otherwise each item goes on a line of its own.
+- A `"""` or `'''` literal before the last item ends its line with its closing quotes, which nothing follows: each item goes on a line of its own. After `=`, `:=` or `key:`, a literal of items that holds one, last or not, goes in a block (see [Multi-line literals](#multi-line-literals)).
 
 ## Expressions
 

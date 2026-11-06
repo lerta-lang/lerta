@@ -7,8 +7,8 @@ from '../ast'
 import TokenKind from '../lexer/tokens'
 import AnnotationKey, AnnotationKind from './annotated'
 import
-  breaking, choice, closing, Doc, has_line_feed, indent, join, line_feed, rule, separated, text,
-  token
+  breaking, choice, closing, Doc, has_line_feed, indent, join, line_feed, rule, separated,
+  takes_lines, text, token
 from './doc'
 import StatementLines from './kept'
 import LONG_LISTS, StyleRule, TYPE_ANNOTATIONS from './rules'
@@ -124,8 +124,11 @@ export bracketed_or := (
 ) ->
   return join([open, closing_text]) if items.is_empty()
   docs := [item.doc for item in items]
-  holds_block := (item: Item) -> has_line_feed(item.doc)
-  blocks := items.find_index(holds_block)
+  # An item before the last that takes lines ends its line, with a `"""` or `'''` literal's closing
+  # quotes, which the comma after it cannot follow.
+  holds_block := (item: Item, i: Int) ->
+    i < items.length - 1 then takes_lines(item.doc) else has_line_feed(item.doc)
+  blocks := [i for item, i in items when holds_block(item, i)].first()
   ending_with := (last: Doc) ->
     leading := docs[..(docs.length - 1)]
     join [open, separated([leading..., last], text(', ')), line_feed(), closing_text]
@@ -148,7 +151,7 @@ export opened_list := (open: Doc, items: Item[], closing: Doc) ->
 export lines_of_items := (items: Item[]) ->
   # Lines that a comment ends would hold one item, which no comma ends.
   shares_lines := (item: Item) ->
-    item.simple and not item.after_comment and not has_line_feed(item.doc)
+    item.simple and not item.after_comment and not takes_lines(item.doc)
   all_simple := items.find_index((item) -> not shares_lines(item)) == nil
   return separated([item.doc for item in items], line_feed()) unless all_simple
   parts: Doc[]
