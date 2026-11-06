@@ -29,3 +29,15 @@ A call whose arguments fit on its line but for a `case`, as `x := label` over `t
 ## Comments in tests/ name test/cli.lerta for checks that moved to test/cli/
 
 The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` gathers, but comments of the files they run still say that `test/cli.lerta` runs or links them, as `tests/extern/lib/leak.c`, `tests/extern/lib/sized.c` and `tests/extern/lib/leak.lerta` (`test/cli/extern.lerta`), `tests/leak/lib/*.lerta`, `tests/bin/echo_stdin.lerta`, `tests/bin/read_after_cancel.lerta` and `tests/cli/status.txt`. Fix: name the file under `test/cli/` that holds each check.
+
+## fmt writes a statement in its postfix form over more than one line
+
+[Postfix forms](reference/style.md#postfix-forms) takes the block form for a statement that takes more than one line, but `if_statement_doc` (`compiler/format/print_control.lerta`), as the `while` and the `for` there, chooses the postfix form where its first line fits (`Choice` in `compiler/format/doc.lerta`), however many lines follow. `unless xs.all((x) ->`, over a function body of two lines and `)`, with `return false` in its block, is reported under Postfix forms, and `--fix` writes `return false unless xs.all((x) ->` over the same lines. Fix: take the postfix form only where it fits on one line.
+
+## fmt reports `unless a and b` as a `not` to write with `unless`
+
+[Negated conditions](reference/style.md#negated-conditions) keeps `if not` before an `and` or an `or`, so `head_doc` (`compiler/format/print_control.lerta`) writes `return nil unless a and b` as `return nil if not (a and b)`, but reports it under the message of the rule as a whole, which says to write `unless x` for `not x`: the opposite of what it did. Fix: give each rewrite of the rule a message of its own.
+
+## `if c then a else b` fails as a missing block
+
+`c then a else b` is a value, so `if c then 1 else 2` parses as an `if` whose condition is `c then 1 else 2` (`parse_if` in `compiler/parser/statement.lerta`), and fails with `expected indented block, found end of block`, which does not say that the value is written without `if`. Fix: where the condition of an `if`, `unless`, `while` or `until` is a `then` value and no block follows, fail at the keyword with a message that does.
