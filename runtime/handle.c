@@ -100,38 +100,8 @@ static void reopen_tcp(Handle *handle) {
   open_tcp(handle);
 }
 
-// An IPv6 address is written in brackets, as in a URL, so that its port is told from it.
-static LertaString *address_text(const char *host, int64_t port) {
-  bool is_ip6 = strchr(host, ':') != NULL;
-  uint8_t digits[LERTA_INT_TEXT_MAX];
-  int64_t start = lerta_format_int(port, digits);
-  int64_t host_length = (int64_t)strlen(host);
-  int64_t port_length = LERTA_INT_TEXT_MAX - start;
-  LertaString *text = lerta_string_new(host_length + port_length + (is_ip6 ? 3 : 1));
-  uint8_t *end = text->bytes;
-  if (is_ip6) *end++ = '[';
-  memcpy(end, host, (size_t)host_length);
-  end += host_length;
-  if (is_ip6) *end++ = ']';
-  *end++ = ':';
-  memcpy(end, digits + start, (size_t)port_length);
-  return text;
-}
-
-// The port as getaddrinfo takes it, a service named by its number.
-static char *port_text(int64_t port, uint8_t buffer[LERTA_INT_TEXT_MAX + 1]) {
-  int64_t start = lerta_format_int(port, buffer);
-  buffer[LERTA_INT_TEXT_MAX] = '\0';
-  return (char *)buffer + start;
-}
-
 static const struct addrinfo tcp_hints = {
   .ai_family = AF_UNSPEC, .ai_socktype = SOCK_STREAM, .ai_flags = AI_NUMERICSERV};
-
-static int64_t port_of(const struct sockaddr_storage *address) {
-  if (address->ss_family == AF_INET6) return ntohs(((struct sockaddr_in6 *)address)->sin6_port);
-  return ntohs(((struct sockaddr_in *)address)->sin_port);
-}
 
 // The promise that the Handle held, taken from it.
 static LertaPromise *take_pending(Handle *handle) {
@@ -215,10 +185,7 @@ static LertaString *peer_address(Handle *socket) {
   int length = sizeof(peer);
   if (uv_tcp_getpeername(tcp_of(socket), (struct sockaddr *)&peer, &length) != 0) return NULL;
   char host[INET6_ADDRSTRLEN];
-  int status = peer.ss_family == AF_INET6
-                 ? uv_ip6_name((struct sockaddr_in6 *)&peer, host, sizeof(host))
-                 : uv_ip4_name((struct sockaddr_in *)&peer, host, sizeof(host));
-  return status == 0 ? address_text(host, port_of(&peer)) : NULL;
+  return lerta_host_of(&peer, host) ? lerta_address_text(host, lerta_port_of(&peer)) : NULL;
 }
 
 // The connection goes into the socket, which takes the peer's address. One whose address cannot be
@@ -259,8 +226,8 @@ int64_t lerta_tcp_listen(int64_t pointer, const LertaString *host, int64_t port)
   uint8_t buffer[LERTA_INT_TEXT_MAX + 1];
   uv_getaddrinfo_t request;
   // Without a callback, libuv resolves the name at once.
-  bool resolved = uv_getaddrinfo(uv_default_loop(), &request, NULL, name, port_text(port, buffer),
-                                 &tcp_hints) == 0;
+  bool resolved = uv_getaddrinfo(uv_default_loop(), &request, NULL, name,
+                                 lerta_port_text(port, buffer), &tcp_hints) == 0;
   bool listening = resolved && uv_tcp_bind(tcp_of(handle), request.addrinfo->ai_addr, 0) == 0 &&
                    uv_listen(handle->stream, SOMAXCONN, come_connection) == 0;
   if (resolved) uv_freeaddrinfo(request.addrinfo);
@@ -268,8 +235,8 @@ int64_t lerta_tcp_listen(int64_t pointer, const LertaString *host, int64_t port)
   int length = sizeof(address);
   bool bound =
     listening && uv_tcp_getsockname(tcp_of(handle), (struct sockaddr *)&address, &length) == 0;
-  int64_t bound_port = bound ? port_of(&address) : -1;
-  set_address(handle, address_text(name, bound ? bound_port : port));
+  int64_t bound_port = bound ? lerta_port_of(&address) : -1;
+  set_address(handle, lerta_address_text(name, bound ? bound_port : port));
   free(name);
   if (!bound) lerta_raise_with(LERTA_IO_ERROR, LERTA_STR(cannot_listen), handle->address);
   return bound_port;
@@ -378,7 +345,7 @@ LertaPromise *lerta_tcp_connect(int64_t pointer, const LertaString *host, int64_
   Handle *socket = handle_of(pointer);
   LertaPromise *promise = lerta_promise_new(LERTA_PLAIN_ITEMS);
   char *name = lerta_c_string(host);
-  set_address(socket, address_text(name, port));
+  set_address(socket, lerta_address_text(name, port));
   if (socket->stream == NULL) {
     free(name);
     lerta_promise_reject_io(promise, LERTA_STR(cannot_connect), socket->address);
@@ -388,7 +355,7 @@ LertaPromise *lerta_tcp_connect(int64_t pointer, const LertaString *host, int64_
   uint8_t buffer[LERTA_INT_TEXT_MAX + 1];
   socket->resolving.data = socket;
   int status = uv_getaddrinfo(uv_default_loop(), &socket->resolving, end_resolve, name,
-                              port_text(port, buffer), &tcp_hints);
+                              lerta_port_text(port, buffer), &tcp_hints);
   free(name);
   if (status == 0) socket->requests++;
   else end_connect(socket, false);

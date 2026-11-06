@@ -553,7 +553,7 @@ xs := decode_json<Int[]>(text)
 
 ## std:net
 
-TCP over IPv4 and IPv6, on the [event loop](functions.md#functions-that-await).
+TCP and UDP over IPv4 and IPv6, on the [event loop](functions.md#functions-that-await).
 
 | Name | |
 |---|---|
@@ -561,6 +561,9 @@ TCP over IPv4 and IPv6, on the [event loop](functions.md#functions-that-await).
 | `connect_tcp(host: String, port: Int): Promise<Socket>` | Resolves the host and connects to each of its addresses in turn until one connects. Rejected with `cannot connect to <host>:<port>` if none does, including for a host that holds a NUL byte. A cancel gives up the connect. |
 | `Listener` | A struct of `port: Int`, the port it listens at, and the methods `accept(): Promise<Socket>` and `close()`. |
 | `Socket` | A struct of `reader: Reader`, of [std:io](#stdio), and the methods `write(data: String \| Binary): Promise`, `end()` and `close()`. |
+| `bind_udp(host: String, port = 0): UdpSocket` | Binds, at once, at the first address that the host resolves to, and at a free port if `port` is 0. Throws `cannot bind at <host>:<port>` on failure, including for a host that holds a NUL byte. |
+| `UdpSocket` | A struct of `port: Int`, the port it is bound at, and the methods `send(data: String \| Binary, host: String, port: Int): Promise`, `receive(): Promise<Datagram>` and `close()` (see [UDP](#udp)). |
+| `Datagram` | A struct of `data: Binary`, and `host: String` and `port: Int`, where it came from, `host` a numeric address without brackets. |
 
 - **accept** gives the next connection. It is rejected with `cannot accept at <host>:<port>` on failure.
   - It throws a `ValueError`, `a Listener is accepted by another accept that has not ended`, while another accept is pending, as a `Reader` does.
@@ -579,6 +582,23 @@ TCP over IPv4 and IPv6, on the [event loop](functions.md#functions-that-await).
 - **Cancels.** A cancelled read loses nothing, as the next read gets what comes. A cancelled accept leaves the connection for the next. A cancelled write goes on, which cannot be stopped.
 - **A peer that has gone.** A connection whose peer's address cannot be read, as one that its peer resets before an accept takes it, is given all the same, its address `a peer that has gone`. Its reads fail or end, so that a server goes on accepting.
 - **Serving.** A server serves each connection in a function of its own that it does not await, `spawn serve(await listener.accept())`. That function must catch what it throws, since a rejected promise that nothing awaits ends the program (see [functions that await](functions.md#functions-that-await)).
+
+### UDP
+
+```lerta
+import bind_udp from 'std:net'
+
+socket := bind_udp('127.0.0.1')
+await socket.send('ping', '127.0.0.1', socket.port)
+datagram := await socket.receive()
+print datagram.data.text()!
+```
+
+- **send** sends the data as one datagram to the first address of the socket's family, IPv4 or IPv6, that the host resolves to. It is resolved once the datagram has been handed to the system, and rejected with `cannot send to <host>:<port>` on failure, as for a datagram too large or a host of the other family.
+  - A numeric host is not resolved. A name is resolved on the thread pool, and the socket keeps the address of the name that it resolved last, with its port, for a second, so that the sends that follow to it are not resolved again.
+- **receive** gives the next datagram, whole, an empty one too. It is rejected with `cannot receive at <host>:<port>`, where the socket is bound, on failure.
+  - It throws a `ValueError`, `a UdpSocket is received by another receive that has not ended`, while another receive is pending, as a `Reader` does.
+- **Lifetime, close and cancels** are as of a `Socket`, a receive for a read and a send for a write, but a cancelled send to a name that is still being resolved is given up.
 
 ## std:process
 

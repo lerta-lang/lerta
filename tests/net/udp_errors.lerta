@@ -1,0 +1,50 @@
+# Failures of UDP throw or reject with an IOError that names the operation and the address, or a
+# ValueError for a port out of range; so do a receive and a send after a close, and the close
+# fails the receive that waits.
+import bind_udp from 'std:net'
+import sleep from 'std:time'
+
+# The port that the system chose changes from run to run, so it is written as PORT, and a NUL byte
+# as \0.
+shown := (error: IOError | ValueError, port: Int) ->
+  error.message.replace(":#{port}", ':PORT').replace("\0", '\0')
+
+failure := <T>(attempt: () -> Promise<T>, port: Int) ->
+  try
+    await attempt()
+    'no failure'
+  catch error: IOError | ValueError
+    shown error, port
+
+bind_failure := (host: String, port: Int) ->
+  try
+    bind_udp host, port
+    'no failure'
+  catch error: IOError | ValueError
+    shown error, port
+
+print bind_failure('127.0.0.1', -1)
+print bind_failure('127.0.0.1', 65536)
+print bind_failure('no-such-host.invalid', 0)
+print bind_failure("local\0host", 0)
+
+socket := bind_udp('127.0.0.1')
+port := socket.port
+print bind_failure('127.0.0.1', port).replace(":#{port}", ':PORT')
+print await failure(-> await socket.send('x', 'no-such-host.invalid', 80), 0)
+print await failure(-> await socket.send('x', '127.0.0.1', 65536), 0)
+print await failure(-> await socket.send('x', "local\0host", 80), 0)
+# Of the other family than the socket's.
+print await failure(-> await socket.send('x', '::1', 80), 0)
+# Larger than a datagram can be.
+print await failure(-> await socket.send('x'.repeat(70000), '127.0.0.1', port), port)
+
+# One receive waits at a time.
+first := socket.receive()
+print await failure(-> await socket.receive(), port)
+await sleep(0)
+socket.close()
+print await failure(-> await first, port)
+print await failure(-> await socket.receive(), port)
+print await failure(-> await socket.send('late', '127.0.0.1', port), port)
+socket.close()

@@ -1,14 +1,23 @@
-# TCP over IPv4 and IPv6 on the event loop (see runtime/handle.c).
+# TCP and UDP over IPv4 and IPv6 on the event loop (see runtime/handle.c and runtime/udp.c).
 
 import Reader from 'std:io'
 import
   address_text, close_handle, end_handle, Handle, reader_of, write_handle
 from './internal/handle'
+import bytes_of from './internal/utf8'
 
 extern lerta_tcp_new: () -> Int
 extern lerta_tcp_listen: (Int, String, Int) -> Int
 extern lerta_tcp_accept: (Int, Int) -> Promise
 extern lerta_tcp_connect: (Int, String, Int) -> Promise
+extern lerta_udp_new: () -> Int
+extern lerta_udp_close: (Int) -> void
+extern lerta_udp_free: (Int) -> void
+extern lerta_udp_bind: (Int, String, Int) -> Int
+extern lerta_udp_receive: (Int) -> Promise<Binary>
+extern lerta_udp_sender_host: (Int) -> String
+extern lerta_udp_sender_port: (Int) -> Int
+extern lerta_udp_send: (Int, Binary, String, Int) -> Promise
 
 new_handle := -> Handle(lerta_tcp_new())
 
@@ -50,3 +59,36 @@ export connect_tcp := (host: String, port: Int) ->
   handle := new_handle()
   await lerta_tcp_connect(handle.pointer, host, port)
   socket_of handle
+
+# The runtime's UDP socket, closed once nothing holds it.
+class UdpHandle
+  pointer: Int
+  deinit := -> lerta_udp_free(@pointer)
+
+export struct Datagram
+  data: Binary
+  host: String
+  port: Int
+
+export struct UdpSocket
+  handle: UdpHandle
+  port: Int
+
+  receive := ->
+    data := await lerta_udp_receive(@handle.pointer)
+    Datagram
+      data
+      host: lerta_udp_sender_host(@handle.pointer)
+      port: lerta_udp_sender_port(@handle.pointer)
+
+  send := (data: String | Binary, host: String, port: Int) ->
+    check_address 'cannot send to ', host, port
+    await lerta_udp_send(@handle.pointer, bytes_of(data), host, port)
+
+  close := -> lerta_udp_close(@handle.pointer)
+
+# Binds at once, at a free port if `port` is 0.
+export bind_udp := (host: String, port = 0) ->
+  check_address 'cannot bind at ', host, port
+  handle := UdpHandle(lerta_udp_new())
+  UdpSocket handle, port: lerta_udp_bind(handle.pointer, host, port)

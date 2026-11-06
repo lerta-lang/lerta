@@ -135,6 +135,16 @@ void lerta_promise_reject_io(LertaPromise *promise, const LertaString *prefix,
 // The slot of a settled promise; if it holds an exception, throws it.
 void *lerta_promise_result(LertaPromise *promise);
 
+// Addresses (address.c). The text of an address as failures name it, `host:port`, an IPv6 host in
+// brackets, as in a URL, so that its port is told from it.
+LertaString *lerta_address_text(const char *host, int64_t port);
+// The port as getaddrinfo takes it, a service named by its number.
+char *lerta_port_text(int64_t port, uint8_t buffer[LERTA_INT_TEXT_MAX + 1]);
+struct sockaddr_storage;
+int64_t lerta_port_of(const struct sockaddr_storage *address);
+// Writes the numeric host of the address into `host`, of INET6_ADDRSTRLEN bytes; false if it cannot.
+bool lerta_host_of(const struct sockaddr_storage *address, char *host);
+
 // The libuv stream of a handle (handle.c), for a program that runs to read or write.
 struct uv_stream_s *lerta_handle_stream(int64_t pointer);
 // The event loop (loop.c). Waits for what settles promises, and settles them, once; false, without

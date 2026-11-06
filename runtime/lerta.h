@@ -388,6 +388,22 @@ LertaPromise *lerta_handle_write(int64_t pointer, const LertaString *bytes);
 // Closes the writing side, once what was written has gone.
 void lerta_handle_end(int64_t pointer);
 
+// UDP sockets (udp.c), for std:net, which lerta_udp_free frees, closing it if lerta_udp_close has
+// not; failures are as of the handles above, and the close rejects the receive pending.
+int64_t lerta_udp_new(void);
+void lerta_udp_close(int64_t pointer);
+void lerta_udp_free(int64_t pointer);
+// The port it is bound at, which a port 0 leaves to the system.
+int64_t lerta_udp_bind(int64_t pointer, const LertaString *host, int64_t port);
+// The next datagram, as a Binary, whose sender the two functions after give until the next
+// receive. One receive is pending at most: another throws a ValueError.
+LertaPromise *lerta_udp_receive(int64_t pointer);
+LertaString *lerta_udp_sender_host(int64_t pointer);
+int64_t lerta_udp_sender_port(int64_t pointer);
+// Resolved once the datagram has been handed to the system.
+LertaPromise *lerta_udp_send(int64_t pointer, const LertaString *bytes, const LertaString *host,
+                             int64_t port);
+
 // Output (io.c), by file descriptor: 1 for stdout or 2 for stderr, the only ones that std:io gives.
 // Its writes go through a buffer, written out on the event loop (output.c; see
 // docs/internals/platforms.md#output).

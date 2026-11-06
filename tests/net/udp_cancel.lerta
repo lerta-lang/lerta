@@ -1,0 +1,46 @@
+# A cancelled receive loses nothing that comes after it, a cancelled send to a name that is being
+# resolved is given up, and a socket left open, or released, does not keep the program running.
+import bind_udp from 'std:net'
+import sleep from 'std:time'
+
+outcome := <T>(promise: Promise<T>) ->
+  try
+    await promise
+    'done'
+  catch error: CancelledError
+    error.message
+
+a := bind_udp('127.0.0.1')
+b := bind_udp('127.0.0.1')
+receiving := b.receive()
+await sleep(0)
+receiving.cancel()
+print await outcome(receiving)
+await a.send('after', '127.0.0.1', b.port)
+print (await b.receive()).data.text()!
+
+sending := a.send('given up', 'localhost', b.port)
+sending.cancel()
+print await outcome(sending)
+await a.send('sent', '127.0.0.1', b.port)
+print (await b.receive()).data.text()!
+
+# A cancelled send that has been handed to the system goes on.
+handed := a.send('handed', '127.0.0.1', b.port)
+handed.cancel()
+print await outcome(handed)
+print (await b.receive()).data.text()!
+
+# A close while a send resolves its name fails the send.
+c := bind_udp('127.0.0.1')
+resolving := c.send('late', 'localhost', b.port)
+c.close()
+try
+  await resolving
+catch error: IOError
+  print error.message.replace(":#{b.port}", ':PORT')
+
+# Released as the function returns.
+bind_one := -> bind_udp('127.0.0.1').port
+print bind_one() > 0
+print 'done'

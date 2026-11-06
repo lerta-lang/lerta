@@ -53,9 +53,9 @@ See [the reference](../reference/std.md#stdprocess).
 
 ### std:net and std:http
 
-- In [std:net](../reference/std.md#stdnet): UDP, TLS and Unix domain sockets.
-  - Each protocol has functions named by it, as TCP's `listen_tcp` and `connect_tcp`.
-  - Types are named by the shape of what they carry. A Unix domain socket, a stream, is a `Socket` of `connect_unix(path)` and a `Listener` of `listen_unix(path)`, as TCP's are. UDP, of datagrams, is a `UdpSocket` of `bind_udp(host, port)`.
+- In [std:net](../reference/std.md#stdnet): TLS and Unix domain sockets.
+  - Each protocol has functions named by it, as TCP's `listen_tcp` and UDP's `bind_udp`.
+  - Types are named by the shape of what they carry. A Unix domain socket, a stream, is a `Socket` of `connect_unix(path)` and a `Listener` of `listen_unix(path)`, as TCP's are.
 - In [std:http](../reference/std.md#stdhttp), later:
   - TLS, through that of std:net, for the server and for `fetch`;
   - a URL module for the parts of `request.url`, with which `fetch` would parse its URLs;

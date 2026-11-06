@@ -65,6 +65,9 @@
 - The libuv stream is unreferenced but while a read or an accept waits on it.
 - **Connect.** A connect resolves the host on libuv's thread pool (`uv_getaddrinfo`), and retries with a new libuv stream for each address, as a failed one is not reusable.
 - **Close.** A close gives up what waits, which it rejects. The C `Handle` is freed once the Lerta one has freed it and the pending requests, such as writes, and the closes of its libuv streams have ended. A write holds its bytes and the address until it ends.
+- **UDP.** A `UdpSocket` holds a `Udp` of `runtime/udp.c`, which holds its libuv handle, as a `Handle` does its stream, and is freed as one is.
+  - A receive stops libuv's receives at the first datagram, as a read does, into a buffer of the `Udp` that any datagram fits. Its sender is kept in the `Udp` for `std:net` to read, as a promise gives one value.
+  - A send parses a numeric host at once (`uv_ip4_addr`, `uv_ip6_addr`), and resolves a name on the thread pool unless it is the name, and the port, that the `Udp` resolved last, within a second.
 - **HTTP timeouts.** The timeouts of a connection that `serve` of `std:http` serves, one wait after another, go through a `Deadline` of `std/internal/deadline.lerta` rather than `timeout` of `std:async`, whose sleep and race for each read were a tenth of the server's time.
   - One sleep watches them, until the deadline set, or without end while none is set; a deadline sooner than its wake cancels it to wake then.
   - Over a connection kept alive, it sleeps a few times for each idle timeout, however many requests come meanwhile.
