@@ -7,10 +7,8 @@ import
   UnaryOperation, While, Yield
 from '../ast'
 import choice, Doc, indent, join, line_feed, rule, text, token from './doc'
-import
-  BRANCHES, DOUBLE_NEGATIONS, NEGATED_CONDITIONS, NEGATED_JUNCTIONS, POSTFIX_FORMS
-from './rules'
-import is_junction, negated_head from './negated_conditions'
+import BRANCHES, NEGATED_CONDITIONS, POSTFIX_FORMS from './rules'
+import negated_head from './negated_conditions'
 import expression_doc, loop_header from './print_expression'
 import block_doc, statement_doc from './print_statement'
 import Context, keyword, word_before from './printing'
@@ -56,22 +54,20 @@ condition_doc := (condition: Condition, context: Context) ->
 
 # The word and the condition of an `if` or a `while`, the word as `spelled` makes it: `unless` or
 # `until` for a `not` where the statement takes it, `negatable` (see Negated conditions). A rule
-# covers a head that the source may have written otherwise: DOUBLE_NEGATIONS one whose condition
-# was written with a double negation, NEGATED_CONDITIONS `unless x` for `if not x`, and
-# NEGATED_JUNCTIONS `if not (a and b)` for `unless a and b`.
+# covers a head that the source may have written otherwise: that of the rewrite of its condition
+# (see rewrite_negated_conditions), or NEGATED_CONDITIONS `unless x` for `if not x`.
 head_doc := (
   word: String, condition: Condition, negatable: Bool, spelled: (String) -> Doc, context: Context
 ) ->
-  double_negated := condition is not Binding and condition in context.reported
+  rewrite_rule := condition is Binding then nil else context.reported[condition]
   if negated := negated_head(word, condition, negatable)
     written := join([spelled("#{negated.word} "), expression_doc(negated.operand, context)])
-    return rule(double_negated then DOUBLE_NEGATIONS else NEGATED_CONDITIONS, written)
+    return rule(rewrite_rule ? NEGATED_CONDITIONS, written)
   written := join([spelled("#{word} "), condition_doc(condition, context)])
-  return written if condition is Binding
-  return rule(DOUBLE_NEGATIONS, written) if double_negated
-  negation := condition as UnaryOperation ? return written
-  is_negated_junction := negation.operator == 'not' and is_junction(negation.operand)
-  negatable and is_negated_junction then rule(NEGATED_JUNCTIONS, written) else written
+  if found := rewrite_rule
+    rule found, written
+  else
+    written
 
 # `if` and its block, and `else if` or `else` and its block (see Branches); `unless` for an `if`
 # without `else` that is not one of `else if`, `chained`.

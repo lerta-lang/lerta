@@ -1,20 +1,66 @@
 # The conditions of `if` and `while` as the style writes them (see Negated conditions): without a
-# double negation, and with `unless` or `until` for `not` of a test that reads as well without it.
+# double negation, with `not` given to each operand of an `and` or an `or`, and with `unless` or
+# `until` for `not` of any other test.
 import BinaryOperation, Condition, Expression, is_nil_test, Statement, UnaryOperation from '../ast'
 import places_of from './places'
-import DOUBLE_NEGATIONS, StyleRule from './rules'
+import DOUBLE_NEGATIONS, NEGATED_JUNCTIONS, StyleRule from './rules'
 
-# Writes each condition, but those on the lines kept as written, without its double negation, in the
-# syntax tree, and reports it.
-export take_out_double_negations := (
+# Writes each condition, but those on the lines kept as written, as the style does in the syntax
+# tree, and reports it.
+export rewrite_negated_conditions := (
   program: Statement[], reported: Map<Expression, StyleRule>, kept_lines: Set<Int>
 ) ->
   condition := (written: Expression, place: (Expression) -> void) ->
     return if written.position.line in kept_lines
+    created: UnaryOperation[]
+    if distributed := distributed_negation(written, created)
+      place distributed
+      report reported, distributed, created, NEGATED_JUNCTIONS
+      return
     positive := without_double_negation(written) ? return
-    place positive
-    reported[positive] = DOUBLE_NEGATIONS
+    # What is left of a double negation may be `not` of an `and` or an `or`.
+    rewritten := distributed_negation(positive, created) ? positive
+    place rewritten
+    report reported, rewritten, created, DOUBLE_NEGATIONS
   places_of program, { condition }
+
+# Reports the condition under the rule, and each `not` that the rewrite wrote, which the rule covers
+# rather than those of `x is not T` and `x not in xs` (see unary_doc).
+report := (
+  reported: Map<Expression, StyleRule>, condition: Expression, created: UnaryOperation[],
+  rule: StyleRule
+) ->
+  reported[condition] = rule
+  reported[negation] = rule for negation in created
+
+# `not (a and b)` as `not a or not b` and `not (a or b)` as `not a and not b` (see negated for
+# the `not` of each operand), with the `not`s that it writes put on `created`; nil for no `not` of
+# an `and` or an `or`.
+distributed_negation := (expression: Expression, created: UnaryOperation[]): Expression? ->
+  negation := expression as UnaryOperation ? return nil
+  return nil if negation.operator != 'not'
+  junction := negation.operand as BinaryOperation ? return nil
+  return nil unless is_junction(junction)
+  operator := junction.operator == 'and' then 'or' else 'and'
+  BinaryOperation
+    junction...
+    operator
+    left: negated(junction.left, created)
+    right: negated(junction.right, created)
+
+# `not` of the expression: given on into an `and` or an `or`, without a double negation, or as
+# `a != b` for `a == b` and `a == b` for `a != b`, as `!=` gives the opposite of `==`; otherwise a
+# `not` that it writes, which goes on `created`.
+negated := (expression: Expression, created: UnaryOperation[]): Expression ->
+  if equality := expression as BinaryOperation?
+    if equality.operator == '==' or equality.operator == '!='
+      inverse := equality.operator == '==' then '!=' else '=='
+      return BinaryOperation(equality..., operator: inverse)
+  negation := UnaryOperation(operator: 'not', operand: expression, position: expression.position)
+  return distributed if distributed := distributed_negation(negation, created)
+  return positive if positive := without_double_negation(negation)
+  created.push negation
+  negation
 
 # `not not x` as `x`, `not (a != b)` as `a == b` and `not (x == nil)` as `x != nil`; nil if it has
 # no double negation.
@@ -38,8 +84,8 @@ inverse_equality := (test: BinaryOperation) ->
     else nil
 
 # The word that an `if` or a `while` is written with, and its condition: `unless` or `until` and
-# the operand for `not` of one that is no `and` or `or`, whose negation reads better as a whole,
-# where the statement may take it, `negatable`, as it takes no `else`.
+# the operand for `not` of one that is no `and` or `or`, which takes `not` for each operand
+# instead, where the statement may take it, `negatable`, as it takes no `else`.
 export negated_head := (word: String, condition: Condition, negatable: Bool) ->
   negation := condition as UnaryOperation ? return nil
   return nil if negation.operator != 'not' or not negatable or is_junction(negation.operand)

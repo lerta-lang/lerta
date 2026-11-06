@@ -206,9 +206,10 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 ### Negated conditions
 
 - Write `unless x` and `until x`, not `if not x` and `while not x`.
-- But keep `if not`:
-  - where the `if` has an `else` or follows one: `else if not x`;
-  - where `x` is an `and` or an `or`: `if not (a and b)`.
+- But keep `if not` where the `if` has an `else` or follows one: `else if not x`.
+- Give `not` to each operand of an `and` or an `or`: `if not a or not b`, not `unless a and b` or `if not (a and b)`, and `while not a and not b`, not `until a or b`.
+  - A `not` given to an operand writes `a != b` for `a == b`, `x not in xs` and `x is not T`, takes out a double negation, and goes on into an `and` or an `or` inside: `if not (b or x == 5)` is `if not b and x != 5`.
+  - Why: `unless a and b` and `if not (a and b)` are easily misread as `not a and not b`, while `not` on each operand states each test as it is.
 - Do not negate a negation:
 
 | Write | Not |

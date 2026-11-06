@@ -69,10 +69,12 @@ export coalesce_doc := (coalesce: Coalesce, context: Context) ->
 
 export unary_doc := (unary: UnaryOperation, context: Context) ->
   if unary.operator == 'not'
+    # A `not` that a rewrite of its condition wrote is that rewrite's (see report).
+    rewritten := unary in context.reported
     test := unary.operand as IsTest?
-    return is_not_doc(test, context) if test
+    return is_not_doc(test, context, rewritten) if test
     in_test := unary.operand as BinaryOperation?
-    return not_in_doc(in_test, context) if in_test and is_in_test(in_test)
+    return not_in_doc(in_test, context, rewritten) if in_test and is_in_test(in_test)
     # `not x is not T` and `not x not in xs` would read as two tests.
     operand_doc :=
       if is_negated_test(unary.operand)
@@ -164,15 +166,15 @@ export is_doc := (test: IsTest, context: Context, word: String) ->
   join [operand(test.value, context, COALESCE, last: false), text(word), type_doc(test.type)]
 
 # `not (x is T)` is written `x is not T` (see Negated is tests).
-is_not_doc := (test: IsTest, context: Context) ->
-  rule NEGATED_IS_TESTS, is_doc(test, context, ' is not ')
+is_not_doc := (test: IsTest, context: Context, rewritten: Bool) ->
+  written := is_doc(test, context, ' is not ')
+  rewritten then written else rule(NEGATED_IS_TESTS, written)
 
 # `not (x in xs)` is written `x not in xs` (see Negated in tests).
-not_in_doc := (test: BinaryOperation, context: Context) ->
+not_in_doc := (test: BinaryOperation, context: Context, rewritten: Bool) ->
   left := operand(test.left, context, COALESCE, last: false)
-  rule
-    NEGATED_IN_TESTS
-    join([left, text(' not in '), operand(test.right, context, COALESCE, last: true)])
+  written := join([left, text(' not in '), operand(test.right, context, COALESCE, last: true)])
+  rewritten then written else rule(NEGATED_IN_TESTS, written)
 
 is_in_test := (expression: Expression) ->
   expression is BinaryOperation and expression.operator == 'in'
