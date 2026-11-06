@@ -8,7 +8,7 @@ import reject_bad_type_parameters from './generics'
 import
   builtin_export, has_import, import_qualified_type, imported_export, InterfaceExport
 from './imports'
-import is_jsonable_bound, is_jsonable_declaration from './json'
+import is_codable_bound, is_codable_declaration from './codable'
 import declared_symbol, has_declared_type, ProgramWide, record_type_name, Shared from './shared'
 import
   has_type, module_resolver, named_in, resolve, Resolver, resolver_shared, with_type_parameters
@@ -93,8 +93,8 @@ export add_interfaces := (shared: Shared, declarations: InterfaceDeclaration[]) 
 # A member is `name: Type`.
 reject_invalid_members := (shared: Shared, declaration: InterfaceDeclaration) ->
   program := shared.program
-  # std:json's Jsonable has none: the compiler tells the types that satisfy it.
-  if declaration.members.is_empty() and not is_jsonable_declaration(shared, declaration.name.name)
+  # Codable has none: the compiler tells the types that satisfy it.
+  if declaration.members.is_empty() and not is_codable_declaration(shared, declaration.name.name)
     fail program, declaration.position, 'an interface needs at least one member'
   seen: Set<String>
   for member in declaration.members
@@ -146,8 +146,8 @@ export value_interface_type := (
   reason :=
     case
       when info.names_self then "its members name #{SELF}, which its values could not tell"
-      # std:json writes and reads a value by the type that the code gives it where it is called.
-      when is_jsonable_bound(program, info.type) then 'std:json converts a value by its type'
+      # A value is encoded and decoded by the type that the code gives it where it is called.
+      when is_codable_bound(program, info.type) then 'the compiler converts a value by its type'
       else nil
   if reason
     fail program, type_name.position, "'#{info.name}' can only bound a type parameter: #{reason}"

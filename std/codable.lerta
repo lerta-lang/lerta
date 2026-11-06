@@ -1,0 +1,95 @@
+# Values of data types written and read through a format's Encoder and Decoder (see
+# docs/reference/std.md#stdcodable). The compiler generates the code that writes and reads each type
+# (compiler/codegen/encode.lerta and decode.lerta), which `encode_value` and `decode_value` call: it
+# calls the methods of the Encoder or the Decoder that it is given, of its own type, directly.
+
+# The types that encode and decode convert, which the compiler tells by their parts.
+export interface Codable
+
+# What the generated code writes a value through: a scalar by its type, an enum's member by its
+# name, and the parts of the others between a begin_ and an end_, each after next_item, write_key
+# or write_field.
+export interface Encoder
+  write_nil: () -> void
+  write_bool: (Bool) -> void
+  write_int: (Int) -> void
+  write_uint64: (UInt64) -> void
+  write_float: (Float) -> void
+  write_float32: (Float32) -> void
+  write_string: (String) -> void
+  write_binary: (Binary) -> void
+  # The enum's name, and the member's.
+  write_member: (String, String) -> void
+  begin_array: () -> void
+  next_item: () -> void
+  end_array: () -> void
+  # The count of the items.
+  begin_tuple: (Int) -> void
+  end_tuple: () -> void
+  begin_map: () -> void
+  write_key: (String) -> void
+  end_map: () -> void
+  begin_record: () -> void
+  # The field's name.
+  write_field: (String) -> void
+  end_record: () -> void
+  # A class or struct that may hold itself, by its address, around its record: a format that
+  # cannot hold a cycle throws if it is entered again before it is left.
+  enter: (Int) -> void
+  leave: () -> void
+
+# What the generated code reads a value through, as Encoder writes it. A method that finds what it
+# does not expect throws, as do the fail_ ones.
+export interface Decoder
+  # Whether the value is nil, which it then reads.
+  read_nil: () -> Bool
+  read_bool: () -> Bool
+  # An integer of a type other than UInt64, from the least to the most of that type, as an Int,
+  # which the generated code narrows; the text names the type, as `an Int8`, for an error.
+  read_integer: (String, Int, Int) -> Int
+  read_uint64: () -> UInt64
+  read_float: () -> Float
+  read_float32: () -> Float32
+  read_string: () -> String
+  read_binary: () -> Binary
+  # The name of a member of the enum of the name.
+  read_member: (String) -> String
+  begin_array: () -> void
+  # Whether another item of the innermost array or tuple follows, which it then starts reading.
+  next_item: () -> Bool
+  # The count of the items, which next_tuple_item and end_tuple are given too.
+  begin_tuple: (Int) -> void
+  next_tuple_item: (Int) -> void
+  end_tuple: (Int) -> void
+  begin_map: () -> void
+  # The next key of the innermost map, whose value it then starts reading, or nil at its end.
+  read_key: () -> String?
+  begin_record: () -> void
+  # As read_key, of the innermost record.
+  read_field: () -> String?
+  # Whether the key read is that of the field of the name.
+  is_field: (String, String) -> Bool
+  # The record just read has no key of the field of the name, which needs one.
+  fail_missing_field: (String) -> never
+  # The value of a key that is no field.
+  skip_value: () -> void
+  # The kind of the value, one of the KIND_ ones below, which tells the member of a union it is.
+  peek_kind: () -> Int
+  fail_expected: (String) -> never
+  # The name read names no member of the enum of the name.
+  fail_member: (String, String) -> never
+
+# The kinds that peek_kind gives, as compiler/checker/codable.lerta numbers them: of a Bool, a
+# number, a String, a Binary or an enum's member, a class or struct, and anything else.
+export KIND_BOOL := 0
+export KIND_NUMBER := 1
+export KIND_TEXT := 2
+export KIND_RECORD := 3
+export KIND_OTHER := 4
+
+# Writes the value through the encoder.
+export encode := <E: Encoder, T: Codable>(encoder: E, value: T): void ->
+  encode_value encoder, value
+
+# The value of type T that the decoder reads.
+export decode := <T: Codable, D: Decoder>(decoder: D): T -> decode_value<T>(decoder)

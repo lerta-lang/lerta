@@ -1,6 +1,6 @@
-# The functions that read values of a type through a JsonReader (see codegen/json), which give the
+# The functions that read values of a type through a Decoder (see codegen/codable), which give the
 # value owned, and release what they have read of it when a method throws.
-import json_kind from '../checker/json'
+import codable_kind from '../checker/codable'
 import FieldInfo, info_of, is_argument from '../checker/object_types'
 import ProgramWide from '../checker/shared'
 import emit_array_new, emit_push from './array'
@@ -9,7 +9,7 @@ import emit_check_with, emit_return_thrown from './exceptions'
 import emit_box from './boxes'
 import emit_values from './heap_object'
 import emit_branch, emit_when, emit_while, IrBuilder, IrModule, phi_incoming from './ir_builder'
-import call_method, call_void_method, Coder, field_name_args, is_inline, SCALARS from './json'
+import call_method, call_void_method, Coder, is_inline, name_arg, SCALARS from './codable'
 import
   constructor_symbol, emit_release, emit_release_value, ir_type, shared_string_constant
 from './lerta_ir'
@@ -23,7 +23,7 @@ import
 from '../types'
 
 # The value read, owned; the caller checks for an exception after it.
-export emit_read_json := (
+export emit_decode := (
   ir: IrBuilder, program: ProgramWide, reader_type: ObjectType, reader: String, type: Type
 ) -> emit_read_call(ir, { program, type: reader_type, operand: reader }, type)
 
@@ -37,10 +37,10 @@ read_function := (module: IrModule, reader: Coder, type: Type) ->
     own := Coder(reader..., operand: '%reader')
     ir.emit "ret #{ir_type(type)} #{emit_read_parts(ir, own, type)}"
     ir.finish "private #{ir_type(type)} #{name}(ptr %reader)"
-  module.named "json read #{type_key(type)}", '@lerta.json.read', define
+  module.named "decode #{type_key(type)}", '@lerta.decode', define
 
 # The body of the function of a type: its parts, or the value itself for a type that others read
-# inline, which read_json may read too.
+# inline, which a builtin may read too.
 emit_read_parts := (ir: IrBuilder, reader: Coder, type: Type) ->
   case type
     when ArrayType then emit_read_array(ir, reader, type)
@@ -59,7 +59,7 @@ emit_read := (ir: IrBuilder, reader: Coder, type: Type, unwind: () -> void): Str
     return value
   case type
     when OptionalType
-      is_null := call_method(ir, reader, 'read_null', bool_type, [], unwind)
+      is_null := call_method(ir, reader, 'read_nil', bool_type, [], unwind)
       present := ir.negate(is_null)
       read_inner := -> emit_wrap(ir, emit_read(ir, reader, type.inner, unwind), type.inner)
       emit_branch ir, ir_type(type), present, read_inner, nil_constant(type)
@@ -79,17 +79,15 @@ emit_read_integer := (ir: IrBuilder, reader: Coder, type: Type, unwind: () -> vo
   word := call_method(ir, reader, 'read_integer', int_type, args, unwind)
   narrowed_from_word ir, word, scalar_of(type)!
 
-# The member that the string read names.
+# The member that the name read names.
 emit_read_member := (ir: IrBuilder, reader: Coder, type: EnumType, unwind: () -> void) ->
-  text := call_method(ir, reader, 'read_string', string_type, [], unwind)
+  enum_name := name_arg(ir, format_type(type))
+  text := call_method(ir, reader, 'read_member', string_type, [enum_name], unwind)
   member := emit_parse(ir, text, type)
   release_text := ->
     emit_release ir, text
     unwind()
-  fail := ->
-    enum_name := shared_string_constant(ir, format_type(type))
-    args := ["ptr #{enum_name}", "ptr #{text}"]
-    call_void_method ir, reader, 'fail_member', args, release_text
+  fail := -> call_void_method(ir, reader, 'fail_member', [enum_name, "ptr #{text}"], release_text)
   optional := optional_type(type)
   emit_when ir, emit_is_nil(ir, member, optional), fail
   emit_release ir, text
@@ -114,24 +112,25 @@ emit_read_array := (ir: IrBuilder, reader: Coder, type: ArrayType) ->
 emit_read_map := (ir: IrBuilder, reader: Coder, type: MapType) ->
   map := emit_map_new(ir, reader.program, type)
   unwind := -> release_and_return(ir, map, type)
-  call_void_method ir, reader, 'begin_object', [], unwind
+  call_void_method ir, reader, 'begin_map', [], unwind
   read_entry := (key: String, release_key: () -> void) ->
     value := emit_read(ir, reader, type.value, release_key)
     # The map retains the key and the value, which this function owned.
     emit_map_set ir, map, key, value, type
     emit_release ir, key
     emit_release_value ir, value, type.value
-  emit_for_each_key ir, reader, unwind, read_entry
+  emit_for_each_key ir, reader, 'read_key', unwind, read_entry
   map
 
-# Runs `body` with each key of the object being read, owned, and what releases the key and
-# unwinds, for where reading its value fails.
+# Runs `body` with each key of the map or record being read, which the method gives, owned, and
+# what releases the key and unwinds, for where reading its value fails.
 emit_for_each_key := (
-  ir: IrBuilder, reader: Coder, unwind: () -> void, body: (String, () -> void) -> void
+  ir: IrBuilder, reader: Coder, method: String, unwind: () -> void,
+  body: (String, () -> void) -> void
 ) ->
   var key = ''
   more := ->
-    key = call_method(ir, reader, 'next_key', optional_type(string_type), [], unwind)
+    key = call_method(ir, reader, method, optional_type(string_type), [], unwind)
     ir.is_not_null key
   release_key := ->
     emit_release ir, key
@@ -145,14 +144,14 @@ emit_read_tuple := (ir: IrBuilder, reader: Coder, type: TupleType) ->
   unwind := ->
     emit_release_value ir, item, type.items[i] for item, i in items
     emit_return_thrown ir, type
-  call_void_method ir, reader, 'begin_array', [], unwind
+  call_void_method ir, reader, 'begin_tuple', [count], unwind
   for item_type in type.items
     call_void_method ir, reader, 'next_tuple_item', [count], unwind
     items.push emit_read(ir, reader, item_type, unwind)
   call_void_method ir, reader, 'end_tuple', [count], unwind
   emit_values ir, type, items
 
-# A field read from an object's key: a field with a default, or of an optional type, may be left
+# A field read from a record's key: a field with a default, or of an optional type, may be left
 # out.
 struct FieldToRead
   name: String
@@ -220,28 +219,29 @@ emit_read_fields := (
     ir.store 'i1', 'false', given
     values.slots.push { value: slot, given }
   unwind := -> values.unwind()
-  call_void_method ir, reader, 'begin_object', [], unwind
+  call_void_method ir, reader, 'begin_record', [], unwind
   read_key := (key: String, release_key: () -> void) ->
     emit_read_field_of_key ir, reader, values, key, release_key
     emit_release ir, key
-  emit_for_each_key ir, reader, unwind, read_key
+  emit_for_each_key ir, reader, 'read_field', unwind, read_key
   for field, i in fields
     continue unless is_required(field)
-    fail := -> call_void_method(ir, reader, 'fail_missing', field_name_args(ir, field.name), unwind)
+    fail := ->
+      call_void_method ir, reader, 'fail_missing_field', [name_arg(ir, field.name)], unwind
     emit_when ir, ir.negate(values.given(i)), fail
   make values
 
-# Reads the value of the key into the field whose key it is (see JsonKeys), or skips it if no
+# Reads the value of the key into the field whose key it is, as the decoder tells, or skips it if no
 # field has it as its key.
 emit_read_field_of_key := (
   ir: IrBuilder, reader: Coder, values: FieldValues, key: String, unwind: () -> void
 ) ->
-  done := ir.fresh_label('json.key.done')
+  done := ir.fresh_label('decode.key.done')
   for field, i in values.fields
-    read := ir.fresh_label('json.key.field')
-    next := ir.fresh_label('json.key.next')
-    args := ["ptr #{key}", field_name_args(ir, field.name)...]
-    matches := call_method(ir, reader, 'is_field_key', bool_type, args, unwind)
+    read := ir.fresh_label('decode.key.field')
+    next := ir.fresh_label('decode.key.next')
+    args := ["ptr #{key}", name_arg(ir, field.name)]
+    matches := call_method(ir, reader, 'is_field', bool_type, args, unwind)
     ir.branch_if matches, read, next
     ir.start_block read
     value := emit_read(ir, reader, field.type, unwind)
@@ -253,14 +253,14 @@ emit_read_field_of_key := (
   ir.branch done
   ir.start_block done
 
-# The member that the kind of the value tells (see checker/json), in its box if it has one.
+# The member that the kind of the value tells (see checker/codable), in its box if it has one.
 emit_read_union := (ir: IrBuilder, reader: Coder, type: UnionType) ->
   unwind := -> emit_return_thrown(ir, type)
   kind := call_method(ir, reader, 'peek_kind', int_type, [], unwind)
-  done := ir.fresh_label('json.member.done')
-  other := ir.fresh_label('json.member.other')
-  labels := [ir.fresh_label('json.member') for _ in type.members]
-  cases := ["i64 #{json_kind(member)!}, label %#{labels[i]}" for member, i in type.members]
+  done := ir.fresh_label('decode.member.done')
+  other := ir.fresh_label('decode.member.other')
+  labels := [ir.fresh_label('decode.member') for _ in type.members]
+  cases := ["i64 #{codable_kind(member)!}, label %#{labels[i]}" for member, i in type.members]
   ir.emit "switch i64 #{kind}, label %#{other} [ #{cases.join(' ')} ]"
   incoming: String[]
   for member, i in type.members

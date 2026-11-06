@@ -100,16 +100,16 @@ What `std:builtins`, in the files of `std/builtins/`, cannot write in Lerta (see
 - std:math's `pow`, whose result C checks, as i686 holds what libm returns in an x87 register, wider than a `Float`, until it is stored.
 - `print` and `print_error` write with `lerta_print_stdout` and `lerta_print_stderr`, which write at once rather than through the buffer of `stdout` (see [output](platforms.md#output)).
 
-### std:json
+### std:codable and std:json
 
-- The code that writes and reads each type is the compiler's; the rest is Lerta's (`std/json.lerta`, and in `std/internal/` the `JsonWriter`, the `JsonReader` and what they share): its tokens, escapes, the paths of its errors and the objects being written, in the methods of a `JsonWriter` and a `JsonReader`.
-- `encode_json` and `decode_json` call `write_json(writer, value)` and `read_json<T>(reader)`, names that only std:json sees. The checker types them by the value's type in the instance (`compiler/checker/json.lerta`), and codegen calls the function of that type (`compiler/codegen/json_write.lerta` and `json_read.lerta`).
-- There is one such function per type and module, defined at its first use.
+- The code that writes and reads each type is the compiler's; the rest is Lerta's: each format's, as std:json's (`std/json.lerta`, and in `std/internal/` the `JsonWriter`, the `JsonReader` and what they share): its tokens, escapes, the paths of its errors and the objects being written, in the methods of its `Encoder` and `Decoder`.
+- `encode` and `decode` call `encode_value(encoder, value)` and `decode_value<T>(decoder)`, names that only std:codable sees, as std:json's `encode_json` and `decode_json` call `write_json(writer, value)` and `read_json<T>(reader)`, until the seed is refreshed. The checker types them by the value's type in the instance (`compiler/checker/codable.lerta`), and codegen calls the function of that type (`compiler/codegen/encode.lerta` and `decode.lerta`), which calls the methods of the encoder's or decoder's type in the instance.
+- There is one such function per type, format and module, defined at its first use.
   - It writes or reads a scalar, an enum or an optional value inline by a method: an integer of fewer bits than an `Int` as an `Int`, read in the type's range, and a `Binary` in base64, in Lerta.
   - Other types go through functions of their own, so a type that holds itself is a recursive call.
 - The function of a class or struct that may hold itself, through any of its parts, gives the writer the object's address on entering it and leaves it after.
-- A field's key is given to the writer's and the reader's methods both as its name is written and in camel case, as the compiler makes it; they take the one of the `JsonKeys` given.
-- Reading a union reads the member that the kind of the value tells, by `JsonReader.peek_kind`, whose numbers `json_kind` gives the members.
+- A field is given to the methods by its name, which std:json's then writes in camel case for `JsonKeys.CAMEL_CASE`.
+- Reading a union reads the member that the kind of the value tells, by the decoder's `peek_kind`, whose numbers `codable_kind` gives the members.
 - Reading an object keeps each field that the constructor takes in a slot with whether its key was given, then calls the constructor with them, as a call does.
 - Such a function passes an exception of a method on at once, releasing what it holds, such as an array or the fields partly read, or a map's cursor.
 

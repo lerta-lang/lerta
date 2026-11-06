@@ -1,0 +1,78 @@
+# A Decoder that reads the words that Trace writes (see trace.lerta), but for the `,` before an
+# item, for the checks of what the generated code reads.
+import KIND_BOOL, KIND_NUMBER, KIND_OTHER, KIND_RECORD, KIND_TEXT from 'std:codable'
+
+export class Script
+  words: String[]
+  var at = 0
+
+  take := ->
+    @fail 'the end of the words' if @at == @words.length
+    word := @words[@at]
+    @at += 1
+    word
+
+  peek := -> @words.get(@at) ? ''
+
+  # The rest of the next word after the prefix, which it must have.
+  value := (prefix: String) ->
+    word := @take()
+    word.without_prefix(prefix) ? @fail("expected #{prefix}, found #{word}")
+
+  read_nil := ->
+    return false if @peek() != 'nil'
+    @take()
+    true
+
+  read_bool := -> @value('bool:') == 'true'
+
+  read_integer := (expected: String, least: Int, most: Int) ->
+    value := @value('int:').parse_int()!
+    @fail "expected #{expected}, found #{value}" if value < least or value > most
+    value
+
+  read_uint64 := -> @value('uint64:').parse_int()!.to_uint64()!
+  read_float := -> @value('float:').parse_float()!
+  read_float32 := -> @value('float32:').parse_float()!.to_float32()
+  read_string := -> @value('string:')
+  read_binary := -> @value('binary:').binary
+  read_member := (enum_name: String) -> @value("member:#{enum_name}.")
+
+  begin_array := -> @expect('[')
+  next_item := -> not @ends_with(']')
+  begin_tuple := (count: Int) -> @expect("(#{count}")
+  next_tuple_item := (count: Int) -> @expect_more()
+  end_tuple := (count: Int) -> @expect(')')
+  begin_map := -> @expect('map{')
+  read_key := -> @ends_with('}') then nil else @value('key:')
+  begin_record := -> @expect('{')
+  read_field := -> @ends_with('}') then nil else @value('field:')
+  is_field := (key: String, name: String) -> key == name
+  fail_missing_field := (name: String) -> @fail("missing the field #{name}")
+  skip_value := (): void -> @take()
+
+  peek_kind := ->
+    word := @peek()
+    case
+      when word.starts_with('bool:') then KIND_BOOL
+      when word.starts_with('int:') or word.starts_with('float:') then KIND_NUMBER
+      when word.starts_with('string:') then KIND_TEXT
+      when word == '{' then KIND_RECORD
+      else KIND_OTHER
+
+  fail_expected := (expected: String) -> @fail("expected #{expected}, found #{@peek()}")
+  fail_member := (enum_name: String, name: String) -> @fail("no member #{name} of #{enum_name}")
+
+  expect := (word: String): void ->
+    found := @take()
+    @fail "expected #{word}, found #{found}" if found != word
+
+  expect_more := (): void -> @fail('fewer items than the tuple has') if @peek() == ')'
+
+  # Whether the next word closes, which it then reads.
+  ends_with := (close: String) ->
+    return false if @peek() != close
+    @take()
+    true
+
+  fail := (message: String) -> throw ValueError(message)

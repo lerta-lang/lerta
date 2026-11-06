@@ -1,6 +1,6 @@
-# What std:json's generated code writes through (see std/json.lerta).
+# What std:json's generated code writes through, as an Encoder (see std/codable.lerta).
 import base64 from './base64'
-import field_key, is_finite, Level, path_of, quoted from './json_text'
+import field_key, FieldKeys, is_finite, Level, path_of, quoted from './json_text'
 import JsonError, JsonKeys from '../json'
 
 export class JsonWriter
@@ -12,8 +12,9 @@ export class JsonWriter
   # count of levels when it was entered: the steps of those levels give its path.
   entered: Int[] = []
   depths: Map<Int, Int> = Map()
+  field_keys := FieldKeys(@keys)
 
-  write_null := (): void -> @written += 'null'
+  write_nil := (): void -> @written += 'null'
   write_bool := (value: Bool): void -> @written += value.to_string()
   write_int := (value: Int): void -> @written += value.to_string()
   write_float := (value: Float): void ->
@@ -34,6 +35,21 @@ export class JsonWriter
 
   end_array := (): void -> @end(']')
 
+  # An enum's member is written as a string of its name.
+  write_member := (enum_name: String, member: String): void -> @write_string(member)
+
+  # A tuple is written as an array of its items.
+  begin_tuple := (count: Int): void -> @begin_array()
+  end_tuple := (): void -> @end_array()
+
+  # A map and a record are written as objects, of a key for each entry or field.
+  begin_map := (): void -> @begin_object()
+  write_key := (key: String): void -> @next_key(key)
+  end_map := (): void -> @end_object()
+  begin_record := (): void -> @begin_object()
+  write_field := (name: String): void -> @next_key(@field_keys.key(name))
+  end_record := (): void -> @end_object()
+
   begin_object := (): void -> @begin('{')
 
   # Starts the value of the key in the innermost object.
@@ -42,8 +58,10 @@ export class JsonWriter
     @written += quoted(key)
     @written += ':'
 
-  # Starts the value of a field in the innermost object, by its key: its name as written, or in
-  # camel case, which the compiler gives.
+  # The methods that the seed's generated code calls, until the seed is refreshed (see
+  # docs/internals/architecture.md#refreshing-the-seed).
+  write_null := (): void -> @write_nil()
+
   next_field := (name: String, camel_case: String): void ->
     @next_key field_key(@keys, name, camel_case)
 

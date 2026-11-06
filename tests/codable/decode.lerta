@@ -1,0 +1,40 @@
+import Codable, decode, encode from 'std:codable'
+import Script from './lib/script'
+import Trace from './lib/trace'
+
+# The generated code reads each type through the methods of the decoder that it is given; what it
+# reads is shown as Trace writes it, but for the `,` before each item.
+enum Color
+  RED
+  GREEN
+
+struct Point
+  x: Int8
+  label: String?
+  color: Color = default RED
+
+show := <T: Codable>(words: String) ->
+  try
+    value := decode<T, Script>(Script(words: words.split(' ')))
+    trace := Trace()
+    encode trace, value
+    print [call for call in trace.calls when call != ','].join(' ')
+  catch error: ValueError
+    print "error: #{error.message}"
+
+show<Int[]>('[ int:1 int:2 ]')
+show<Point>('{ field:x int:1 field:label nil field:color member:Color.GREEN }')
+show<Point>('{ field:unknown int:5 field:x int:2 }')
+show<(Float, Bool, String)>('(3 float:2.5 bool:true string:a )')
+show<Map<String, Int>>('map{ key:a int:1 key:b int:2 }')
+show<(Int | String)[]>('[ int:1 string:one ]')
+show<Point>('{ field:label string:a }')
+show<Point>('{ field:x int:300 }')
+show<Point>('{ field:x int:1 field:color member:Color.BLUE }')
+show<(Int | String)[]>('[ bool:true ]')
+show<(Int | Point)[]>('[ int:1 { field:x int:3 } ]')
+show<(Int, Int)>('(2 int:1 )')
+show<(Int, Int)>('(2 int:1 int:2 int:3 )')
+show<Map<String, Int>>('map{ key:a string:x }')
+show<(UInt64, Float32)>('(2 uint64:4000000000 float32:1.5 )')
+show<Int?>('nil')

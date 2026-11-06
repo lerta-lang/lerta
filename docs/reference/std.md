@@ -1,7 +1,7 @@
 # Standard modules
 
 - `'std:<name>'` is the Lerta file `std/<name>.lerta` of the repository. The compiler carries it, and a program [imports](modules.md) it as any module.
-- The standard modules so far: `'std:async'`, `'std:http'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:process'`, `'std:scanner'` and `'std:time'` (below), and `'std:builtins'`, the module of the [builtins](builtins.md).
+- The standard modules so far: `'std:async'`, `'std:codable'`, `'std:http'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:process'`, `'std:scanner'` and `'std:time'` (below), and `'std:builtins'`, the module of the [builtins](builtins.md).
 - A standard module may import the files of `std/`'s directories, as `std/internal/`, by relative paths, as a file imports another: `import JsonWriter from './internal/json_writer'`.
   - Those files are not standard modules: a program cannot import them as `std:...`.
   - Their warnings show only when a standard module that imports them is built on its own.
@@ -56,6 +56,44 @@
 - **Extends.** They are generic functions that call the methods `gathered`, `first_settled` and `settled_within` of an extend of `Promise<T>[]` and one of `Promise[]`.
   - Those extends are in effect where `std:async` is imported (see [objects](objects.md#extend)), so those names are taken there.
   - `timeout` passes its promise in an array of one, as a `Promise` cannot be extended.
+
+## std:codable
+
+| Name | |
+|---|---|
+| `Codable` | The interface of the types that the compiler writes and reads by their parts (below). |
+| `Encoder`, `Decoder` | The interfaces of what a format writes and reads a value through (below). |
+| `encode<E: Encoder, T: Codable>(encoder: E, value: T)` | Writes the value through the encoder. |
+| `decode<T: Codable, D: Decoder>(decoder: D): T` | The value of type `T` that the decoder reads, both type arguments written, as `decode<Config, LineReader>(reader)` of a `LineReader` class. |
+| `KIND_BOOL`, `KIND_NUMBER`, `KIND_TEXT`, `KIND_RECORD`, `KIND_OTHER` | The kinds that a `Decoder`'s `peek_kind` gives (below). |
+
+- A format is a class or struct with the members of `Encoder` or `Decoder`, as std:json's own `JsonWriter` and `JsonReader`; a union of such types is not one. The code that the compiler generates for each type calls its methods directly, with no interface value between.
+
+### Codable
+
+- It only bounds type parameters, as `<T: Codable>`, as std:json's `Jsonable` does (see [std:json](#stdjson)), and it has no members either: the types that satisfy it are those of data, told by their parts.
+- A type with a part that is not data does not satisfy it: a function, a `Promise`, an `Iter`, an interface or a `weak` field: `Request does not satisfy Codable: $.handler is of type (Int) -> Int, which is not data`.
+- So far, neither does a type with a part that is a `Char`, a `Set`, or a map whose keys are not `String`s, nor a union that std:json's [unions](#types) leave out.
+
+### Encoder
+
+- A scalar is written by the method of its type: `write_nil`, `write_bool`, `write_int` (an integer of another type than `UInt64`, as an `Int`), `write_uint64`, `write_float`, `write_float32`, `write_string` and `write_binary`; an enum's member by `write_member(enum_name, member)`.
+- The others are written between a `begin_` and an `end_`:
+  - an array: `begin_array`, `next_item` before each item, the first too, `end_array`;
+  - a tuple: `begin_tuple(count)`, `next_item` before each item, the first too, `end_tuple`;
+  - a map: `begin_map`, `write_key(key)` before each value, `end_map`;
+  - a class, a struct or an anonymous struct: `begin_record`, `write_field(name)` before each field's value, `end_record`.
+- A class or struct whose type can hold itself is written between `enter(address)` and `leave`, around its record, so that a format that cannot hold a cycle can throw.
+
+### Decoder
+
+- Each method reads what its `Encoder` counterpart writes, and throws where it finds something else: `read_nil(): Bool`, which reads a nil if there is one, `read_bool`, `read_integer(expected, least, most)` (an integer of another type than `UInt64`, in its range, with `expected` naming it, as `an Int8`), `read_uint64`, `read_float`, `read_float32`, `read_string`, `read_binary` and `read_member(enum_name): String`.
+- An array: `begin_array`, then `next_item(): Bool` before each item, false at the end.
+- A tuple: `begin_tuple(count)`, `next_tuple_item(count)` before each item and `end_tuple(count)`, which throw if there are fewer or more.
+- A map: `begin_map`, then `read_key(): String?` before each value, nil at the end.
+- A record: `begin_record`, then `read_field(): String?`, as `read_key`. `is_field(key, name)` tells the field whose key it is, `skip_value` skips the value of a key that is none, and `fail_missing_field(name)` throws for a field that needs a key.
+- A union: `peek_kind(): Int` gives the kind of the value, without reading it: `KIND_BOOL`, `KIND_NUMBER`, `KIND_TEXT` (a `String`, a `Binary` or an enum's member), `KIND_RECORD` (a class or struct) or `KIND_OTHER`, and the member of that kind is read; `fail_expected(expected)` throws for one of no member's kind.
+- `fail_member(enum_name, name)` throws for a name read that names no member.
 
 ## std:http
 
@@ -481,7 +519,7 @@ xs := decode_json<Int[]>(text)
   - Why: a type of values would not tell which type to convert by.
 - It has no members: the compiler tells the types that satisfy it by their parts, and generates the code that converts each, so no type declares anything for it. It is the only interface without members.
 - A type that has a part of a type the table below lacks does not satisfy it: a function, a `Promise`, an `Iter`, an interface, a `Char`, a `Set`, a map whose keys are not `String`s, or a `weak` field.
-- That is an error at the call, which names the path of the part, as JsonError's messages write it, with `$[]` for an item of an array and `$.*` for a value of a map: `Request does not satisfy Jsonable: $.handler is of type (Int) -> Int, which std:json does not convert`.
+- That is an error at the call, which names the path of the part, as JsonError's messages write it, with `$[]` for an item of an array and `$.*` for a value of a map: `Request does not satisfy Jsonable: $.handler is of type (Int) -> Int, which is not data`.
 
 ### JsonKeys
 

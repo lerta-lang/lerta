@@ -4,7 +4,7 @@ import Call, construction_arguments, Expression, Identifier, Member from '../ast
 import BuiltinMethod from '../checker/builtins'
 import EnumParse, EnumValue, InterfaceProperty, Method, Property from '../checker/member_targets'
 import
-  CollectionMaker, Constructor, ExternReference, FunctionReference, JsonConversion, ScopedLocal,
+  CodableConversion, CollectionMaker, Constructor, ExternReference, FunctionReference, ScopedLocal,
   TopLevelValue
 from '../checker/references'
 import
@@ -30,8 +30,8 @@ import deferred_value, Generator from './generator'
 import emit_borrowed_value, emit_member_dispatch from './heap_object'
 import emit_interface_call from './interface'
 import IrBuilder from './ir_builder'
-import emit_read_json from './json_read'
-import emit_write_json from './json_write'
+import emit_decode from './decode'
+import emit_encode from './encode'
 import
   constructor_symbol, default_entry_symbol, emit_release, extension_symbol, instance_symbol,
   ir_return_type, ir_type, method_symbol, returns_nothing
@@ -52,18 +52,18 @@ export generate_call := (g: Generator, call: Call): String ->
   return generate_named_call(g, call, callee) if callee is Identifier
   call_closure g, callee, arguments_of(g.facts, call)
 
-# A call of a name: of the builtin Map, Set or Array, std:json's write_json or read_json, a
+# A call of a name: of the builtin Map, Set or Array, one that encodes or decodes a value, a
 # constructor, a C function, a function written in Lerta, or a local or a top-level value that holds
 # a function.
 generate_named_call := (g: Generator, call: Call, callee: Identifier) ->
-  # The checker types the callee of every call but those of the builtin collections and of
-  # std:json.
+  # The checker types the callee of every call but those of the builtin collections and of the
+  # builtins that encode and decode.
   callee_type := -> type_of(g, callee)
   reference := g.facts.references[callee]!
   args := arguments_of(g.facts, call)
   case reference
     when CollectionMaker then generate_new_collection(g, call, reference.type)
-    when JsonConversion then generate_json_conversion(g, call, reference)
+    when CodableConversion then generate_codable_conversion(g, call, reference)
     when Constructor then generate_construction(g, call, reference.type)
     when ExternReference
       emit_call := (operands: String[]) ->
@@ -109,15 +109,15 @@ generate_filled_array := (g: Generator, call: Call, type: ArrayType) ->
     array
   borrowing_all g, call.args, fill
 
-# The writer or reader is the first argument, and the value written the second.
-generate_json_conversion := (g: Generator, call: Call, conversion: JsonConversion) ->
+# The encoder or decoder is the first argument, and the value written the second.
+generate_codable_conversion := (g: Generator, call: Call, conversion: CodableConversion) ->
   coder_type := type_of(g, call.args[0]) as ObjectType!
   emit_call := (operands: String[]) ->
     case conversion.direction
-      when WRITE
-        emit_write_json g.ir, g.code.program, coder_type, operands[0], operands[1], conversion.type
+      when ENCODE
+        emit_encode g.ir, g.code.program, coder_type, operands[0], operands[1], conversion.type
         ''
-      when READ then emit_read_json(g.ir, g.code.program, coder_type, operands[0], conversion.type)
+      when DECODE then emit_decode(g.ir, g.code.program, coder_type, operands[0], conversion.type)
   result := borrowing_all(g, call.args, emit_call)
   emit_exception_check g
   result

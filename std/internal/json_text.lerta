@@ -3,6 +3,7 @@
 import JsonKeys from '../json'
 import double_quoted from './escape'
 import INFINITY from '../math'
+import scan from '../scanner'
 
 export is_finite := (value: Float) -> value != INFINITY and value != -INFINITY
 
@@ -18,6 +19,35 @@ export path_of := (levels: Level[]) -> "$#{[level.step for level in levels].join
 # The key of a field: its name as written, or in camel case, which the compiler gives.
 export field_key := (keys: JsonKeys, name: String, camel_case: String) ->
   keys == JsonKeys.AS_WRITTEN then name else camel_case
+
+# The keys of fields by their names, as JsonKeys writes them: in camel case, each made once.
+export class FieldKeys
+  keys: JsonKeys
+  made: Map<String, String> = Map()
+
+  key := (name: String) ->
+    return name if @keys == JsonKeys.AS_WRITTEN
+    return made if made := @made[name]
+    key := camel_case(name)
+    @made[name] = key
+    key
+
+# The name in camel case: each `_` between another character and a lowercase ASCII letter is left
+# out, and the letter written in uppercase; a leading `_`, and one after another, stay. The checker
+# tells the fields that it writes as one key alike (camel_case in compiler/checker/codable.lerta).
+camel_case := (name: String) ->
+  scanner := scan(name)
+  var written = ''
+  var follows_other = false
+  while c := scanner.next()
+    after := scanner.peek()
+    if c == '_' and follows_other and after and after in 'a'..'z'
+      written += after.to_string().to_upper()
+      scanner.next()
+    else
+      written += c
+      follows_other = c != '_'
+  written
 
 # The string in quotes, with the characters that JSON escapes escaped.
 export quoted := (value: String) -> double_quoted(value, escape_of)

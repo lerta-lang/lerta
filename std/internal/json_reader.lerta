@@ -1,6 +1,6 @@
-# What std:json's generated code reads through (see std/json.lerta).
+# What std:json's generated code reads through, as a Decoder (see std/codable.lerta).
 import from_base64 from './base64'
-import field_key, is_finite, Level, path_of, quoted from './json_text'
+import field_key, FieldKeys, is_finite, Level, path_of, quoted from './json_text'
 import JsonError, JsonKeys from '../json'
 
 export class JsonReader
@@ -11,14 +11,32 @@ export class JsonReader
   levels: Level[] = []
   # The keys that each object being read has given, the innermost last.
   seen_keys: Set<String>[] = []
-
-  # Whether the value is null, which it then reads.
-  read_null := -> @read_literal('null')
+  field_keys := FieldKeys(@keys)
 
   read_bool := ->
     return true if @read_literal('true')
     return false if @read_literal('false')
     @fail_expected 'a Bool'
+
+  read_nil := -> @read_literal('null')
+
+  # An enum's member is written as a string of its name.
+  read_member := (enum_name: String): String -> @read_string()
+
+  # A tuple is written as an array of its items.
+  begin_tuple := (count: Int): void -> @begin_array()
+
+  # A map and a record are written as objects, of a key for each entry or field.
+  begin_map := (): void -> @begin_object()
+  read_key := (): String? -> @next_key()
+  begin_record := (): void -> @begin_object()
+  read_field := (): String? -> @next_key()
+
+  # Whether the key read is that of the field, as write_field writes it.
+  is_field := (key: String, name: String): Bool -> key == @field_keys.key(name)
+
+  fail_missing_field := (name: String): never ->
+    @fail "missing the key #{quoted(@field_keys.key(name))}"
 
   # A number that `parse` reads as what `expected` names, as `an Int8`, or gives nil for.
   read_number := <T>(expected: String, parse: (String) -> T?): T ->
@@ -143,7 +161,10 @@ export class JsonReader
       when byte == b'{' then JSON_OBJECT
       else JSON_OTHER
 
-  # Whether the key read is that of the field, as next_field writes it.
+  # The methods that the seed's generated code calls, until the seed is refreshed (see
+  # docs/internals/architecture.md#refreshing-the-seed).
+  read_null := -> @read_nil()
+
   is_field_key := (key: String, name: String, camel_case: String): Bool ->
     key == field_key(@keys, name, camel_case)
 
@@ -272,9 +293,9 @@ export class JsonReader
 # nested deeper throws rather than overflowing the stack.
 MAX_DEPTH := 128
 
-# The kinds of values that peek_kind tells, by the numbers that json_kind in
-# compiler/checker/json.lerta gives them: null and an array are JSON_OTHER, as no member of a union
-# is either.
+# The kinds of values that peek_kind tells, as std:codable's KIND_ ones, which std:json cannot
+# import until the seed is refreshed (see docs/internals/architecture.md#refreshing-the-seed): null
+# and an array are JSON_OTHER, as no member of a union is either.
 JSON_BOOL := 0
 JSON_NUMBER := 1
 JSON_STRING := 2

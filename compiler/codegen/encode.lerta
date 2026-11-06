@@ -1,4 +1,4 @@
-# The functions that write values of a type through a JsonWriter (see codegen/json), which borrow
+# The functions that write values of a type through an Encoder (see codegen/codable), which borrow
 # the value. A writer that throws is let go of as it is, so a function releases only what it took.
 import info_of from '../checker/object_types'
 import ProgramWide from '../checker/shared'
@@ -8,18 +8,18 @@ import emit_check_with, emit_return_thrown from './exceptions'
 import emit_member_value from './boxes'
 import emit_borrowed_value, emit_field_pointer, emit_member_dispatch from './heap_object'
 import emit_count_up, emit_if_else, emit_while, IrBuilder, IrModule from './ir_builder'
-import call_void_method, Coder, field_name_args, is_inline, SCALARS from './json'
+import call_void_method, Coder, is_inline, name_arg, SCALARS from './codable'
 import emit_release, emit_release_value, ir_type from './lerta_ir'
 import emit_is_present, emit_unwrap from './optional'
 import scalar_of, widened_to_word from './scalar'
 import call_runtime, call_void_runtime from './runtime_calls'
 import
-  ArrayType, EnumType, kind_of, MapType, ObjectType, OptionalType, RecordType, TupleType, Type,
-  type_key, UnionType, void_type
+  ArrayType, EnumType, format_type, kind_of, MapType, ObjectType, OptionalType, RecordType,
+  TupleType, Type, type_key, UnionType, void_type
 from '../types'
 
 # Writes the value, borrowed; the caller checks for an exception after it.
-export emit_write_json := (
+export emit_encode := (
   ir: IrBuilder, program: ProgramWide, writer_type: ObjectType, writer: String, value: String,
   type: Type
 ) -> emit_write_call(ir, { program, type: writer_type, operand: writer }, value, type)
@@ -35,10 +35,10 @@ write_function := (module: IrModule, writer: Coder, type: Type) ->
     emit_write_parts ir, own, '%value', type
     ir.emit 'ret void'
     ir.finish "private void #{name}(ptr %writer, #{ir_type(type)} %value)"
-  module.named "json write #{type_key(type)}", '@lerta.json.write', define
+  module.named "encode #{type_key(type)}", '@lerta.encode', define
 
 # The body of the function of a type: its parts, or the value itself for a type that others write
-# inline, which write_json may write too.
+# inline, which a builtin may write too.
 emit_write_parts := (ir: IrBuilder, writer: Coder, value: String, type: Type) ->
   unwind := -> emit_return_thrown(ir, void_type)
   case type
@@ -59,11 +59,12 @@ emit_write := (ir: IrBuilder, writer: Coder, value: String, type: Type, unwind: 
   case type
     when OptionalType
       write_inner := -> emit_write(ir, writer, emit_unwrap(ir, value, type), type.inner, unwind)
-      write_null := -> call_void_method(ir, writer, 'write_null', [], unwind)
-      emit_if_else ir, emit_is_present(ir, value, type), write_inner, write_null
+      write_nil := -> call_void_method(ir, writer, 'write_nil', [], unwind)
+      emit_if_else ir, emit_is_present(ir, value, type), write_inner, write_nil
     when EnumType
       name := emit_member_name(ir, value, type)
-      call_void_method ir, writer, 'write_string', ["ptr #{name}"], unwind
+      args := [name_arg(ir, format_type(type)), "ptr #{name}"]
+      call_void_method ir, writer, 'write_member', args, unwind
     else
       if scalar := SCALARS[kind_of(type)]
         call_void_method ir, writer, scalar.write, ["#{ir_type(type)} #{value}"], unwind
@@ -88,7 +89,7 @@ emit_write_map := (ir: IrBuilder, writer: Coder, map: String, type: MapType): vo
   release_cursor := ->
     emit_release ir, cursor
     emit_return_thrown ir, void_type
-  call_void_method ir, writer, 'begin_object', [], release_cursor
+  call_void_method ir, writer, 'begin_map', [], release_cursor
   more := -> call_runtime(ir, 'i1 @lerta_map_cursor_has_next(ptr)', "ptr #{cursor}")
   write_entry := ->
     key_slot := ir.alloca('i64')
@@ -103,21 +104,21 @@ emit_write_map := (ir: IrBuilder, writer: Coder, map: String, type: MapType): vo
     unwind := ->
       release_entry()
       release_cursor()
-    call_void_method ir, writer, 'next_key', ["ptr #{key}"], unwind
+    call_void_method ir, writer, 'write_key', ["ptr #{key}"], unwind
     emit_write ir, writer, value, type.value, unwind
     release_entry()
   emit_while ir, more, write_entry
   emit_release ir, cursor
-  call_void_method ir, writer, 'end_object', [], -> emit_return_thrown(ir, void_type)
+  call_void_method ir, writer, 'end_map', [], -> emit_return_thrown(ir, void_type)
 
 emit_write_tuple := (
   ir: IrBuilder, writer: Coder, tuple: String, type: TupleType, unwind: () -> void
 ): void ->
-  call_void_method ir, writer, 'begin_array', [], unwind
+  call_void_method ir, writer, 'begin_tuple', ["i64 #{type.items.length}"], unwind
   for item_type, i in type.items
     call_void_method ir, writer, 'next_item', [], unwind
     emit_write ir, writer, emit_borrowed_value(ir, tuple, type, i), item_type, unwind
-  call_void_method ir, writer, 'end_array', [], unwind
+  call_void_method ir, writer, 'end_tuple', [], unwind
 
 emit_write_record := (
   ir: IrBuilder, writer: Coder, record: String, type: RecordType, unwind: () -> void
@@ -125,10 +126,10 @@ emit_write_record := (
   write_field := (name: String, value: String, field_type: Type) ->
     emit_write_field ir, writer, name, unwind
     emit_write ir, writer, value, field_type, unwind
-  call_void_method ir, writer, 'begin_object', [], unwind
+  call_void_method ir, writer, 'begin_record', [], unwind
   for field, i in type.fields
     write_field field.name, emit_borrowed_value(ir, record, type, i), field.type
-  call_void_method ir, writer, 'end_object', [], unwind
+  call_void_method ir, writer, 'end_record', [], unwind
 
 # A class or struct that may hold itself is entered, so that the writer finds a cycle.
 emit_write_object := (
@@ -139,14 +140,14 @@ emit_write_object := (
   if may_cycle
     address := ir.assign("ptrtoint ptr #{object} to i64")
     call_void_method ir, writer, 'enter', ["i64 #{address}"], unwind
-  call_void_method ir, writer, 'begin_object', [], unwind
+  call_void_method ir, writer, 'begin_record', [], unwind
   for field in info.fields
     name := field.name.name
     field_type := field.type!
     pointer := emit_field_pointer(ir, object, info, name)
     emit_write_field ir, writer, name, unwind
     emit_write ir, writer, ir.load(ir_type(field_type), pointer), field_type, unwind
-  call_void_method ir, writer, 'end_object', [], unwind
+  call_void_method ir, writer, 'end_record', [], unwind
   call_void_method ir, writer, 'leave', [], unwind if may_cycle
 
 # The member that the value is, as it is written alone.
@@ -159,7 +160,7 @@ emit_write_union := (
   emit_member_dispatch ir, union, type.members, 'void', write_member
 
 emit_write_field := (ir: IrBuilder, writer: Coder, name: String, unwind: () -> void) ->
-  call_void_method ir, writer, 'next_field', field_name_args(ir, name), unwind
+  call_void_method ir, writer, 'write_field', [name_arg(ir, name)], unwind
 
 # Whether a value of the class or struct may hold itself, through its parts and theirs.
 may_hold_itself := (program: ProgramWide, type: ObjectType) ->

@@ -1,10 +1,9 @@
-# The code of std:json's builtin write_json and read_json (see checker/json): a function for each
-# type that writes or reads its values (json_write and json_read), defined at its first use,
-# through the methods of the JsonWriter or the JsonReader that it takes. A scalar, an enum or an
+# The code of the builtins that encode and decode a value (see checker/codable): a function for each
+# type that writes or reads its values (encode and decode), defined at its first use, through the
+# methods of the Encoder or the Decoder that it takes, of its type. A scalar, an enum or an
 # optional value is written and read inline, the others by their own functions, through which a
 # type that holds itself is a recursive call. An exception that a method throws is passed on at
 # once, releasing what the function holds.
-import camel_case from '../checker/json'
 import ProgramWide from '../checker/shared'
 import emit_check_with from './exceptions'
 import IrBuilder from './ir_builder'
@@ -15,14 +14,14 @@ import
   OptionalType, SimpleType, string_type, Type, TypeKind, void_type
 from '../types'
 
-# The JsonWriter or JsonReader, of its type, as the operand that the code holds.
+# The Encoder or Decoder, of its type, as the operand that the code holds.
 export struct Coder
   program: ProgramWide
   type: ObjectType
   operand: String
 
 # The methods that write and read a scalar of the type, which they take and give as it is; an
-# integer of another type goes through an Int (see json_write and json_read).
+# integer of another type goes through an Int (see encode and decode).
 export struct ScalarMethods
   write: String
   read: String
@@ -40,13 +39,10 @@ export SCALARS: Map<TypeKind, ScalarMethods> =
 export is_inline := (type: Type) ->
   kind_of(type) in SCALARS or is_integer(type) or type is EnumType or type is OptionalType
 
-# The arguments that give a method a field's name, as written and in camel case (see JsonKeys in
-# std:json).
-export field_name_args := (ir: IrBuilder, name: String) ->
-  as_written := shared_string_constant(ir, name)
-  ["ptr #{as_written}", "ptr #{shared_string_constant(ir, camel_case(name))}"]
+# The argument that gives a method a name, as of a field or an enum.
+export name_arg := (ir: IrBuilder, name: String) -> "ptr #{shared_string_constant(ir, name)}"
 
-# Calls the method of the writer or reader, of the result type, with the arguments after the
+# Calls the method of the encoder or decoder, of the result type, with the arguments after the
 # object; `unwind` runs if it throws.
 export call_method := (
   ir: IrBuilder, coder: Coder, name: String, result: Type, args: String[], unwind: () -> void

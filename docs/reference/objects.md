@@ -289,7 +289,7 @@ print shape.area() for shape in shapes
 ```
 
 - `interface Name` at the top level, followed by an indented block of members, `name: Type`, one per line, declares what a type must have to satisfy it.
-- It has at least one member; only std:json's [Jsonable](std.md#stdjson) has none.
+- It has at least one member; only std:codable's [Codable](std.md#codable) and std:json's [Jsonable](std.md#jsonable) have none.
 - Its name shares the namespace of types and values, and may shadow a builtin, as a class's.
 
 ### Interface members
