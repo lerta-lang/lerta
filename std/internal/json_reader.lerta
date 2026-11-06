@@ -21,11 +21,33 @@ export class JsonReader
 
   read_nil := -> @read_literal('null')
 
+  # A Char is written as a string of it alone.
+  read_char := (): Char ->
+    text := @read_string()
+    chars := [c for c in text]
+    @fail "expected a Char, found #{quoted(text)}" if chars.length != 1
+    chars[0]
+
   # An enum's member is written as a string of its name.
   read_member := (enum_name: String): String -> @read_string()
 
   # A tuple is written as an array of its items.
   begin_tuple := (count: Int): void -> @begin_array()
+
+  # A set is written as an array of its items.
+  begin_set := (): void -> @begin_array()
+
+  # A map of other keys than Strings is written as an array of its entries, each an array of its
+  # key and its value.
+  begin_entries := (): void -> @begin_array()
+  next_entry := (): Bool ->
+    return false unless @next_item()
+    @begin_tuple 2
+    @next_tuple_item 2
+    true
+  entry_value := (): void -> @next_tuple_item(2)
+  end_entry := (): void -> @end_tuple(2)
+  fail_duplicate := (): never -> @fail('the same as one before')
 
   # A map and a record are written as objects, of a key for each entry or field.
   begin_map := (): void -> @begin_object()

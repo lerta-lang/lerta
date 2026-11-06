@@ -9,11 +9,13 @@ import emit_check_with, emit_return_thrown from './exceptions'
 import emit_box from './boxes'
 import emit_values from './heap_object'
 import emit_branch, emit_when, emit_while, IrBuilder, IrModule, phi_incoming from './ir_builder'
-import call_method, call_void_method, Coder, is_inline, name_arg, SCALARS from './codable'
+import
+  call_method, call_void_method, Coder, is_inline, map_shape, MAP, name_arg, SCALARS, SET
+from './codable'
 import
   constructor_symbol, emit_release, emit_release_value, ir_type, shared_string_constant
 from './lerta_ir'
-import emit_map_new, emit_map_set from './map'
+import emit_map_new, emit_map_set, emit_set_add, emit_set_contains from './map'
 import emit_is_nil, emit_unwrap, emit_wrap, nil_constant from './optional'
 import narrowed_from_word, scalar_of from './scalar'
 import
@@ -108,19 +110,60 @@ emit_read_array := (ir: IrBuilder, reader: Coder, type: ArrayType) ->
   emit_while ir, more, read_item
   array
 
-# The map, which the function holds while it reads the entries.
+# The map, which the function holds while it reads the items of a set, the keys of String and the
+# values of a map, or the entries of another map, each of a key and a value (see map_shape).
 emit_read_map := (ir: IrBuilder, reader: Coder, type: MapType) ->
   map := emit_map_new(ir, reader.program, type)
   unwind := -> release_and_return(ir, map, type)
-  call_void_method ir, reader, 'begin_map', [], unwind
-  read_entry := (key: String, release_key: () -> void) ->
+  shape := map_shape(type)
+  call_void_method ir, reader, "begin_#{shape}", [], unwind
+  # The map retains the key and the value, which this function owned.
+  add := (key: String, release_key: () -> void) ->
     value := emit_read(ir, reader, type.value, release_key)
-    # The map retains the key and the value, which this function owned.
     emit_map_set ir, map, key, value, type
-    emit_release ir, key
     emit_release_value ir, value, type.value
-  emit_for_each_key ir, reader, 'read_key', unwind, read_entry
+    emit_release_value ir, key, type.key
+  case shape
+    when MAP then emit_for_each_key(ir, reader, 'read_key', unwind, add)
+    when SET then emit_read_set_items(ir, reader, map, type, unwind)
+    else emit_for_each_entry(ir, reader, map, type, unwind, add)
   map
+
+# Adds each item of the set, read, to it. An item that the set holds already fails, as a key of a
+# map of String keys read twice does.
+emit_read_set_items := (
+  ir: IrBuilder, reader: Coder, set: String, type: MapType, unwind: () -> void
+) ->
+  more := -> call_method(ir, reader, 'next_item', bool_type, [], unwind)
+  read := ->
+    item := emit_read(ir, reader, type.key, unwind)
+    release_item := ->
+      emit_release_value ir, item, type.key
+      unwind()
+    fail := -> call_void_method(ir, reader, 'fail_duplicate', [], release_item)
+    # The set retains the item, which this function owned.
+    emit_when ir, ir.negate(emit_set_add(ir, set, item, type)), fail
+    emit_release_value ir, item, type.key
+  emit_while ir, more, read
+
+# Runs `add` with the key of each entry, read, owned, and what releases it and unwinds, after which
+# it reads the end of the entry. A key that the map holds already fails.
+emit_for_each_entry := (
+  ir: IrBuilder, reader: Coder, map: String, type: MapType, unwind: () -> void,
+  add: (String, () -> void) -> void
+) ->
+  more := -> call_method(ir, reader, 'next_entry', bool_type, [], unwind)
+  read := ->
+    key := emit_read(ir, reader, type.key, unwind)
+    release_key := ->
+      emit_release_value ir, key, type.key
+      unwind()
+    fail := -> call_void_method(ir, reader, 'fail_duplicate', [], release_key)
+    emit_when ir, emit_set_contains(ir, map, key, type), fail
+    call_void_method ir, reader, 'entry_value', [], release_key
+    add key, release_key
+    call_void_method ir, reader, 'end_entry', [], unwind
+  emit_while ir, more, read
 
 # Runs `body` with each key of the map or record being read, which the method gives, owned, and
 # what releases the key and unwinds, for where reading its value fails.

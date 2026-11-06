@@ -8,7 +8,7 @@ import emit_check_with, emit_return_thrown from './exceptions'
 import emit_member_value from './boxes'
 import emit_borrowed_value, emit_field_pointer, emit_member_dispatch from './heap_object'
 import emit_count_up, emit_if_else, emit_while, IrBuilder, IrModule from './ir_builder'
-import call_void_method, Coder, is_inline, name_arg, SCALARS from './codable'
+import call_void_method, Coder, is_inline, map_shape, MAP, name_arg, SCALARS, SET from './codable'
 import emit_release, emit_release_value, ir_type from './lerta_ir'
 import emit_is_present, emit_unwrap from './optional'
 import scalar_of, widened_to_word from './scalar'
@@ -83,33 +83,47 @@ emit_write_array := (
   call_void_method ir, writer, 'end_array', [], unwind
 
 # The entries in their order, through a cursor of the runtime, which gives each key and value
-# owned.
+# owned: a set's items, a map's keys of String with their values, or another map's entries, each of
+# a key and a value (see map_shape).
 emit_write_map := (ir: IrBuilder, writer: Coder, map: String, type: MapType): void ->
+  shape := map_shape(type)
   cursor := call_runtime(ir, 'ptr @lerta_map_cursor(ptr)', "ptr #{map}")
   release_cursor := ->
     emit_release ir, cursor
     emit_return_thrown ir, void_type
-  call_void_method ir, writer, 'begin_map', [], release_cursor
+  call_void_method ir, writer, "begin_#{shape}", [], release_cursor
   more := -> call_runtime(ir, 'i1 @lerta_map_cursor_has_next(ptr)', "ptr #{cursor}")
   write_entry := ->
     key_slot := ir.alloca('i64')
-    value_slot := emit_item_slot(ir, type.value)
+    value_slot := shape == SET then 'null' else emit_item_slot(ir, type.value)
     args := "ptr #{cursor}, ptr #{key_slot}, ptr #{value_slot}"
     call_void_runtime ir, 'void @lerta_map_cursor_next(ptr, ptr, ptr)', args
     key := from_item(ir, ir.load('i64', key_slot), type.key)
-    value := emit_load_item(ir, value_slot, type.value)
+    value := shape == SET then '' else emit_load_item(ir, value_slot, type.value)
     release_entry := ->
-      emit_release ir, key
-      emit_release_value ir, value, type.value
+      emit_release_value ir, key, type.key
+      emit_release_value ir, value, type.value unless shape == SET
     unwind := ->
       release_entry()
       release_cursor()
-    call_void_method ir, writer, 'write_key', ["ptr #{key}"], unwind
-    emit_write ir, writer, value, type.value, unwind
+    write_value := -> emit_write(ir, writer, value, type.value, unwind)
+    case shape
+      when SET
+        call_void_method ir, writer, 'next_item', [], unwind
+        emit_write ir, writer, key, type.key, unwind
+      when MAP
+        call_void_method ir, writer, 'write_key', ["ptr #{key}"], unwind
+        write_value()
+      else
+        call_void_method ir, writer, 'next_entry', [], unwind
+        emit_write ir, writer, key, type.key, unwind
+        call_void_method ir, writer, 'entry_value', [], unwind
+        write_value()
+        call_void_method ir, writer, 'end_entry', [], unwind
     release_entry()
   emit_while ir, more, write_entry
   emit_release ir, cursor
-  call_void_method ir, writer, 'end_map', [], -> emit_return_thrown(ir, void_type)
+  call_void_method ir, writer, "end_#{shape}", [], -> emit_return_thrown(ir, void_type)
 
 emit_write_tuple := (
   ir: IrBuilder, writer: Coder, tuple: String, type: TupleType, unwind: () -> void
@@ -178,7 +192,7 @@ class Reach
     case part
       when OptionalType then @reaches(part.inner)
       when ArrayType then @reaches(part.element)
-      when MapType then @reaches(part.value)
+      when MapType then @reaches(part.key) or @reaches(part.value)
       when TupleType then part.items.any(@reaches)
       when RecordType then part.fields.any((field) -> @reaches(field.type))
       when ObjectType then @reaches_object(part)

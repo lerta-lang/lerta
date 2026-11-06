@@ -36,6 +36,7 @@ export class Script
   read_float32 := -> @value('float32:').parse_float()!.to_float32()
   read_string := -> @value('string:')
   read_binary := -> @value('binary:').binary
+  read_char := -> [c for c in @value('char:')][0]
   read_member := (enum_name: String) -> @value("member:#{enum_name}.")
 
   begin_array := -> @expect('[')
@@ -43,6 +44,15 @@ export class Script
   begin_tuple := (count: Int) -> @expect("(#{count}")
   next_tuple_item := (count: Int) -> @expect_more()
   end_tuple := (count: Int) -> @expect(')')
+  begin_set := -> @expect('set[')
+  begin_entries := -> @expect('entries[')
+  next_entry := ->
+    return false if @ends_with(']')
+    @expect 'entry('
+    true
+  entry_value := -> @expect(':')
+  end_entry := -> @expect(')')
+  fail_duplicate := -> @fail('the same as one before')
   begin_map := -> @expect('map{')
   read_key := -> @ends_with('}') then nil else @value('key:')
   begin_record := -> @expect('{')
@@ -56,7 +66,7 @@ export class Script
     case
       when word.starts_with('bool:') then KIND_BOOL
       when word.starts_with('int:') or word.starts_with('float:') then KIND_NUMBER
-      when word.starts_with('string:') then KIND_TEXT
+      when word.starts_with('string:') or word.starts_with('char:') then KIND_TEXT
       when word == '{' then KIND_RECORD
       else KIND_OTHER
 

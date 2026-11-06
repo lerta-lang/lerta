@@ -7,8 +7,8 @@
 export interface Codable
 
 # What the generated code writes a value through: a scalar by its type, an enum's member by its
-# name, and the parts of the others between a begin_ and an end_, each after next_item, write_key
-# or write_field.
+# name, and the parts of the others between a begin_ and an end_, each after next_item, write_key,
+# write_field or next_entry.
 export interface Encoder
   write_nil: () -> void
   write_bool: (Bool) -> void
@@ -18,6 +18,7 @@ export interface Encoder
   write_float32: (Float32) -> void
   write_string: (String) -> void
   write_binary: (Binary) -> void
+  write_char: (Char) -> void
   # The enum's name, and the member's.
   write_member: (String, String) -> void
   begin_array: () -> void
@@ -26,9 +27,19 @@ export interface Encoder
   # The count of the items.
   begin_tuple: (Int) -> void
   end_tuple: () -> void
+  begin_set: () -> void
+  end_set: () -> void
+  # A map of String keys.
   begin_map: () -> void
   write_key: (String) -> void
   end_map: () -> void
+  # A map of other keys, of entries each after next_entry, the first too, of a key, then entry_value
+  # and its value, then end_entry.
+  begin_entries: () -> void
+  next_entry: () -> void
+  entry_value: () -> void
+  end_entry: () -> void
+  end_entries: () -> void
   begin_record: () -> void
   # The field's name.
   write_field: (String) -> void
@@ -52,18 +63,30 @@ export interface Decoder
   read_float32: () -> Float32
   read_string: () -> String
   read_binary: () -> Binary
+  read_char: () -> Char
   # The name of a member of the enum of the name.
   read_member: (String) -> String
   begin_array: () -> void
-  # Whether another item of the innermost array or tuple follows, which it then starts reading.
+  # A set, whose items next_item starts.
+  begin_set: () -> void
+  # Whether another item of the innermost array, set or tuple follows, which it then starts reading.
   next_item: () -> Bool
   # The count of the items, which next_tuple_item and end_tuple are given too.
   begin_tuple: (Int) -> void
   next_tuple_item: (Int) -> void
   end_tuple: (Int) -> void
   begin_map: () -> void
-  # The next key of the innermost map, whose value it then starts reading, or nil at its end.
+  # The next key of the innermost map of String keys, whose value it then starts reading, or nil at
+  # its end.
   read_key: () -> String?
+  # A map of other keys: whether another entry follows, whose key it then starts reading; its value
+  # follows entry_value, and end_entry ends it.
+  begin_entries: () -> void
+  next_entry: () -> Bool
+  entry_value: () -> void
+  end_entry: () -> void
+  # The item of a set, or the key of an entry, just read is one that came before.
+  fail_duplicate: () -> never
   begin_record: () -> void
   # As read_key, of the innermost record.
   read_field: () -> String?
@@ -80,7 +103,7 @@ export interface Decoder
   fail_member: (String, String) -> never
 
 # The kinds that peek_kind gives, as compiler/checker/codable.lerta numbers them: of a Bool, a
-# number, a String, a Binary or an enum's member, a class or struct, and anything else.
+# number, a String, a Binary, a Char or an enum's member, a class or struct, and anything else.
 export KIND_BOOL := 0
 export KIND_NUMBER := 1
 export KIND_TEXT := 2

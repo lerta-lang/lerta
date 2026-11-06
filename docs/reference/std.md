@@ -75,27 +75,32 @@
   - Why: a type of values would not tell which type to convert by.
 - It has no members: the types that satisfy it are those of data, which the compiler tells by their parts, and it generates the code that converts each, so no type declares anything for it. It is the only interface without members.
 - A type with a part that is not data does not satisfy it: a function, a `Promise`, an `Iter`, an interface or a `weak` field.
-- That is an error at the call, which names the path of the part, as JsonError's messages write it, with `$[]` for an item of an array and `$.*` for a value of a map: `Request does not satisfy Codable: $.handler is of type (Int) -> Int, which is not data`.
-- So far, neither does a type with a part that is a `Char`, a `Set`, or a map whose keys are not `String`s, nor a union that std:json's [unions](#types) leave out.
+- That is an error at the call, which names the path of the part, as JsonError's messages write it, with `$[]` for an item of an array or a set, `$.*` for a value of a map of `String` keys, and `$[][0]` and `$[][1]` for a key and a value of another map: `Request does not satisfy Codable: $.handler is of type (Int) -> Int, which is not data`.
+- So far, neither does a union that std:json's [unions](#types) leave out.
 
 ### Encoder
 
-- A scalar is written by the method of its type: `write_nil`, `write_bool`, `write_int` (an integer of another type than `UInt64`, as an `Int`), `write_uint64`, `write_float`, `write_float32`, `write_string` and `write_binary`; an enum's member by `write_member(enum_name, member)`.
+- A scalar is written by the method of its type: `write_nil`, `write_bool`, `write_int` (an integer of another type than `UInt64`, as an `Int`), `write_uint64`, `write_float`, `write_float32`, `write_string`, `write_binary` and `write_char`; an enum's member by `write_member(enum_name, member)`.
 - The others are written between a `begin_` and an `end_`:
   - an array: `begin_array`, `next_item` before each item, the first too, `end_array`;
   - a tuple: `begin_tuple(count)`, `next_item` before each item, the first too, `end_tuple`;
-  - a map: `begin_map`, `write_key(key)` before each value, `end_map`;
+  - a set: `begin_set`, `next_item` before each item, the first too, `end_set`;
+  - a map of `String` keys: `begin_map`, `write_key(key)` before each value, `end_map`;
+  - another map: `begin_entries`, then for each entry `next_entry`, its key, `entry_value`, its value and `end_entry`, then `end_entries`;
   - a class, a struct or an anonymous struct: `begin_record`, `write_field(name)` before each field's value, `end_record`.
 - A class or struct whose type can hold itself is written between `enter(address)` and `leave`, around its record, so that a format that cannot hold a cycle can throw.
 
 ### Decoder
 
-- Each method reads what its `Encoder` counterpart writes, and throws where it finds something else: `read_nil(): Bool`, which reads a nil if there is one, `read_bool`, `read_integer(expected, least, most)` (an integer of another type than `UInt64`, in its range, with `expected` naming it, as `an Int8`), `read_uint64`, `read_float`, `read_float32`, `read_string`, `read_binary` and `read_member(enum_name): String`.
+- Each method reads what its `Encoder` counterpart writes, and throws where it finds something else: `read_nil(): Bool`, which reads a nil if there is one, `read_bool`, `read_integer(expected, least, most)` (an integer of another type than `UInt64`, in its range, with `expected` naming it, as `an Int8`), `read_uint64`, `read_float`, `read_float32`, `read_string`, `read_binary`, `read_char` and `read_member(enum_name): String`.
 - An array: `begin_array`, then `next_item(): Bool` before each item, false at the end.
 - A tuple: `begin_tuple(count)`, `next_tuple_item(count)` before each item and `end_tuple(count)`, which throw if there are fewer or more.
-- A map: `begin_map`, then `read_key(): String?` before each value, nil at the end.
+- A set: `begin_set`, then `next_item(): Bool` before each item, as an array.
+- A map of `String` keys: `begin_map`, then `read_key(): String?` before each value, nil at the end.
+- Another map: `begin_entries`, then `next_entry(): Bool` before each entry, false at the end, its key, `entry_value`, its value and `end_entry`.
+- `fail_duplicate()` throws for an item of a set, or a key of an entry, that came before, as a key of a map of `String` keys read twice throws.
 - A record: `begin_record`, then `read_field(): String?`, as `read_key`. `is_field(key, name)` tells the field whose key it is, `skip_value` skips the value of a key that is none, and `fail_missing_field(name)` throws for a field that needs a key.
-- A union: `peek_kind(): Int` gives the kind of the value, without reading it: `KIND_BOOL`, `KIND_NUMBER`, `KIND_TEXT` (a `String`, a `Binary` or an enum's member), `KIND_RECORD` (a class or struct) or `KIND_OTHER`, and the member of that kind is read; `fail_expected(expected)` throws for one of no member's kind.
+- A union: `peek_kind(): Int` gives the kind of the value, without reading it: `KIND_BOOL`, `KIND_NUMBER`, `KIND_TEXT` (a `String`, a `Binary`, a `Char` or an enum's member), `KIND_RECORD` (a class or struct) or `KIND_OTHER`, and the member of that kind is read; `fail_expected(expected)` throws for one of no member's kind.
 - `fail_member(enum_name, name)` throws for a name read that names no member.
 
 ## std:http
@@ -520,7 +525,7 @@ xs := decode_json<Int[]>(text)
 - `AS_WRITTEN`: the fields' names.
 - `CAMEL_CASE`: each `_` between another character and a lowercase ASCII letter left out, and the letter in uppercase, as `textDocument` for `text_document`, for formats such as the LSP's.
   - A leading `_`, one after another, and one before anything else, stay.
-- The keys of maps, which are data, stay as they are.
+- The `String` keys of maps, which are data, stay as they are; keys of other types are written as any other value.
 - `encode_json` throws a `JsonError` for an object with two fields that camel case writes as one key, as `ab_c` and `abC`, which would give it two values of the key: `$.pair: two fields of the key "abC"`. `decode_json` reads the key into the first of them.
 
 ### Types
@@ -535,7 +540,10 @@ xs := decode_json<Int[]>(text)
 | `T?` | `null` for nil, otherwise as `T`. |
 | `T[]` | An array. |
 | tuples | An array of as many items. |
+| `Char` | A string of it alone. |
+| `Set<T>` | An array of its items, in their order; `decode_json` takes no item twice: `$[2]: the same as one before`. |
 | `Map<String, V>` | An object, of the entries in their order. |
+| `Map<K, V>` of other keys | An array of the entries in their order, each an array of its key and its value: `[[1,"one"]]`; `decode_json` takes no key twice. |
 | classes, structs, anonymous structs | An object, of a key for each field, as `JsonKeys` writes its name, in the order of the fields (below). |
 | enums | The member's text, as `to_string` gives it, as a string. |
 | unions | The member, as it is written alone (below). |
@@ -545,8 +553,8 @@ xs := decode_json<Int[]>(text)
   - A key that is no such field, as one of a field given by an initializer alone, is skipped.
   - A key may not be given twice.
 - **Unions.** `decode_json` takes the member that the kind of the JSON value tells: a number, `true` or `false`, a string or an object.
-  - So the members must be of different kinds. A union of two number types, as `Int` and `Float`, of two that are strings, as `String` and `Binary` or an enum, or of two classes or structs, does not satisfy `Codable`.
-  - Nor does a union with an array, a map, a tuple or an anonymous struct as a member, so far.
+  - So the members must be of different kinds. A union of two number types, as `Int` and `Float`, of two that are strings, as `String` and `Binary`, a `Char` or an enum, or of two classes or structs, does not satisfy `Codable`.
+  - Nor does a union with an array, a set, a map, a tuple or an anonymous struct as a member, so far.
   - A value of no member's kind is an error: `$.id: expected Int | String, found an array`.
 
 ### JsonError

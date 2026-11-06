@@ -10,8 +10,8 @@ import Body, ProgramWide, Shared from './shared'
 import names_type_or_import, resolve from './type_names'
 import field_type, info_of from './object_types'
 import
-  ArrayType, EnumType, format_type, InterfaceType, is_kind, is_number, is_one_of_kinds, MapType,
-  NUMBER_KINDS, ObjectType, OptionalType, RecordType, TupleType, Type, type_key, TypeKind,
+  ArrayType, EnumType, format_type, InterfaceType, is_kind, is_number, is_one_of_kinds, is_set,
+  MapType, NUMBER_KINDS, ObjectType, OptionalType, RecordType, TupleType, Type, type_key, TypeKind,
   TypeParameterType, UnionType, void_type
 from '../types'
 
@@ -67,11 +67,12 @@ class PartFinder
       when type is TupleType then @first_part([(item, "#{path}[#{i}]") for item, i in type.items])
       when type is RecordType
         @first_part [(field.type, "#{path}.#{field.name}") for field in type.fields]
-      when type is MapType
-        unless is_kind(type.key, 'String')
-          problem := "has keys of type #{format_type(type.key)}, which no map holds so far"
-          return { path, problem }
+      when is_set(type) then @uncodable_part((type as MapType!).key, "#{path}[]")
+      when type is MapType and is_kind(type.key, 'String')
         @uncodable_part type.value, "#{path}.*"
+      when type is MapType
+        return part if part := @uncodable_part(type.key, "#{path}[][0]")
+        @uncodable_part type.value, "#{path}[][1]"
       when type is ObjectType then @object_part(type, path)
       when type is UnionType then @union_part(type, path)
       when type is TypeParameterType and @is_codable_parameter(type) then nil
@@ -117,14 +118,14 @@ export codable_kind := (member: Type) ->
   case
     when is_kind(member, 'Bool') then 0
     when is_number(member) then 1
-    when is_one_of_kinds(member, ['String', 'Binary']) or member is EnumType then 2
+    when is_one_of_kinds(member, ['String', 'Binary', 'Char']) or member is EnumType then 2
     when member is ObjectType then 3
     else nil
 
 # The kinds as messages write them, by their numbers.
 KIND_WORDS := ['Bool values', 'numbers', 'text', 'classes or structs']
 
-SCALAR_KINDS: TypeKind[] = [NUMBER_KINDS..., 'Bool', 'String', 'Binary']
+SCALAR_KINDS: TypeKind[] = [NUMBER_KINDS..., 'Bool', 'String', 'Binary', 'Char']
 
 # A call in std:codable of the builtin `encode_value` or `decode_value`, unless the name is taken
 # there.
