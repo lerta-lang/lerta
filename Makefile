@@ -27,11 +27,20 @@ BUILD_TOOL_SOURCES := tools/build.lerta $(shell find tools/build compiler std -n
 
 # The goals, which tools/build.lerta builds once the Makefile has built it from the seed: see
 # README.md. Each runs it, as it finds what to make again itself.
-GOALS := all bin/lerta bin/test test test-bootstrap seed check bench bench-http site site-serve \
-  test-cross
+GOALS := all bin/lerta bin/test test test-bootstrap seed check bench bench-http site site-serve
 
 $(GOALS): build/build$(HOST_EXE)
 	@build/build $@ $(if $(TARGET),--target $(TARGET))
+
+# The targets of test-targets.llit, or those of TARGETS alone, each where it says, and the tests of
+# the target TARGET here, which test-targets runs wherever it runs one (see README.md).
+test-targets: build/build$(HOST_EXE)
+	$(if $(TARGET),$(error make test-targets takes TARGETS, not TARGET))
+	@build/build test-targets $(TARGETS)
+
+test-target: build/build$(HOST_EXE)
+	$(if $(TARGET),,$(error make test-target needs TARGET))
+	@build/build test-target $(TARGET)
 
 # Goals run one at a time, even under -j, as each run of build/build makes what it needs in build/
 # and bin/, which another run would make at the same time.
@@ -92,4 +101,4 @@ build/build$(HOST_EXE): build/build.ll $(RUNTIME) build/libuv/built
 clean:
 	rm -rf build bin
 
-.PHONY: $(GOALS) clean
+.PHONY: $(GOALS) test-targets test-target clean

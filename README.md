@@ -56,7 +56,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `seed/` | The seed, from which `make` builds the compiler (see [the bootstrap](docs/internals/architecture.md#bootstrap)) |
 | `LICENSE-MIT`, `LICENSE-APACHE` | Lerta's licenses (see [License](#license)) |
 | `third_party/` | libuv and its license. Its license notice goes with the compiler and the programs it builds (see [License](#license)) |
-| `tools/` | `build.lerta` and `build/`, which build the compiler, and check and test it, for the goals of `make` (see [the bootstrap](docs/internals/architecture.md#bootstrap)); `test_cross.sh`, which `make test-cross` runs; `docker/`, its Docker images, with `run.sh` to run a command (bash by default) in one |
+| `tools/` | `build.lerta` and `build/`, which build the compiler, and check and test it, for the goals of `make` (see [the bootstrap](docs/internals/architecture.md#bootstrap)); `docker/`, the Docker images that `make test-targets` runs in, with `run.sh` to run a command (bash by default) in one |
 | `test/` | The test driver and suites (see [Testing](#testing)) |
 | `tests/` | The run tests: Lerta sources and their expected output; also the CLI checks' files (`tests/cli/`) and the formatter cases (`tests/format/`) |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
@@ -104,26 +104,25 @@ The tests run on Linux, macOS and Windows. A check of what only POSIX systems ha
 
 ```
 make test              # builds bin/lerta, then runs the tests and test-bootstrap, on the host only
-make test-cross        # the tests for every environment but the host's own (see below)
+make test-targets      # the tests of the targets that test-targets.llit names, each where it says (see below)
+make test-target TARGET=<target>  # the tests of that target here, as test-targets runs them
 make check             # the code in the style (lerta fmt)
 ```
 
 - Every language feature gets run tests in `tests/`: a Lerta source and its expected output, as the top of `test/run.lerta` describes. Programs in `examples/` are run as tests too.
 - `make check` checks the tests' style too. Code that breaks it on purpose, as a test of a form that the style rewrites, keeps it with `# fmt: skip` or `# fmt: off` (see [fmt](docs/reference/compiler.md#fmt)). A file that does not parse starts with `# fmt: off`.
 
-#### Cross testing
+#### Testing other targets
 
-`make test-cross` runs the tests, with the bootstrap through a compiler for each target, as:
+`make test-targets` runs the tests of the targets that `test-targets.llit` names (see [llit](docs/internals/llit.md)), each where it says. The file is each developer's own, which git ignores: copy [tools/test-targets.example.llit](tools/test-targets.example.llit) to it and edit it.
 
-- 32-bit Linux programs;
-- 64-bit and 32-bit Windows programs (mingw-w64 and Wine);
-- on a host other than Linux, also `make test` on Linux in Docker.
-
-Where each runs:
-
-- On the host if it can, otherwise in Docker when Docker runs it without emulation. The 32-bit and Windows programs then need an x86-64 host.
-- The targets run one after another. It ends with what ran and what was skipped, and why. What a container skips, such as the Windows bootstrap in the Wine image without a clang for Windows, shows only in its output.
-- For example, on an Apple silicon Mac it runs Linux in Docker and skips 32-bit Linux. Windows runs only with mingw-w64, lld and Wine installed; the Windows bootstrap also needs a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s) on Wine's `PATH` (`WINEPATH`).
+- A target is a short name of [`--target`](docs/reference/compiler.md#--target-target), and runs:
+  - `local`: here;
+  - `docker`: in a container of that image of `tools/docker/` (`linux`, or `wine`, for Windows programs under Wine), on the tree mounted read-only (see `tools/docker/run.sh`);
+  - `ssh`: on that host, in a temporary directory that the tree is sent to, which is removed after, the tree being what `make check` checks: the files that git lists, those not added yet included. The commands run in bash, so its `PATH` there must have make and clang, as in the shell of Git for Windows.
+- The host's own target runs `make test`; another the run tests built for it (`bin/test --target`) and `make test-bootstrap` for it. A Windows target elsewhere than on Windows runs under Wine, whose bootstrap needs a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s, which the `wine` image has) on Wine's `PATH` (`WINEPATH`), and fails without one.
+- `make test-targets TARGETS="windows-amd64 windows-i386"` runs those alone.
+- The targets run one after another, in the order of the file, but those of SSH hosts after the others, each host's after the tree is sent there once. It ends with how each went. An interruption, as Ctrl-C, removes the containers and the temporary directories.
 
 #### The driver
 

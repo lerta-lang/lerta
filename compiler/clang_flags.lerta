@@ -1,6 +1,7 @@
 # What clang is given for each kind of build, which the program and the runtime share. The runtime
 # checks (test/runtime.lerta), which minilerta builds, import it too, so that they compile the
 # runtime's sources as `build` does.
+import platform from 'std:process'
 
 # A kind of build: with `-O` or not, with the memory checks or not, and for `target` (a triple such
 # as i686-linux-gnu) or else for the host.
@@ -60,6 +61,21 @@ export UNIVERSAL_TRIPLES := ['arm64-apple-macos', 'x86_64-apple-macos']
 
 # The triple of a target, given by its short name or as a triple.
 export target_triple := (target: String) -> TRIPLES_BY_NAME[target] ? target
+
+# Whether the target is one of the short names.
+export is_target_name := (target: String) -> target in TRIPLES_BY_NAME
+
+# The short name of the host's target, `<platform>-<architecture>`, by the triple that clang prints
+# for it, as `arm64-apple-darwin25.6.0`, which none of TRIPLES_BY_NAME is; nil for an architecture
+# that has none.
+export target_name_of_host := (triple: String) ->
+  architecture :=
+    case triple.split('-')[0]
+      when 'x86_64' then 'amd64'
+      when 'aarch64', 'arm64' then 'arm64'
+      when 'i386', 'i486', 'i586', 'i686' then 'i386'
+      else return nil
+  "#{platform}-#{architecture}"
 
 # A mingw-w64 triple, as GCC's toolchains name it or as llvm-mingw's clang does by default.
 export is_mingw := (target: String) ->

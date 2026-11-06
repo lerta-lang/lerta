@@ -9,18 +9,45 @@ import platform from 'std:process'
 import sleep from 'std:time'
 import is_stale, sorted_once from '../../tools/build/files'
 import bootstrap_for from '../../tools/build/stages'
+import SETTINGS_USAGE from '../../tools/build/targets'
 import CompileError from '../../compiler/errors'
 import described_build, runtime_c_names from '../../compiler/platform_description'
 import BuildError, command_line_batches, piped_to_file from '../../tools/build/steps'
 
 BUILD_TOOL := "#{root_dir}/build/build#{host_executable_suffix}"
-USAGE := 'usage: build <goal> [--target <target>] | build embed <output> <path>...'
+USAGE :=
+  'usage: build <goal> [--target <target>] | build test-targets [<target>...]'
+  'build test-target <target> | build embed <output> <path>...'
+.join(' | ')
 
 # A run that ends with code 2 and prints `message`, as make does for a usage error.
 usage_check := (name: String, dir_name: String, args: String[], message: String) ->
   Check name: "build/build #{name} is a usage error", run: ->
     ran := await run_command(BUILD_TOOL, args, new_cli_dir(dir_name))
     [expect_status(2, ran.status)..., compare_output('stderr', b"#{message}\n", ran.stderr)...]
+
+# A run of test-targets in a directory of the settings, if any, that ends with code 2 and prints
+# `message`, before it runs any target.
+settings_check := (
+  name: String, dir_name: String, settings: String?, args: String[], message: String
+) ->
+  Check name: "build/build test-targets #{name} is an error", run: ->
+    dir := new_cli_dir(dir_name)
+    await write_file("#{dir}/test-targets.llit", settings) if settings
+    ran := await run_command(BUILD_TOOL, ['test-targets', args...], dir)
+    [expect_status(2, ran.status)..., compare_output('stderr', b"#{message}\n", ran.stderr)...]
+
+# tools/test-targets.example.llit is settings that test-targets takes: a target that it has not is
+# then the error, before anything runs.
+example_check := Check
+  name: 'build/build test-targets takes tools/test-targets.example.llit'
+  run: ->
+    dir := new_cli_dir('build-tool-example-settings')
+    example := await read_file("#{root_dir}/tools/test-targets.example.llit")
+    await write_file("#{dir}/test-targets.llit", example)
+    ran := await run_command(BUILD_TOOL, ['test-targets', 'linux-arm64'], dir)
+    message := b"test-targets.llit has no linux-arm64\n"
+    [expect_status(2, ran.status)..., compare_output('stderr', message, ran.stderr)...]
 
 batches_check := (name: String, args: String[], limit: Int, expected: String) ->
   Check
@@ -262,13 +289,72 @@ export checks :=
     ['test', '--target', 'x']
     'make test does not take TARGET: run bin/test --target <target>'
   )
-  usage_check(
-    'test-cross --target'
-    'build-tool-test-cross-target'
-    ['test-cross', '--target', 'x']
-    'make test-cross does not take TARGET: run bin/test --target <target>'
-  )
   usage_check('embed with no output', 'build-tool-embed', ['embed'], "no goal embed: #{USAGE}")
+  usage_check('test-target with no target', 'build-tool-test-target-none', ['test-target'], USAGE)
+  usage_check(
+    'test-target of no short name'
+    'build-tool-test-target-name'
+    ['test-target', 'linux-i368']
+    'no target linux-i368'
+  )
+  usage_check(
+    'test-target with two targets'
+    'build-tool-test-target-two'
+    ['test-target', 'linux-i386', 'linux-amd64']
+    USAGE
+  )
+  settings_check('without settings', 'build-tool-no-settings', nil, [], SETTINGS_USAGE)
+  settings_check('of no target', 'build-tool-no-targets', 'targets: Map()', [], SETTINGS_USAGE)
+  example_check
+  settings_check(
+    'of a target of two places'
+    'build-tool-two-places'
+    "targets:\n  'linux-i386': { local: true, docker: 'linux' }\n"
+    []
+    'test-targets.llit: linux-i386 takes one of local, docker and ssh'
+  )
+  settings_check(
+    'of a target of no place'
+    'build-tool-no-place'
+    "targets:\n  'linux-i386': { local: false }\n"
+    []
+    'test-targets.llit: linux-i386 takes one of local, docker and ssh'
+  )
+  settings_check(
+    'of a target that the settings have not'
+    'build-tool-unknown-target'
+    "targets:\n  'linux-i386': { local: true }\n"
+    ['windows-amd64']
+    'test-targets.llit has no windows-amd64'
+  )
+  settings_check(
+    'of a target of no short name'
+    'build-tool-no-target-name'
+    "targets:\n  'linux-i368': { docker: 'linux' }\n"
+    []
+    'test-targets.llit: no target linux-i368'
+  )
+  settings_check(
+    'of an image that tools/docker has not'
+    'build-tool-no-image'
+    "targets:\n  'linux-i386': { docker: 'linx' }\n"
+    []
+    'test-targets.llit: no image linx, which is linux or wine'
+  )
+  settings_check(
+    'of targets of which one the settings have not'
+    'build-tool-unknown-of-two'
+    "targets:\n  'linux-i386': { docker: 'linux' }\n"
+    ['linux-i386', 'windows-amd64']
+    'test-targets.llit has no windows-amd64'
+  )
+  settings_check(
+    'of settings that are not llit'
+    'build-tool-bad-settings'
+    "targets:\n  'linux-i386': { dokcer: 'linux' }\n"
+    []
+    'test-targets.llit:2:19: no field dokcer'
+  )
   usage_check(
     'seed --target'
     'build-tool-seed-target'

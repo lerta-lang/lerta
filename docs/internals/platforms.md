@@ -77,7 +77,7 @@
 ## Platforms
 
 - Targets are Linux, macOS and **Windows**. No POSIX-specific assumptions from the start: OS dependencies are confined to the boundary of libuv and the runtime.
-- How the tests cover other targets, Windows under Wine included, is in the [README](../../README.md#cross-testing).
+- How the tests cover other targets, on other machines or in Docker, is in the [README](../../README.md#testing-other-targets).
 
 ### Platform functions
 

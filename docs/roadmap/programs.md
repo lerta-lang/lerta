@@ -128,7 +128,7 @@ The rest of [`lerta lsp`](../reference/compiler.md#lsp):
 
 ### Tests of the compiler
 
-- The command-line checks (`test/cli.lerta`) run on Windows too, through `make test-cross` (the bootstrap runs there already: see [platforms](../internals/platforms.md#platforms)), with those that run a shell made to run without one.
+- The command-line checks (`test/cli.lerta`) run on Windows too, through `make test-targets` (the bootstrap runs there already: see [platforms](../internals/platforms.md#platforms)), with those that run a shell made to run without one.
 
 ## Open questions
 

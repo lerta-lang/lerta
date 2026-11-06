@@ -1,0 +1,234 @@
+# The tests for other targets than the host's, or on other machines, that test-targets.llit names,
+# each where it says (see README.md#testing-other-targets): here, in a container of a Docker image,
+# or over SSH on another machine, whose tree is a copy of this one, sent for the run alone.
+import decode_llit, LlitError from '../../compiler/llit'
+import
+  is_mingw, is_target_name, target_name_of_host, target_triple
+from '../../compiler/clang_flags'
+import read_text, stat from 'std:io'
+import platform, process_id, run from 'std:process'
+import BuildError, call, captured from './steps'
+import BUILD_TOOL, HARNESS_PROGRAM from './stages'
+
+SETTINGS := 'test-targets.llit'
+
+# The images that tools/docker/run.sh runs.
+IMAGES := ['linux', 'wine']
+
+export SETTINGS_USAGE := """
+  #{SETTINGS} names the targets that make test-targets runs, each where it runs: copy
+  tools/test-targets.example.llit to it and edit it. make test-targets TARGETS="<target>..." runs
+  those of them alone.
+  """
+
+# Where a target runs: here, in a container of the image, or over SSH on the host. A target names
+# one of them.
+struct Place
+  local := default false
+  docker: String? = default nil
+  ssh: String? = default nil
+
+struct Settings
+  targets: Map<String, Place>
+
+# How the run of a target went, as the summary at the end gives it.
+struct Outcome
+  what: String
+  passed: Bool
+
+# Runs the targets of the settings, those named alone if any are, one after another, and prints
+# how each went at the end; the exit code is 1 if any failed.
+export test_targets := (named: String[]) ->
+  targets := selected((await read_settings()).targets, named)
+  outcomes: Outcome[]
+  ssh_hosts: Map<String, String[]>
+  for (target, place) in targets.entries()
+    if host := place.ssh
+      ssh_hosts[host] = [(ssh_hosts[host] ? [])..., target]
+    else if image := place.docker
+      outcomes.push await run_in_docker(target, image)
+    else
+      outcomes.push await run_here(target)
+  for (host, host_targets) in ssh_hosts.entries()
+    outcomes.push each for each in await run_on_host(host, host_targets)
+  print "\ntest-targets:"
+  for outcome in outcomes
+    print "  #{outcome.passed then 'passed: ' else 'FAILED: '} #{outcome.what}"
+  outcomes.all((outcome) -> outcome.passed) then 0 else 1
+
+read_settings := ->
+  throw BuildError(message: SETTINGS_USAGE, code: 2) if stat(SETTINGS) == nil
+  text := await read_text(SETTINGS) ? throw BuildError(message: "#{SETTINGS} is not UTF-8", code: 2)
+  settings := decode_settings(text)
+  throw BuildError(message: SETTINGS_USAGE, code: 2) if settings.targets.is_empty()
+  for (target, place) in settings.targets.entries()
+    places := [given for given in [place.local, place.docker != nil, place.ssh != nil] when given]
+    if places.length != 1
+      message := "#{SETTINGS}: #{target} takes one of local, docker and ssh"
+      throw BuildError(message, code: 2)
+    unless is_target_name(target)
+      throw BuildError(message: "#{SETTINGS}: no target #{target}", code: 2)
+    if image := place.docker
+      unless image in IMAGES
+        message := "#{SETTINGS}: no image #{image}, which is #{IMAGES.join(' or ')}"
+        throw BuildError(message, code: 2)
+  settings
+
+decode_settings := (text: String) ->
+  try
+    decode_llit<Settings>(text, SETTINGS)
+  catch error: LlitError
+    throw BuildError(message: error.message, code: 2)
+
+# The targets that are named, in the order of the settings, all of them if none is.
+selected := (targets: Map<String, Place>, named: String[]) ->
+  return targets if named.is_empty()
+  for target in named
+    throw BuildError(message: "#{SETTINGS} has no #{target}", code: 2) unless target in targets
+  chosen: Map<String, Place>
+  for (target, place) in targets.entries()
+    chosen[target] = place if target in named
+  chosen
+
+# The tests of the target here: make test's for the host's own, else the run tests and the
+# bootstrap built for it. A Windows target on another system runs under Wine, whose bootstrap
+# needs a clang for Windows on Wine's PATH, without which it fails.
+export test_target := (target: String) ->
+  throw BuildError(message: "no target #{target}", code: 2) unless is_target_name(target)
+  print "started: #{target}"
+  host :=
+    target_name_of_host((await captured('clang', ['-print-target-triple'], b'')).text()!.trim())
+  return await call('nice', BUILD_TOOL, 'test') if target == host
+  return 1 if await call(BUILD_TOOL, 'bin/lerta') != 0 or await call(BUILD_TOOL, 'bin/test') != 0
+  under_wine := is_mingw(target_triple(target)) and platform != 'windows'
+  # Without it, Wine writes its own messages to the programs' stderr.
+  env := under_wine then { 'WINEDEBUG': '-all' } else Map<String, String>()
+  # Before the run tests, so that a run without one fails at once.
+  if under_wine and not await has_wine_clang(env)
+    print_error "the bootstrap for #{target} needs a clang for Windows on Wine's PATH"
+    return 1
+  code := (await run('nice', HARNESS_PROGRAM, '--target', target, env: env)).code
+  bootstrap := (await run('nice', BUILD_TOOL, 'test-bootstrap', '--target', target, env: env)).code
+  code == 0 and bootstrap == 0 then 0 else 1
+
+# Wine itself missing is none either.
+has_wine_clang := (env: Map<String, String>) ->
+  try
+    (await run('wine', 'clang', '--version', env: env, stdout: DISCARD, stderr: DISCARD)).code == 0
+  catch error: IOError
+    false
+
+# Each container is named, so that it is removed however the run ends, an interruption included,
+# which stopping `docker run` leaves it running for.
+var containers = 0
+
+# The command that tests the target in a fresh copy of the tree, as make names build/build there.
+remote_test := (target: String) -> "make --no-print-directory test-target TARGET=#{target}"
+
+run_in_docker := (target: String, image: String) ->
+  containers += 1
+  container := "lerta-test-#{process_id}-#{containers}"
+  print "started: #{target} in Docker (#{image})"
+  var code = 1
+  try
+    command := ['--name', container, image, 'sh', '-c', remote_test(target)]
+    code = await call('tools/docker/run.sh', command...)
+  finally
+    await remove_container(container)
+  Outcome what: "#{target} in Docker (#{image})", passed: code == 0
+
+# Docker itself missing, which fails the run, leaves no container either.
+remove_container := (container: String) ->
+  try
+    _removed := await run('docker', 'rm', '--force', container, stdout: DISCARD, stderr: DISCARD)
+  catch error: IOError
+    return
+
+# A program that cannot be run, as clang, fails the target, and the others go on.
+run_here := (target: String) ->
+  what := "#{target} here"
+  try
+    Outcome what, passed: await test_target(target) == 0
+  catch error: BuildError | IOError
+    print_error error.message
+    Outcome what: "#{what}: #{error.message}", passed: false
+
+# A host that cannot be reached, or that the tree cannot be sent to, fails its targets, as ssh or
+# tar missing does, and the others go on.
+run_on_host := (host: String, targets: String[]) ->
+  try
+    await run_over_ssh(host, targets)
+  catch error: BuildError | IOError
+    print_error error.message
+    [
+      Outcome(what: "#{target} over SSH (#{host}): #{error.message}", passed: false)
+      for target in targets
+    ]
+
+# The targets of the host, in a temporary directory there, which the tree is sent to once, and
+# which is removed however the run ends. A run that is stopped here, as by an interruption, goes on
+# there, where it would keep files of the directory in use, so the processes of the last run are
+# stopped first (see STOP_RUN).
+run_over_ssh := (host: String, targets: String[]) ->
+  print "started: #{targets.join(', ')} over SSH (#{host})"
+  # The last line, as a login's profile may print lines before it, which must be the absolute path
+  # of the directory, as `rm -rf` takes it.
+  dir := (await remote_output(host, 'mktemp -d')).trim().lines().last() ? ''
+  if not (dir.starts_with('/') and ' ' not in dir)
+    throw BuildError(message: "#{host} made no temporary directory: '#{dir}'")
+  outcomes: Outcome[]
+  try
+    archive := await tree_archive()
+    # The archive takes the standard input, so the command is an argument, without a quote or a
+    # `$`, which cmd and a POSIX shell would read apart.
+    sent := await run('ssh', host, "bash -lc \"tar -xf - -C #{dir}\"", stdin: archive)
+    throw BuildError(message: "cannot send the tree to #{host}") if sent.code != 0
+    for target in targets
+      # The ID is that of bash, whose process group, or tree on Windows, holds the run.
+      script := """
+        cd #{dir} && echo $$ > #{PID_FILE} || exit 1
+        #{remote_test(target)}
+        code=$?
+        rm -f #{PID_FILE}
+        exit $code
+        """
+      code := (await run('ssh', host, REMOTE_BASH, stdin: script.binary)).code
+      outcomes.push { what: "#{target} over SSH (#{host})", passed: code == 0 }
+  finally
+    await run('ssh', host, REMOTE_BASH, stdin: b"cd #{dir}\n#{STOP_RUN}\ncd / && rm -rf #{dir}")
+  outcomes
+
+# Where the run there writes its process's ID, which runs make, for STOP_RUN.
+PID_FILE := '.lerta-pid'
+
+# Stops the processes of the last run of the directory, if it was cut off, as it removes its file
+# when it ends: the tree of its process on Windows,
+# where Git for Windows's bash gives the Windows process's ID, else its process group.
+STOP_RUN := """
+  if [ -f #{PID_FILE} ]; then
+    pid=$(cat #{PID_FILE})
+    if [ -f /proc/$pid/winpid ]; then
+      taskkill //T //F //PID $(cat /proc/$pid/winpid) > /dev/null 2>&1
+    else
+      kill -TERM -- -$(ps -o pgid= -p $pid | tr -d ' ') 2> /dev/null
+    fi
+    sleep 1
+  fi
+  """
+
+# bash reads the script from its standard input: Windows's SSH server runs a command in cmd, which
+# reads the quotes and the `$` of an argument otherwise than a POSIX shell does.
+REMOTE_BASH := 'bash -l -s'
+
+# What the script prints there.
+remote_output := (host: String, script: String) ->
+  (await captured('ssh', [host, REMOTE_BASH], script.binary)).text()!
+
+# The files that git lists, those not added yet included, but those deleted and not yet from git,
+# as a tar archive.
+tree_archive := ->
+  git_args := ['ls-files', '-z', '--cached', '--others', '--exclude-standard']
+  listed := (await captured('git', git_args, b'')).text()!.split("\0")
+  files := [file for file in listed when not file.is_empty() and stat(file) != nil]
+  names := [file + "\0" for file in files].join('')
+  await captured('tar', ['-cf', '-', '--null', '-T', '-'], names.binary)

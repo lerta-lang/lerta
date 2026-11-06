@@ -1,8 +1,10 @@
 # Builds the compiler, and checks and tests it, as the Makefile asks: `build <goal> [--target
-# <target>]`, where the goals are those that the Makefile names in GOALS. The Makefile builds
-# this program with minilerta, from the seed, so that only make and clang are needed (see
-# docs/internals/architecture.md#bootstrap). `build embed <output> <path>...` writes the module
-# that embeds the files, as the build writes build/embedded.lerta, for the tests of it.
+# <target>]`, where the goals are those that the Makefile names in GOALS. The Makefile builds this
+# program with minilerta, from the seed, so that only make and clang are needed (see
+# docs/internals/architecture.md#bootstrap). `build test-targets [<target>...]` runs the tests of
+# other targets, each where test-targets.llit says, and `build test-target <target>` those of one
+# here (see build/targets). `build embed <output> <path>...` writes the module that embeds the
+# files, as the build writes build/embedded.lerta, for the tests of it.
 import is_dir, remove_tree, stat from 'std:io'
 import argv, exit from 'std:process'
 import
@@ -11,8 +13,12 @@ import
 from './build/stages'
 import write_embedded from './build/embed'
 import BuildError, call, captured, command_line_batches, step from './build/steps'
+import test_target, test_targets from './build/targets'
 
-USAGE := 'usage: build <goal> [--target <target>] | build embed <output> <path>...'
+USAGE :=
+  'usage: build <goal> [--target <target>] | build test-targets [<target>...]'
+  'build test-target <target> | build embed <output> <path>...'
+.join(' | ')
 
 struct Arguments
   goal: String
@@ -65,7 +71,7 @@ run_program := (source: String, args: String...) ->
 
 # The goals that take no target: the tests and the seed run for the host only, the seed so that a
 # target given by mistake cannot change it.
-HOST_ONLY := ['test', 'test-cross', 'seed']
+HOST_ONLY := ['test', 'seed']
 
 run_goal := (goal: String, target: String?) ->
   if target != nil and goal in HOST_ONLY
@@ -79,7 +85,6 @@ run_goal := (goal: String, target: String?) ->
     when 'test-bootstrap' then await test_bootstrap(bootstrap)
     when 'seed' then await make_seed()
     when 'test' then await test()
-    when 'test-cross' then exit(await call('sh', 'tools/test_cross.sh'))
     when 'check' then await check()
     when 'bench' then await run_program('bench/run.lerta')
     when 'bench-http' then await run_program('bench/http/run.lerta')
@@ -92,6 +97,11 @@ run_goal := (goal: String, target: String?) ->
 try
   if argv.length >= 2 and argv[0] == 'embed'
     await write_embedded(argv[1], argv[2..])
+  else if argv.length >= 1 and argv[0] == 'test-targets'
+    exit await test_targets(argv[1..])
+  else if argv.length >= 1 and argv[0] == 'test-target'
+    throw BuildError(message: USAGE, code: 2) if argv.length != 2
+    exit await test_target(argv[1])
   else
     { goal, target } := parse_arguments()
     await run_goal(goal, target)
