@@ -50,7 +50,7 @@ export scan_multiline := (lines: SourceLine[], first: Int, start: Int) ->
     continue if is_blank(texts[i])
     line := lines[first + 1 + i]
     if is_raw
-      template.bytes += line.bytes[width...end]
+      template.bytes += line.bytes[width..end]
     else
       read_template line, width, template, false, (j) -> j == end
   MultilineLiteral parts: template.finish(), line: lines[last], end: close! + 3
@@ -114,20 +114,20 @@ read_template := (
     case
       when c == b'\'
         escape := read_escape(line, i, is_binary)
-        template.bytes += line.bytes[plain...i]
+        template.bytes += line.bytes[plain..i]
         template.bytes += escape.value
         i = escape.end
         plain = i
       when c == b'#' and line.bytes.occurs_at(i + 1, b'{')
         brace := find_interpolation_end(line, i + 2)
         close := brace ? line.fail('unterminated interpolation', i)
-        template.bytes += line.bytes[plain...i]
+        template.bytes += line.bytes[plain..i]
         source := line.text(i + 2, close)
         template.add_code { source, line: line.number, column: line.column(i + 2) }
         i = close + 1
         plain = i
       else i += 1
-  template.bytes += line.bytes[plain...i]
+  template.bytes += line.bytes[plain..i]
   i
 
 # A `\xHH` escape gives any byte in a Binary literal, and an ASCII one, up to `\x7F`, in a String.
@@ -138,13 +138,13 @@ read_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
   return read_byte_escape(line, start, is_binary) if kind == b'x'
   line.fail 'invalid escape sequence', start unless line.bytes.occurs_at(start + 1, b'u{')
   close := line.index_of(b'}', start + 3) ? line.fail('invalid unicode escape', start)
-  digits := line.bytes[(start + 3)...close]
+  digits := line.bytes[(start + 3)..close]
   char := parse_char(digits) ? line.fail('invalid unicode escape', start)
   { value: char.to_string().binary, end: close + 1 }
 
 read_byte_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
   end := start + 4
-  digits := end <= line.length then line.bytes[(start + 2)...end] else b''
+  digits := end <= line.length then line.bytes[(start + 2)..end] else b''
   value := parse_byte(digits) ? line.fail('invalid byte escape', start)
   if not (is_binary or value <= 0x7F)
     line.fail 'a String takes \x00 to \x7F, and other characters as \u{...}', start
