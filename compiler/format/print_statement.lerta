@@ -7,7 +7,9 @@ import
   NamedType, NilLiteral, Pass, RecordLiteral, Statement, StringLiteral, This, Throw, TupleLiteral,
   TupleItem, TypeAlias, TypeDeclaration, TypeName, UnaryOperation, UnionTypeName, While
 from '../ast'
-import choice, Doc, has_line_feed, join, line_feed, rule, separated, text, token from './doc'
+import
+  Doc, first_line_choice, has_line_feed, join, line_feed, rule, separated, text, token
+from './doc'
 import declaration_doc, exported from './print_declaration'
 import SourceText from './source'
 import type_doc from './print_type'
@@ -227,12 +229,14 @@ call_statement := (call: Call, context: Context) ->
   if last_arg is FunctionLiteral
     return command_of([leading..., function_doc(last_arg, context.after_head())])
   command := command_of([item.doc for item in items])
+  # Only the first line of a call without parentheses must fit, as its last argument may take the
+  # lines below.
   fallback :=
     if opened := items.last()!.opened
-      choice command_of([leading..., opened]), with_parentheses
+      first_line_choice command_of([leading..., opened]), with_parentheses
     else
       with_parentheses
-  choice command, fallback
+  first_line_choice command, fallback
 
 export is_command_callee := (callee: Expression): Bool ->
   case callee

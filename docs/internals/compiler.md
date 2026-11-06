@@ -60,7 +60,7 @@
 
 `lerta fmt` (`compiler/format/`) prints the syntax tree again, and compares that with the source.
 
-- **Document.** The printers make a document (`format/doc.lerta`) of texts, line feeds, indentation, and choices between two forms of a part: the first where its first line fits in 100 columns, the second otherwise.
+- **Document.** The printers make a document (`format/doc.lerta`) of texts, line feeds, indentation, and choices between two forms of a part: the first where it fits in 100 columns, and the second otherwise. A choice of a form that must stay on one line, such as a postfix form or a body on the line of `->` (`choice`), measures all of it; one of a form whose rest may take the lines below, such as a call without parentheses or a list that a function ends (`first_line_choice`, `breaking`), only its first line.
 - **Rules.** A style rule that decides a part marks it, so that a place where the source differs is reported with the rule of the innermost part there.
   - Where only blank lines differ, it is reported under Blank lines.
   - Where only the indentation of the same number of lines differs, under Layout.

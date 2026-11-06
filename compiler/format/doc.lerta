@@ -23,8 +23,9 @@ export struct Indent
 export struct Concat
   docs: Doc[]
 
-# `flat` where its first line fits on the rest of the line, with what follows it up to the next
-# line feed, and otherwise `broken`. A part such as the block of a `case` is laid out on lines of
+# `flat` where it fits on the rest of the line, with what follows it up to the next line feed, and
+# otherwise `broken`: all of `flat` (see choice), or only its first line, whose rest may take the
+# lines below (see first_line_choice). A part such as the block of a `case` is laid out on lines of
 # its own either way. `flat` fits nowhere if a comment of the source is between its texts on its
 # first line.
 export struct Choice
@@ -35,6 +36,8 @@ export struct Choice
   # What must fit for `flat`, if not all of it: the start of `flat`, whose rest decides its own
   # breaks.
   measured: Doc? = default nil
+  # Whether all of `flat` must fit on the line, rather than its first line.
+  whole := default false
 
 # A part whose form the rule of the style decides.
 export struct Rule
@@ -138,7 +141,7 @@ class Printer
         # Mid-line, a comment not printed yet would end the line inside `flat`.
         from_line := @pending_indent then 0 else @source_line
         measured := doc.measured ? doc.flat
-        fitting := fits(measured, room, indent, steps, @source.comment_lines, from_line)
+        fitting := fits(measured, room, indent, steps, @source.comment_lines, from_line, doc.whole)
         unless fitting
           @start_rule breaking_rule, steps if breaking_rule := doc.breaking_rule
         steps.push Work(indent, doc: fitting then doc.flat else doc.broken)
@@ -280,18 +283,19 @@ struct Measured
   depth: Int
   nested: Bool
 
-# Whether the first line of `flat`, at the depth `indent`, fits in `room` columns, with what
-# follows it on `steps` up to the next line feed. A `flat` that starts with a line feed is measured
-# on the line after it. The choices in `flat` are taken flat, and those after it broken, as each of
-# those is laid out later in what is left of the line. A comment of the source between the first
-# and the last texts of that line does not fit either, as it ends a line, unless a choice inside
-# `flat` holds it, which breaks there itself; from `from_line` mid-line, as a comment not printed
-# yet would go before the first text.
+# Whether the first line of `flat`, or all of it if `whole`, at the depth `indent`, fits in `room`
+# columns, with what follows it on `steps` up to the next line feed. A `flat` that starts with a
+# line feed is measured on the line after it. The choices in `flat` are taken flat, and those after
+# it broken, as each of those is laid out later in what is left of the line. A comment of the
+# source between the first and the last texts of that line does not fit either, as it ends a line,
+# unless a choice inside `flat` holds it, which breaks there itself; from `from_line` mid-line, as a
+# comment not printed yet would go before the first text.
 fits := (
-  flat: Doc, room: Int, indent: Int, steps: Step[], comment_lines: Map<Int, Bool>, from_line: Int
+  flat: Doc, room: Int, indent: Int, steps: Step[], comment_lines: Map<Int, Bool>, from_line: Int,
+  whole: Bool
 ) ->
   pending: Measured[] = [{ doc: flat, depth: indent, nested: false }]
-  measurer := Measurer(steps, comment_lines, from_line, pending, left: room)
+  measurer := Measurer(steps, comment_lines, from_line, pending, whole, left: room)
   measurer.fits()
 
 # Measures the parts on `pending`, the last first, and then the works on `steps`, the last first,
@@ -301,6 +305,7 @@ class Measurer
   comment_lines: Map<Int, Bool>
   from_line: Int
   pending: Measured[]
+  whole: Bool
   var left: Int
   # The next work on `steps` to measure, once those on `pending` are measured.
   var next_step = @steps.length - 1
@@ -332,6 +337,7 @@ class Measurer
     case doc
       when Text then return false unless @measure_text(doc, nested)
       when Newline
+        return false if @in_flat and @whole and @has_text
         return @fits_at_line_end() if @has_text or not @in_flat
         @left = WIDTH - depth * INDENT_WIDTH
       when Indent then @pending.push({ measured..., doc: doc.doc, depth: depth + 1 })
@@ -346,6 +352,7 @@ class Measurer
       # Its lines are those of a statement, which a line feed comes before.
       when Verbatim then return not @in_flat
       when LiteralLines
+        return false if @in_flat and @whole
         @left = WIDTH - (depth + 1) * INDENT_WIDTH - columns(doc.lines.last()!)
         return false if @left < 0
     nil
@@ -409,7 +416,11 @@ export line_feed := (): Doc -> Newline(count: 1)
 
 export indent := (doc: Doc): Doc -> Indent(doc)
 
-export choice := (flat: Doc, broken: Doc): Doc -> Choice(flat, broken)
+# `flat` where all of it fits on the line, and otherwise `broken`.
+export choice := (flat: Doc, broken: Doc): Doc -> Choice(flat, broken, whole: true)
+
+# `flat` where its first line fits on the line, and otherwise `broken`.
+export first_line_choice := (flat: Doc, broken: Doc): Doc -> Choice(flat, broken)
 
 # A choice whose broken form the rule decides: a part that fits on its line is left to the rules
 # inside it.

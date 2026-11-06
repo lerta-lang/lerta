@@ -6,8 +6,8 @@ import
   MapLiteral, Member, NamedValue, NilLiteral, Position, RecordLiteral, StringLiteral, Try
 from '../ast'
 import
-  breaking, choice, Choice, closing, Doc, has_line_feed, indent, join, line_feed, rule, separated,
-  text, token
+  breaking, Choice, closing, Doc, first_line_choice, has_line_feed, indent, join, line_feed, rule,
+  separated, text, token
 from './doc'
 import AnnotationKey from './annotated'
 import function_block_doc from './print_block'
@@ -30,8 +30,10 @@ export item := (expression: Expression, context: Context) ->
   doc := expression_doc(expression, context)
   after_comment := context.source.comment_before(expression.position)
   opened := opened_doc(expression, context)
-  as_block := expression is FunctionLiteral then function_block_doc(expression, context)
-  Item doc, after_comment, opened, as_block, simple: is_simple(expression)
+  function := expression as FunctionLiteral?
+  as_block := function then function_block_doc(function, context)
+  is_function := function != nil
+  Item doc, after_comment, opened, as_block, is_function, simple: is_simple(expression)
 
 # A literal list broken after its opening bracket (see Item.opened).
 opened_doc := (expression: Expression, context: Context): Doc? ->
@@ -76,7 +78,8 @@ export named_item := (named: NamedValue, context: Context) ->
   name := token(named.name.name, named.name.position)
   doc := join([name, text(':'), value_after(named.value, context)])
   after_comment := context.source.comment_before(named.name.position)
-  Item doc, after_comment, simple: is_simple(named.value)
+  is_function := named.value is FunctionLiteral
+  Item doc, after_comment, is_function, simple: is_simple(named.value)
 
 # A name or a literal, which shares a line with others in a long list (see Long lists).
 # A string longer than that may stand for a line of text, which is on a line of its own.
@@ -205,7 +208,7 @@ export value_after := (value: Expression, context: Context): Doc ->
       next_line := indent(join([line_feed(), expression_doc(value, context)]))
       start := join([text(' '), operation_start(value, context)])
       broken := Choice(flat: on_line, broken: next_line, measured: start)
-      breaking LINE_LENGTH, on_line, choice(next_line, broken)
+      breaking LINE_LENGTH, on_line, first_line_choice(next_line, broken)
     else
       if block := literal_block_with_members(value, context)
         return breaking(MULTI_LINE_LITERALS, on_line, block)
@@ -215,7 +218,9 @@ export value_after := (value: Expression, context: Context): Doc ->
       in_block := value is Call and takes_block_arguments(value, context)
       broken :=
         in_block then join([text(' '), call_doc(value as Call!, context, whole: true)]) else on_line
-      breaking LINE_LENGTH, on_line, choice(next_line, broken)
+      # Arguments that break their line in every form go in the block.
+      return broken if in_block and has_line_feed(on_line)
+      breaking LINE_LENGTH, on_line, first_line_choice(next_line, broken)
 
 # The items of a literal in an indented block, without brackets, if it can be written so: a block
 # reads one element as the element itself, and takes no spread, nor a name alone for a field, which

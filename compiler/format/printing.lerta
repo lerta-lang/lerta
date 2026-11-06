@@ -98,13 +98,16 @@ export struct Item
   # The item with its body as a block, if it is a function whose body may go on its line, which a
   # list can end its line with when the item is last (see bracketed).
   as_block: Doc? = default nil
+  # Whether it is a function, or `name: ` and a function, whose body a list can end its line with
+  # inside the brackets when the item is last.
+  is_function := default false
 
 # A list in brackets: on one line if it fits, and otherwise on lines of their own inside the
 # brackets, as many on a line as fit if every item is simple, and one on each line otherwise (see
 # Long lists). `close_at` is where the closing bracket is in the source, if it is there.
-# An item that holds a block, a function's body, ends its line inside the brackets, which a comma
-# cannot then follow: only the last item may, and the closing bracket goes on a line of its own
-# (see Layout in the lexer); otherwise each item is on a line of its own.
+# A function last whose body is a block ends its line inside the brackets, which a comma cannot
+# then follow, and the closing bracket goes on a line of its own (see Layout in the lexer); a list
+# with any other item that holds a block has each item on a line of its own.
 export bracketed := (open: Doc, items: Item[], close: String, close_at: Position?) ->
   closing_text := closing(close, close_at)
   bracketed_or open, items, closing_text, opened_list(open, items, closing_text)
@@ -127,8 +130,9 @@ export bracketed_or := (
     leading := docs[..(docs.length - 1)]
     join [open, separated([leading..., last], text(', ')), line_feed(), closing_text]
   if first_block := blocks
-    return opened if first_block < items.length - 1
-    return breaking(LONG_LISTS, ending_with(docs.last()!), opened)
+    # Only a function last ends the line with its body inside the brackets.
+    ends_with_body := first_block == items.length - 1 and items[first_block].is_function
+    return ends_with_body then breaking(LONG_LISTS, ending_with(docs.last()!), opened) else opened
   on_line := flat ? join([open, separated(docs, text(', ')), closing_text])
   # A function last whose body does not fit on its line takes the lines below for it.
   block := items.last()!.as_block ? return breaking(LONG_LISTS, on_line, opened)

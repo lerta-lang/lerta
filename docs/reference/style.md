@@ -242,7 +242,7 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 - A two-way `case` without `else` that handles every type or member of its subject (see [case with a subject](control-flow.md#case-with-a-subject)) stays a `case`.
   - Why: a type or member added later then fails to compile, where an `if` would take it to `else`.
 - A two-way value that fits on one line is `c then a else b`.
-- An arm whose body is one statement that its line can hold (see [case without a subject](control-flow.md#case-without-a-subject)) and that fits on it is written on it, `when 1 then 'one'` or `else pass`, and otherwise as a block.
+- An arm whose body is one statement that its line can hold (see [case without a subject](control-flow.md#case-without-a-subject)) and that fits on it, all of it, is written on it, `when 1 then 'one'` or `else pass`, and otherwise as a block, as is one of a `'''` literal.
 - A block of the name `pass` alone stays one, as on the line it would be the arm that does nothing.
 - An `else` whose body is one `if` is `else if`, unless a comment comes before the `if`.
 - An `if`, a `case` or a `try` whose blocks are on the lines below starts a line of its own, one level deeper than the line that takes its value (`x :=`, then `case n` on the next line), where the grammar allows it (see [bracketless blocks](syntax.md#bracketless-blocks)).
@@ -303,7 +303,7 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 
 ### Function bodies
 
-- A body of one statement that fits on the line of the `->` goes on it (`(x) -> x + 1`).
+- A body of one statement that fits on the line of the `->`, all of it, goes on it (`(x) -> x + 1`). One that would take lines below, as a call with a function last whose body is a block or a `'''` literal, does not.
 - Otherwise it goes in a block below it, as does one statement that a line cannot hold: a declaration, or one that holds a block, as a `case`, a `try` or a loop without a postfix form.
 
 ### Functions without parameters
