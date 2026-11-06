@@ -4,6 +4,18 @@
 - It carries the standard modules and the runtime in it, so it needs no other file of the repository.
 - It is built with `-O`, without the [memory checks](#memory-checks).
 
+## Tools
+
+`build` and `run` have `clang` on the `PATH` compile and link, and so need what it needs on the host:
+
+| Host | Needs |
+|---|---|
+| Linux | `clang` (LLVM 15 or newer); GNU ld, with LLVM's plugin for `-O`; and the C library's development files, glibc's or musl's |
+| macOS | Xcode's Command Line Tools (`xcode-select --install`) or Xcode, which have `clang`, the linker and the SDK |
+| Windows | A clang for Windows, mingw-w64 and lld, which [llvm-mingw](https://github.com/mstorsjo/llvm-mingw) has all of |
+
+A build for another target needs more (see [`--target`](#--target-target)).
+
 ## Arguments
 
 - Arguments that do not fit a command's usage print the usage to stderr and exit with code 2.

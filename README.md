@@ -26,10 +26,10 @@ Early development. The compiler is written in Lerta and builds itself, starting 
 
 ## Getting started
 
-`make` builds the compiler, `bin/lerta`, from the seed; what it needs is in [Building](#building). The programs run on Linux, macOS and Windows. To compile a program:
+The compiler, `lerta`, runs on Linux, macOS and Windows, and builds programs for them with clang and the host's C toolchain, such as Xcode's Command Line Tools on macOS (see [its tools](docs/reference/compiler.md#tools)). To compile a program:
 
 ```
-bin/lerta build examples/hello.lerta [-o hello] [-O]
+lerta build examples/hello.lerta [-o hello] [-O]
 ```
 
 The commands of the compiler are in [the reference](docs/reference/compiler.md).
@@ -79,14 +79,14 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 
 ### Building
 
-What the compiler is built and runs with, on each host:
+What building the compiler needs on each host, besides the tools that it needs to build programs (see [its tools](docs/reference/compiler.md#tools)), on the `PATH`:
 
 | Host | Needs |
 |---|---|
-| Linux, macOS | make and `clang` (LLVM 15 or newer) |
-| Windows | The shell of [Git for Windows](https://gitforwindows.org/), which `make` runs in; GNU make (such as `winget install ezwinports.make`); and a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s), both on the `PATH`. The compiler is `bin/lerta.exe` |
+| Linux, macOS | make |
+| Windows | The shell of [Git for Windows](https://gitforwindows.org/), which `make` runs in, and GNU make (such as `winget install ezwinports.make`) |
 
-The compiler builds programs for other targets with `--target` (see [the reference](docs/reference/compiler.md)): Windows programs with mingw-w64 and lld.
+On Windows, the compiler is `bin/lerta.exe`.
 
 ```
 make                   # bin/lerta, the compiler, built from the seed
