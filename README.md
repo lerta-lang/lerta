@@ -73,6 +73,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `checker/` | Checks them |
 | `codegen/` | Emits LLVM IR |
 | `format/` | The formatter |
+| `llit.lerta` | Reads [llit](docs/internals/llit.md), Lerta literals as data, for the tools |
 | `main.lerta` | The commands |
 | `minilerta.lerta` | The entry the seed is made from |
 

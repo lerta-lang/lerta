@@ -1,0 +1,317 @@
+# llit, Lerta literals as data (see docs/internals/llit.md): a file of a bracketless block
+# of literals, as a file of settings, read as a value of a Codable type through the code that the
+# compiler generates for it, by an LlitReader, its Decoder, which walks the literals that the parser
+# gives.
+import
+  ArrayLiteral, BooleanLiteral, Call, Expression, FloatLiteral, Identifier, IntegerLiteral,
+  Interpolation, MapEntry, MapLiteral, NilLiteral, Position, RecordLiteral, StringLiteral,
+  TupleLiteral
+from './ast'
+import
+  Codable, decode, KIND_BOOL, KIND_NUMBER, KIND_OTHER, KIND_RECORD, KIND_TEXT
+from 'std:codable'
+import INFINITY from 'std:math'
+import CompileError from './errors'
+import TextPart from './lexer/string_literal'
+import Token, TokenKind, tokenize from './lexer/tokens'
+import parse_block_literal from './parser/block_literal'
+import TokenStream from './parser/token_stream'
+
+# The text is not llit, or not of the type it is read as: its message is that of each error, as
+# `<path>:<line>:<column>: <message>`.
+export struct LlitError: Error
+
+# The value of type T that the text holds, whose errors name the path.
+export decode_llit := <T: Codable>(text: String, path: String): T ->
+  reader := LlitReader(path, value: parse_llit(text, path))
+  decode<T, LlitReader>(reader)
+
+# The literals of the text, read as the lines of a block literal are, after its first line. A text
+# of nothing but blank lines and comments holds a record without fields.
+parse_llit := (text: String, path: String) ->
+  try
+    tokens := tokenize(text, path)
+    file_end := tokens.last()!
+    return RecordLiteral(fields: [], position: { line: 1, column: 1 }) if tokens.length == 1
+    first := tokens[0]
+    block := [
+      layout(NEWLINE, first)
+      layout(INDENT, first)
+      tokens[..(tokens.length - 1)]...
+      layout(DEDENT, file_end)
+      file_end
+    ]
+    # The block ends at its DEDENT, as the lexer balances the blocks within it, so the file ends
+    # there too.
+    parse_block_literal TokenStream(path, tokens: block, interpolation: nil)
+  catch error: CompileError
+    throw LlitError(message: error.message)
+
+# A token of the layout, where the token is.
+layout := (kind: TokenKind, at: Token) ->
+  Token kind, text: '', spaced: true, line: at.line, column: at.column, parts: nil
+
+# The literals of an array, a set, a tuple, a record or a map being read, in their order: a
+# record's with its fields' names, a map's with their keys.
+class Level
+  values: Expression[]
+  names: Identifier[] = default []
+  keys: Expression[] = default []
+  position: Position
+  var at = 0
+  # The names, or the keys of String, read so far, which none may repeat.
+  seen: Set<String> = Set()
+
+  is_done := -> @at == @values.length
+
+# The Decoder of llit: `value` is the literal to read next, which each read takes.
+class LlitReader
+  path: String
+  var value: Expression?
+  # Each array, set, tuple, record or map being read, the innermost last.
+  levels: Level[] = []
+  # Where the last literal read is, or the last level that ended, which a failure after it names.
+  var last: Position = { line: 1, column: 1 }
+  # The name of the last field read, which a field that the type has not fails with.
+  var field = ''
+
+  read_nil := ->
+    return false unless @value is NilLiteral
+    @take()
+    true
+
+  read_bool := ->
+    literal := @value as BooleanLiteral ? @fail_expected('a Bool')
+    @take()
+    literal.value
+
+  read_integer := (expected: String, least: Int, most: Int) ->
+    value := @integer(expected)
+    @fail_last "expected #{expected}, found #{value}" if value < least or value > most
+    value
+
+  # One above the largest Int is beyond what an integer literal holds.
+  read_uint64 := ->
+    value := @integer('a UInt64')
+    value.to_uint64() ? @fail_last("expected a UInt64, found #{value}")
+
+  read_float := -> @number('a Float')
+
+  # A number beyond the finite Float32s is none.
+  read_float32 := ->
+    text := number_text(@value!)
+    value := @number('a Float32').to_float32()
+    is_finite := value.to_float() != INFINITY and value.to_float() != -INFINITY
+    @fail_last "expected a Float32, found #{text!}" unless is_finite
+    value
+
+  read_string := ->
+    literal := @value as StringLiteral ? @fail_expected('a String')
+    @take()
+    literal.value
+
+  read_binary := ->
+    literal := @value as Interpolation ? @fail_expected('a Binary')
+    @fail_expected 'a Binary' unless literal.binary
+    @take()
+    var bytes = b''
+    for part in literal.parts
+      @fail_last 'expected a Binary without interpolation' unless part is TextPart
+      bytes += part.bytes
+    bytes
+
+  read_char := ->
+    text := @read_string()
+    chars := [c for c in text]
+    @fail_last "expected a Char, found '#{text}'" if chars.length != 1
+    chars[0]
+
+  read_member := (enum_name: String) ->
+    name := @value as Identifier ? @fail_expected("a member of #{enum_name}")
+    @take()
+    name.name
+
+  begin_array := ->
+    literal := @value as ArrayLiteral ? @fail_expected('an array')
+    @begin_items literal
+
+  begin_set := ->
+    literal := @value as ArrayLiteral ? @fail_expected('a set, as an array')
+    @begin_items literal
+
+  next_item := ->
+    level := @levels.last()!
+    return @end_level() if level.is_done()
+    @value = level.values[level.at]
+    level.at += 1
+    true
+
+  begin_tuple := (count: Int) ->
+    tuple := @value as TupleLiteral ? @fail_expected("a tuple of #{count} items")
+    @take()
+    if tuple.items.length != count
+      @fail_last "expected a tuple of #{count} items, found #{tuple.items.length}"
+    @levels.push Level(values: tuple.items, position: tuple.position)
+
+  next_tuple_item := (count: Int): void -> @next_item()
+
+  end_tuple := (count: Int): void -> @end_level()
+
+  # `Map()` is the empty map, which `{}` cannot write.
+  begin_map := ->
+    value := @value!
+    entries := map_entries(value) ? @fail_expected('a map')
+    @take()
+    values := [entry.value for entry in entries]
+    keys := [entry.key for entry in entries]
+    @levels.push Level(values, keys, position: value.position)
+
+  read_key := ->
+    level := @levels.last()!
+    if level.is_done()
+      @end_level()
+      return nil
+    key := level.keys[level.at]
+    text :=
+      key as StringLiteral ? @fail_at(key.position, "expected a String key, found #{found(key)}")
+    @next_named text.value, key.position, 'key'
+
+  begin_entries := -> @begin_map()
+
+  next_entry := ->
+    level := @levels.last()!
+    return @end_level() if level.is_done()
+    @value = level.keys[level.at]
+    true
+
+  entry_value := ->
+    level := @levels.last()!
+    @value = level.values[level.at]
+
+  end_entry := -> @levels.last()!.at += 1
+
+  fail_duplicate := -> @fail_last('the same as one before')
+
+  begin_record := ->
+    record := @value as RecordLiteral ? @fail_expected('a struct')
+    @take()
+    values := [field.value for field in record.fields]
+    names := [field.name for field in record.fields]
+    @levels.push Level(values, names, position: record.position)
+
+  read_field := ->
+    level := @levels.last()!
+    if level.is_done()
+      @end_level()
+      return nil
+    name := level.names[level.at]
+    @field = name.name
+    @last = name.position
+    @next_named name.name, name.position, 'field'
+
+  is_field := (key: String, name: String) -> key == name
+
+  fail_missing_field := (name: String) -> @fail_last("missing the field #{name}")
+
+  # A field that the type has not is a mistake, as in a struct literal of Lerta.
+  skip_value := (): void -> @fail_last("no field #{@field}")
+
+  peek_kind := ->
+    value := @value!
+    case
+      when value is BooleanLiteral then KIND_BOOL
+      when number_text(value) != nil then KIND_NUMBER
+      when value is StringLiteral or value is Interpolation or value is Identifier then KIND_TEXT
+      when value is RecordLiteral then KIND_RECORD
+      else KIND_OTHER
+
+  fail_expected := (expected: String) ->
+    value := @value!
+    @fail_at value.position, "expected #{expected}, found #{found(value)}"
+
+  fail_member := (enum_name: String, name: String) ->
+    @fail_last "expected a member of #{enum_name}, found #{name}"
+
+  # The literal to read, which it takes.
+  take := ->
+    value := @value!
+    @value = nil
+    @last = value.position
+    value
+
+  begin_items := (array: ArrayLiteral) ->
+    @take()
+    @levels.push Level(values: array.elements, position: array.position)
+
+  # Ends the innermost level, as reading it does when it has nothing more.
+  end_level := ->
+    @last = @levels.pop().position
+    false
+
+  # Starts reading the value of the field or the key of the name, which the level must not have had
+  # already.
+  next_named := (name: String, at: Position, what: String) ->
+    level := @levels.last()!
+    @fail_at at, "the #{what} #{name} twice" unless level.seen.add(name)
+    @value = level.values[level.at]
+    level.at += 1
+    name
+
+  # The integer to read, which the parser gives with its minus, if it is one that an Int holds.
+  integer := (expected: String) ->
+    literal := @value as IntegerLiteral ? @fail_expected(expected)
+    value := literal.value ? @fail_expected(expected)
+    @take()
+    value
+
+  # The number to read, an integer or not, which the parser gives with its minus.
+  number := (expected: String) ->
+    value := @value!
+    number := number_of(value) ? @fail_expected(expected)
+    @take()
+    number
+
+  fail_last := (message: String) -> @fail_at(@last, message)
+
+  fail_at := (at: Position, message: String) ->
+    throw LlitError(message: "#{@path}:#{at.line}:#{at.column}: #{message}")
+
+# The text of a number literal, an integer or not, with its minus, if any.
+number_text := (value: Expression) ->
+  case value
+    when IntegerLiteral, FloatLiteral then value.text
+    else nil
+
+# The value of a number literal as a Float, as a literal of Lerta is: a decimal integer by its
+# digits, so that `-0` is -0.0 and one beyond Int is read, a hexadecimal one by its value, nil
+# beyond Int.
+number_of := (value: Expression) ->
+  case value
+    when IntegerLiteral
+      if not (value.text.starts_with('0x') or value.text.starts_with('-0x'))
+        return value.text.parse_float()
+      value.value?.to_float()
+    when FloatLiteral then value.text.parse_float()
+    else nil
+
+# The entries of a map literal, or none of `Map()`.
+map_entries := (value: Expression): MapEntry[]? ->
+  return value.entries if value is MapLiteral
+  call := value as Call ? return nil
+  return nil if not (call.callee is Identifier and call.callee.name == 'Map')
+  no_args := call.args.is_empty() and call.named_args.is_empty() and call.type_args.is_empty()
+  no_args then []
+
+# What a literal is, as an error says it.
+found := (value: Expression) ->
+  case value
+    when NilLiteral then 'nil'
+    when BooleanLiteral then value.value.to_string()
+    when StringLiteral then 'a string'
+    when Interpolation then value.binary then 'a Binary' else 'a string with interpolation'
+    when Identifier then value.name
+    when ArrayLiteral then 'an array'
+    when MapLiteral then 'a map'
+    when RecordLiteral then 'a struct'
+    when TupleLiteral then 'a tuple'
+    else number_text(value) ? 'an expression, which llit does not take'

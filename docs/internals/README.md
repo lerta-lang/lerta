@@ -10,4 +10,5 @@ This describes the implementation's design. The planned design is in [the roadma
 | [memory.md](memory.md) | Reference counts, object headers, weak references, ownership and borrowing, leak checking, allocation and alias analysis |
 | [representation.md](representation.md) | How values are represented: objects, interfaces, the builtin types, floats, maps, strings and FFI |
 | [iteration.md](iteration.md) | Iters, functions that yield, fused loops, inlined methods and functions that await |
+| [llit.md](llit.md) | llit, the text of data written as Lerta literals that the tools read |
 | [platforms.md](platforms.md) | Output, files, processes and the network, the platform functions, Windows and libuv |
