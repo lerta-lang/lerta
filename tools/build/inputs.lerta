@@ -3,8 +3,8 @@ import list_dir, read_text from 'std:io'
 import platform from 'std:process'
 import CompileError from '../../compiler/errors'
 import
-  described_build, described_sources, DESCRIPTION_PATH, is_for, LibuvBuild
-from '../../compiler/libuv_description'
+  described_build, description_path, PlatformBuild, runtime_c_names, SYSTEMS
+from '../../compiler/platform_description'
 import files_under, sorted_once from './files'
 import BuildError from './steps'
 
@@ -15,15 +15,15 @@ export EMBEDDED_MODULE := 'build/embedded.lerta'
 
 # The files that the build reads, found in the repository, which it runs from:
 export struct Inputs
-  # what the host builds libuv with (see compiler/libuv_description.lerta);
-  host_libuv: LibuvBuild
-  # the runtime's files, and the C files that the host compiles of them: platform_<systems>.c only
-  # for the host's systems, as compiler/runtime_cache.lerta takes them;
+  # what the host builds the runtime with (see compiler/platform_description.lerta);
+  host_build: PlatformBuild
+  # the runtime's files, the descriptions among them, and the C files that the host compiles of
+  # them;
   runtime: String[]
   runtime_c: String[]
   # the files that the compiler carries in build/embedded.lerta: std's at any depth, as the seed
-  # finds them (see tools/build/embed.lerta), the runtime's, and libuv's: its description, its
-  # headers, and the sources that it lists for some system;
+  # finds them (see tools/build/embed.lerta), the runtime's, and libuv's: its headers, and the
+  # sources that a description lists;
   embedded: String[]
   # the compiler's;
   sources: String[]
@@ -40,39 +40,36 @@ export inputs := ->
 var read_inputs: Promise<Inputs>?
 
 find_inputs := ->
-  description := await read_text(DESCRIPTION_PATH) ? throw BuildError(
-    message: "#{DESCRIPTION_PATH} is not UTF-8"
-  )
-  runtime := files_in('runtime', ['.c', '.h'])
-  runtime_c := [
-    path for path in runtime when path.ends_with('.c') and is_for(platform_systems(path), platform)
-  ]
-  sources := described(-> described_sources(description))
-  libuv_sources := ["third_party/libuv/#{source}" for source in sources]
+  builds: PlatformBuild[]
+  builds.push await read_build(system) for system in SYSTEMS
+  host_build := builds.find((build) -> build.system == platform)!
+  runtime := files_in('runtime', ['.c', '.h', '.mk'])
+  runtime_names := [path.without_prefix('runtime/')! for path in runtime]
+  runtime_c := ["runtime/#{name}" for name in runtime_c_names(runtime_names, host_build)]
+  libuv_sources: String[]
+  for build in builds
+    libuv_sources.append ["third_party/libuv/#{source}" for source in build.libuv_sources]
   libuv := [
-    DESCRIPTION_PATH
     files_under('third_party/libuv/include', ['.h'])...
     files_under('third_party/libuv/src', ['.h'])...
     libuv_sources...
   ]
-  host_libuv := described(-> described_build(description, platform))
   Inputs
-    host_libuv
+    host_build
     runtime
     runtime_c
     embedded: sorted_once([files_under('std', ['.lerta'])..., runtime..., libuv...])
     sources: [files_under('compiler', ['.lerta'])..., EMBEDDED_MODULE]
     harness: files_under('test', ['.lerta'])
 
-# What `read` reads of libuv's description, which ends the build if it is not well formed.
-described := <T>(read: () -> T) ->
+# What the system's description gives it, which ends the build if it is not well formed.
+read_build := (system: String) ->
+  path := description_path(system)
+  description := await read_text(path) ? throw BuildError(message: "#{path} is not UTF-8")
   try
-    read()
+    described_build description, system
   catch error: CompileError
     throw BuildError(message: error.message)
 
 files_in := (dir: String, suffixes: String[]) ->
   sorted_once ["#{dir}/#{name}" for name in list_dir(dir) when suffixes.any(name.ends_with)]
-
-platform_systems := (path: String) ->
-  path.without_prefix('runtime/')!.without_suffix('.c')!.without_prefix('platform_') ? 'all'

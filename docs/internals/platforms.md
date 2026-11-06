@@ -81,7 +81,7 @@
 - In the runtime, what differs between systems is a small set of functions, declared together in `runtime/internal.h`:
   - `runtime/platform.c` implements those that libuv makes the same on every system, through its synchronous file system calls and its functions of the system.
   - `runtime/platform_posix.c` and `runtime/platform_windows.c` implement the rest, which libuv lacks, or has not synchronously, or not as the runtime needs: the stack and the memory, the standard streams, the arguments, the file of the command of `run`, how the program ends, the system's name (which libuv tells as Linux under Wine), and the copy of a file (libuv's copy removes the file it was replacing if it fails, and copies the size that the file had when it began).
-- The compiler compiles `platform_<systems>.c` only for those systems, named as in `third_party/libuv.txt`, so no file of the runtime tests the system with the preprocessor. The rest of the runtime is shared and calls no system functions.
+- The compiler compiles of the `platform_*.c` files only those that `runtime/<system>.mk` lists for the system, so no file of the runtime tests the system with the preprocessor. The rest of the runtime is shared and calls no system functions.
 
 ### Windows
 
@@ -102,7 +102,7 @@
 
 - The runtime is built with libuv (v1.53.0, `third_party/libuv`), with one line taken out: on Unix, `uv_spawn` that fails while it makes the stdio takes the process handle off the loop's queue (libuv's #4980), though its docs ask for `uv_close` even after a failure, which takes it off again and breaks the queue.
   - A runtime check (`test/runtime/spawn_fails.c`) fails while libuv does so; the line is to stay out of a newer libuv until libuv drops it.
-- The compiler carries libuv's sources as it does the runtime's, and compiles them into the runtime's cache for each target, with the flags and the system's libraries that `third_party/libuv.txt` lists for its system, taken from libuv's CMakeLists.txt. Its warnings are silenced, as they are not the program's.
+- The compiler carries libuv's sources as it does the runtime's, and compiles them into the runtime's cache for each target, with the flags and the system's libraries that `runtime/<system>.mk` lists for its system, taken from libuv's CMakeLists.txt. Its warnings are silenced, as they are not the program's.
 - The runtime's own files take only libuv's headers, which ask nothing more of their users, so that libuv's feature macros, such as `_FILE_OFFSET_BITS`, do not change what the runtime sees.
 - Its object files are linked as they are, with no archive: an optimized build drops what the program does not use, through `-flto`, and an unoptimized one holds all of libuv, whose size does not matter there.
 - A system's libuv is not used instead:

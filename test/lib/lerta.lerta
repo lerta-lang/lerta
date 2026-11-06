@@ -4,16 +4,13 @@
 import is_file, make_dir, make_temp_dir, read_text, real_path, remove_tree from 'std:io'
 import exit, Exit, platform, run from 'std:process'
 import timeout, TimeoutError from 'std:async'
+import described_build, description_path from '../../compiler/platform_description'
 
 export root_dir := real_path('.').text()!
 
 unless is_file("#{root_dir}/test/main.lerta")
   print_error 'the tests run from the root of the repository'
   exit 2
-
-# The systems, as third_party/libuv.txt names them, that the host takes: the runtime is built with
-# libuv's files and platform_<systems>.c for them (see compiler/libuv.lerta).
-export host_systems := platform == 'windows' then ['all', 'windows'] else ['all', 'posix', platform]
 
 # What the name of a program built for the host ends with.
 export host_executable_suffix := platform == 'windows' then '.exe' else ''
@@ -35,22 +32,9 @@ export shown_text := (bytes: Binary) -> bytes.text() ? '(not valid UTF-8)'
 export read_text_or_throw := (path: String) ->
   await read_text(path) ? throw ValueError("#{path} is not valid UTF-8")
 
-# What the lines of third_party/libuv.txt for the host's systems give, by the rule of is_for in
-# compiler/libuv.lerta: the source files, the flags of the compiler and the libraries.
-export host_libuv := ->
-  sources: String[]
-  flags: String[]
-  libraries: String[]
-  for line in (await read_text_or_throw("#{root_dir}/third_party/libuv.txt")).lines()
-    continue if line.is_empty() or line.starts_with('#')
-    words := line.split(' ')
-    continue if words.length != 3 or not host_systems.contains(words[0])
-    case words[1]
-      when 'source' then sources.push(words[2])
-      when 'flag' then flags.push(words[2])
-      when 'library' then libraries.push(words[2])
-      else pass
-  { sources, flags, libraries }
+# What the host's description gives it (see compiler/platform_description.lerta).
+export host_build := ->
+  described_build await read_text_or_throw("#{root_dir}/#{description_path(platform)}"), platform
 
 # A file's text, as read_text_or_throw gives it, or the fallback if there is no such file.
 export read_text_or := (path: String, fallback: String) ->

@@ -5,14 +5,15 @@ import texts_hash from '../../compiler/runtime_cache'
 import Check, posix_check from '../lib/report'
 import compare_text, expect_status, reason_unless from '../lib/expect'
 import
-  compiler, host_libuv, host_systems, read_text_or_throw, root_dir, host_executable_suffix
+  compiler, host_build, read_text_or_throw, root_dir, host_executable_suffix
 from '../lib/lerta'
 import
   CliRun, cli_work_dir, expect_left, expect_success, succeed, host_platform, host_triple,
   new_cli_dir, new_cli_dirs, run_command, run_in_dir, run_in_new_dir
 from '../lib/cli'
 import is_dir, list_dir, make_dir, remove_tree, stat, write_file from 'std:io'
-import process_id from 'std:process'
+import platform, process_id from 'std:process'
+import runtime_c_names from '../../compiler/platform_description'
 
 hello := "#{root_dir}/examples/hello.lerta"
 
@@ -39,13 +40,12 @@ runtime_name_reasons := (name: String, kind: String) ->
   ]
 
 runtime_file_names := ->
-  # platform_<systems>.c is only for those systems.
-  is_for_host := (name: String) -> host_systems.contains(name.without_prefix('platform_') ? 'all')
-  names := [file.without_suffix('.c') for file in list_dir("#{root_dir}/runtime")]
-  runtime := ["#{name}.o" for name in names when name and is_for_host(name)]
+  build := await host_build()
+  c_files := runtime_c_names(list_dir("#{root_dir}/runtime"), build)
+  runtime := ["#{file.without_suffix('.c')!}.o" for file in c_files]
   libuv := [
     "libuv-#{source.without_suffix('.c')!.replace('/', '-')}.o"
-    for source in (await host_libuv()).sources
+    for source in build.libuv_sources
     when source.ends_with('.c')
   ]
   [runtime..., libuv..., 'function_attributes.txt', 'coro_end_type.txt'].sorted((a, b) ->

@@ -1,0 +1,80 @@
+# What runtime/<system>.mk describes: which of the runtime's platform_*.c files, and which of
+# libuv's sources, with which flags and libraries, the system builds the runtime with. Apart from
+# compiler/libuv.lerta, which reads the descriptions from the files that the compiler carries, so
+# that tools/build.lerta, which writes those, reads them too.
+import platform from 'std:process'
+import is_mingw from './clang_flags'
+import CompileError from './errors'
+
+# The systems, as target_system names them, that the runtime is built for.
+export SYSTEMS := ['macos', 'linux', 'windows']
+
+export description_path := (system: String) -> "runtime/#{system}.mk"
+
+# What one system builds the runtime with: its platform_*.c files, relative to runtime/, libuv's
+# source files, relative to libuv's root, the flags of the compiler for those, and the libraries to
+# link with.
+export struct PlatformBuild
+  system: String
+  platform_sources: String[]
+  libuv_sources: String[]
+  libuv_flags: String[]
+  libraries: String[]
+
+# What the system's description, its text, gives it. Each variable must be set, and only to
+# platform_*.c files in PLATFORM_SOURCES, which the runtime's other files are compiled besides.
+export described_build := (description: String, system: String) ->
+  path := description_path(system)
+  values := variables_of(description, path)
+  value := (variable: String) -> values[variable] ? throw CompileError("#{path}: no #{variable}")
+  platform_sources := value('PLATFORM_SOURCES')
+  is_platform_file := (source: String) -> source.starts_with('platform_') and source.ends_with('.c')
+  if stray := platform_sources.find((source) -> not is_platform_file(source))
+    throw CompileError("#{path}: not a platform_*.c file: #{stray}")
+  PlatformBuild
+    system
+    platform_sources
+    libuv_sources: value('LIBUV_SOURCES')
+    libuv_flags: value('LIBUV_FLAGS')
+    libraries: value('LIBUV_LIBRARIES')
+
+# The runtime's C files that the build compiles, of the names of the runtime's files: those that
+# are not platform_*.c, which are for all systems, and the build's own.
+export runtime_c_names := (names: String[], build: PlatformBuild) ->
+  is_shared := (name: String) -> name.ends_with('.c') and not name.starts_with('platform_')
+  [[name for name in names when is_shared(name)]..., build.platform_sources...]
+
+VARIABLES := ['PLATFORM_SOURCES', 'LIBUV_SOURCES', 'LIBUV_FLAGS', 'LIBUV_LIBRARIES']
+
+# The words of the variables, each set once by `:=` on a line of its own, which a `\` at the end of
+# a line goes on past, their names and words apart by spaces or tabs, or none, as make reads them.
+# What make reads otherwise, a comment after a value, a reference in it, which make expands, or a
+# variable set again, is refused, so that the two cannot differ.
+variables_of := (description: String, path: String) ->
+  values: Map<String, String[]>
+  for line in description.replace("\\\n", ' ').replace("\t", ' ').lines()
+    trimmed := line.trim()
+    continue if trimmed.is_empty() or trimmed.starts_with('#')
+    parts := line.split(':=')
+    throw CompileError("#{path}: not a variable: #{line}") if parts.length != 2
+    variable := parts[0].trim()
+    throw CompileError("#{path}: not a variable: #{line}") if ' ' in variable or ':' in variable
+    throw CompileError("#{path}: not a variable of it: #{variable}") unless variable in VARIABLES
+    throw CompileError("#{path}: set again: #{variable}") if values[variable] != nil
+    throw CompileError("#{path}: a comment in #{variable}") if '#' in parts[1]
+    throw CompileError("#{path}: a reference in #{variable}") if '$' in parts[1]
+    values[variable] = [word for word in parts[1].split(' ') when not word.is_empty()]
+  values
+
+# The system of a target triple, as `platform` names the host's: one of SYSTEMS.
+export target_system := (target: String?) ->
+  triple := target ? return platform
+  parts := triple.split('-')
+  has_part := (prefix: String) -> parts.any((part) -> part.starts_with(prefix))
+  return 'windows' if is_mingw(triple)
+  return 'macos' if has_part('darwin') or has_part('macos')
+  # A Linux target's environment, after `linux`, is left out for glibc, or names glibc or musl.
+  if at := parts.index_of('linux')
+    environment := parts.get(at + 1) ? 'gnu'
+    return 'linux' if environment.starts_with('gnu') or environment.starts_with('musl')
+  throw CompileError("not a target that the runtime is built for: #{triple}")

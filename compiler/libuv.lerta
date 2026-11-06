@@ -1,25 +1,24 @@
-# libuv, which the runtime is built with, from the sources that the compiler carries, as
-# compiler/libuv_description.lerta reads them.
+# libuv, which the runtime is built with, from the sources that the compiler carries, and what a
+# target builds the runtime with, as compiler/platform_description.lerta reads it from them.
 import make_dir, write_file from 'std:io'
 import embedded_source, EMBEDDED_PATHS from '../build/embedded'
-import described_build, DESCRIPTION_PATH, target_system from './libuv_description'
+import described_build, description_path, target_system from './platform_description'
 import dirname, join from './paths'
 
 SOURCE_ROOT := 'third_party/libuv/'
 
-# Every file that the build of libuv reads, the description included.
-export LIBUV_PATHS :=
-  [path for path in EMBEDDED_PATHS when path == DESCRIPTION_PATH or path.starts_with(SOURCE_ROOT)]
+# Every file of libuv that the compiler carries.
+export LIBUV_PATHS := [path for path in EMBEDDED_PATHS when path.starts_with(SOURCE_ROOT)]
 
 # The build for the target, or for the host without one.
-export libuv_build := (target: String?) ->
-  described_build embedded_source(DESCRIPTION_PATH)!, target_system(target)
+export platform_build := (target: String?) ->
+  system := target_system(target)
+  described_build embedded_source(description_path(system))!, system
 
 # Writes libuv's files under `dir`, as they are under its root, and gives the flags that find its
 # headers there.
 export write_libuv_sources := (dir: String) ->
   for path in LIBUV_PATHS
-    continue unless path.starts_with(SOURCE_ROOT)
     file := join(dir, path.without_prefix(SOURCE_ROOT)!)
     make_dir dirname(file)
     await write_file(file, embedded_source(path)!)

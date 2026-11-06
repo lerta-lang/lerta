@@ -10,7 +10,7 @@ import sleep from 'std:time'
 import is_stale, sorted_once from '../../tools/build/files'
 import bootstrap_for from '../../tools/build/stages'
 import CompileError from '../../compiler/errors'
-import described_build, described_sources from '../../compiler/libuv_description'
+import described_build, runtime_c_names from '../../compiler/platform_description'
 import BuildError, command_line_batches from '../../tools/build/steps'
 
 BUILD_TOOL := "#{root_dir}/build/build#{host_executable_suffix}"
@@ -112,44 +112,109 @@ missing_embed_check := Check(name: 'build/build embed reports a file that is mis
   ]
 )
 
-DESCRIPTION := "# a comment\nall source a.c\nposix flag -x\nwindows library w\nlinux source l.c\n"
+# Variables as make reads them: a value goes on past a `\` at the end of a line.
+# A tab, a space at an end, no space around `:=`, an empty value, an indented comment and a line of
+# blanks are as make reads them too.
+DESCRIPTION := """
+  # a comment \\
+  that a `\\` goes on past
+    # an indented comment
+  \x20\t
+  LIBUV_SOURCES := \\
+    a.c \\
+  \tb.c
 
-# What the description gives a system, as one line.
-described_line := (system: String) ->
-  { sources, flags, libraries } := described_build(DESCRIPTION, system)
-  "#{sources} #{flags} #{libraries}"
+  LIBUV_FLAGS := -x\x20\x20
+  PLATFORM_SOURCES:=platform_p.c
+  LIBUV_LIBRARIES :=
+  """
 
-description_check := Check
-  name: 'described_build takes the lines for the system'
-  run: ->
-    [
-      compare_text('linux', "['a.c', 'l.c'] ['-x'] []", described_line('linux'))...
-      compare_text('macos', "['a.c'] ['-x'] []", described_line('macos'))...
-      compare_text('windows', "['a.c'] [] ['w']", described_line('windows'))...
-      compare_text('sources', "['a.c', 'l.c']", "#{described_sources(DESCRIPTION)}")...
-    ]
+description_check := Check(name: 'described_build takes the variables', run: ->
+  build := described_build(DESCRIPTION, 'linux')
+  [
+    compare_text('platform', "['platform_p.c']", "#{build.platform_sources}")...
+    compare_text('sources', "['a.c', 'b.c']", "#{build.libuv_sources}")...
+    compare_text('flags', "['-x']", "#{build.libuv_flags}")...
+    compare_text('libraries', '[]', "#{build.libraries}")...
+    compare_text(
+      'runtime'
+      "['a.c', 'platform_p.c']"
+      "#{runtime_c_names(['a.c', 'a.h', 'platform_p.c', 'platform_q.c', 'linux.mk'], build)}"
+    )...
+  ]
+)
 
 # The error that the description gives, or `no error`.
 description_error := (description: String) ->
   try
-    described_sources description
+    described_build description, 'linux'
     'no error'
   catch error: CompileError
     error.message
 
 description_error_check := Check
-  name: 'described_sources reports a line that is not one'
+  name: 'described_build reports a line that is no variable of the description'
   run: ->
     [
       compare_text(
-        'two words'
-        'third_party/libuv.txt: not a build line: all source'
-        description_error("all source\n")
+        'no variable'
+        'runtime/linux.mk: not a variable: LIBUV_SOURCES = a.c'
+        description_error("LIBUV_SOURCES = a.c\n")
       )...
       compare_text(
-        'no such kind'
-        'third_party/libuv.txt: not a kind of line: thing'
-        description_error("all thing x\n")
+        'two :='
+        'runtime/linux.mk: not a variable: LIBUV_SOURCES := a.c := b.c'
+        description_error("LIBUV_SOURCES := a.c := b.c\n")
+      )...
+      compare_text(
+        'set again'
+        'runtime/linux.mk: set again: LIBUV_SOURCES'
+        description_error("LIBUV_SOURCES := a.c\nLIBUV_SOURCES := b.c\n")
+      )...
+      compare_text(
+        'a reference'
+        'runtime/linux.mk: a reference in LIBUV_FLAGS'
+        description_error("LIBUV_FLAGS := -DX=$(Y)\n")
+      )...
+      compare_text(
+        '+='
+        'runtime/linux.mk: not a variable: LIBUV_SOURCES += a.c'
+        description_error("LIBUV_SOURCES += a.c\n")
+      )...
+      compare_text(
+        '::='
+        'runtime/linux.mk: not a variable: LIBUV_SOURCES ::= a.c'
+        description_error("LIBUV_SOURCES ::= a.c\n")
+      )...
+      compare_text(
+        'export'
+        'runtime/linux.mk: not a variable: export LIBUV_SOURCES := a.c'
+        description_error("export LIBUV_SOURCES := a.c\n")
+      )...
+      compare_text(
+        'a comment after a value'
+        'runtime/linux.mk: a comment in LIBUV_SOURCES'
+        description_error("LIBUV_SOURCES := a.c # b\n")
+      )...
+      compare_text(
+        'no such variable'
+        'runtime/linux.mk: not a variable of it: LIBUV_SOURCES_all'
+        description_error("LIBUV_SOURCES_all := a.c\n")
+      )...
+      compare_text(
+        '?='
+        'runtime/linux.mk: not a variable: LIBUV_SOURCES ?= a.c'
+        description_error("LIBUV_SOURCES ?= a.c\n")
+      )...
+      compare_text(
+        'left out'
+        'runtime/linux.mk: no PLATFORM_SOURCES'
+        description_error("LIBUV_SOURCES := a.c\n")
+      )...
+      compare_text(
+        'no platform file'
+        'runtime/linux.mk: not a platform_*.c file: array.c'
+        description_error("PLATFORM_SOURCES := array.c\n")
       )...
     ]
 

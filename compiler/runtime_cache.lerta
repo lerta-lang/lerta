@@ -7,8 +7,8 @@ import bits_hex from './bits'
 import run_clang_jobs from './clang_jobs'
 import build_flags, BuildKind from './clang_flags'
 import CompileError from './errors'
-import libuv_build, LIBUV_PATHS, write_libuv_sources from './libuv'
-import is_for, LibuvBuild from './libuv_description'
+import LIBUV_PATHS, platform_build, write_libuv_sources from './libuv'
+import PlatformBuild, runtime_c_names from './platform_description'
 import basename, join from './paths'
 
 RUNTIME_PATHS := [path for path in EMBEDDED_PATHS when path.starts_with('runtime/')]
@@ -31,16 +31,16 @@ export struct CachedRuntime
 export cached_runtime := (kind: BuildKind, temp_dir: String) ->
   reject_path_target target if target := kind.target
   clang_version := await clang_version_text() ? return nil
-  libuv := libuv_build(kind.target)
+  build := platform_build(kind.target)
   cache := cache_dir()
-  runtime_name := cached_runtime_name(kind, clang_version, libuv)
+  runtime_name := cached_runtime_name(kind, clang_version, build)
   dir := join(cache, runtime_name)
-  objects := [join(dir, name) for name in object_names(libuv)]
-  files := [join(dir, name) for name in cached_file_names(libuv)]
+  objects := [join(dir, name) for name in object_names(build)]
+  files := [join(dir, name) for name in cached_file_names(build)]
   runtime := ->
     function_attributes := await read_text_or_throw(join(dir, ATTRIBUTES_FILE))
     coro_end_type := await read_text_or_throw(join(dir, CORO_END_FILE))
-    CachedRuntime objects, function_attributes, coro_end_type, libraries: libuv.libraries
+    CachedRuntime objects, function_attributes, coro_end_type, libraries: build.libraries
   return await runtime() if is_complete(files)
   if files.any(is_file)
     # Another build may have renamed its runtime into place meanwhile, which puts all the files
@@ -53,7 +53,7 @@ export cached_runtime := (kind: BuildKind, temp_dir: String) ->
   make_dir staging_dir
   compiled :=
     try
-      await compile_runtime(kind, libuv, staging_dir, temp_dir)
+      await compile_runtime(kind, build, staging_dir, temp_dir)
     catch error
       await remove_tree(staging_dir)
       throw error
@@ -145,12 +145,12 @@ non_empty_env := (name: String) ->
 
 # See Names in docs/reference/compiler.md#cache. A target given is no path (see
 # reject_path_target).
-cached_runtime_name := (kind: BuildKind, clang_version: String, libuv: LibuvBuild) ->
+cached_runtime_name := (kind: BuildKind, clang_version: String, build: PlatformBuild) ->
   kind_name := runtime_kind_name(kind)
   target_name := kind.target ? version_line_value(clang_version, 'Target: ') ? 'unknown'
   clang_name := "clang#{major_version(clang_version) ? 'unknown'}"
   flags := build_flags(kind).join(' ')
-  hash := runtime_hash([clang_version, flags, cached_file_names(libuv)...])
+  hash := runtime_hash([clang_version, flags, cached_file_names(build)...])
   "runtime-#{kind_name}-#{target_name}-#{clang_name}-#{hash}"
 
 runtime_kind_name := (kind: BuildKind) ->
@@ -192,13 +192,10 @@ export texts_hash := (texts: String[]) ->
     mix 0xFF
   bits_hex hash
 
-# The runtime's C files for `system`: platform_<systems>.c only for those systems, named as in
-# third_party/libuv.txt, and the others for all.
-c_paths := (system: String) ->
-  [path for path in RUNTIME_PATHS when path.ends_with('.c') and is_for(c_systems(path), system)]
-
-c_systems := (path: String) ->
-  basename(path).without_suffix('.c')!.without_prefix('platform_') ? 'all'
+# The runtime's C files that the build compiles.
+c_paths := (build: PlatformBuild) ->
+  names := [basename(path) for path in RUNTIME_PATHS]
+  ["runtime/#{name}" for name in runtime_c_names(names, build)]
 
 object_name := (c_path: String) -> "#{basename(c_path).without_suffix('.c')!}.o"
 
@@ -206,15 +203,16 @@ object_name := (c_path: String) -> "#{basename(c_path).without_suffix('.c')!}.o"
 # hold files of the same names, as `src/unix/async.c` and `src/win/async.c`.
 libuv_object_name := (source: String) -> "libuv-#{source.without_suffix('.c')!.replace('/', '-')}.o"
 
-object_names := (libuv: LibuvBuild) ->
-  runtime := [object_name(path) for path in c_paths(libuv.system)]
-  [runtime..., [libuv_object_name(path) for path in libuv.sources]...]
+object_names := (build: PlatformBuild) ->
+  runtime := [object_name(path) for path in c_paths(build)]
+  [runtime..., [libuv_object_name(path) for path in build.libuv_sources]...]
 
-cached_file_names := (libuv: LibuvBuild) -> [object_names(libuv)..., ATTRIBUTES_FILE, CORO_END_FILE]
+cached_file_names := (build: PlatformBuild) ->
+  [object_names(build)..., ATTRIBUTES_FILE, CORO_END_FILE]
 
 # Writes the runtime's sources and libuv's to `temp_dir`, compiles each C file into `staging_dir`
 # and writes what it reads from clang's IR there; false if clang fails.
-compile_runtime := (kind: BuildKind, libuv: LibuvBuild, staging_dir: String, temp_dir: String) ->
+compile_runtime := (kind: BuildKind, build: PlatformBuild, staging_dir: String, temp_dir: String) ->
   source_dir := join(temp_dir, 'runtime')
   make_dir source_dir
   for path in RUNTIME_PATHS
@@ -226,13 +224,13 @@ compile_runtime := (kind: BuildKind, libuv: LibuvBuild, staging_dir: String, tem
   flags := [build_flags(kind)..., libuv_includes...]
   runtime_job := (path: String) ->
     ['-c', flags..., join(source_dir, basename(path)), '-o', join(staging_dir, object_name(path))]
-  libuv_flags := [flags..., libuv.flags..., '-w']
+  libuv_flags := [flags..., build.libuv_flags..., '-w']
   libuv_job := (path: String) ->
     object := join(staging_dir, libuv_object_name(path))
     ['-c', libuv_flags..., join(libuv_dir, path), '-o', object]
   jobs := [
-    [runtime_job(path) for path in c_paths(libuv.system)]...
-    [libuv_job(path) for path in libuv.sources]...
+    [runtime_job(path) for path in c_paths(build)]...
+    [libuv_job(path) for path in build.libuv_sources]...
   ]
   return false unless await run_clang_jobs(jobs)
   ir := await clang_probe_ir(flags, temp_dir) ? return false

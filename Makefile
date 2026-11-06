@@ -10,22 +10,17 @@ HOST_SYSTEM := $(if $(filter Darwin,$(UNAME)),macos,$(if $(filter MINGW% MSYS%,$
 HOST_WINDOWS := $(filter windows,$(HOST_SYSTEM))
 # What a program built for the host ends with; that shell runs it without.
 HOST_EXE := $(if $(HOST_WINDOWS),.exe)
-# What third_party/libuv.txt lists of the kind $(1) for the host's system, by the rule of is_for in
-# compiler/libuv_description.lerta.
-HOST_LIBUV_SYSTEMS := all $(if $(HOST_WINDOWS),,posix) $(HOST_SYSTEM)
-host_libuv = $(shell awk -v kind=$(1) -v systems='$(HOST_LIBUV_SYSTEMS)' \
-  'BEGIN { split(systems, list, " "); for (i in list) wanted[list[i]] = 1 } \
-  $$2 == kind && ($$1 in wanted) { print $$3 }' third_party/libuv.txt)
+# What the host builds the runtime with (see compiler/platform_description.lerta).
+DESCRIPTION := runtime/$(HOST_SYSTEM).mk
+include $(DESCRIPTION)
 
-# Of libuv, the headers, and the sources that third_party/libuv.txt lists for some system.
+# Of libuv, the host's description, the headers, and the sources that it lists.
 LIBUV_HEADERS := $(shell find third_party/libuv/include third_party/libuv/src -name '*.h')
-LIBUV_SOURCES := $(shell awk '$$2 == "source" { print "third_party/libuv/" $$3 }' third_party/libuv.txt)
-LIBUV := third_party/libuv.txt $(LIBUV_HEADERS) $(LIBUV_SOURCES)
-# The host's: platform_<systems>.c only for the host's systems, as compiler/runtime_cache.lerta
-# takes them.
+LIBUV := $(DESCRIPTION) $(LIBUV_HEADERS) $(addprefix third_party/libuv/,$(LIBUV_SOURCES))
+# The host's: of platform_*.c, only those of its description.
 RUNTIME_C := $(filter-out runtime/platform_%.c,$(wildcard runtime/*.c)) \
-  $(foreach systems,$(HOST_LIBUV_SYSTEMS),$(wildcard runtime/platform_$(systems).c))
-RUNTIME := $(wildcard runtime/*.c runtime/*.h)
+  $(addprefix runtime/,$(PLATFORM_SOURCES))
+RUNTIME := $(wildcard runtime/*.c runtime/*.h runtime/*.mk)
 # What tools/build.lerta is built from: itself, the compiler's modules, some of which it imports,
 # and std, which minilerta reads.
 BUILD_TOOL_SOURCES := tools/build.lerta $(shell find tools/build compiler std -name '*.lerta')
@@ -77,16 +72,16 @@ endef
 # clang compiles the IR far faster without optimization than the program loses running unoptimized,
 # and each such program runs little.
 link_debug = clang -Wno-override-module $(1) -D LERTA_DEBUG -Ithird_party/libuv/include \
-  $(RUNTIME_C) build/libuv/*.o $(addprefix -l,m $(call host_libuv,library)) -o $(2)
+  $(RUNTIME_C) build/libuv/*.o $(addprefix -l,m $(LIBUV_LIBRARIES)) -o $(2)
 
 build/minilerta$(HOST_EXE): build/seed.ll $(RUNTIME) build/libuv/built
 	$(call link_debug,build/seed.ll,$@)
 
 build/libuv/built: $(LIBUV)
 	@rm -rf build/libuv && mkdir -p build/libuv
-	cd build/libuv && clang -c $(call host_libuv,flag) -I$(CURDIR)/third_party/libuv/include \
+	cd build/libuv && clang -c $(LIBUV_FLAGS) -I$(CURDIR)/third_party/libuv/include \
 	  -I$(CURDIR)/third_party/libuv/src -w \
-	  $(addprefix $(CURDIR)/third_party/libuv/,$(call host_libuv,source))
+	  $(addprefix $(CURDIR)/third_party/libuv/,$(LIBUV_SOURCES))
 	touch $@
 
 build/build.ll: build/minilerta$(HOST_EXE) build/host_llvm.sed $(BUILD_TOOL_SOURCES)

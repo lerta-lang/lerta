@@ -52,10 +52,10 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 |---|---|
 | `compiler/` | The compiler (see [below](#the-compiler)) |
 | `std/` | The standard modules, in Lerta, which the compiler embeds |
-| `runtime/` | The C runtime, which the compiler embeds |
+| `runtime/` | The C runtime, which the compiler embeds; `<system>.mk` says which of its `platform_*.c` files and of libuv's sources, with which flags and libraries, each system builds it with, as make includes it |
 | `seed/` | The seed, from which `make` builds the compiler (see [the bootstrap](docs/internals/architecture.md#bootstrap)) |
 | `LICENSE-MIT`, `LICENSE-APACHE` | Lerta's licenses (see [License](#license)) |
-| `third_party/` | libuv and its license; `libuv.txt` says how the runtime builds it for each system. Its license notice goes with the compiler and the programs it builds (see [License](#license)) |
+| `third_party/` | libuv and its license. Its license notice goes with the compiler and the programs it builds (see [License](#license)) |
 | `tools/` | `build.lerta` and `build/`, which build the compiler, and check and test it, for the goals of `make` (see [the bootstrap](docs/internals/architecture.md#bootstrap)); `test_cross.sh`, which `make test-cross` runs; `docker/`, its Docker images, with `run.sh` to run a command (bash by default) in one |
 | `test/` | The test driver and suites (see [Testing](#testing)) |
 | `tests/` | The run tests: Lerta sources and their expected output; also the CLI checks' files (`tests/cli/`) and the formatter cases (`tests/format/`) |

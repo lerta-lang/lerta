@@ -4,11 +4,12 @@ import build_flags from '../compiler/clang_flags'
 import Check, posix_check, run_checks, select from './lib/report'
 import compare_text, expect_status, lines, reason_unless from './lib/expect'
 import
-  exit_in_time, host_libuv, host_systems, OUTPUT_LIMIT, root_dir, SetupError, shown_text, suite_dir
+  exit_in_time, host_build, OUTPUT_LIMIT, root_dir, SetupError, shown_text, suite_dir
 from './lib/lerta'
 import timeout from 'std:async'
 import encode_json from 'std:json'
 import platform, run from 'std:process'
+import runtime_c_names from '../compiler/platform_description'
 import
   is_dir, is_file, list_dir, make_dir, make_link, make_temp_dir, remove_tree, write_file
 from 'std:io'
@@ -50,50 +51,46 @@ clang := (args: String[], cwd: String = work_dir) ->
   outcome := await execute('clang', args, cwd)
   throw SetupError("clang #{args.join(' ')} failed:\n#{outcome.stderr}") if outcome.status != 0
 
-# libuv as the runtime's programs link it, compiled once for all of them by set_up_libuv.
-struct Libuv
-  objects: String[]
+# What the runtime's programs are built with, set up once for all of them by set_up_runtime: the
+# host's runtime C files, and libuv's objects and libraries.
+struct Runtime
+  c_files: String[]
+  libuv_objects: String[]
   libraries: String[]
-var libuv = Libuv(objects: [], libraries: [])
+var runtime = Runtime(c_files: [], libuv_objects: [], libraries: [])
 
-# Compiles the sources and links the libraries that third_party/libuv.txt lists for the host's
-# system, with its flags, into the directory that clang runs in.
-set_up_libuv := ->
-  { sources, flags, libraries } := await host_libuv()
+# Compiles libuv's sources that the host's description lists, with its flags, into the directory
+# that clang runs in, and takes the runtime's C files and the libraries that it lists.
+set_up_runtime := ->
+  build := await host_build()
+  { libuv_sources, libuv_flags, libraries } := build
   objects_dir := "#{work_dir}/libuv"
   make_dir objects_dir
   await clang(
     [
       '-c'
-      flags...
+      libuv_flags...
       "-I#{libuv_dir}/include"
       "-I#{libuv_dir}/src"
       '-w'
-      ("#{libuv_dir}/#{source}" for source in sources)...
+      ("#{libuv_dir}/#{source}" for source in libuv_sources)...
     ]
     objects_dir
   )
-  libuv = { objects: ["#{objects_dir}/#{file}" for file in list_dir(objects_dir)], libraries }
-
-# The host's: platform_<systems>.c only for the host's systems, as compiler/runtime_cache.lerta
-# takes them.
-is_host_c_file := (file: String) ->
-  name := file.without_suffix('.c') ? return false
-  host_systems.contains name.without_prefix('platform_') ? 'all'
-
-runtime_c_files :=
-  ["#{runtime_dir}/#{file}" for file in list_dir(runtime_dir) when is_host_c_file(file)]
+  c_files := ["#{runtime_dir}/#{file}" for file in runtime_c_names(list_dir(runtime_dir), build)]
+  libuv_objects := ["#{objects_dir}/#{file}" for file in list_dir(objects_dir)]
+  runtime = { c_files, libuv_objects, libraries }
 
 # What `build` gives clang for the runtime's sources on the host, with -O or without it and its
-# default memory checks; libuv is compiled once, without them, by set_up_libuv.
+# default memory checks; libuv is compiled once, without them, by set_up_runtime.
 runtime_clang_args := (optimize: Bool) ->
   [
     build_flags({ optimize, memory_checks: not optimize, target: nil })...
     "-I#{libuv_dir}/include"
-    runtime_c_files...
-    libuv.objects...
+    runtime.c_files...
+    runtime.libuv_objects...
     # libm, as compiler/build.lerta links it.
-    ("-l#{library}" for library in ['m', libuv.libraries...])...
+    ("-l#{library}" for library in ['m', runtime.libraries...])...
     (platform == 'windows' then ["#{sources_dir}/binary_stdout.c"] else [])...
   ]
 
@@ -373,5 +370,5 @@ checks := [
 export suite := ->
   title := 'runtime checks'
   selected := select(title, checks) ? return 0
-  await set_up_libuv()
+  await set_up_runtime()
   await run_checks(title, selected)
