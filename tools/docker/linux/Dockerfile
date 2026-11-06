@@ -7,3 +7,7 @@ RUN apt-get update \
   && if [ "$(dpkg --print-architecture)" = amd64 ]; then \
     apt-get install -y --no-install-recommends gcc-multilib; fi \
   && rm -rf /var/lib/apt/lists/*
+# The tests run as a user, not as root, whom the system lets through the permissions that some of
+# them check. The volumes that run.sh makes at build/ and bin/ take the owner of these.
+RUN useradd --create-home lerta && mkdir -p /lerta/build /lerta/bin && chown lerta /lerta/build /lerta/bin
+USER lerta
