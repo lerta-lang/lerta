@@ -1,3 +1,5 @@
+// glibc declares O_PATH only under _GNU_SOURCE.
+#define _GNU_SOURCE
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
