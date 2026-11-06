@@ -24,5 +24,7 @@ if [ $# -eq 0 ]; then set -- bash; fi
 if [ -t 0 ]; then tty_option=-it; else tty_option=-i; fi
 # The mount points must be in the tree, which is read-only in the container.
 mkdir -p "$root/build" "$root/bin"
-exec docker run --rm $name_option $tty_option --volume "$root:/lerta:ro" --volume /lerta/build \
+# Some Docker setups disable IPv6 in containers, which leaves them no ::1 for the tests of std:net.
+exec docker run --rm $name_option $tty_option --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+  --volume "$root:/lerta:ro" --volume /lerta/build \
   --volume /lerta/bin --workdir /lerta "lerta-test-$image" "$@"
