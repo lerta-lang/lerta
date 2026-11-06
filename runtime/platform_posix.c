@@ -98,6 +98,17 @@ void lerta_os_exit(int code) {
   _exit(code);
 }
 
+bool lerta_os_signal_ignored(int signal_number) {
+  struct sigaction action;
+  return sigaction(signal_number, NULL, &action) == 0 && action.sa_handler == SIG_IGN;
+}
+
+void lerta_os_end_by_signal(int signal_number) {
+  signal(signal_number, SIG_DFL);
+  raise(signal_number);
+  _exit(128 + signal_number);
+}
+
 void lerta_os_abort(void) {
   abort();
 }

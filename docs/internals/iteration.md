@@ -145,7 +145,7 @@ Fusion generates the loop's source in place (`compiler/codegen/fusion.lerta`), s
 - A module's top-level code that awaits is generated as a function that awaits, without parameters.
 - The program's top-level code, the entry module's after that of the modules it imports, is then one too, which awaits each of theirs that awaits.
 - `lerta_main` starts it and:
-  1. has the runtime watch it (`lerta_watch_top_level`), which ends the program as soon as it is rejected, as the loop may still wait for work that never ends, such as an accept;
+  1. has the runtime watch it (`lerta_watch_top_level`), which ends the program as soon as it is rejected, as the loop may still wait for work that never ends, such as an accept, and has the signals that ask the program to end cancel it (runtime/signal.c, see [signals](../reference/functions.md#signals)), after which it ends the program by the signal as soon as it is settled, and which, once it is settled otherwise, stop being watched;
   2. runs the loop;
   3. has the runtime check that it is settled (`lerta_finish_top_level`).
 - A program whose top-level code awaits nowhere keeps plain functions.

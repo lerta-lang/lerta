@@ -148,6 +148,15 @@ void lerta_os_exit(int code) {
   ExitProcess((UINT)code);
 }
 
+bool lerta_os_signal_ignored(int signal_number) {
+  (void)signal_number;
+  return false;
+}
+
+void lerta_os_end_by_signal(int signal_number) {
+  ExitProcess((UINT)(128 + signal_number));
+}
+
 void lerta_os_abort(void) {
   TerminateProcess(GetCurrentProcess(), 3);
   // TerminateProcess returns while the process ends.

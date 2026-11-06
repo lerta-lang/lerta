@@ -46,6 +46,7 @@ See [the reference](../reference/std.md#stdio).
 See [the reference](../reference/std.md#stdprocess).
 
 - The `Exit` of a Windows program that an exception or `TerminateProcess` ended, tested.
+- **Signals taken by the program.** `signals(names: String...)`, an async iterator of the signals named, as `for await signal in signals('SIGHUP')`; one so taken no longer cancels the top-level code (see [signals](../reference/functions.md#signals)), so that a program may go on after it, as to read its settings again, or tell one signal from another.
 
 ### std:async
 

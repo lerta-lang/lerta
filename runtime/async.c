@@ -115,8 +115,25 @@ bool lerta_promise_wait_in(LertaPromise *promise, void *coroutine, LertaPromise 
   return true;
 }
 
+// The program's top-level code, once it awaits (see lerta_watch_top_level).
+static LertaPromise *top_level = NULL;
+
+// Once a signal has cancelled the top-level code, the program ends by the signal as soon as the code
+// is settled, without waiting for the loop, unless an error other than the cancel rejects it.
+// Otherwise a signal from then on takes its default action, as no code is left to cancel.
+static void end_if_interrupted(LertaPromise *promise) {
+  if (promise != top_level) return;
+  if (lerta_signal_received() == 0) {
+    lerta_signals_unwatch();
+    return;
+  }
+  if (promise->state == REJECTED && !is_given_up(promise)) return;
+  lerta_end_by_signal();
+}
+
 static void settle(LertaPromise *promise, int state) {
   promise->state = state;
+  end_if_interrupted(promise);
   promise->cancel = NULL;
   for (int64_t i = 0; i < promise->waiter_count; i++) push_ready(promise->waiters[i]);
   lerta_mem_free(promise->waiters);
@@ -132,9 +149,6 @@ void *lerta_promise_slot(LertaPromise *promise) {
 void lerta_promise_resolve(LertaPromise *promise) {
   settle(promise, RESOLVED);
 }
-
-// The program's top-level code, once it awaits (see lerta_watch_top_level).
-static LertaPromise *top_level = NULL;
 
 void lerta_promise_reject(LertaPromise *promise) {
   promise->exception = lerta_exception;
@@ -237,6 +251,7 @@ void lerta_loop_run(void (*resume)(void *coroutine)) {
 void lerta_watch_top_level(LertaPromise *promise) {
   if (promise->state == REJECTED) exit_with_rejection(promise);
   top_level = promise;
+  if (promise->state == PENDING) lerta_signals_watch(promise);
 }
 
 LERTA_STATIC_STRING(never_settled, "the top-level code awaits a promise that is never settled");

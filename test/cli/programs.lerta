@@ -454,6 +454,37 @@ terminal_color_check := (
   ]
 )
 
+# Waits for the file that the program writes.
+UNTIL_FILE := 'until_file() { while [ ! -e "$1" ]; do sleep 0.02; done; }'
+
+# Runs the script with the program of tests/process/lib/ as $0, given the seconds that the cleanup
+# of `interrupted` waits as $1, and `until_file`; the script ends with how the program ended in $?,
+# and the check then prints it, what the program printed to `out` and the first line of `err`.
+signal_check := (
+  name: String, dir: String, program: String, cleanup_seconds: String, script: String,
+  expected: String
+) -> posix_check(name, ->
+  built := await build_program(dir, "#{root_dir}/tests/process/lib/#{program}.lerta")
+  return built.errors unless built.errors.is_empty()
+  # The directory is kept from an earlier run of the check.
+  fresh := 'rm -f ready cleaning out; : >err'
+  ran := await run_command(
+    'sh'
+    [
+      '-c'
+      "#{UNTIL_FILE}; #{fresh}; #{script}; echo $?; cat out; head -n 1 err"
+      built.executable
+      cleanup_seconds
+    ]
+    built.dir
+  )
+  [expect_status(0, ran.status)..., compare_text('stdout', expected, ran.stdout_text())...]
+)
+
+# A shell leaves SIGINT ignored for a program that it runs in the background, and the program is
+# run in the foreground instead, by a shell that it replaces, so that $$ names it.
+SIGINT_IN_FOREGROUND := "#{UNTIL_FILE}; (until_file ready; kill -INT $$) & exec \"$0\" \"$1\" >out"
+
 # Longer than the first buffer that the runtime reads a value into.
 long_value := 'x'.repeat(1000)
 
@@ -488,6 +519,64 @@ export checks :=
   read_before_exit_check()
   read_then_run_check()
   run_without_stdout_check()
+  signal_check(
+    'a built program cancels its top-level code on SIGTERM and ends by it'
+    'sigterm'
+    'interrupted'
+    '0'
+    '"$0" "$1" >out & until_file ready; kill -TERM $!; wait $!'
+    "143\nfinally\ncleaned up\n"
+  )
+  signal_check(
+    'a built program cancels its top-level code on SIGINT and ends by it'
+    'sigint'
+    'interrupted'
+    '0'
+    "sh -c '#{SIGINT_IN_FOREGROUND}' \"$0\" \"$1\""
+    "130\nfinally\ncleaned up\n"
+  )
+  signal_check(
+    'a built program ends at once on a second signal'
+    'second-signal'
+    'interrupted'
+    '60'
+    '"$0" "$1" >out & until_file ready; kill -TERM $!; until_file cleaning; kill -TERM $!; ' +
+      'wait $!'
+    "143\nfinally\n"
+  )
+  signal_check(
+    'a built program ends by a signal after its top-level code while work is left'
+    'signal-after-end'
+    'interrupted_after_end'
+    '0'
+    '"$0" >out & until_file ready; sleep 0.2; kill -TERM $!; wait $!'
+    "143\n"
+  )
+  signal_check(
+    'a built program ends by a signal whose CancelledError it takes'
+    'caught-signal'
+    'interrupted_caught'
+    '0'
+    '"$0" >out & until_file ready; kill -TERM $!; wait $!'
+    "143\ncaught cancelled\nwent on\n"
+  )
+  signal_check(
+    'a built program ends by the error of a cleanup that throws after a signal'
+    'failing-cleanup'
+    'interrupted_failing'
+    '0'
+    '"$0" >out 2>err & until_file ready; kill -TERM $!; wait $!'
+    "1\ncleanup failed\n"
+  )
+  signal_check(
+    'a built program leaves a signal ignored that its parent ignores'
+    'ignored-signal'
+    'interrupted'
+    '0'
+    '(trap "" HUP; exec "$0" "$1" >out) & until_file ready; kill -HUP $!; sleep 0.2; ' +
+      'kill -TERM $!; wait $!'
+    "143\nfinally\ncleaned up\n"
+  )
   environment_check(
     'lerta build runs a program with an unset environment value'
     Map()

@@ -150,6 +150,13 @@ struct uv_stream_s *lerta_handle_stream(int64_t pointer);
 // The event loop (loop.c). Waits for what settles promises, and settles them, once; false, without
 // waiting, if nothing is left to wait for.
 bool lerta_loop_wait(void);
+// The signals that ask the program to end cancel the top-level code, once it awaits, until it is
+// settled and they are unwatched; lerta_signal_received gives the signal, or 0, and
+// lerta_end_by_signal ends the program by it, after its output.
+void lerta_signals_watch(LertaPromise *top_level);
+void lerta_signals_unwatch(void);
+int lerta_signal_received(void);
+_Noreturn void lerta_end_by_signal(void);
 // Runs `work` on libuv's thread pool, then `done` on the loop, both with `data`. `work` must not
 // touch what the main thread does, such as Lerta's allocator.
 void lerta_loop_work(void *data, void (*work)(void *data), void (*done)(void *data));
@@ -241,6 +248,11 @@ void lerta_os_stdio_init(void);
 double lerta_os_unix_time(void);
 // Ends the program at once, without flushing stdout.
 _Noreturn void lerta_os_exit(int code);
+// Whether the parent left the signal ignored; never on Windows.
+bool lerta_os_signal_ignored(int signal_number);
+// Ends the program as the signal does by default, which the parent sees; on Windows, with the code
+// 128 plus its number, as std:process gives a signal.
+_Noreturn void lerta_os_end_by_signal(int signal_number);
 // Ends the program as a failure that is not an exit code, as C's abort does.
 _Noreturn void lerta_os_abort(void);
 // Memory from the system for the allocator (allocator.c): `size` bytes, a multiple of

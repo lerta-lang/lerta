@@ -255,6 +255,14 @@ A function that does not await, but whose return type is a `Promise`, written or
   - another error that rejects it, as one that a `finally` block throws;
   - a `CancelledError` that a program throws in a `Promise` that no cancel has gone through.
 
+### Signals
+
+- Once the program's top-level code awaits, SIGINT, SIGTERM and SIGHUP cancel it, as `cancel` does (above), so that its `finally` blocks run; on Windows, Ctrl-C, Ctrl-Break and the closing of the console do, as SIGINT, SIGBREAK and SIGHUP.
+- Code that runs without awaiting takes the cancel only once it awaits. Before the top-level code first awaits, after it is settled, as the loop still runs the work that it left, or in a program whose top-level code awaits nowhere, a signal ends the program at once, as it does by default.
+- Once the top-level code is settled, the program ends by the signal, as it would by default, without waiting for the loop; on Windows, with the exit code 128 plus its number. So it does even if the code took the `CancelledError` and went on to its end. An error other than the cancel's that rejects the code ends the program as any uncaught error does instead.
+- A second signal ends the program at once, its cleanup cut short.
+- A signal that the program's parent left ignored, as `nohup` does SIGHUP or a shell SIGINT for a program in the background, stays ignored.
+
 ## Generic functions
 
 ```lerta
