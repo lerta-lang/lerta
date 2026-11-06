@@ -1,17 +1,17 @@
 # tools/build.lerta, which the Makefile builds into build/build: the usage errors that end it before
 # it builds anything, and the parts of it that a build cannot reach on purpose.
-import Check from '../lib/report'
+import Check, posix_check from '../lib/report'
 import compare_output, compare_text, expect_status from '../lib/expect'
 import host_executable_suffix, root_dir from '../lib/lerta'
 import new_cli_dir, run_command from '../lib/cli'
-import write_file from 'std:io'
+import is_file, read_file, write_file from 'std:io'
 import platform from 'std:process'
 import sleep from 'std:time'
 import is_stale, sorted_once from '../../tools/build/files'
 import bootstrap_for from '../../tools/build/stages'
 import CompileError from '../../compiler/errors'
 import described_build, runtime_c_names from '../../compiler/platform_description'
-import BuildError, command_line_batches from '../../tools/build/steps'
+import BuildError, command_line_batches, piped_to_file from '../../tools/build/steps'
 
 BUILD_TOOL := "#{root_dir}/build/build#{host_executable_suffix}"
 USAGE := 'usage: build <goal> [--target <target>] | build embed <output> <path>...'
@@ -39,6 +39,39 @@ missing_input_check := Check(name: 'is_stale ends the build on an input that is 
       error.message
   compare_text 'error', "missing input: #{dir}/missing", message
 )
+
+# What the producer prints goes through the filter into the output, which it replaces.
+piped_check := posix_check('piped_to_file writes what the filter prints', ->
+  output := "#{new_cli_dir('build-tool-piped')}/output"
+  await write_file(output, 'old')
+  await piped_to_file(output, ['printf', 'a\nb\n'], ['sed', 's/b/c/'])
+  compare_output 'output', b"a\nc\n", await read_file(output)
+)
+
+# More than a pipe holds streams through, as nothing waits for the whole of it.
+piped_large_check := posix_check('piped_to_file streams more than a pipe holds', ->
+  output := "#{new_cli_dir('build-tool-piped-large')}/output"
+  await piped_to_file(output, ['sh', '-c', 'yes | head -c 1000001'], ['cat'])
+  compare_text 'length', '1000001', "#{(await read_file(output)).length}"
+)
+
+# Either program failing, or not starting, ends the build and leaves the output as it was, without
+# the file it was written into.
+piped_failure_check := (name: String, producer: String[], filter: String[], message: String) ->
+  posix_check "piped_to_file ends the build when #{name}", ->
+    output := "#{new_cli_dir("build-tool-piped-#{name.replace(" ", "-")}")}/output"
+    await write_file(output, 'old')
+    error :=
+      try
+        await piped_to_file(output, producer, filter)
+        'no error'
+      catch error
+        error.message
+    [
+      compare_text('error', message, error)...
+      compare_output('output', b'old', await read_file(output))...
+      compare_text('unfinished', 'false', "#{is_file("#{output}.unfinished")}")...
+    ]
 
 # An output is stale once an input is newer than it, and not before. The pause outlasts the file
 # times of the file systems that the tests run on, APFS, ext4 and NTFS, though not a coarser one
@@ -255,6 +288,35 @@ export checks :=
     run: -> compare_text('stale', 'true', "#{is_stale("#{root_dir}/build/no-such-output", [])}")
   )
   missing_input_check
+  piped_check
+  piped_failure_check(
+    'the producer fails'
+    ['sh', '-c', 'printf a; exit 3']
+    ['cat']
+    'sh exited with 3'
+  )
+  piped_failure_check(
+    'the filter fails'
+    ['printf', 'a']
+    ['sh', '-c', 'cat; exit 4']
+    'sh exited with 4'
+  )
+  # A producer that writes on past the filter is killed by SIGPIPE, which the filter's failure
+  # comes before.
+  piped_failure_check('the filter fails first', ['yes'], ['sh', '-c', 'exit 4'], 'sh exited with 4')
+  piped_failure_check(
+    'the filter cannot start'
+    ['yes']
+    ['no-such-command']
+    'cannot run: no-such-command'
+  )
+  piped_failure_check(
+    'the producer cannot start'
+    ['no-such-command']
+    ['cat']
+    'cannot run: no-such-command'
+  )
+  piped_large_check
   order_check
   bootstrap_check
   not_utf8_check

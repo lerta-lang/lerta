@@ -10,7 +10,7 @@ import dirname from '../../compiler/paths'
 import embedded_module, write_seed_embedded from './embed'
 import files_under, is_stale from './files'
 import EMBEDDED_MODULE, HOST_EXE, inputs from './inputs'
-import BuildError, captured, step, step_to_file from './steps'
+import BuildError, step, step_piped_to_file, step_to_file from './steps'
 
 MAIN := 'compiler/main.lerta'
 MINILERTA_MAIN := 'compiler/minilerta.lerta'
@@ -27,9 +27,7 @@ export BUILD_TOOL := "build/build#{HOST_EXE}"
 
 # What minilerta prints for the source, into the IR file `output`, rewritten for the host's LLVM.
 minilerta_ir := (source: String, output: String) ->
-  print "#{MINILERTA} #{source} > #{output}"
-  ir := await captured(MINILERTA, [source], b'')
-  await write_file(output, await captured('sed', ['-f', HOST_LLVM_SED], ir))
+  await step_piped_to_file(output, [MINILERTA, source], ['sed', '-f', HOST_LLVM_SED])
 
 # Links the IR into `output` with the debug runtime, as the compiler's own unoptimized build does:
 # clang compiles the IR far faster without optimization than the program loses running

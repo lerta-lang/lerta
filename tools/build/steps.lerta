@@ -1,7 +1,8 @@
 # Runs the commands of the build: a step prints its command first, as make prints a recipe, and
 # ends the build if it fails.
-import write_file from 'std:io'
-import run from 'std:process'
+import all from 'std:async'
+import open, Pipe, remove_tree, rename, write_file, Writer from 'std:io'
+import Exit, run from 'std:process'
 
 # What ends the build: a step that failed, with code 1, or a usage error, with code 2, as make's.
 export struct BuildError: Error
@@ -40,6 +41,54 @@ export step := (command: String, args: String...) ->
 export step_to_file := (output: String, command: String, args: String...) ->
   print "#{command_line(command, args)} > #{output}"
   await write_file(output, await captured(command, args, b''))
+
+# Prints the pipeline, then runs the producer with its output piped into the filter, and writes
+# what the filter prints to `output` as it comes, as the producer's output may be too large to hold.
+# The output is made only once both succeed, for the reason that step_to_file gives. As with
+# pipefail, a producer that the filter leaves unread fails the step too.
+export step_piped_to_file := (output: String, producer: String[], filter: String[]) ->
+  producer_line := command_line(producer[0], producer[1..])
+  print "#{producer_line} | #{command_line(filter[0], filter[1..])} > #{output}"
+  await piped_to_file(output, producer, filter)
+
+# What step_piped_to_file runs, without its line.
+export piped_to_file := (output: String, producer: String[], filter: String[]) ->
+  unfinished := "#{output}.unfinished"
+  filtered := open(unfinished, WRITE).writer
+  try
+    await run_piped(filtered, producer, filter)
+  catch error
+    await abandon(filtered, unfinished)
+    throw error
+  rename unfinished, output
+
+# Removes the file that a failed step wrote, if it can: it is ended first, as a filter that could
+# not start has not ended it, and Windows cannot remove an open file, which a filter still running
+# may hold. An end that fails has closed the file all the same. A file left is emptied by the next
+# run.
+abandon := (writer: Writer, path: String) ->
+  await quietly(writer.end())
+  await quietly(remove_tree(path))
+
+# The step's error tells why it failed, rather than what its cleanup met after.
+quietly := (cleanup: Promise) ->
+  try
+    await cleanup
+  catch _
+    return
+
+# The filter's failure is told first: a producer that writes on once the filter has failed fails
+# too, killed by SIGPIPE, which would hide why.
+run_piped := (filtered: Writer, producer: String[], filter: String[]) ->
+  pipe := Pipe()
+  filtering := run(filter[0], filter[1..]..., stdin: pipe, stdout: filtered)
+  producing := run(producer[0], producer[1..]..., stdout: pipe)
+  exits := await all([filtering, producing])
+  check_exit filter[0], exits[0]
+  check_exit producer[0], exits[1]
+
+check_exit := (command: String, exit: Exit) ->
+  throw BuildError(message: "#{command} exited with #{exit.code}") if exit.code != 0
 
 # What the command prints, given `input`; the build ends if it fails.
 export captured := (command: String, args: String[], input: Binary) ->
