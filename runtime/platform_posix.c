@@ -10,6 +10,7 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "internal.h"
@@ -439,4 +440,14 @@ bool lerta_os_remove_tree(const char *path) {
   free(dir_path);
   free(trimmed);
   return removed;
+}
+
+// localtime_r need not read TZ as localtime does, so tzset reads it first.
+int64_t lerta_os_utc_offset(int64_t seconds) {
+  time_t time = (time_t)seconds;
+  struct tm local;
+  if ((int64_t)time != seconds) return INT64_MIN;
+  tzset();
+  if (localtime_r(&time, &local) == NULL) return INT64_MIN;
+  return local.tm_gmtoff;
 }

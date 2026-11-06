@@ -290,6 +290,9 @@ LertaPromise *lerta_sleep_milliseconds(int64_t milliseconds);
 double lerta_unix_time(void);
 // Seconds since an unspecified time, which only go forward.
 double lerta_monotonic_time(void);
+// The seconds that local time is ahead of UTC at the seconds since the Unix epoch; INT64_MIN for a
+// time that the system cannot convert, which std:time throws for.
+int64_t lerta_utc_offset(int64_t seconds);
 
 // Process (process.c). The arguments exclude the program name; they are Binary values, as nothing
 // makes them UTF-8.

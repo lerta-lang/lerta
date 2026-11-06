@@ -707,3 +707,13 @@ print "#{name}: #{scanner.rest()}"
 | `sleep(seconds: Float): Promise` | A promise that is resolved once at least the seconds have passed, for a [function that awaits](functions.md#functions-that-await) to wait for. A time of zero only lets other work run first. Throws a `ValueError`, `sleep for a negative time`, for a negative time. |
 | `time(): Float` | The seconds since the Unix epoch, 1970-01-01T00:00:00Z, with their fraction, as the system's clock tells them. It may go back if the clock is set back. |
 | `monotonic(): Float` | The seconds, with their fraction, since a time that is not specified, as a clock that only goes forward tells them, which a setting of the system's clock does not move: what a time that has passed is measured by. |
+| `utc_offset(at: Float = time()): Int` | The seconds that local time is ahead of UTC at a time, given as `time` gives it (below). |
+
+### utc_offset
+
+- Local time is as the `TZ` environment variable sets it, or else as the system does. It is read at each call.
+  - A zone by its offset and the name of its summer time, as `JST-9` or `EST5EDT`, is read on every system.
+  - A zone by its name, as `America/New_York`, only on POSIX systems; Windows reads only the form above.
+- The offset is that of the time: one of summer time where it is in use, as New York's `-14400` in July and `-18000` in January.
+- The time is taken to the whole second that holds it, rounded down.
+- Throws a `ValueError`, `no UTC offset for the time <at>`, for a time that the system cannot convert: an infinity, or one too far from the epoch. On Windows, that is any time before 1970 or after 3000.

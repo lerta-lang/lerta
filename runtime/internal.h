@@ -246,6 +246,9 @@ bool lerta_os_write(int fd, const uint8_t *bytes, int64_t length);
 void lerta_os_stdio_init(void);
 // Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
 double lerta_os_unix_time(void);
+// The seconds that local time, as TZ or else the system sets it, is ahead of UTC at the seconds
+// since the Unix epoch; INT64_MIN for a time that the system cannot convert.
+int64_t lerta_os_utc_offset(int64_t seconds);
 // Ends the program at once, without flushing stdout.
 _Noreturn void lerta_os_exit(int code);
 // Whether the parent left the signal ignored; never on Windows.

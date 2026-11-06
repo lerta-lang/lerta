@@ -1,6 +1,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <windows.h>
 
 #include "internal.h"
@@ -379,3 +380,20 @@ void lerta_os_discard_region(void *region, int64_t size) {
 }
 
 bool lerta_os_remove_tree(const char *path) { return lerta_remove_tree_by_paths(path); }
+
+// The CRT's tm has no offset, so it is how far the local time's fields are ahead of UTC's, less than
+// a day either way. _mkgmtime64 of the local time is not used, as it fails for a local time before
+// 1970, as 0 is west of UTC. _tzset reads TZ, as POSIX's localtime does.
+int64_t lerta_os_utc_offset(int64_t seconds) {
+  __time64_t time = seconds;
+  struct tm local;
+  struct tm utc;
+  _tzset();
+  if (_localtime64_s(&local, &time) != 0 || _gmtime64_s(&utc, &time) != 0) return INT64_MIN;
+  // Across a new year, the years are one apart, as the days are.
+  int64_t days =
+      local.tm_year == utc.tm_year ? local.tm_yday - utc.tm_yday : local.tm_year - utc.tm_year;
+  int64_t hours = days * 24 + local.tm_hour - utc.tm_hour;
+  int64_t minutes = hours * 60 + local.tm_min - utc.tm_min;
+  return minutes * 60 + local.tm_sec - utc.tm_sec;
+}

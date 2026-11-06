@@ -56,6 +56,10 @@ double lerta_unix_time(void) {
   return lerta_os_unix_time();
 }
 
+int64_t lerta_utc_offset(int64_t seconds) {
+  return lerta_os_utc_offset(seconds);
+}
+
 // libuv's high-resolution clock, which no setting of the system's clock moves.
 double lerta_monotonic_time(void) {
   return (double)uv_hrtime() / 1e9;
