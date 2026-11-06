@@ -79,9 +79,8 @@ build/minilerta$(HOST_EXE): build/seed.ll $(RUNTIME) build/libuv/built
 
 build/libuv/built: $(LIBUV)
 	@rm -rf build/libuv && mkdir -p build/libuv
-	cd build/libuv && clang -c $(LIBUV_FLAGS) -I$(CURDIR)/third_party/libuv/include \
-	  -I$(CURDIR)/third_party/libuv/src -w \
-	  $(addprefix $(CURDIR)/third_party/libuv/,$(LIBUV_SOURCES))
+	cd build/libuv && clang -c $(LIBUV_FLAGS) -I../../third_party/libuv/include \
+	  -I../../third_party/libuv/src -w $(addprefix ../../third_party/libuv/,$(LIBUV_SOURCES))
 	touch $@
 
 build/build.ll: build/minilerta$(HOST_EXE) build/host_llvm.sed $(BUILD_TOOL_SOURCES)
