@@ -159,12 +159,12 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 
 | Short name | Triple |
 |---|---|
-| `linux-386` | `i686-linux-gnu` |
+| `linux-i386` | `i686-linux-gnu` |
 | `linux-amd64` | `x86_64-linux-gnu` |
 | `linux-arm64` | `aarch64-linux-gnu` |
 | `macos-amd64` | `x86_64-apple-macos` |
 | `macos-arm64` | `arm64-apple-macos` |
-| `windows-386` | `i686-w64-mingw32` |
+| `windows-i386` | `i686-w64-mingw32` |
 | `windows-amd64` | `x86_64-w64-mingw32` |
 | `windows-arm64` | `aarch64-w64-mingw32` |
 
