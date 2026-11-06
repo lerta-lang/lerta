@@ -251,7 +251,7 @@ Checks that each file is in the [style](style.md). What of the style it does not
 - It reports once for each line, or each run of lines, that differs.
 - A run of a different number of lines, as where lines are joined or broken, or of lines that move, as the lines below a line that a body joins shift up by one, is reported once, at its first difference.
 - What else breaks the style in it is reported once that is fixed.
-- A line that it keeps but is over 100 columns, such as one of a comment or a string, which it cannot break, is reported under [Line length](style.md#line-length) at its 101st column, but one [kept as written](#code-kept-as-written).
+- A line over 100 columns that it keeps or writes, such as one of a comment, a string or an operation that stays on one line (see [Long operations](style.md#long-operations)), which it cannot break, is reported under [Line length](style.md#line-length) with a message saying to shorten it by hand: one that it keeps at its 101st column, but one [kept as written](#code-kept-as-written).
 
 #### `--fix`
 

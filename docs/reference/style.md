@@ -70,7 +70,7 @@ In a literal, and in the lines of a `"""` literal but its interpolations:
 ### Line length
 
 - Up to 100 columns per line, comments and strings included.
-- Break a comment over lines of their own, and a long string into literals joined by `+` (see [String](types.md#string)).
+- Break a comment over lines of their own, and a long string into literals joined by `+` (see [String](types.md#string)). Name a part of an operation that does not fit (see [Long operations](#long-operations)).
 
 ### Blank lines
 
@@ -118,6 +118,8 @@ None:
   - an operation that is an operand of another outside brackets;
   - one in parentheses, whose `)` would end its last line;
   - one in the head of a block (`if`, `while`, `for`, `case` and its patterns), whose lines below are the block.
+- Name a part of one that still does not fit (`product := b * c * d`, then `a + product`), by hand: `lerta fmt` reports the line.
+  - Why not break it inside the operand: `a +` over `b * c *` and `d` reads as if `a + b * c` came first.
 
 ### Long lists
 

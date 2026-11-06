@@ -15,7 +15,8 @@ import write_binary_literals from './binary_literals'
 import block_doc, is_left_out_import, left_out_import_mark from './print_statement'
 import Context from './printing'
 import
-  BLANK_LINES, COMMENTS, LAYOUT, LINE_LENGTH, SEMICOLONS, SPACING, STRANDED_COMMENTS, StyleRule
+  BLANK_LINES, COMMENTS, LAYOUT, LINE_LENGTH, SEMICOLONS, SPACING, STRANDED_COMMENTS, StyleRule,
+  UNBREAKABLE_LINES
 from './rules'
 import columns, source_text, SourceText from './source'
 
@@ -209,7 +210,10 @@ difference_finding := (
       found := inner then inner else first_rule_from(rules, in_new, last_line)
       differing := (lines: String[]) -> spaced_only then lines[..1] else lines
       found ? kind_of_difference(differing(old_lines), differing(new_lines), source, at.line)
-  { at, rule }
+  # Lines that the formatter joins into one still too long are to be shortened by hand.
+  joined := place.old_count > place.new_count
+  still_long := rule == LINE_LENGTH and joined and columns(new_line) > WIDTH
+  { at, rule: still_long then UNBREAKABLE_LINES else rule }
 
 # The lines that the formatter keeps but that are too long, such as of a comment or a string, which
 # it cannot break, but those kept as written.
@@ -217,7 +221,7 @@ long_line_findings := (old: String[], differing: Set<Int>, kept_lines: Set<Int>)
   found: Finding[]
   for line, i in old
     too_long := columns(line) > WIDTH and i not in differing and i + 1 not in kept_lines
-    found.push { rule: LINE_LENGTH, at: { line: i + 1, column: WIDTH + 1 } } if too_long
+    found.push { rule: UNBREAKABLE_LINES, at: { line: i + 1, column: WIDTH + 1 } } if too_long
   found
 
 # Whether a line of the hunk, but for its indentation, is at another line of it in the other text,
