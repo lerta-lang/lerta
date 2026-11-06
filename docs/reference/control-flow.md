@@ -154,6 +154,7 @@ greeting := name then "hello #{name}"
   - in `c then a else b else d`, the last `else` could continue the `then` or take the fallback, which differ where `c` holds and `a` is nil.
 
   Only a guard, `ages[name] else return -1`, would read better.
+- `if c then a else b` with no block below it is an error that says to leave out `if`, as are `unless`, `while` and `until` before such a value.
 - Why `c then a else b`, not `if c then a else b` on one line:
   - `if c then a` would have to give nil, while an `if` without `else` gives no value, or require `else` and lose `name then greet(name)`;
   - `if c then x` as a statement would duplicate the postfix `x if c`.

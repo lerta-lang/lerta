@@ -1,7 +1,7 @@
 # Statements: the program, blocks, the declarations of consts and `var`s, assignments, control flow
 # and calls without parentheses; `declaration` reads the other declarations.
 import
-  ArrayLiteral, ArrayTypeName, Assignment, AssignmentTarget, Binding, Call, Condition,
+  ArrayLiteral, ArrayTypeName, Assignment, AssignmentTarget, Binding, Call, Condition, Conditional,
   copy_identifier, Declaration, Expression, For, Identifier, If, Index, Jump, Member, NamedType,
   NilLiteral, Return, Statement, Throw, TypeName, UnaryOperation, While, Yield
 from '../ast'
@@ -404,30 +404,52 @@ at_binding := (tokens: TokenStream) ->
 
 # The condition after the keyword of an `if` or a `while`; that of `unless` or `until` is `not`
 # of what follows it, which binds no name, as the name would hold where the condition does not.
-parse_condition_after := (tokens: TokenStream, kind: TokenKind): Condition ->
+parse_condition_after := (tokens: TokenStream, kind: TokenKind) ->
+  condition_of parse_written_condition(tokens, kind), kind
+
+# The condition as written after the keyword, which binds no name after `unless` or `until`.
+parse_written_condition := (tokens: TokenStream, kind: TokenKind): Condition ->
   return parse_condition(tokens) if kind == 'if' or kind == 'while'
   tokens.fail_here "'#{kind}' cannot bind a name" if at_binding(tokens)
-  operand := parse_expression(tokens)
+  parse_expression tokens
+
+condition_of := (written: Condition, kind: TokenKind) ->
+  return written if kind == 'if' or kind == 'while'
+  # No name is bound after `unless` or `until` (see parse_written_condition).
+  operand := written as Expression!
   UnaryOperation operand, operator: 'not', position: operand.position
+
+# The condition after the keyword of a statement with a block, and the block. `if c then a else b`
+# takes `c then a else b` for the condition of a block that is missing, which the error says.
+parse_head_and_block := (tokens: TokenStream, keyword: Token) ->
+  written := parse_written_condition(tokens, keyword.kind)
+  value := written is Binding then written.value else written
+  has_block := tokens.peek().kind == NEWLINE and tokens.peek_at(1).kind == INDENT
+  if value is Conditional and not has_block
+    word := keyword.kind.to_string()
+    message :=
+      "'#{word}' takes a block below it; write a value as 'c then a else b', without '#{word}'"
+    tokens.fail keyword.position(), message
+  (condition_of(written, keyword.kind), parse_block(tokens))
 
 parse_while := (tokens: TokenStream) ->
   token := tokens.next()
-  condition := parse_condition_after(tokens, token.kind)
-  While condition, position: token.position(), body: parse_block(tokens)
+  (condition, body) := parse_head_and_block(tokens, token)
+  While condition, body, position: token.position()
 
 # `unless`, which takes no `else`: `if` reads better with one.
 parse_unless := (tokens: TokenStream) ->
-  position := tokens.next().position()
-  condition := parse_condition_after(tokens, 'unless')
-  then_body := parse_block(tokens)
+  keyword := tokens.next()
+  position := keyword.position()
+  (condition, then_body) := parse_head_and_block(tokens, keyword)
   tokens.fail_here "an 'unless' cannot have an 'else'" if tokens.peek().kind == 'else'
   If condition, then_body, position, else_body: []
 
 # `if` with an optional `else` block; `else if` chains further.
 export parse_if := (tokens: TokenStream): If ->
-  position := tokens.next().position()
-  condition := parse_condition(tokens)
-  then_body := parse_block(tokens)
+  keyword := tokens.next()
+  position := keyword.position()
+  (condition, then_body) := parse_head_and_block(tokens, keyword)
   return If(condition, then_body, position, else_body: []) if tokens.peek().kind != 'else'
   tokens.next()
   tokens.fail_here "an 'unless' cannot follow 'else'" if tokens.peek().kind == 'unless'
