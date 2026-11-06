@@ -17,30 +17,30 @@ cases_dir := "#{root_dir}/tests/format"
 
 fmt := (cwd: String, args: String[]) -> await run_file(compiler, ['fmt', args...], cwd)
 
-case_check := (name: String) -> Check(name: "tests/format/#{name}", run: ->
-  dir := "#{work_dir}/#{name}"
-  make_dir dir
-  input := await read_text_or_throw("#{cases_dir}/#{name}.in")
-  file := "#{name}.lerta"
-  await write_file("#{dir}/#{file}", input)
-  expected_report := await read_text_or("#{cases_dir}/#{name}.report", '')
-  remaining := await read_text_or("#{cases_dir}/#{name}.remaining", '')
-  remaining_status := remaining.is_empty() then 0 else 1
-  checked := await fmt(dir, [file])
-  fixed := await fmt(dir, ['--fix', file])
-  formatted := await read_text_or_throw("#{dir}/#{file}")
-  rechecked := await fmt(dir, [file])
-  [
-    expect_run(checked, expected_report, expected_report.is_empty() then 0 else 1, 'report')...
-    expect_run(fixed, remaining, remaining_status, '--fix stderr')...
-    compare_text(
-      'formatted'
-      await read_text_or("#{cases_dir}/#{name}.formatted", input)
-      formatted
-    )...
-    expect_run(rechecked, remaining, remaining_status, 'report on the formatted file')...
-  ]
-)
+case_check := (name: String) ->
+  Check name: "tests/format/#{name}", run: ->
+    dir := "#{work_dir}/#{name}"
+    make_dir dir
+    input := await read_text_or_throw("#{cases_dir}/#{name}.in")
+    file := "#{name}.lerta"
+    await write_file("#{dir}/#{file}", input)
+    expected_report := await read_text_or("#{cases_dir}/#{name}.report", '')
+    remaining := await read_text_or("#{cases_dir}/#{name}.remaining", '')
+    remaining_status := remaining.is_empty() then 0 else 1
+    checked := await fmt(dir, [file])
+    fixed := await fmt(dir, ['--fix', file])
+    formatted := await read_text_or_throw("#{dir}/#{file}")
+    rechecked := await fmt(dir, [file])
+    [
+      expect_run(checked, expected_report, expected_report.is_empty() then 0 else 1, 'report')...
+      expect_run(fixed, remaining, remaining_status, '--fix stderr')...
+      compare_text(
+        'formatted'
+        await read_text_or("#{cases_dir}/#{name}.formatted", input)
+        formatted
+      )...
+      expect_run(rechecked, remaining, remaining_status, 'report on the formatted file')...
+    ]
 
 # A directory of files, made fresh for a check. Making each file's directory makes `dir` too, but
 # it is made first for a tree of no files.

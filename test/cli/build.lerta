@@ -264,19 +264,19 @@ optimized_runtime_check := ->
     else
       no_reasons
 
-dump_llvm_check := -> Check(name: 'lerta dump-llvm prints the IR and leaves no file', run: ->
-  dumped := await run_in_new_dir(compiler, ['dump-llvm', hello])
-  ir := dumped.result.stdout_text()
-  ir_reasons: String[]
-  ir_reasons.push 'no lerta_main in the IR' unless 'define external void @lerta_main()' in ir
-  ir_reasons.push 'target attributes in the IR' if 'attributes #' in ir
-  [
-    expect_status(0, dumped.result.status)...
-    ir_reasons...
-    expect_left('files left', [], dumped.left)...
-    expect_left('files left in the temporary directory', [], dumped.left_in_temp)...
-  ]
-)
+dump_llvm_check := ->
+  Check name: 'lerta dump-llvm prints the IR and leaves no file', run: ->
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', hello])
+    ir := dumped.result.stdout_text()
+    ir_reasons: String[]
+    ir_reasons.push 'no lerta_main in the IR' unless 'define external void @lerta_main()' in ir
+    ir_reasons.push 'target attributes in the IR' if 'attributes #' in ir
+    [
+      expect_status(0, dumped.result.status)...
+      ir_reasons...
+      expect_left('files left', [], dumped.left)...
+      expect_left('files left in the temporary directory', [], dumped.left_in_temp)...
+    ]
 
 # A branch to a throw carries the weights of one seldom taken: to an unwinding after a call, to an
 # overflow's throw and to the throw of an Iter resumed while it runs, of a program with each.
@@ -504,21 +504,24 @@ ITEM_WRITES := "#{root_dir}/tests/array/item_writes.lerta"
 
 # Each load and store of an item of an array or a value of a map, of each size, names the alias tag
 # of the items, whose nodes the module defines once each.
-dump_item_tag_check := -> Check(name: 'lerta dump-llvm tags the loads and stores of items', run: ->
-  dumped := await run_in_new_dir(compiler, ['dump-llvm', ITEM_WRITES])
-  lines := dumped.result.stdout_text().split("\n")
-  tagged := alias_tag_of(lines, 'lerta item') ? return ['the tag of items is not defined once']
-  root := await clang_tbaa_root(dumped.cwd)
-  has_root := lines.any((line) -> line.ends_with(" = #{root}"))
-  return ["no node of clang's root of type-based alias analysis, #{root}"] unless has_root
-  types := ['i8', 'i32', 'float', 'i64', '{ ptr, ptr }']
-  accesses := [["load #{type}, ptr" for type in types]..., ["store #{type} " for type in types]...]
-  is_tagged := (access: String) -> lines.any((line) -> access in line and line.ends_with(tagged))
-  [
-    expect_status(0, dumped.result.status)...
-    ["no #{access} with the tag" for access in accesses when not is_tagged(access)]...
-  ]
-)
+dump_item_tag_check := ->
+  Check name: 'lerta dump-llvm tags the loads and stores of items', run: ->
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', ITEM_WRITES])
+    lines := dumped.result.stdout_text().split("\n")
+    tagged := alias_tag_of(lines, 'lerta item') ? return ['the tag of items is not defined once']
+    root := await clang_tbaa_root(dumped.cwd)
+    has_root := lines.any((line) -> line.ends_with(" = #{root}"))
+    return ["no node of clang's root of type-based alias analysis, #{root}"] unless has_root
+    types := ['i8', 'i32', 'float', 'i64', '{ ptr, ptr }']
+    accesses := [
+      ["load #{type}, ptr" for type in types]...
+      ["store #{type} " for type in types]...
+    ]
+    is_tagged := (access: String) -> lines.any((line) -> access in line and line.ends_with(tagged))
+    [
+      expect_status(0, dumped.result.status)...
+      ["no #{access} with the tag" for access in accesses when not is_tagged(access)]...
+    ]
 
 # What an access with the alias tag of the type of the name ends with, among the lines of the IR,
 # or nil unless the module defines the type's node and the tag's once each.
@@ -611,27 +614,27 @@ escaped_run_check := (program: String, flags: String[]) ->
     expected := await read_file("#{root_dir}/test/cli/escaped_path/#{program}.out")
     [expect_status(0, ran.status)..., compare_output('stdout', expected, ran.stdout)...]
 
-dump_symbols_check := -> posix_check('lerta dump-llvm escapes module paths in symbol names', ->
-  (dir, temp) := new_cli_dirs()
-  await copy_escaped_path(dir)
-  copied := list_dir(dir)
-  dumped := await run_in_dir(compiler, ['dump-llvm', 'escaped_path.lerta'], dir, temp)
-  ir := dumped.result.stdout_text()
-  symbols :=
-    '@"lerta.fn.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.describe"'
-    '@"lerta.thunk.lerta.fn.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.describe"'
-    '@"lerta.method.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Box.doubled"'
-    '@"lerta.extend.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Int.tripled"'
-    '%"lerta.object.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Pair<String>"'
-    '@"lerta.value../escaped_path.lerta.box.set"'
-    '@"lerta.fn.std:builtins/text.print<String>"'
-  [
-    expect_status(0, dumped.result.status)...
-    ["no #{symbol}" for symbol in symbols when symbol not in ir]...
-    expect_left('files left', copied, dumped.left)...
-    expect_left('files left in the temporary directory', [], dumped.left_in_temp)...
-  ]
-)
+dump_symbols_check := ->
+  posix_check 'lerta dump-llvm escapes module paths in symbol names', ->
+    (dir, temp) := new_cli_dirs()
+    await copy_escaped_path(dir)
+    copied := list_dir(dir)
+    dumped := await run_in_dir(compiler, ['dump-llvm', 'escaped_path.lerta'], dir, temp)
+    ir := dumped.result.stdout_text()
+    symbols :=
+      '@"lerta.fn.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.describe"'
+      '@"lerta.thunk.lerta.fn.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.describe"'
+      '@"lerta.method.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Box.doubled"'
+      '@"lerta.extend.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Int.tripled"'
+      '%"lerta.object.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Pair<String>"'
+      '@"lerta.value../escaped_path.lerta.box.set"'
+      '@"lerta.fn.std:builtins/text.print<String>"'
+    [
+      expect_status(0, dumped.result.status)...
+      ["no #{symbol}" for symbol in symbols when symbol not in ir]...
+      expect_left('files left', copied, dumped.left)...
+      expect_left('files left in the temporary directory', [], dumped.left_in_temp)...
+    ]
 
 # Calls of a generic whose extends in effect differ only in what its bounds do not use share one
 # instance.
@@ -646,11 +649,11 @@ dump_shared_instance_check := ->
     reasons.push "#{count} instances of shown<Int>" if count != 1
     reasons
 
-source_lines_check := -> Check(name: 'lerta run --source-lines runs a program', run: ->
-  source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
-  ran := await run_command(compiler, ['run', source, '--source-lines'], cli_work_dir)
-  [expect_status(0, ran.status)..., compare_output('stdout', b"2\n7\n", ran.stdout)...]
-)
+source_lines_check := ->
+  Check name: 'lerta run --source-lines runs a program', run: ->
+    source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
+    ran := await run_command(compiler, ['run', source, '--source-lines'], cli_work_dir)
+    [expect_status(0, ran.status)..., compare_output('stdout', b"2\n7\n", ran.stdout)...]
 
 # macOS keeps the debug information beside the executable, in its dSYM bundle.
 debug_file_of := (executable: String) ->

@@ -53,25 +53,29 @@ compiler_keywords := ->
     keywords.push keyword if keyword := keyword_from_line(line)
   keywords
 
-completion_check := -> Check(name: 'lerta lsp completes members after a dot', run: ->
-  dir := new_cli_dir('lsp-completion')
-  path := "#{dir}/a.lerta"
-  text := "struct Point\n  x: Int\n  y: Int\nf := (p: Point) ->\n  print p.\n  later := 2\n"
-  await write_file(path, text)
-  uri := uri_of(path)
-  messages := [did_open(uri, text), did_change(uri, text), completion_request(uri, 4, 10)].join('')
-  ran := await session(dir, messages)
-  items := completion_items(ran.stdout_text(), 1)
-  [
-    expect_status(0, ran.status)...
-    compare_text(
-      'completion items'
-      "x 5 Int\ny 5 Int\nequals 2 (Point) -> Bool\nhash 2 () -> Int"
-      [completion_item_text(item) for item in items].join("\n")
-    )...
-    compare_text('response order', '0 1 end', response_ids(ran.stdout_text()).join(' '))...
-  ]
-)
+completion_check := ->
+  Check name: 'lerta lsp completes members after a dot', run: ->
+    dir := new_cli_dir('lsp-completion')
+    path := "#{dir}/a.lerta"
+    text := "struct Point\n  x: Int\n  y: Int\nf := (p: Point) ->\n  print p.\n  later := 2\n"
+    await write_file(path, text)
+    uri := uri_of(path)
+    messages :=
+      did_open(uri, text)
+      did_change(uri, text)
+      completion_request(uri, 4, 10)
+    .join('')
+    ran := await session(dir, messages)
+    items := completion_items(ran.stdout_text(), 1)
+    [
+      expect_status(0, ran.status)...
+      compare_text(
+        'completion items'
+        "x 5 Int\ny 5 Int\nequals 2 (Point) -> Bool\nhash 2 () -> Int"
+        [completion_item_text(item) for item in items].join("\n")
+      )...
+      compare_text('response order', '0 1 end', response_ids(ran.stdout_text()).join(' '))...
+    ]
 
 completion_names_check := ->
   Check name: 'lerta lsp completes locals, module names, and keywords', run: ->
@@ -105,22 +109,26 @@ completion_names_check := ->
       compare_text('response order', '0 1 end', response_ids(output).join(' '))...
     ]
 
-completion_enum_check := -> Check(name: 'lerta lsp completes enum members after a dot', run: ->
-  dir := new_cli_dir('lsp-completion-enum')
-  path := "#{dir}/a.lerta"
-  text := "enum Color\n  RED\nf := ->\n  print Color.\n  later := 1\n"
-  await write_file(path, text)
-  uri := uri_of(path)
-  messages := [did_open(uri, text), did_change(uri, text), completion_request(uri, 3, 14)].join('')
-  ran := await session(dir, messages)
-  output := ran.stdout_text()
-  items := completion_items(output, 1)
-  [
-    expect_status(0, ran.status)...
-    compare_text('completion labels', 'RED parse', completion_labels(items))...
-    compare_text('response order', '0 1 end', response_ids(output).join(' '))...
-  ]
-)
+completion_enum_check := ->
+  Check name: 'lerta lsp completes enum members after a dot', run: ->
+    dir := new_cli_dir('lsp-completion-enum')
+    path := "#{dir}/a.lerta"
+    text := "enum Color\n  RED\nf := ->\n  print Color.\n  later := 1\n"
+    await write_file(path, text)
+    uri := uri_of(path)
+    messages :=
+      did_open(uri, text)
+      did_change(uri, text)
+      completion_request(uri, 3, 14)
+    .join('')
+    ran := await session(dir, messages)
+    output := ran.stdout_text()
+    items := completion_items(output, 1)
+    [
+      expect_status(0, ran.status)...
+      compare_text('completion labels', 'RED parse', completion_labels(items))...
+      compare_text('response order', '0 1 end', response_ids(output).join(' '))...
+    ]
 
 completion_contexts_check := ->
   Check name: 'lerta lsp completes methods, optional members, and members of @', run: ->

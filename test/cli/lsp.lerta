@@ -58,21 +58,21 @@ error_request_check := ->
       )...
     ]
 
-diagnostic_check := -> Check(name: 'lerta lsp reports diagnostics for an opened document', run: ->
-  dir := new_cli_dir('lsp-diagnostics')
-  path := "#{dir}/a.lerta"
-  await write_file(path, b'')
-  uri := uri_of(path)
-  message := did_open(uri, "print missing\n")
-  ran := await session(dir, message)
-  [
-    expect_status(0, ran.status)...
-    exact_messages(
-      ran.stdout_text()
-      [published_diagnostics(uri, [diagnostic_body(0, 6, 1, "undefined name 'missing'")])]
-    )...
-  ]
-)
+diagnostic_check := ->
+  Check name: 'lerta lsp reports diagnostics for an opened document', run: ->
+    dir := new_cli_dir('lsp-diagnostics')
+    path := "#{dir}/a.lerta"
+    await write_file(path, b'')
+    uri := uri_of(path)
+    message := did_open(uri, "print missing\n")
+    ran := await session(dir, message)
+    [
+      expect_status(0, ran.status)...
+      exact_messages(
+        ran.stdout_text()
+        [published_diagnostics(uri, [diagnostic_body(0, 6, 1, "undefined name 'missing'")])]
+      )...
+    ]
 
 diagnostic_lifecycle_check := ->
   Check name: 'lerta lsp updates and clears document diagnostics', run: ->
@@ -240,66 +240,66 @@ lsp_input_errors_check := ->
         compare_text('stderr', "the end came after 0 of 100 bytes\n", no_body.stderr_text())...
       ]
 
-empty_body_check := -> Check(name: 'lerta lsp reports empty message bodies as parse errors', run: ->
-  dir := new_cli_dir('lsp-empty-body')
-  path := "#{dir}/a.lerta"
-  await write_file(path, b'')
-  input :=
-    frame(initialize)
-    frame('{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":1}}}')
-    frame(
-      '{"jsonrpc":"2.0","method":"textDocument/didChange",' +
-        "\"params\":{\"textDocument\":{\"uri\":\"#{uri_of(path)}\"},\"contentChanges\":[]}}"
-    )
-    "Content-Length: 0\r\n\r\nContent-Length: -1\r\n\r\n"
-    finish
-  .join('')
-  ran := await run_command(compiler, ['lsp'], dir, input.binary)
-  [
-    expect_status(0, ran.status)...
-    exact_messages(
-      ran.stdout_text()
-      [
-        '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, ' +
-          'found the end of the text"}}'
-        '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, ' +
-          'found the end of the text"}}'
-      ]
-    )...
-  ]
-)
+empty_body_check := ->
+  Check name: 'lerta lsp reports empty message bodies as parse errors', run: ->
+    dir := new_cli_dir('lsp-empty-body')
+    path := "#{dir}/a.lerta"
+    await write_file(path, b'')
+    input :=
+      frame(initialize)
+      frame('{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":1}}}')
+      frame(
+        '{"jsonrpc":"2.0","method":"textDocument/didChange",' +
+          "\"params\":{\"textDocument\":{\"uri\":\"#{uri_of(path)}\"},\"contentChanges\":[]}}"
+      )
+      "Content-Length: 0\r\n\r\nContent-Length: -1\r\n\r\n"
+      finish
+    .join('')
+    ran := await run_command(compiler, ['lsp'], dir, input.binary)
+    [
+      expect_status(0, ran.status)...
+      exact_messages(
+        ran.stdout_text()
+        [
+          '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, ' +
+            'found the end of the text"}}'
+          '{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"$: expected an object, ' +
+            'found the end of the text"}}'
+        ]
+      )...
+    ]
 
-formatting_check := -> Check(name: 'lerta lsp formats an open document', run: ->
-  dir := new_cli_dir('lsp-formatting')
-  path := "#{dir}/a.lerta"
-  await write_file(path, b'')
-  uri := uri_of(path)
-  messages :=
-    did_open(uri, "value  := 1\nprint value\n")
-    formatting_request(uri, 1)
-    did_change_at(uri, "value := 1\nprint value\n", 2)
-    formatting_request(uri, 2)
-    did_change_at(uri, "print (\n", 3)
-    formatting_request(uri, 3)
-  .join('')
-  ran := await session(dir, messages)
-  [
-    expect_status(0, ran.status)...
-    exact_messages(
-      ran.stdout_text()
-      [
-        published_diagnostics(uri, [])
-        '{"jsonrpc":"2.0","id":1,"result":[{"range":{"start":{"line":0,' +
-          '"character":0},"end":{"line":2,"character":0}},' +
-          "\"newText\":#{encode_json("value := 1\nprint value\n")}}]}"
-        published_diagnostics(uri, [])
-        '{"jsonrpc":"2.0","id":2,"result":[]}'
-        published_diagnostics(uri, [diagnostic_body(0, 6, 1, "'(' is never closed")])
-        '{"jsonrpc":"2.0","id":3,"result":null}'
-      ]
-    )...
-  ]
-)
+formatting_check := ->
+  Check name: 'lerta lsp formats an open document', run: ->
+    dir := new_cli_dir('lsp-formatting')
+    path := "#{dir}/a.lerta"
+    await write_file(path, b'')
+    uri := uri_of(path)
+    messages :=
+      did_open(uri, "value  := 1\nprint value\n")
+      formatting_request(uri, 1)
+      did_change_at(uri, "value := 1\nprint value\n", 2)
+      formatting_request(uri, 2)
+      did_change_at(uri, "print (\n", 3)
+      formatting_request(uri, 3)
+    .join('')
+    ran := await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_messages(
+        ran.stdout_text()
+        [
+          published_diagnostics(uri, [])
+          '{"jsonrpc":"2.0","id":1,"result":[{"range":{"start":{"line":0,' +
+            '"character":0},"end":{"line":2,"character":0}},' +
+            "\"newText\":#{encode_json("value := 1\nprint value\n")}}]}"
+          published_diagnostics(uri, [])
+          '{"jsonrpc":"2.0","id":2,"result":[]}'
+          published_diagnostics(uri, [diagnostic_body(0, 6, 1, "'(' is never closed")])
+          '{"jsonrpc":"2.0","id":3,"result":null}'
+        ]
+      )...
+    ]
 
 formatting_new_document_check := ->
   Check name: 'lerta lsp formats a document that does not exist yet', run: ->
@@ -788,82 +788,82 @@ partial_parse_check := ->
         )...
       ]
 
-type_name_check := -> Check(name: 'lerta lsp gives type names their types and declarations', run: ->
-  dir := new_cli_dir('lsp-type-names')
-  path := "#{dir}/a.lerta"
-  other := "#{dir}/b.lerta"
-  await write_file(path, b'')
-  await write_file(other, b"export enum Hue\n  WARM\nexport struct Far\n  n: Int\n")
-  uri := uri_of(path)
-  text :=
-    "import './b' as m"
-    'struct Point'
-    '  x: Int'
-    'enum Color'
-    '  RED'
-    'interface Shape'
-    '  area: () -> Int'
-    'type Spot = Point'
-    'struct Box<T>'
-    '  item: T'
-    'f := (p: Point, s: Shape, c: Color): Spot -> p'
-    'g := <T: Shape>(t: T, b: Box<Int>, n: Int, far: m.Far) -> 1'
-    'print Color.RED'
-    'print m.Hue.WARM'
-    'h := <U>(u: U) ->'
-    '  b: Box<U> = { item: u }'
-    '  b'
-    'print h(1)'
-    "print h('a')"
-    ''
-  .join("\n")
-  messages :=
-    did_open(uri, text)
-    definition_request(uri, 10, 9, 1)
-    definition_request(uri, 10, 19, 2)
-    definition_request(uri, 10, 29, 3)
-    definition_request(uri, 10, 37, 4)
-    definition_request(uri, 12, 6, 5)
-    definition_request(uri, 11, 9, 6)
-    definition_request(uri, 11, 25, 7)
-    definition_request(uri, 11, 50, 8)
-    definition_request(uri, 13, 8, 9)
-    hover_request(uri, 10, 9, 10)
-    hover_request(uri, 12, 6, 11)
-    hover_request(uri, 10, 37, 12)
-    hover_request(uri, 10, 19, 13)
-    hover_request(uri, 11, 38, 14)
-    hover_request(uri, 11, 48, 15)
-    hover_request(uri, 15, 5, 16)
-    hover_request(uri, 11, 19, 17)
-  .join('')
-  ran := await session(dir, messages)
-  [
-    expect_status(0, ran.status)...
-    exact_responses(
-      ran.stdout_text()
-      [
-        location_fragment(1, uri, 1, 7, 12)
-        location_fragment(2, uri, 5, 10, 15)
-        location_fragment(3, uri, 3, 5, 10)
-        location_fragment(4, uri, 7, 5, 9)
-        location_fragment(5, uri, 3, 5, 10)
-        location_fragment(6, uri, 5, 10, 15)
-        location_fragment(7, uri, 8, 7, 10)
-        location_fragment(8, uri_of(other), 2, 14, 17)
-        location_fragment(9, uri_of(other), 0, 12, 15)
-        hover_fragment(10, 'Point: Point')
-        hover_fragment(11, 'Color: Color')
-        hover_fragment(12, 'Spot: Point')
-        hover_fragment(13, 'Shape: Shape')
-        '"id":14,"result":null'
-        hover_fragment(15, 'm.Far: Far')
-        hover_fragment(16, "Box: Box<Int>\nBox: Box<String>")
-        '"id":17,"result":null'
-      ]
-    )...
-  ]
-)
+type_name_check := ->
+  Check name: 'lerta lsp gives type names their types and declarations', run: ->
+    dir := new_cli_dir('lsp-type-names')
+    path := "#{dir}/a.lerta"
+    other := "#{dir}/b.lerta"
+    await write_file(path, b'')
+    await write_file(other, b"export enum Hue\n  WARM\nexport struct Far\n  n: Int\n")
+    uri := uri_of(path)
+    text :=
+      "import './b' as m"
+      'struct Point'
+      '  x: Int'
+      'enum Color'
+      '  RED'
+      'interface Shape'
+      '  area: () -> Int'
+      'type Spot = Point'
+      'struct Box<T>'
+      '  item: T'
+      'f := (p: Point, s: Shape, c: Color): Spot -> p'
+      'g := <T: Shape>(t: T, b: Box<Int>, n: Int, far: m.Far) -> 1'
+      'print Color.RED'
+      'print m.Hue.WARM'
+      'h := <U>(u: U) ->'
+      '  b: Box<U> = { item: u }'
+      '  b'
+      'print h(1)'
+      "print h('a')"
+      ''
+    .join("\n")
+    messages :=
+      did_open(uri, text)
+      definition_request(uri, 10, 9, 1)
+      definition_request(uri, 10, 19, 2)
+      definition_request(uri, 10, 29, 3)
+      definition_request(uri, 10, 37, 4)
+      definition_request(uri, 12, 6, 5)
+      definition_request(uri, 11, 9, 6)
+      definition_request(uri, 11, 25, 7)
+      definition_request(uri, 11, 50, 8)
+      definition_request(uri, 13, 8, 9)
+      hover_request(uri, 10, 9, 10)
+      hover_request(uri, 12, 6, 11)
+      hover_request(uri, 10, 37, 12)
+      hover_request(uri, 10, 19, 13)
+      hover_request(uri, 11, 38, 14)
+      hover_request(uri, 11, 48, 15)
+      hover_request(uri, 15, 5, 16)
+      hover_request(uri, 11, 19, 17)
+    .join('')
+    ran := await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout_text()
+        [
+          location_fragment(1, uri, 1, 7, 12)
+          location_fragment(2, uri, 5, 10, 15)
+          location_fragment(3, uri, 3, 5, 10)
+          location_fragment(4, uri, 7, 5, 9)
+          location_fragment(5, uri, 3, 5, 10)
+          location_fragment(6, uri, 5, 10, 15)
+          location_fragment(7, uri, 8, 7, 10)
+          location_fragment(8, uri_of(other), 2, 14, 17)
+          location_fragment(9, uri_of(other), 0, 12, 15)
+          hover_fragment(10, 'Point: Point')
+          hover_fragment(11, 'Color: Color')
+          hover_fragment(12, 'Spot: Point')
+          hover_fragment(13, 'Shape: Shape')
+          '"id":14,"result":null'
+          hover_fragment(15, 'm.Far: Far')
+          hover_fragment(16, "Box: Box<Int>\nBox: Box<String>")
+          '"id":17,"result":null'
+        ]
+      )...
+    ]
 
 partial_block_check := ->
   Check name: 'lerta lsp checks the statements of a block that parse', run: ->
