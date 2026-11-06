@@ -1,6 +1,7 @@
 # What std:json's generated code reads through, as a Decoder (see std/codable.lerta).
 import from_base64 from './base64'
-import field_key, FieldKeys, is_finite, Level, path_of, quoted from './json_text'
+import KIND_BOOL, KIND_NUMBER, KIND_OTHER, KIND_RECORD, KIND_TEXT from '../codable'
+import FieldKeys, is_finite, Level, path_of, quoted from './json_text'
 import JsonError, JsonKeys from '../json'
 
 export class JsonReader
@@ -150,27 +151,17 @@ export class JsonReader
       @at += number.binary.length
 
   # The kind of the value where the reader is, by the first byte that it can be told by, as one of
-  # the JSON_ kinds below, which tells the member of a union that it is.
+  # std:codable's KIND_ ones, which tells the member of a union that it is: null and an array are
+  # KIND_OTHER, as no member of a union is either.
   peek_kind := (): Int ->
     @skip_space()
-    byte := @peek() ? return JSON_OTHER
+    byte := @peek() ? return KIND_OTHER
     case
-      when byte == b't' or byte == b'f' then JSON_BOOL
-      when byte == b'-' or byte.is_digit() then JSON_NUMBER
-      when byte == b'"' then JSON_STRING
-      when byte == b'{' then JSON_OBJECT
-      else JSON_OTHER
-
-  # The methods that the seed's generated code calls, until the seed is refreshed (see
-  # docs/internals/architecture.md#refreshing-the-seed).
-  read_null := -> @read_nil()
-
-  is_field_key := (key: String, name: String, camel_case: String): Bool ->
-    key == field_key(@keys, name, camel_case)
-
-  # The object just read has no key for the field, which needs one.
-  fail_missing := (name: String, camel_case: String): never ->
-    @fail "missing the key #{quoted(field_key(@keys, name, camel_case))}"
+      when byte == b't' or byte == b'f' then KIND_BOOL
+      when byte == b'-' or byte.is_digit() then KIND_NUMBER
+      when byte == b'"' then KIND_TEXT
+      when byte == b'{' then KIND_RECORD
+      else KIND_OTHER
 
   # Starts reading the next of the `count` items of a tuple, which must be there.
   next_tuple_item := (count: Int): void ->
@@ -292,15 +283,6 @@ export class JsonReader
 # The deepest that arrays and objects may nest, as each is read by a call of its own, so that text
 # nested deeper throws rather than overflowing the stack.
 MAX_DEPTH := 128
-
-# The kinds of values that peek_kind tells, as std:codable's KIND_ ones, which std:json cannot
-# import until the seed is refreshed (see docs/internals/architecture.md#refreshing-the-seed): null
-# and an array are JSON_OTHER, as no member of a union is either.
-JSON_BOOL := 0
-JSON_NUMBER := 1
-JSON_STRING := 2
-JSON_OBJECT := 3
-JSON_OTHER := 4
 
 # The byte that an escape of one letter stands for.
 unescaped := (byte: Byte): Byte? ->

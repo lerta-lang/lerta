@@ -71,8 +71,11 @@
 
 ### Codable
 
-- It only bounds type parameters, as `<T: Codable>`, as std:json's `Jsonable` does (see [std:json](#stdjson)), and it has no members either: the types that satisfy it are those of data, told by their parts.
-- A type with a part that is not data does not satisfy it: a function, a `Promise`, an `Iter`, an interface or a `weak` field: `Request does not satisfy Codable: $.handler is of type (Int) -> Int, which is not data`.
+- It only bounds type parameters, as `<T: Codable>` of a function that passes its type on to `encode` and `decode`, or to std:json's `encode_json` and `decode_json`.
+  - Why: a type of values would not tell which type to convert by.
+- It has no members: the types that satisfy it are those of data, which the compiler tells by their parts, and it generates the code that converts each, so no type declares anything for it. It is the only interface without members.
+- A type with a part that is not data does not satisfy it: a function, a `Promise`, an `Iter`, an interface or a `weak` field.
+- That is an error at the call, which names the path of the part, as JsonError's messages write it, with `$[]` for an item of an array and `$.*` for a value of a map: `Request does not satisfy Codable: $.handler is of type (Int) -> Int, which is not data`.
 - So far, neither does a type with a part that is a `Char`, a `Set`, or a map whose keys are not `String`s, nor a union that std:json's [unions](#types) leave out.
 
 ### Encoder
@@ -507,19 +510,10 @@ xs := decode_json<Int[]>(text)
 
 | Name | |
 |---|---|
-| `encode_json<T: Jsonable>(value: T, keys: JsonKeys = JsonKeys.AS_WRITTEN): String` | The value as JSON, with no whitespace. |
-| `decode_json<T: Jsonable>(text: String, keys: JsonKeys = JsonKeys.AS_WRITTEN): T` | The value of type `T` that the text holds, with whitespace around its parts and nothing but whitespace after it. Throws a `JsonError` for text that is not JSON, does not fit `T` or nests arrays and objects more than 128 deep. |
-| `Jsonable` | The interface of the types that the two convert (below). |
+| `encode_json<T: Codable>(value: T, keys: JsonKeys = JsonKeys.AS_WRITTEN): String` | The value as JSON, with no whitespace, a value of any [Codable](#codable) type. |
+| `decode_json<T: Codable>(text: String, keys: JsonKeys = JsonKeys.AS_WRITTEN): T` | The value of type `T` that the text holds, with whitespace around its parts and nothing but whitespace after it. Throws a `JsonError` for text that is not JSON, does not fit `T` or nests arrays and objects more than 128 deep. |
 | `JsonKeys` | How the keys of the fields of objects are written (below). |
-| `JsonError` | The error of `decode_json`, and of `encode_json` for a value that holds itself (below), a struct of a `message`. |
-
-### Jsonable
-
-- It only bounds type parameters, as `<T: Jsonable>` of a function that passes its type on to the two.
-  - Why: a type of values would not tell which type to convert by.
-- It has no members: the compiler tells the types that satisfy it by their parts, and generates the code that converts each, so no type declares anything for it. It is the only interface without members.
-- A type that has a part of a type the table below lacks does not satisfy it: a function, a `Promise`, an `Iter`, an interface, a `Char`, a `Set`, a map whose keys are not `String`s, or a `weak` field.
-- That is an error at the call, which names the path of the part, as JsonError's messages write it, with `$[]` for an item of an array and `$.*` for a value of a map: `Request does not satisfy Jsonable: $.handler is of type (Int) -> Int, which is not data`.
+| `JsonError` | The error of `decode_json`, and of `encode_json` for a value that holds itself or that camel case cannot write (below), a struct of a `message`. |
 
 ### JsonKeys
 
@@ -527,7 +521,7 @@ xs := decode_json<Int[]>(text)
 - `CAMEL_CASE`: each `_` between another character and a lowercase ASCII letter left out, and the letter in uppercase, as `textDocument` for `text_document`, for formats such as the LSP's.
   - A leading `_`, one after another, and one before anything else, stay.
 - The keys of maps, which are data, stay as they are.
-- A type with two fields that camel case writes as one key, as `ab_c` and `abC`, does not satisfy `Jsonable`.
+- `encode_json` throws a `JsonError` for an object with two fields that camel case writes as one key, as `ab_c` and `abC`, which would give it two values of the key: `$.pair: two fields of the key "abC"`. `decode_json` reads the key into the first of them.
 
 ### Types
 
@@ -551,7 +545,7 @@ xs := decode_json<Int[]>(text)
   - A key that is no such field, as one of a field given by an initializer alone, is skipped.
   - A key may not be given twice.
 - **Unions.** `decode_json` takes the member that the kind of the JSON value tells: a number, `true` or `false`, a string or an object.
-  - So the members must be of different kinds. A union of two number types, as `Int` and `Float`, of two that are strings, as `String` and `Binary` or an enum, or of two classes or structs, does not satisfy `Jsonable`.
+  - So the members must be of different kinds. A union of two number types, as `Int` and `Float`, of two that are strings, as `String` and `Binary` or an enum, or of two classes or structs, does not satisfy `Codable`.
   - Nor does a union with an array, a map, a tuple or an anonymous struct as a member, so far.
   - A value of no member's kind is an error: `$.id: expected Int | String, found an array`.
 

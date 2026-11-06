@@ -1,6 +1,5 @@
 # The types that the compiler converts by their parts, which satisfy Codable, and the calls of the
 # code that it generates for each (see codegen/codable).
-import scan from 'std:scanner'
 import Call, Expression, Identifier, Position from '../ast'
 import fail from './diagnostics'
 import type_of from './expression'
@@ -16,73 +15,37 @@ import
   TypeParameterType, UnionType, void_type
 from '../types'
 
-# The interfaces, without members, of those types, by the modules that declare them: std:json's
-# Jsonable stays until the seed is refreshed (see
-# docs/internals/architecture.md#refreshing-the-seed).
-CODABLE_INTERFACES := { 'std:codable': 'Codable', 'std:json': 'Jsonable' }
+CODABLE_MODULE := 'std:codable'
 
 export is_codable_bound := (program: ProgramWide, bound: InterfaceType) ->
   is_declared_by := (shared: Shared) ->
     shared.name == bound.module and is_codable_declaration(shared, bound.name)
   program.shared.any is_declared_by
 
-# Whether the interface of the name, declared in the module, is one of CODABLE_INTERFACES.
+# Whether the interface of the name, declared in the module, is std:codable's Codable.
 export is_codable_declaration := (shared: Shared, name: String) ->
-  for (module, declared) in CODABLE_INTERFACES.entries()
-    return true if name == declared and is_module(shared, module)
-  false
+  is_codable_module(shared) and name == 'Codable'
 
-# The standard module, also when it is the entry module, as when it is built on its own.
-is_module := (shared: Shared, name: String) ->
-  shared.name == name or (shared.path == nil and shared.program.entry_path == name)
+# std:codable, also when it is the entry module, as when it is built on its own.
+is_codable_module := (shared: Shared) ->
+  is_entry := shared.path == nil and shared.program.entry_path == CODABLE_MODULE
+  shared.name == CODABLE_MODULE or is_entry
 
 # Rejects a type that has a part that is not data, naming the part by its path, as JsonError does
 # in std:json: `$[]` is an item of an array, `$.*` a value of a map, and `$[0]` and `$.name` an item
-# of a tuple and a field. The message names the interface that the type does not satisfy. std:json's
-# Jsonable also rejects two fields that camel case writes as one key.
-export reject_uncodable := (body: Body, type: Type, bound_name: String, at: Position) ->
+# of a tuple and a field.
+export reject_uncodable := (body: Body, type: Type, at: Position) ->
   { program } := body
-  keys_in_camel_case := bound_name == 'Jsonable'
-  finder := PartFinder(program, at, keys_in_camel_case, bounds: body.resolver.bounds)
+  finder := PartFinder(program, at, bounds: body.resolver.bounds)
   part := finder.uncodable_part(type, '$') ? return
   where := part.path == '$' then 'it' else part.path
   reason := "#{where} #{part.problem}"
-  fail program, at, "#{format_type(type)} does not satisfy #{bound_name}: #{reason}"
+  fail program, at, "#{format_type(type)} does not satisfy Codable: #{reason}"
 
 # A part of a type, by its path from it, and why it is not data.
 struct Part
   path: String
   problem: String
-
-# Two of the fields' names that camel case writes as one key (see JsonKeys in std:json), which
-# would give an object two values of one key.
-same_camel_case := (names: String[], path: String) ->
-  named: Map<String, String>
-  for name in names
-    key := camel_case(name)
-    if other := named[key]
-      return Part
-        path
-        problem: "has the fields #{other} and #{name}, which camel case writes as one key, #{key}"
-    named[key] = name
-  nil
-
-# The key of a field of the name in camel case: each `_` between another character and a lowercase
-# ASCII letter is left out, and the letter written in uppercase; a leading `_`, and one after
-# another, stay, as std:json writes it (camel_case in std/internal/json_text.lerta).
-export camel_case := (name: String) ->
-  scanner := scan(name)
-  var written = ''
-  var follows_other = false
-  while c := scanner.next()
-    after := scanner.peek()
-    if c == '_' and follows_other and after and after in 'a'..'z'
-      written += after.to_string().to_upper()
-      scanner.next()
-    else
-      written += c
-      follows_other = c != '_'
-  written
 
 unconverted := (path: String, problem: String) ->
   Part path, problem: "#{problem}, which is not data"
@@ -92,8 +55,6 @@ class PartFinder
   at: Position
   # Those of the type parameters that stand for themselves, which Codable may bound.
   bounds: Map<String, InterfaceType>
-  # Whether two fields that camel case writes as one key are rejected.
-  keys_in_camel_case: Bool
   # The classes and structs whose parts are being looked through, which a part of them that is
   # of their own type does not look through again.
   visited: Set<String> = Set()
@@ -105,8 +66,6 @@ class PartFinder
       when type is ArrayType then @uncodable_part(type.element, "#{path}[]")
       when type is TupleType then @first_part([(item, "#{path}[#{i}]") for item, i in type.items])
       when type is RecordType
-        names := [field.name for field in type.fields]
-        return part if part := @same_key(names, path)
         @first_part [(field.type, "#{path}.#{field.name}") for field in type.fields]
       when type is MapType
         unless is_kind(type.key, 'String')
@@ -117,9 +76,6 @@ class PartFinder
       when type is UnionType then @union_part(type, path)
       when type is TypeParameterType and @is_codable_parameter(type) then nil
       else unconverted(path, "is of type #{format_type(type)}")
-
-  same_key := (names: String[], path: String) ->
-    @keys_in_camel_case then same_camel_case(names, path)
 
   is_codable_parameter := (type: TypeParameterType) ->
     bound := @bounds[type.name]
@@ -148,7 +104,6 @@ class PartFinder
     key := type_key(type)
     return nil unless @visited.add(key)
     info := info_of(@program, type)
-    return part if part := @same_key([field.name.name for field in info.fields], path)
     for field in info.fields
       field_path := "#{path}.#{field.name.name}"
       return unconverted(field_path, 'is weak') if field.weak
@@ -171,53 +126,39 @@ KIND_WORDS := ['Bool values', 'numbers', 'text', 'classes or structs']
 
 SCALAR_KINDS: TypeKind[] = [NUMBER_KINDS..., 'Bool', 'String', 'Binary']
 
-# The builtins that write and read a value of a Codable type through the first argument, by their
-# names, each in the module that it is called in: std:json's stay until the seed is refreshed.
-export struct Builtin
-  module: String
-  direction: CodableDirection
-  bound_name: String
-
-BUILTINS: Map<String, Builtin> =
-  'encode_value': { module: 'std:codable', direction: ENCODE, bound_name: 'Codable' }
-  'decode_value': { module: 'std:codable', direction: DECODE, bound_name: 'Codable' }
-  'write_json': { module: 'std:json', direction: ENCODE, bound_name: 'Jsonable' }
-  'read_json': { module: 'std:json', direction: DECODE, bound_name: 'Jsonable' }
-
-# A call of a builtin, in its module, unless the name is taken there.
-export codable_builtin := (body: Body, callee: Expression): Builtin? ->
-  return nil unless callee is Identifier
+# A call in std:codable of the builtin `encode_value` or `decode_value`, unless the name is taken
+# there.
+export codable_direction := (body: Body, callee: Expression): CodableDirection? ->
+  return nil if callee is not Identifier or not is_codable_module(body.shared)
   name := callee.name
-  builtin := BUILTINS[name] ? return nil
-  return nil unless is_module(body.shared, builtin.module)
+  direction :=
+    case name
+      when 'encode_value' then CodableDirection.ENCODE
+      when 'decode_value' then CodableDirection.DECODE
+      else return nil
   return nil if lookup(body, name) != nil or has_function(body.shared, name)
-  not names_type_or_import(body.shared, name) then builtin
+  not names_type_or_import(body.shared, name) then direction
 
 # `encode_value(encoder, value)` writes the value, of a Codable type, and `decode_value<T>(decoder)`
-# reads a T; std:json's take its JsonWriter and JsonReader. The encoder or decoder is of a class or
-# struct, whose methods the generated code calls.
-export type_of_codable_call := (body: Body, call: Call, builtin: Builtin) ->
+# reads a T. The encoder or decoder is of a class or struct, whose methods the generated code calls.
+export type_of_codable_call := (body: Body, call: Call, direction: CodableDirection) ->
   program := body.program
   callee := call.callee as Identifier!
-  encodes := builtin.direction == ENCODE
+  encodes := direction == ENCODE
   arity := encodes then 2 else 1
   if call.args.length != arity or not call.named_args.is_empty()
     fail program, call.position, "#{callee.name} takes #{arity} arguments"
   arg_types := [type_of(body, arg) for arg in call.args]
   coder := arg_types[0]
-  reject_coder := (expected: String) ->
+  if coder is not ObjectType and coder is not TypeParameterType
+    expected := encodes then 'an Encoder' else 'a Decoder'
     fail program, call.args[0].position, "#{callee.name} takes #{expected} first"
-  if builtin.module == 'std:json'
-    name := encodes then 'JsonWriter' else 'JsonReader'
-    reject_coder "a #{name}" if not (coder is ObjectType and coder.name == name)
-  else if coder is not ObjectType and coder is not TypeParameterType
-    reject_coder encodes then 'an Encoder' else 'a Decoder'
   type :=
     if encodes
       arg_types[1]
     else
       written := call.type_args.first() ? fail(program, call.position, "#{callee.name}<T> needs T")
       resolve program, body.resolver, written
-  reject_uncodable body, type, builtin.bound_name, call.position
-  record_reference body, callee, CodableConversion(type, direction: builtin.direction)
+  reject_uncodable body, type, call.position
+  record_reference body, callee, CodableConversion(type, direction)
   encodes then void_type else type

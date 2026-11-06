@@ -26,7 +26,7 @@ The planned design of modules, FFI, the standard library and tools.
 ### std:json
 
 - Unions with an array, a map, a tuple or an anonymous struct as a member. An array and a tuple are written as JSON arrays, a map and an anonymous struct as objects, so decoding tells apart one of each kind, as it does a class from the others.
-- A class's or struct's own conversion, through a `Jsonable` type `J`: a method `to_json := (): J` and a [static member](objects.md#classes-and-structs) `from_json := (json: J): Self`, as a `Date` written as an ISO 8601 string.
+- A class's or struct's own conversion, through a `Codable` type `J`: a method `to_json := (): J` and a [static member](objects.md#classes-and-structs) `from_json := (json: J): Self`, as a `Date` written as an ISO 8601 string.
   - The generated code converts `J` and calls them wherever the type is a part, as a field.
   - A `from_json` that throws gives a `JsonError` with the path, `$.at: <message>`.
 - Unions of objects told apart by a field, as `kind`, and a dynamic JSON value type, once a program needs them. Meanwhile, a message whose fields depend on another field is decoded twice: first as a type with only that field, then as the type it names.

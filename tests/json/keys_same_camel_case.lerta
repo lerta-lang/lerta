@@ -1,8 +1,30 @@
-import encode_json from 'std:json'
+import decode_json, encode_json, JsonError from 'std:json'
 
 struct Pair
   ab_c: Int
-  abC: Int
+  abC := default 0
 
-# Rejected also when the keys are written as the fields' names.
+class Holder
+  pair: Pair
+  next: Holder?
+
+struct Point
+  x_value: Int
+
+# Two fields that camel case writes as one key are written apart as they are named, but are refused
+# in camel case, which would give the object two values of the key; decoding reads the key into the
+# first of them.
 print encode_json(Pair(ab_c: 1, abC: 2))
+try
+  print encode_json([{ pair: Pair(ab_c: 1, abC: 2) }], CAMEL_CASE)
+catch error: JsonError
+  print error.message
+try
+  print encode_json(Holder(pair: { ab_c: 1 }, next: nil), CAMEL_CASE)
+catch error: JsonError
+  print error.message
+pair := decode_json<Pair>('{"abC":3}', CAMEL_CASE)
+print "#{pair.ab_c} #{pair.abC}"
+# Each record has keys of its own, through a map too.
+points := { points: [Point(x_value: 1), Point(x_value: 2)], by_name: { 'a': Point(x_value: 3) } }
+print encode_json(points, CAMEL_CASE)

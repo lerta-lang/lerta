@@ -1,6 +1,6 @@
 # What std:json's generated code writes through, as an Encoder (see std/codable.lerta).
 import base64 from './base64'
-import field_key, FieldKeys, is_finite, Level, path_of, quoted from './json_text'
+import FieldKeys, is_finite, Level, path_of, quoted from './json_text'
 import JsonError, JsonKeys from '../json'
 
 export class JsonWriter
@@ -13,6 +13,9 @@ export class JsonWriter
   entered: Int[] = []
   depths: Map<Int, Int> = Map()
   field_keys := FieldKeys(@keys)
+  # The keys of each record being written in camel case, the innermost last: two fields that it
+  # writes as one key, as `ab_c` and `abC`, would give the object two values of it.
+  record_keys: Set<String>[] = []
 
   write_nil := (): void -> @written += 'null'
   write_bool := (value: Bool): void -> @written += value.to_string()
@@ -46,9 +49,19 @@ export class JsonWriter
   begin_map := (): void -> @begin_object()
   write_key := (key: String): void -> @next_key(key)
   end_map := (): void -> @end_object()
-  begin_record := (): void -> @begin_object()
-  write_field := (name: String): void -> @next_key(@field_keys.key(name))
-  end_record := (): void -> @end_object()
+  begin_record := (): void ->
+    @record_keys.push Set<String>() if @keys == JsonKeys.CAMEL_CASE
+    @begin_object()
+
+  write_field := (name: String): void ->
+    key := @field_keys.key(name)
+    if keys := @record_keys.last()
+      @fail_twice key unless keys.add(key)
+    @next_key key
+
+  end_record := (): void ->
+    @record_keys.pop() if @keys == JsonKeys.CAMEL_CASE
+    @end_object()
 
   begin_object := (): void -> @begin('{')
 
@@ -57,13 +70,6 @@ export class JsonWriter
     @next ".#{key}"
     @written += quoted(key)
     @written += ':'
-
-  # The methods that the seed's generated code calls, until the seed is refreshed (see
-  # docs/internals/architecture.md#refreshing-the-seed).
-  write_null := (): void -> @write_nil()
-
-  next_field := (name: String, camel_case: String): void ->
-    @next_key field_key(@keys, name, camel_case)
 
   end_object := (): void -> @end('}')
 
@@ -81,6 +87,12 @@ export class JsonWriter
     throw JsonError(message: "#{@path_text()}: #{value}, which JSON cannot hold")
 
   leave := (): void -> @depths.remove(@entered.pop())
+
+  # The record has two fields of the key, an error of the record, which the levels around its own
+  # give the path of, rather than of its last value.
+  fail_twice := (key: String): never ->
+    record := path_of(@levels[...(@levels.length - 1)])
+    throw JsonError(message: "#{record}: two fields of the key #{quoted(key)}")
 
   begin := (open: String) ->
     @written += open

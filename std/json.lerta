@@ -1,12 +1,9 @@
-# JSON (see docs/reference/std.md#stdjson). The compiler generates the code that writes and
-# reads each type (compiler/codegen/encode.lerta and decode.lerta), which `write_json` and
-# `read_json` call: it goes through the methods of a JsonWriter and a JsonReader (std/internal/),
-# which write their result types, since that code calls them with those types.
+# JSON (see docs/reference/std.md#stdjson), a format of std:codable: the code that the compiler
+# generates for each type writes and reads it through the methods of a JsonWriter and a JsonReader
+# (std/internal/), its Encoder and Decoder.
+import Codable, decode, encode from './codable'
 import JsonReader from './internal/json_reader'
 import JsonWriter from './internal/json_writer'
-
-# The types that encode_json and decode_json convert, which the compiler tells by their parts.
-export interface Jsonable
 
 # The text is not JSON, or not of the type it is decoded as.
 export struct JsonError: Error
@@ -17,14 +14,14 @@ export enum JsonKeys
   AS_WRITTEN
   CAMEL_CASE
 
-export encode_json := <T: Jsonable>(value: T, keys: JsonKeys = JsonKeys.AS_WRITTEN) ->
+export encode_json := <T: Codable>(value: T, keys: JsonKeys = JsonKeys.AS_WRITTEN) ->
   writer := new_writer(keys)
-  write_json writer, value
+  encode writer, value
   writer.text()
 
-export decode_json := <T: Jsonable>(text: String, keys: JsonKeys = JsonKeys.AS_WRITTEN): T ->
+export decode_json := <T: Codable>(text: String, keys: JsonKeys = JsonKeys.AS_WRITTEN): T ->
   reader := new_reader(text, keys)
-  value := read_json<T>(reader)
+  value := decode<T, JsonReader>(reader)
   reader.end()
   value
 
