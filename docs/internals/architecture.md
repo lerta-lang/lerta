@@ -27,7 +27,7 @@
 Each build's objects must be found again in [the ThinLTO cache](../reference/compiler.md#cache):
 
 - Each module names its `source_filename`; clang would otherwise give it the path of its `.ll`, in the build's temporary directory.
-- The link runs in that directory, which `build` gives clang as its working directory, and names the modules' objects relative to it, `module<N>.o`.
+- The link runs in that directory, which `build` gives clang as its working directory, and names the modules' objects relative to it, `module<N>.o`, or `<triple>/module<N>.o` for each of [`macos-universal`](../reference/compiler.md#--target-target)'s triples.
   - Why: LLVM may hold the path of each object, as the linker is given it, in the cache's keys, as clang 15's does. An absolute path under a build's own temporary directory is never found there again.
 - Other relative paths given to the link are resolved below the directory the compiler runs in, by `real_path`, so that the system works out each `..` and symbolic link from there, as when clang ran in that directory (see [real_path](../reference/std.md#stdio)).
 - What the build makes itself (the runtime's objects, the cache and the temporary directory) is resolved itself, as it always exists when the link runs; so it is named the same from any directory.

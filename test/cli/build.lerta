@@ -751,9 +751,42 @@ no_trace_check := ->
       ] else no_reasons)...
     ]
 
+lipo_archs := (path: String) ->
+  listed := await run_command('lipo', ['-archs', path], cli_work_dir)
+  listed.stdout_text().split_whitespace().sorted()
+
+# Rosetta, which would run the x86_64 slice on arm64, may be missing, so only the host's slice runs.
+universal_check := (flags: String[]) ->
+  Check name: "lerta build --target macos-universal #{flags.join(' ')}", run: ->
+    source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
+    built := await run_in_new_dir(
+      compiler
+      ['build', source, '-o', 'lines', '--target', 'macos-universal', flags...]
+    )
+    succeed 'build', built.result
+    output := "#{built.cwd}/lines"
+    ran := await run_command(output, [], built.cwd)
+    expected := ['arm64', 'x86_64']
+    archs := await lipo_archs(output)
+    debug_archs := '--source-lines' in flags then await lipo_archs(debug_file_of(output))
+    [
+      expect_success('run', ran)...
+      compare_output('stdout', b"2\n7\n", ran.stdout)...
+      (archs == expected then no_reasons else ["the executable's architectures: #{archs}"])...
+      (debug_archs == nil or debug_archs == expected then no_reasons else [
+        "the debug information's architectures: #{debug_archs}"
+      ])...
+    ]
+
 export checks: Check[] = [
   [build_and_run(flags) for flags in runtime_flags]...
   (host_target_name then [build_and_run(['--target', host_target_name])] else [])...
+  (host_platform == 'macos' then [
+    universal_check(no_build_flags)
+    universal_check(['-O'])
+    universal_check(['--source-lines'])
+    universal_check(['-O', '--source-lines'])
+  ] else [])...
   default_output_check()
   leading_dash_check()
   symlink_output_check()

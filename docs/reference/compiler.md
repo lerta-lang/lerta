@@ -168,6 +168,7 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 | `windows-amd64` | `x86_64-w64-mingw32` |
 | `windows-arm64` | `aarch64-w64-mingw32` |
 
+- `macos-universal`, a short name with no triple of its own, builds the executable for both `macos-arm64` and `macos-amd64`, and has `lipo`, which Apple's tools have, join them into one. With `--source-lines`, its dSYM bundle holds both too.
 - A Windows target (`*-w64-mingw32`, or `*-w64-windows-gnu` as llvm-mingw names it) needs mingw-w64, and lld, which links it.
 - The runtime is built for these targets:
 

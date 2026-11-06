@@ -1,14 +1,17 @@
 # Builds a program: has clang compile the IR that codegen generates for it, written to a temporary
 # directory, which is removed afterwards, and link it with the runtime's cached objects.
-import is_file, make_temp_dir, open, remove_tree from 'std:io'
+import is_file, make_dir, make_temp_dir, open, remove_tree from 'std:io'
 import exit, run from 'std:process'
 import ProgramWide from './checker/shared'
 import run_clang_jobs from './clang_jobs'
-import build_flags, BuildKind, executable_suffix, LTO_CACHE, lto_link_flags from './clang_flags'
+import
+  build_flags, BuildKind, executable_suffix, LTO_CACHE, lto_link_flags, UNIVERSAL_TARGET,
+  UNIVERSAL_TRIPLES
+from './clang_flags'
 import generate from './codegen/codegen'
 import check_program, write_ir from './compile'
 import CompileError from './errors'
-import basename, is_absolute, join from './paths'
+import is_absolute, join from './paths'
 import target_system from './platform_description'
 import real_path_text from './loader'
 import cache_dir, cached_include_dir, cached_runtime from './runtime_cache'
@@ -74,10 +77,47 @@ reject_objective_c_off_macos := (request: BuildRequest) ->
   return if target_system(request.kind.target) == 'macos'
   throw CompileError("'#{file}' is Objective-C, which links only for macOS")
 
-# What build_then exits with: 1 if clang fails.
+# What build_then exits with: 1 if clang, lipo or dsymutil fails.
 build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_args: String[]?) ->
+  var executable: String?
+  if request.kind.target == UNIVERSAL_TARGET
+    executable = await build_universal(request, program, dir)
+  else
+    executable = await link_executable(request, program, dir, '')
+  return 1 unless executable
+  # On macOS, the debug information stays in the object files, which are removed, so dsymutil
+  # copies it beside the executable first; it reads their paths from the executable, as the link
+  # was given them, in the directory it ran in.
+  if request.source_lines and target_system(request.kind.target) == 'macos'
+    return 1 if (await run('dsymutil', executable, cwd: real_path_text(dir))).code != 0
+  program_args := run_args ? return 0
+  (await run(executable, program_args...)).code
+
+# Links an executable for each of UNIVERSAL_TRIPLES, from objects in a directory of its own under
+# `dir`, and has lipo join them into the executable; nil if either fails.
+build_universal := (request: BuildRequest, program: ProgramWide, dir: String) ->
+  slices: String[]
+  for triple in UNIVERSAL_TRIPLES
+    make_dir join(dir, triple)
+    kind: BuildKind = { request.kind..., target: triple }
+    slice_request: BuildRequest = { request..., output: join(dir, "#{triple}/program"), kind }
+    slice := await link_executable(slice_request, program, dir, "#{triple}/") ? return nil
+    slices.push slice
+  executable := executable_path(request, dir)
+  return nil if (await run('lipo', '-create', '-output', executable, slices...)).code != 0
+  executable
+
+# The path of the executable that the link writes: the output, or one in `dir`.
+executable_path := (request: BuildRequest, dir: String) ->
+  work_dir := real_path_text(dir)
+  default := join(work_dir, "program#{executable_suffix(request.kind.target)}")
+  link_path real_path_text('.'), request.output ? default
+
+# Has clang compile the program for the request's target in `dir`, into objects whose names relative
+# to it start with `prefix`, and link it there; the executable's path, or nil if clang fails.
+link_executable := (request: BuildRequest, program: ProgramWide, dir: String, prefix: String) ->
   { kind } := request
-  runtime := await cached_runtime(kind, dir) ? return 1
+  runtime := await cached_runtime(kind, dir) ? return nil
   { function_attributes, coro_end_type } := runtime
   { traces, source_lines, eager_nan_checks } := request
   modules := generate
@@ -86,7 +126,7 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
     coro_end_type
     { traces, source_lines, eager_nan_checks, separate: true, optimized: kind.optimize }
   flags := build_flags(kind)
-  objects := await compile_modules(modules, flags, dir) ? return 1
+  objects := await compile_modules(modules, flags, dir, prefix) ? return nil
   # The linked C and Objective-C files may include the runtime's header.
   compiles_c := request.linked_files.any((file) -> file.ends_with('.c') or file.ends_with('.m'))
   include_flags: String[] = compiles_c then ["-I#{await cached_include_dir()}"] else []
@@ -95,8 +135,7 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
   # docs/internals/architecture.md#per-module-output).
   cwd := real_path_text('.')
   work_dir := real_path_text(dir)
-  executable :=
-    link_path(cwd, request.output ? join(work_dir, "program#{executable_suffix(kind.target)}"))
+  executable := executable_path(request, dir)
   # libm, which std:math calls, is apart from libc on Linux; elsewhere -lm links nothing more.
   libraries := ["-l#{library}" for library in ['m', runtime.libraries...]]
   lto_cache := join(real_path_text(cache_dir()), LTO_CACHE)
@@ -106,9 +145,9 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
   # makes in a directory that it removes unless told one.
   keeps_objects := source_lines and system == 'macos' and kind.optimize
   lto_objects: String[] =
-    keeps_objects then ["-Wl,-object_path_lto,#{join(work_dir, 'lto')}"] else []
+    keeps_objects then ["-Wl,-object_path_lto,#{join(work_dir, "#{prefix}lto")}"] else []
   args := [
-    [basename(object) for object in objects]...
+    objects...
     flags...
     include_flags...
     (lto_flags ? [])...
@@ -125,14 +164,7 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
   # what it optimizes in a directory under TMPDIR, which it never removes; under the temporary
   # directory, it is removed with it.
   clang := await run('clang', args..., cwd: work_dir, env: { 'TMPDIR': work_dir })
-  return 1 if clang.code != 0
-  # On macOS, the debug information stays in the object files, which are removed, so dsymutil
-  # copies it beside the executable first; it reads their paths from the executable, as the link
-  # was given them, in the directory it ran in.
-  if source_lines and system == 'macos'
-    return 1 if (await run('dsymutil', executable, cwd: work_dir)).code != 0
-  program_args := run_args ? return 0
-  (await run(executable, program_args...)).code
+  clang.code == 0 then executable
 
 # The path that the link, which runs in the build's temporary directory, is given for a file named
 # on the command line: a relative one below `cwd`, the directory the compiler runs in, written there
@@ -144,9 +176,11 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
 link_path := (cwd: String, path: String) -> is_absolute(path) then path else "#{cwd}/#{path}"
 
 # Has clang compile the IR of each module, written to `dir`, into an object file there, as many at
-# once as there are CPUs; nil if it fails for any.
-compile_modules := (modules: String[][], flags: String[], dir: String) ->
-  paths := [join(dir, "module#{i}") for _, i in modules]
+# once as there are CPUs; the objects' paths relative to `dir`, which start with `prefix`, or nil if
+# it fails for any.
+compile_modules := (modules: String[][], flags: String[], dir: String, prefix: String) ->
+  names := ["#{prefix}module#{i}" for _, i in modules]
+  paths := [join(dir, name) for name in names]
   for (path, lines) in paths.zip(modules)
     { writer } := open("#{path}.ll", WRITE)
     await write_ir(lines, writer)
@@ -155,4 +189,4 @@ compile_modules := (modules: String[][], flags: String[], dir: String) ->
   job := (path: String) -> ['-Wno-override-module', '-c', "#{path}.ll", flags..., '-o', "#{path}.o"]
   jobs := [job(path) for path in paths]
   return nil unless await run_clang_jobs(jobs)
-  ["#{path}.o" for path in paths]
+  ["#{name}.o" for name in names]
