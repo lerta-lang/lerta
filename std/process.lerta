@@ -97,7 +97,7 @@ export run := (command: String, args: String..., options: RunOptions) ->
       await lerta_program_wait(program.pointer)
     catch error: CancelledError
       await give_up(copies, feeding, outputting, erroring)
-      end_writers output.sink, errors.sink, copies
+      await end_writers(output.sink, errors.sink, copies)
       throw error
   # What the program did not read is not wanted any more.
   await give_up(copies, feeding, nil, nil)
@@ -109,7 +109,7 @@ export run := (command: String, args: String..., options: RunOptions) ->
   stdout := outputting and not copies.stopped then await outputting
   stderr := erroring and not copies.stopped then await erroring
   await give_up(copies, nil, outputting, erroring) if copies.stopped
-  end_writers output.sink, errors.sink, copies
+  await end_writers(output.sink, errors.sink, copies)
   throw error if error := copies.error
   return Exit(stdout, stderr, code: status) if status >= 0
   Exit stdout, stderr, code: 128 - status, signal: -status
@@ -244,14 +244,15 @@ failed_copy := (copies: Copies, error: Error, program: Program): Binary? ->
   nil
 
 # The Writers are ended once both copies have ended, as one Writer may take both outputs, as `2>&1`
-# does; it is then ended twice, which a Writer takes as once.
+# does; it is then ended twice, which a Writer takes as once. A cancelled run waits for the ends
+# too, so that the output is all written when it settles.
 end_writers := (stdout: Output | Writer?, stderr: Output | Writer?, copies: Copies) ->
-  end_writer stdout, copies if stdout is Writer
-  end_writer stderr, copies if stderr is Writer
+  await end_writer(stdout, copies) if stdout is Writer
+  await end_writer(stderr, copies) if stderr is Writer
 
 end_writer := (writer: Writer, copies: Copies) ->
   try
-    writer.end()
+    await writer.end()
   catch error
     copies.fail error
 

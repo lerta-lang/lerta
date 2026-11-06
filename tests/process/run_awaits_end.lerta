@@ -1,0 +1,28 @@
+# A run returns only once the end of a Writer it was given has finished, and a cancelled one too.
+import Deferred from 'std:async'
+import Reader from 'std:io'
+import run from 'std:process'
+import sleep from 'std:time'
+
+class SlowEnd
+  var ended = false
+
+  write := (data: String | Binary): Promise -> return
+
+  end := ->
+    await sleep(0.01)
+    @ended = true
+
+writer := SlowEnd()
+await run('echo_input', stdin: b'data', stdout: writer)
+print writer.ended
+
+pending := Reader(-> await Deferred<Binary?>().promise())
+cancelled_writer := SlowEnd()
+cancelled := run('echo_input', stdin: pending, stdout: cancelled_writer)
+cancelled.cancel()
+try
+  await cancelled
+catch error: CancelledError
+  print error.message
+print cancelled_writer.ended

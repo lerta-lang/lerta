@@ -19,7 +19,7 @@ feed := (pipe: Pipe, parts: String[], fails: Bool) ->
     if fails
       pipe.writer.fail IOError('the source failed')
     else
-      pipe.writer.end()
+      await pipe.writer.end()
     log.push 'fed'
   catch error: IOError
     log.push "not fed: #{error.message}"
@@ -38,7 +38,7 @@ feed_many := (pipe: Pipe) ->
   for _ in 0...16
     await pipe.writer.write(mib)
     taken += 1
-  pipe.writer.end()
+  await pipe.writer.end()
 
 redirect := (status: Int) ->
   headers := Headers()
@@ -70,7 +70,7 @@ server := serve(handle)
 ask := (requests: String) ->
   client := await connect_tcp('127.0.0.1', server.port)
   await client.write(requests)
-  client.end()
+  await client.end()
   print masked_dates((await client.reader.read_all()).text()!).replace("\r\n", ' | ')
   client.close()
   await sleep(0.05)

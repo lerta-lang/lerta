@@ -13,7 +13,7 @@ server := serve(handle, max_line: 32, max_fields: 3, max_body: 4)
 ask := (request: String) ->
   client := await connect_tcp('127.0.0.1', server.port)
   await client.write(request)
-  client.end()
+  await client.end()
   while line := await client.reader.read_line()
     print line if line.starts_with('HTTP/')
 
@@ -40,7 +40,7 @@ _written :=
     true
   catch _: IOError
     false
-client.end()
+await client.end()
 # The server may close with what the client sent unread, which resets the connection.
 _read :=
   try
@@ -56,7 +56,7 @@ for length in [0, 1]
   await client.write(
     "POST / HTTP/1.1\r\nHost: a\r\nContent-Length: #{length}\r\n\r\n#{'x'.repeat(length)}"
   )
-  client.end()
+  await client.end()
   print await client.reader.read_line() ? 'end'
   _rest := await client.reader.read_all()
 await empty_only.close()
@@ -78,7 +78,7 @@ refused -> serve(handle, body_timeout: -1.0)
 unlimited := serve(handle, max_line: INT_MAX)
 unlimited_client := await connect_tcp('127.0.0.1', unlimited.port)
 await unlimited_client.write("GET / HTTP/1.1\r\nHost: a\r\n\r\n")
-unlimited_client.end()
+await unlimited_client.end()
 print await unlimited_client.reader.read_line() ? 'end'
 _rest := await unlimited_client.reader.read_all()
 await unlimited.close()

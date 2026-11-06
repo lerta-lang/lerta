@@ -69,14 +69,16 @@ export open := (path: String, mode: OpenMode) ->
 FILE_BUFFER_SIZE := 65536
 
 # A file's Writer, which gathers what is written and writes it out on the event loop once it holds
-# FILE_BUFFER_SIZE bytes, or when flushed. Its end writes out the rest on the event loop and closes
+# FILE_BUFFER_SIZE bytes, or when flushed. Its end writes out the rest, as a flush does, and closes
 # the file after; what is left when it is freed, it writes out at once. A write out that fails fails
-# every later write and flush (see lerta_open_file_failed).
+# every later write, flush and end (see lerta_open_file_failed).
 class FileWriter
   pointer: Int
   path: String
   var buffer = b''
   var ended = false
+  # The first end, which a later one waits for too.
+  var ending: Promise? = nil
   # The write out on the event loop, one at a time, which a flush waits for before its own, and
   # after which it finds whether it failed.
   var writing: Promise? = nil
@@ -86,15 +88,26 @@ class FileWriter
     @buffer += bytes_of(data)
     await @flush() if @buffer.length >= FILE_BUFFER_SIZE
 
+  # The file is closed even if the rest cannot be written, or the end is cancelled, after the write
+  # under way.
   end := ->
-    return if @ended
+    @ending = @ending ? @close_out()
+    await @ending!
+
+  close_out := ->
     @ended = true
-    lerta_open_file_end @pointer, @buffer
-    @buffer = b''
+    try
+      await @write_out()
+    finally
+      lerta_open_file_end @pointer, @buffer
+      @buffer = b''
 
   # Resolves once all that was written before it is in the file.
   flush := ->
     @check_open()
+    await @write_out()
+
+  write_out := ->
     while true
       await writing while writing := @writing
       throw @write_failure() if lerta_open_file_failed(@pointer)
@@ -208,20 +221,22 @@ extern lerta_stream_write: (Int, Binary) -> Promise
 extern lerta_stream_flush: (Int) -> Promise
 extern lerta_stream_is_terminal: (Int) -> Bool
 
-# What data is written to, as a stream: `end` closes it, which its reader reads as its end.
+# What data is written to, as a stream: `end` closes it, which its reader reads as its end, once at
+# least what the Writer holds of the writes before it is written, and is rejected if that failed. A
+# write under way is settled on its own, which a Writer's end may not wait for.
 export interface Writer
   write: (String | Binary) -> Promise
-  end: () -> void
+  end: () -> Promise
 
 # stdout or stderr, by its file descriptor (for buffering, see docs/reference/std.md#stdio).
-# An end does nothing: a run ends the Writers it is given, and the program writes on to stdout after
+# An end only flushes: a run ends the Writers it is given, and the program writes on to stdout after
 # it; the descriptor stays open, as a file opened later would take its number.
 struct StandardOutput
   fd: Int
 
   write := (data: String | Binary) -> await lerta_stream_write(@fd, bytes_of(data))
 
-  end := -> return
+  end := -> await @flush()
 
   flush := -> await lerta_stream_flush(@fd)
 
@@ -289,7 +304,11 @@ class PipeWriter
       @queued = [each for each in @queued when each != chunk]
       throw error
 
-  end := ->
+  # The pipe is ended at once; on a system pipe, its end that writes is closed once the writes under
+  # way have finished, which have taken what was written.
+  end := (): Promise -> @finish()
+
+  finish := ->
     @ended = true
     return system.end() if system := @system
     @used = true
@@ -298,7 +317,7 @@ class PipeWriter
   fail := (error: Error) ->
     return if @ended or not @writes_here()
     @failure = error
-    @end()
+    @finish()
 
   # On a system pipe, an end that a program has taken is ended as far as this program goes.
   writes_here := -> @system?.holds(WRITING) ? true

@@ -14,7 +14,7 @@ class Collected
 
   write := (data: String | Binary): Promise -> @written += data is String then data.binary else data
 
-  end := -> @ended = true
+  end := (): Promise -> @ended = true
 
   report := -> "#{@name}: #{@written.text()!.trim()} (ended: #{@ended})"
 
@@ -38,7 +38,7 @@ print (await run('exit_with', '0', stdin: unread)).code
 
 struct Refusing
   write := (data: String | Binary): Promise -> throw IOError('the writer refuses')
-  end := -> return
+  end := (): Promise -> return
 
 try
   await run('echo_input', stdin: b'refused', stdout: Refusing())
@@ -55,7 +55,7 @@ catch error: IOError
 struct RefusingCounted
   ends: Int[]
   write := (data: String | Binary): Promise -> throw IOError('refused again')
-  end := -> @ends.push(1)
+  end := (): Promise -> @ends.push(1)
 
 ends: Int[]
 try
@@ -121,7 +121,7 @@ print (await run('exit_with', '0', stdin: pending)).code
 # The error of a Writer's end fails the run, and the first error is the one told.
 struct FailingEnd
   write := (data: String | Binary): Promise -> return
-  end := (): void -> throw IOError('the end fails')
+  end := (): Promise -> throw IOError('the end fails')
 
 try
   await run('echo_input', stdin: b'o', stdout: FailingEnd())
@@ -135,7 +135,7 @@ catch error: IOError
 # A CancelledError that a Writer throws is its failure, not a cancel of the run.
 struct Cancelling
   write := (data: String | Binary): Promise -> throw CancelledError('of the writer')
-  end := -> return
+  end := (): Promise -> return
 
 try
   await run('echo_input', stdin: b'x', stdout: Cancelling())
@@ -147,14 +147,14 @@ struct LateCancelling
   write := (data: String | Binary): Promise ->
     await sleep(0.2)
     throw CancelledError('of the writer, late')
-  end := -> return
+  end := (): Promise -> return
 
 # Its stderr, slower still, is given up and ended before the run fails, as it would not be if the
 # CancelledError were taken for a cancel of the run.
 class SlowCollected
   var ended = false
   write := (data: String | Binary) -> await sleep(0.5)
-  end := -> @ended = true
+  end := (): Promise -> @ended = true
 
 slow := SlowCollected()
 try
@@ -166,7 +166,7 @@ catch error: CancelledError
 class Waiting
   var ended = false
   write := (data: String | Binary): Promise -> await Deferred<Int>().promise()
-  end := -> @ended = true
+  end := (): Promise -> @ended = true
 
 waiting := Waiting()
 cancelled_run := run('echo_input', stdin: b'x', stdout: waiting)

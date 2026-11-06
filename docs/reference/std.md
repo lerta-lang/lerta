@@ -354,10 +354,10 @@ The `writer`:
 - It gathers what is written in a buffer, which it writes out on the event loop once it holds 64 KiB.
 - A write that fills the buffer is resolved once the bytes are written out, as for `stdout`.
 - `flush(): Promise` is resolved once all that was written before it is in the file.
-- A write out that fails rejects the write or the flush that waits for it, and every later one, with `cannot write file: <path>`.
-- `end()` writes out the rest on the event loop and closes the file after. A write or a flush after it is rejected with `cannot write to a file that has ended`.
+- A write out that fails rejects the write, the flush or the end that waits for it, and every later one, with `cannot write file: <path>`.
+- `end(): Promise` writes out the rest, as a flush does, and closes the file, even if that write out fails; it is resolved once the file is closed. A write or a flush after it is rejected with `cannot write to a file that has ended`, and a later end is settled as the first.
 - A writer that nothing holds any more writes out the rest at once, unless it has ended, and closes the file.
-  - A failure of either has no one to tell, so a program that needs to know, or that reads the file next, flushes first.
+  - A failure then has no one to tell, so a program that needs to know, or that reads the file next, ends it first.
 
 ### Reader
 
@@ -394,9 +394,9 @@ An interface, exported, of what data is written to, as a stream.
 | Member | |
 |---|---|
 | `write(data: String \| Binary): Promise` | Writes the data. |
-| `end()` | Closes it, so that its reader reads its end. |
+| `end(): Promise` | Closes it, so that its reader reads its end. Resolved once at least what it holds of the writes before it is written, or rejected if that failed; a write under way is settled on its own, which an end may not wait for, as those of a `Socket` and a `Pipe` do not. |
 
-- A write after the end is rejected, but by `stdout` and `stderr`, whose `end` does nothing (see [stdout and stderr](#stdout-and-stderr)).
+- A write after the end is rejected, but by `stdout` and `stderr`, whose `end` only flushes (see [stdout and stderr](#stdout-and-stderr)).
 - `stdout`, `stderr`, the `writer` of a `File` and of a `Pipe`, and a `Socket` of [std:net](#stdnet) are `Writer`s.
 
 ### Pipe
@@ -446,7 +446,7 @@ A struct, exported, of a `writer` and a `reader`, a `Reader` that reads what the
   - On Windows, which has no such signal, the write fails as any other.
 - **Windows.** A write to a console is written as UTF-16, so it shows whatever the console's code page. No newline becomes CRLF.
 - **Closed streams.** On POSIX systems, a stdout or stderr closed when the program starts is opened read-only on `/dev/null`, so writes to it fail.
-- **end** does nothing, and leaves the stream open: the program writes on to them after a `run` that is given one, which ends it, and their reader does not read its end.
+- **end** only flushes, and so is rejected as a flush is, and leaves the stream open: the program writes on to them after a `run` that is given one, which ends it, and their reader does not read its end.
 - On Windows, a console is set at start to show the escape sequences of colors, and left so at exit.
 - Their type, `StandardOutput`, is not exported, so that no other is made: code that flushes names `stdout` or `stderr` itself.
 
@@ -560,7 +560,7 @@ TCP and UDP over IPv4 and IPv6, on the [event loop](functions.md#functions-that-
 | `listen_tcp(host: String, port = 0): Listener` | Listens, at once, at the first address that the host resolves to, and at a free port if `port` is 0. Throws `cannot listen at <host>:<port>` on failure, including for a host that holds a NUL byte. |
 | `connect_tcp(host: String, port: Int): Promise<Socket>` | Resolves the host and connects to each of its addresses in turn until one connects. Rejected with `cannot connect to <host>:<port>` if none does, including for a host that holds a NUL byte. A cancel gives up the connect. |
 | `Listener` | A struct of `port: Int`, the port it listens at, and the methods `accept(): Promise<Socket>` and `close()`. |
-| `Socket` | A struct of `reader: Reader`, of [std:io](#stdio), and the methods `write(data: String \| Binary): Promise`, `end()` and `close()`. |
+| `Socket` | A struct of `reader: Reader`, of [std:io](#stdio), and the methods `write(data: String \| Binary): Promise`, `end(): Promise` and `close()`. |
 | `bind_udp(host: String, port = 0): UdpSocket` | Binds, at once, at the first address that the host resolves to, and at a free port if `port` is 0. Throws `cannot bind at <host>:<port>` on failure, including for a host that holds a NUL byte. |
 | `UdpSocket` | A struct of `port: Int`, the port it is bound at, and the methods `send(data: String \| Binary, host: String, port: Int): Promise`, `receive(): Promise<Datagram>` and `close()` (see [UDP](#udp)). |
 | `Datagram` | A struct of `data: Binary`, and `host: String` and `port: Int`, where it came from, `host` a numeric address without brackets. |
@@ -654,7 +654,7 @@ Each option may be left out.
 - **Input.** A program that ends without reading all of its input is no failure, and a write to it that fails ends the input so, whatever the failure.
   - Once the program has started, `run` closes a `Reader` when it reads it no more, so that a `Pipe`'s writer fails then.
   - A program that cannot start leaves the `Reader` as it was, as it does a `Writer`.
-- **Output.** `run` ends a `Writer` after the program, however the run ends once the program has started, and a `Pipe`'s reader reads its end so too.
+- **Output.** `run` ends a `Writer` after the program, however the run ends once the program has started, and returns once the end has finished, so that a file's `writer` holds all of the output then; an end that is rejected fails the run with its error. A cancelled run waits for the ends too. So a run given `stdout` waits for its flush. A `Pipe`'s reader reads its end so too.
   - What reads the output reads its end alike whether the program ended well, failed, was killed or was cancelled; only the `Promise` of `run` tells which.
   - A program that cannot start leaves the `Writer` as it was.
 - **Stream errors.** The error of the `Reader` or of a `Writer`, as a read of the program's output that fails, stops the program, and rejects the `Promise` once the program has ended.
