@@ -15,7 +15,7 @@ import write_binary_literals from './binary_literals'
 import block_doc, is_left_out_import, left_out_import_mark from './print_statement'
 import Context from './printing'
 import
-  BLANK_LINES, COMMENTS, LAYOUT, LINE_LENGTH, SPACING, STRANDED_COMMENTS, StyleRule
+  BLANK_LINES, COMMENTS, LAYOUT, LINE_LENGTH, SEMICOLONS, SPACING, STRANDED_COMMENTS, StyleRule
 from './rules'
 import columns, source_text, SourceText from './source'
 
@@ -141,9 +141,17 @@ findings := (source: SourceText, formatted: String, rules: RulePlace[], kept_lin
   old.push '' unless old.last()!.is_empty()
   differing: Set<Int>
   for hunk in hunks(old, new)
-    differing.add line for line in hunk.old_start...(hunk.old_start + hunk.old_count)
-    for place in places_of(old, new, hunk)
-      result.push difference_finding(old, new, place, rules, source)
+    old_end := hunk.old_start + hunk.old_count
+    differing.add line for line in hunk.old_start...old_end
+    # A `;` that the lines hold is what they differ by first, as it breaks them up.
+    held: Finding[]
+    for line in hunk.old_start...old_end
+      held.push { rule: SEMICOLONS, at } if at := source.separators[line + 1]
+    if held.is_empty()
+      for place in places_of(old, new, hunk)
+        result.push difference_finding(old, new, place, rules, source)
+    else
+      result.append held
   stranded: Finding[] = [
     { rule: STRANDED_COMMENTS, at: { line: comment.line, column: comment.column } }
     for comment in source.stranded

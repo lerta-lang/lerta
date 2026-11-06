@@ -140,6 +140,8 @@ export lex := (source: String, path: String) ->
   lines := source_lines(source, path)
   # The lines up to this number are inside a `"""` or `'''` literal.
   var literal_end = 0
+  # The brackets open at the start of the line (see LineScanner.depth).
+  var brackets = 0
   for line in lines
     continue if line.number <= literal_end
     indent := line.scan_while(0, is_space)
@@ -149,17 +151,18 @@ export lex := (source: String, path: String) ->
       continue
     line.fail 'tabs are not allowed in indentation', indent if line.bytes[indent] == b"\t"
     layout.start_line line, indent
-    var scanner = LineScanner(line, position: indent)
+    var scanner = LineScanner(line, position: indent, depth: brackets)
     while true
       tokens.push token for token in scanner.run()
       start := scanner.multiline_start ? break
       literal := scan_multiline(lines, scanner.line.number - 1, start)
       tokens.push multiline_token(scanner.line, start, literal)
-      scanner = LineScanner(line: literal.line, position: literal.end)
+      scanner = LineScanner(line: literal.line, position: literal.end, depth: scanner.depth)
       literal_end = literal.line.number
     last := scanner.line
     if index := scanner.comment_index
       comments.push { own_line: false, line: last.number, column: last.column(index) }
+    brackets = scanner.depth
     layout.end_line last
   layout.finish lines.length
   Lexed tokens, comments
@@ -179,10 +182,11 @@ export without_carriage_return := (line: String) -> line.without_suffix("\r") ? 
 # The tokens of an interpolated expression, placed where it is in the source line.
 export tokenize_fragment := (source: String, path: String, line: Int, column: Int) ->
   fragment := SourceLine(path, bytes: source.binary, number: line, column_offset: column - 1)
-  scanner := LineScanner(line: fragment, position: 0)
+  scanner := LineScanner(line: fragment, position: 0, depth: 0)
   tokens := scanner.run()
   fragment.fail 'unterminated string literal', start if start := scanner.multiline_start
   fragment.fail 'a comment cannot be in an interpolation', index if index := scanner.comment_index
+  fragment.fail "';' cannot be in an interpolation", index if index := scanner.separator_index
   end := fragment.column(fragment.length)
   tokens.push layout_token(NEWLINE, line, end)
   tokens.push layout_token(EOF, line, end)
@@ -227,6 +231,11 @@ class LineScanner
   # Where the `"""` or `'''` that opens a literal on the lines after it starts, if the line ends
   # with one; scanning stops at it, and the caller reads the literal.
   var multiline_start: Int? = nil
+  # The brackets open here, from the lines before too, which a closing bracket that opens none
+  # leaves as they are, for the parser to report.
+  var depth: Int
+  # Where the first `;` on the line is, if any.
+  var separator_index: Int? = nil
 
   run := ->
     while @position < @line.length
@@ -236,6 +245,8 @@ class LineScanner
         when c == b'#'
           @comment_index = @position
           break
+        # Ends a statement as a line end does, for a program on one line, as on the command line.
+        when c == b';' then @scan_separator()
         when @at_multiline_quotes()
           quotes := @line.text(@position, @position + 3)
           # Quoted with the other quote, which is clearer than the same one next to them.
@@ -250,6 +261,18 @@ class LineScanner
         when c.is_digit() then @scan_number()
         else @scan_punctuation()
     @tokens
+
+  # A `;` comes between two statements: after code on its line other than another `;`, and before
+  # code.
+  scan_separator := ->
+    @separator_index = @position unless @separator_index
+    after_separator := @tokens.last()?.kind == NEWLINE
+    after_code := @line.scan_while(0, is_space) < @position and not after_separator
+    next := @line.scan_while(@position + 1, is_space)
+    between := after_code and next < @line.length and @line.bytes[next] != b'#'
+    @line.fail "';' must come between statements", @position unless between
+    @line.fail "';' cannot be inside brackets", @position if @depth > 0
+    @add NEWLINE, ';', @position + 1, nil
 
   at_multiline_quotes := ->
     bytes := @line.bytes
@@ -279,6 +302,8 @@ class LineScanner
     column := @line.column(start)
     end_column := @line.column(end)
     @tokens.push { kind, text, spaced, parts, column, end_column, line: @line.number }
+    @depth += 1 if kind in OPENING_BRACKETS
+    @depth -= 1 if kind in CLOSING_BRACKETS and @depth > 0
     @position = end
 
   scan_word := ->

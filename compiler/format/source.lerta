@@ -17,6 +17,8 @@ export class SourceText
   token_indexes := index_tokens(@tokens)
   # Whether the comment on each line that holds one is on a line of its own.
   comment_lines := lines_of(@comments)
+  # The place of the first `;` on each line that holds one, by the line.
+  separators := separator_places(@tokens)
   # The comments that the formatter cannot place (see stranded_comments).
   stranded := stranded_comments(@lines, @tokens, @comments)
   # The lines that hold tokens that `# fmt: skip` and `# fmt: off` mark (see lines_marked), and
@@ -154,6 +156,13 @@ export source_text := (source: String, lexed: Lexed) ->
   raw_lines := source.split("\n")
   lines := [without_carriage_return(line) for line in raw_lines]
   SourceText raw_lines, lines, tokens: lexed.tokens, comments: lexed.comments
+
+separator_places := (tokens: Token[]) ->
+  places: Map<Int, Position>
+  for token in tokens
+    if token.kind == NEWLINE and not token.text.is_empty() and token.line not in places
+      places[token.line] = token.position()
+  places
 
 lines_of := (comments: Comment[]) ->
   lines: Map<Int, Bool>

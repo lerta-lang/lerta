@@ -223,6 +223,10 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 - End a function with its value (`x`), not `return x`, except a multi-line literal (see [Multi-line literals](#multi-line-literals)).
 - Do not end a function returning nothing with a bare `return`.
 
+### Semicolons
+
+- Put each statement on a line of its own. `;` is for a program given on the command line (see [`-e`](compiler.md#run)).
+
 ### Postfix forms
 
 - Use the postfix form (`return nil unless found`) if the body is one statement other than a declaration, without a postfix form of its own, of:

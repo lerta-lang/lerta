@@ -7,13 +7,18 @@
 ## Arguments
 
 - Arguments that do not fit a command's usage print the usage to stderr and exit with code 2.
-- An argument that starts with `-` is taken as an option, but for the value of `-o` and `--target`, which is the next argument whatever it starts with.
+- An argument that starts with `-` is taken as an option, but for `-` alone, a source, and the value of `-o`, `-e`, `--target` and `--linker-flag`, which is the next argument whatever it starts with.
 - A path that starts with `-` is written as `./-name.lerta`.
 - A `<source>`, in every command that takes one, is a file, or a standard module as `std:<name>`, such as `std:io`, read from those the compiler carries.
   - An unknown one prints `unknown standard module 'std:<name>'` and exits with code 1.
   - A source that is not a file prints `'<source>' is not a file` and exits with code 1.
   - A file of `std/` given by its path is an ordinary module, which imports the carried `std:builtins` as any other does.
   - `std/process.lerta` builds, while `std/builtins.lerta` fails, as the extends of the files it exports from repeat those of the carried `std:builtins`.
+- A `<source>` may also be `-`, standard input, which is read to its end first.
+  - Diagnostics name it `<stdin>`, and a trace names it so too.
+  - Its imports of files are relative to the current directory.
+  - Not valid UTF-8, it prints `<stdin> is not valid UTF-8` and exits with code 1.
+  - What `run` runs reads its standard input after it.
 
 ## Commands
 
@@ -40,7 +45,8 @@ Usage errors:
 - an unknown or repeated option, or an option without its value;
 - a missing source;
 - a file after the source of another kind than [below](#linked-files);
-- without `-o`, a source whose name does not end with `.lerta`, as `std:<name>` does not.
+- without `-o`, a source whose name does not end with `.lerta`, as `std:<name>` and `-` do not;
+- `-e`, which only `run` takes.
 
 | Option | Effect |
 |---|---|
@@ -188,16 +194,19 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 ### run
 
 ```
-lerta run <source> [<file>...] [-O] [--memory-checks] [-Werror] [--no-trace] [--source-lines]
-          [--eager-nan-checks] [--linker-flag <flag>...] [-- <arg>...]
+lerta run (<source> | -e <code>) [<file>...] [-O] [--memory-checks] [-Werror] [--no-trace]
+          [--source-lines] [--eager-nan-checks] [--linker-flag <flag>...] [-- <arg>...]
 ```
 
 - It is provisional, until it runs the program directly with JIT (see [the roadmap](../roadmap/programs.md#tools)).
 - It builds the program as [`build`](#build) does, from the same source, files and options, in the temporary directory, for the host.
+- With `-e`, the code is the source, as a source of one line written with [`;`](syntax.md#statements): `lerta run -e 'x := 2; print x * 3'`.
+  - It is named, and its imports are relative, as those of `-` are, but as `<command line>`.
+  - The `<file>`s are then all linked files.
 - It runs it in the current directory, with the arguments after `--`, which go to the program as they are, even those that look like options. The program shares the standard streams.
 - It then removes the directory, as `build` does.
 - It exits with the program's exit code, or, if a signal ended it, 128 plus the signal number (see `run` in [std:process](std.md#stdprocess)). An exit code outside 0 to 255, as the NTSTATUS of a Windows program that crashes, becomes 255.
-- Usage errors: `-o`, `--target`, and an argument for the program without `--`.
+- Usage errors: `-o`, `--target`, an argument for the program without `--`, and both a source and `-e`, or neither.
 - A compile error or a failure of clang is reported as by `build`, and nothing runs.
 
 ### fmt
@@ -402,6 +411,7 @@ identity := [  # fmt: skip
   - one of a list keeps all of it;
   - an arm on the line of its `when` keeps the whole `case`, and a member the whole class.
 - The statement is printed as it is written, with its comments, its types and the enums of its members, and with the imports that it uses.
+- A statement on lines that hold a [`;`](syntax.md#statements) is not kept, as it shares a line with another.
 - It is indented as its block is, and its lines after the first as much deeper or shallower than the first as they were, but none shallower than the first column.
 - The blank lines and the comments between such statements are printed as elsewhere.
 - A file in which `# fmt: off` comes before the code, and no `# fmt: on` after it, is not even parsed. It is left as it is written, blank lines and comments too, and reported in nothing, even if it does not parse.
@@ -507,7 +517,7 @@ lerta clean
 
 - These commands print what the lexer, the parser, the checker and codegen make of the source.
 - They are there for debugging the compiler.
-- Each takes one argument, the source: more, or one that starts with `-`, is a usage error.
+- Each takes one argument, the source: more, or an option, is a usage error.
 
 | Command | Prints | Reads imports |
 |---|---|---|

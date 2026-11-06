@@ -201,7 +201,11 @@ A callee followed by an indented block gives the block as the call's arguments, 
 
 ## Statements
 
-- One statement per line.
+- One statement per line, or several separated by `;`, which ends a statement as a line end does: `x := 1; print x`.
+  - A `;` comes between two statements on its line, so none starts or ends a line, and none follows another.
+  - A block does not start after one: `for x in xs; print x` is an error, but `print x for x in xs` is not.
+  - None is inside brackets or in an interpolation.
+  - It is for a program given on the command line (see [`-e`](compiler.md#run)); the style puts each statement on a line of its own (see [Semicolons](style.md#semicolons)).
 - A statement is an expression; see [discarded values](errors.md#discarded-values) for which expressions may stand alone.
 
 ### Member lines

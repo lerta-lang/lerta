@@ -1,5 +1,5 @@
 # The command line of the compiler (see docs/reference/compiler.md#commands).
-import stdout from 'std:io'
+import stdin, stdout from 'std:io'
 import argv, exit from 'std:process'
 import dump_ast from './ast_dump'
 import build, build_and_run, BuildRequest from './build'
@@ -13,15 +13,18 @@ import lsp_command from './lsp/server'
 import parse from './parser/statement'
 import basename from './paths'
 import clean_cache from './runtime_cache'
-import read_entry_source, SOURCE_EXTENSION from './source'
+import
+  COMMAND_LINE_NAME, given_sources, read_entry_source, SOURCE_EXTENSION, STDIN_NAME
+from './source'
 import dump_tokens from './token_dump'
 
 USAGE := """
   usage: lerta build <source> [<file>...] [-o <output>] [-O] [--memory-checks] [-Werror]
                      [--no-trace] [--source-lines] [--eager-nan-checks] [--target <target>]
                      [--linker-flag <flag>...]
-         lerta run <source> [<file>...] [-O] [--memory-checks] [-Werror] [--no-trace]
-                   [--source-lines] [--eager-nan-checks] [--linker-flag <flag>...] [-- <arg>...]
+         lerta run (<source> | -e <code>) [<file>...] [-O] [--memory-checks] [-Werror]
+                   [--no-trace] [--source-lines] [--eager-nan-checks] [--linker-flag <flag>...]
+                   [-- <arg>...]
          lerta fmt [--fix] <path>...
          lerta lsp
          lerta clean
@@ -32,19 +35,37 @@ USAGE := """
 
 is_value := (arg: String) -> not arg.starts_with('-')
 
+# A source is a value, or `-` for standard input.
+is_source := (arg: String) -> is_value(arg) or arg == STDIN_ARG
+
+STDIN_ARG := '-'
+
+# The name of the entry source of the argument (see given_sources): standard input, read whole,
+# for `-`.
+entry_name := (arg: String) ->
+  return arg unless arg == STDIN_ARG
+  text := (await stdin.read_all()).text() ? throw CompileError("#{STDIN_NAME} is not valid UTF-8")
+  given_sources[STDIN_NAME] = text
+  STDIN_NAME
+
+# The name of the entry source of the code of `-e` (see given_sources).
+code_name := (code: String) ->
+  given_sources[COMMAND_LINE_NAME] = code
+  COMMAND_LINE_NAME
+
 fail_usage := ->
   print_error USAGE
   exit 2
 
 # Prints the IR of the source file, line by line, as it is too large to make one String of.
 run_dump_ir := (args: String[]) ->
-  fail_usage() if args.length != 1 or not is_value(args[0])
-  await write_ir(await generate_ir(args[0], false), stdout)
+  fail_usage() if args.length != 1 or not is_source(args[0])
+  await write_ir(await generate_ir(await entry_name(args[0]), false), stdout)
 
 # Prints what `dump` makes of the source file.
 run_dump := (args: String[], dump: (String) -> Promise<String>) ->
-  fail_usage() if args.length != 1 or not is_value(args[0])
-  await stdout.write(await dump(args[0]))
+  fail_usage() if args.length != 1 or not is_source(args[0])
+  await stdout.write(await dump(await entry_name(args[0])))
 
 # The files that clang links with the program, as it takes them.
 LINKED_EXTENSIONS := ['.c', '.m', '.o', '.ll', '.a', '.obj', '.lib']
@@ -61,9 +82,10 @@ SWITCHES :=
   '--eager-nan-checks'
 
 # The request, with no output and no target unless given, and the program's arguments after `--`.
+# Its source is still `-` for standard input.
 parse_build_arguments := (args: String[]) ->
-  var source: String?
-  linked_files: String[]
+  values: String[]
+  var code: String?
   linker_flags: String[]
   var output: String?
   var target: String?
@@ -78,6 +100,7 @@ parse_build_arguments := (args: String[]) ->
   while i < args.length
     arg := args[i]
     case arg
+      when '-e' then code = take_value(code)
       when '-o' then output = take_value(output)
       when '--target' then target = target_triple(take_value(target))
       when '--linker-flag' then linker_flags.push(take_value(nil))
@@ -88,21 +111,22 @@ parse_build_arguments := (args: String[]) ->
         if arg in SWITCHES
           fail_usage() unless switches.add(arg)
         else
-          fail_usage() unless is_value(arg)
-          if source == nil
-            source = arg
-          else
-            fail_usage() unless is_linked_file(arg)
-            linked_files.push arg
+          fail_usage() unless is_source(arg)
+          values.push arg
     i += 1
-  given_source := source ? fail_usage()
+  # The first value is the source, unless `-e` gives it.
+  fail_usage() if code == nil and values.is_empty()
+  linked_files := code != nil then values else values[1..]
+  fail_usage() unless linked_files.all(is_linked_file)
+  # `-` is read once the usage is known to be right, by the command (see entry_name).
+  source := code then code_name(code) else values[0]
   optimize := '-O' in switches
   memory_checks := '--memory-checks' in switches or not optimize
   request := BuildRequest
     linked_files
     linker_flags
     output
-    source: given_source
+    source
     kind: { optimize, memory_checks, target }
     warnings_as_errors: '-Werror' in switches
     traces: '--no-trace' not in switches
@@ -112,15 +136,15 @@ parse_build_arguments := (args: String[]) ->
 
 build_command := (args: String[]) ->
   { request, program_args } := parse_build_arguments(args)
-  fail_usage() if program_args != nil
+  fail_usage() if program_args != nil or request.source == COMMAND_LINE_NAME
   output := request.output ? default_output(request.source, request.kind.target)
-  build { request..., output }
+  await build({ request..., output, source: await entry_name(request.source) })
 
 # The program is built in the temporary directory, for the host.
 run_command := (args: String[]) ->
   { request, program_args } := parse_build_arguments(args)
   fail_usage() if request.output != nil or request.kind.target != nil
-  build_and_run request, program_args ? []
+  await build_and_run({ request..., source: await entry_name(request.source) }, program_args ? [])
 
 default_output := (source: String, target: String?) ->
   name := basename(source)
