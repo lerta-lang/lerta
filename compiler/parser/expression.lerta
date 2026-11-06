@@ -250,26 +250,29 @@ parse_range := (tokens: TokenStream): Expression ->
   if at_spread(tokens)
     tokens.spread = tokens.peek().position()
     return start
-  inclusive := tokens.next().kind == '..'
+  operator := tokens.next().kind
   # `a..`, which has no end: whether it includes it would mean nothing, and `a...` is a spread.
-  return Range(start, inclusive, end: nil, position: start.position) if at_range_end(tokens)
+  if at_range_end(tokens)
+    tokens.fail_here "a range with '..=' takes an end" if operator == '..='
+    return Range(start, inclusive: false, end: nil, position: start.position)
+  inclusive := operator != '...'
   end := parse_arithmetic(tokens, 0)
   reject_chained_range tokens
   Range start, end, inclusive, position: start.position
 
-# `...b` or `..b`.
+# `...b`, `..b` or `..=b`.
 parse_range_without_start := (tokens: TokenStream) ->
   operator := tokens.next()
   end := parse_arithmetic(tokens, 0)
   reject_chained_range tokens
-  Range end, start: nil, inclusive: operator.kind == '..', position: operator.position()
+  Range end, start: nil, inclusive: operator.kind != '...', position: operator.position()
 
 reject_chained_range := (tokens: TokenStream) ->
   tokens.fail_here 'ranges cannot be chained' if tokens.peek_continuation() in RANGE_OPERATORS
 
 at_range_end := (tokens: TokenStream) -> tokens.peek().kind in SPREAD_FOLLOWERS
 
-RANGE_OPERATORS: TokenKind[] = ['...', '..']
+RANGE_OPERATORS: TokenKind[] = ['...', '..', '..=']
 
 # `xs...` with nothing after it that could end a range, which spreads it rather than a range. An
 # array's item takes it (see parse_array_literal); where nothing does, it is rejected as found

@@ -208,7 +208,7 @@ lower_value := (comparison: BinaryOperation) ->
 same := (a: Expression, b: Expression) ->
   dump_ast_without_positions([a]) == dump_ast_without_positions([b])
 
-# The comparisons written as `x in a..b` at their place, or, after `and`s, in place of the first,
+# The comparisons written as `x in a..=b` at their place, or, after `and`s, in place of the first,
 # the `and` of the `and`s and the first taking the place of the whole.
 between := (expression: Expression, test: RangeComparison, place: Place) ->
   { chain, lower, value, start, end, inclusive } := test
@@ -228,7 +228,7 @@ between := (expression: Expression, test: RangeComparison, place: Place) ->
     reported: { written, rule: RANGE_TESTS }
     key: { kind: BETWEEN, at: test.at }
 
-# The range written `a..b` for `a...(b + 1)`, and, where it indexes `xs`, without a start 0 or an
+# The range written `a..=b` for `a...(b + 1)`, and, where it indexes `xs`, without a start 0 or an
 # end `xs.length`, `xs` being written the same and running no code; nil for one written so. An
 # index keeps its start 0 where it has no end, as `xs[..]` is no range.
 range_ends := (range: Range, indexed: Expression?, place: Place) ->
@@ -240,9 +240,7 @@ range_ends := (range: Range, indexed: Expression?, place: Place) ->
     inclusive = true
   var start = range.start
   if indexed
-    if not inclusive and is_length_of(end, indexed)
-      end = nil
-      inclusive = true
+    end = nil if not inclusive and is_length_of(end, indexed)
     start = nil if is_zero(start) and end != nil
   return nil if start == range.start and end == range.end
   written := Range(range..., start, end, inclusive)
