@@ -8,7 +8,7 @@
 ### Shadowing
 
 - A declaration may take the name of one visible from an outer scope, a top-level name or a builtin. Inside its block, the name refers to the new declaration.
-- [Builtins](builtins.md) live outside every scope: inside `for print in 0...3`, `print` is the loop variable.
+- [Builtins](builtins.md) live outside every scope: inside `for print in 0..3`, `print` is the loop variable.
 - Types and values share one namespace. So a name of the module, top-level or imported, shadows a builtin type as well as a builtin value, in the whole module:
   - after `Int := 1`, `x: Int` is an error, `'Int' is a value, not a type`;
   - after `class print`, `print(...)` constructs the class.
@@ -162,7 +162,7 @@ greeting := name then "hello #{name}"
 ## for and ranges
 
 ```lerta
-for i in 0...3
+for i in 0..3
   square := i * i
   print square
 ```
@@ -175,18 +175,23 @@ for i in 0...3
 | a [`Binary`](types.md#binary) | each byte, a `Byte`, in order |
 | an [`Iter`](types.md#iter) | each item; it starts the Iter's one traversal |
 | any other [`Iterable<T>`](builtins.md#iterable) | each item of the `Iter` that `value.iter()` gives, as Python's `for` goes through `__iter__` |
-| `<start>...<end>` | each integer from `<start>` up to, but not including, `<end>`; none if `<end>` is not greater than `<start>` |
-| `<start>..<end>` | the same, including `<end>` |
+| `<start>..<end>` | each integer from `<start>` up to, but not including, `<end>`; none if `<end>` is not greater than `<start>` |
+| `<start>..=<end>` | the same, including `<end>` |
 
 ### Ranges
 
-- `1..3` is `1`, `2` and `3`, as in CoffeeScript and Ruby and as SQL's `BETWEEN 1 AND 3`. `1...3` is `1` and `2`, as SQL's `>= 1 AND < 3`.
-- Why not Swift's `..<` and `...`, Rust's `..` and `..=` or Kotlin's `..` and `..<`, which disagree with each other anyway: they are more symbols to read for the commonest range.
+- `1..3` is `1` and `2`, as in Rust and as SQL's `>= 1 AND < 3`. `1..=3` is `1`, `2` and `3`, as SQL's `BETWEEN 1 AND 3`.
+- `...` is no range; `a...b` is an error that says so. `...` spreads (see [array literals](types.md#array-literals)).
+- Why Rust's `..` and `..=`, not CoffeeScript's and Ruby's `..` and `...`:
+  - their `..` includes its end, which those used to Rust read as excluding it, and a range one item too long gives no error;
+  - `..=` says that it includes its end;
+  - the commonest range, which excludes it, is the shorter.
 - Both ends are `Int`s, evaluated once before the loop. The loop variable is a `const` `Int`.
 - A range can only appear, so far:
   - after `in`, of a `for`, a comprehension or a test (see [in](syntax.md#in));
   - as the index of an array or a `Binary` (see [Array](types.md#array)). Only an index takes one without a start or an end.
-- Ranges do not chain: `a...b...c` and `a..b...c` are errors.
+- Ranges do not chain: `a..b..c` and `a..=b..c` are errors.
+- `a..=` without an end is an error, as including no end means nothing.
 
 ### Postfix for
 

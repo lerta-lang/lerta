@@ -146,7 +146,7 @@ A signed type takes the rules of [`Int`](#int), an unsigned one those of [`Byte`
 ## Char
 
 ```lerta
-kana := (c: Char) -> c in 'ぁ'..'ゖ' then c + 0x60 else c
+kana := (c: Char) -> c in 'ぁ'..='ゖ' then c + 0x60 else c
 print [kana(c).to_string() for c in 'ひらがな'].join('')
 ```
 
@@ -339,8 +339,8 @@ These throw a `ValueError`:
 ### Indexing
 
 - `b.length` is the number of bytes.
-- `b[i]` is the byte at `i`, a `Byte`. An index outside `0 ... b.length` throws `index out of range`; `b.get(i)` gives nil instead.
-- `b[start...end]` copies the bytes from `start` up to, not including, `end` into a new `Binary`, as an [array's](#slices) does.
+- `b[i]` is the byte at `i`, a `Byte`. An index outside `0..b.length` throws `index out of range`; `b.get(i)` gives nil instead.
+- `b[start..end]` copies the bytes from `start` up to, not including, `end` into a new `Binary`, as an [array's](#slices) does.
 
 ### Joining
 
@@ -454,20 +454,20 @@ print xs[0] + xs.length
 
 - It makes an array of `n` copies of `value`, of the expected item type if there is one, otherwise of the value's type: `Array(n, false)`, `row: Float[] = Array(width, 0)`.
 - A negative `n` throws a `ValueError`.
-- Every item is the same value, so a value that changes and is shared is an error unless it is `nil`: a class object, an array, a map, an Iter, or an interface, union or optional value that may be one, or a struct, anonymous struct or tuple that may hold one. Make each item with a comprehension instead: `[[] for _ in 0...n]`.
+- Every item is the same value, so a value that changes and is shared is an error unless it is `nil`: a class object, an array, a map, an Iter, or an interface, union or optional value that may be one, or a struct, anonymous struct or tuple that may hold one. Make each item with a comprehension instead: `[[] for _ in 0..n]`.
 
 ### Indexing
 
 - `xs.length` is the number of items.
 - `xs[i]` reads an item and `xs[i] = value` replaces one; `+=` and so on work on items of the types they take.
-- An index outside `0 ... xs.length` throws `index out of range`.
+- An index outside `0..xs.length` throws `index out of range`.
 
 #### Slices
 
-- `xs[start...end]` copies the items from `start` up to, not including, `end` into a new array, sharing the same items.
-- `xs[start..end]` includes `end`.
+- `xs[start..end]` copies the items from `start` up to, not including, `end` into a new array, sharing the same items.
+- `xs[start..=end]` includes `end`.
 - It throws `slice out of range`, an `IndexError`, unless `0 <= start <= end <= xs.length`.
-- A range there may leave out its start, which is then 0, or its end, which is then the length: `xs[i..]` from `i` on, `xs[...n]` the first `n`, `xs[..n]` up to `n`.
+- A range there may leave out its start, which is then 0, or its end, which is then the length: `xs[i..]` from `i` on, `xs[..n]` the first `n`, `xs[..=n]` up to and including `n`.
 - One without an end is written `a..` alone: whether it includes its end means nothing, and `a...` before `]` would read as a [spread](#array-literals).
 - A `Binary` takes such an index too.
 
@@ -592,7 +592,7 @@ print 4 in primes
 ## Iter
 
 ```lerta
-squares := (x * x for x in 0...10 when x % 2 == 0)
+squares := (x * x for x in 0..10 when x % 2 == 0)
 print square for square in squares.take(3)
 shouts := ['hi', 'yo'].map((w) -> w + '!').to_array()
 ```

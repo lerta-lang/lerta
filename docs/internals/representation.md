@@ -83,9 +83,9 @@ What `std:builtins`, in the files of `std/builtins/`, cannot write in Lerta (see
 - A `Float`'s `to_float32` and a `Float32`'s `to_float` are an `fptrunc` and an `fpext`.
 - The checker resolves the name of such a method once, to a member of `BuiltinMember` (`compiler/checker/builtins.lerta`). Codegen generates it by a `case` on that member with no `else`, so that a member that codegen does not handle is a compile error.
 - **Slices.** An index by a range is no method, so that the program cannot call it by name:
-  - `b[start...end]` of a `Binary` is a call of the runtime's `lerta_binary_slice` (`emit_binary_slice`), which copies the bytes at once, as no Lerta code can;
-  - `xs[start...end]` of an array is a call of `lerta_array_slice` (`emit_array_slice`), which copies the items at once and retains them by kind, rather than pushing them one by one.
-  - A range without a start gives 0, and one without an end the length, which codegen reads. `a..b` gives `b + 1`, or the largest Int itself, which no length reaches, so that the runtime throws.
+  - `b[start..end]` of a `Binary` is a call of the runtime's `lerta_binary_slice` (`emit_binary_slice`), which copies the bytes at once, as no Lerta code can;
+  - `xs[start..end]` of an array is a call of `lerta_array_slice` (`emit_array_slice`), which copies the items at once and retains them by kind, rather than pushing them one by one.
+  - A range without a start gives 0, and one without an end the length, which codegen reads. `a..=b` gives `b + 1`, or the largest Int itself, which no length reaches, so that the runtime throws.
 - **Comparisons.** The builtin `equals` and `hash` of the types that `==` compares, and `compare` of the numbers, are the code of `==`, of the comparisons and of map keys (`compiler/codegen/equality.lerta`).
   - That code calls a class's or struct's own `equals`, `compare` and `hash` (`compiler/codegen/comparison_methods.lerta`).
   - It may run inside the runtime's map functions, so `lerta_check_comparison` makes a panic of an exception that one throws rather than passing it on.

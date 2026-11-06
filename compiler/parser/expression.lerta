@@ -250,6 +250,7 @@ parse_range := (tokens: TokenStream): Expression ->
   if at_spread(tokens)
     tokens.spread = tokens.peek().position()
     return start
+  reject_old_range tokens
   operator := tokens.next().kind
   # `a..`, which has no end: whether it includes it would mean nothing, and `a...` is a spread.
   if at_range_end(tokens)
@@ -262,6 +263,7 @@ parse_range := (tokens: TokenStream): Expression ->
 
 # `..b` or `..=b`.
 parse_range_without_start := (tokens: TokenStream) ->
+  reject_old_range tokens
   operator := tokens.next()
   end := parse_arithmetic(tokens, 0)
   reject_chained_range tokens
@@ -269,6 +271,11 @@ parse_range_without_start := (tokens: TokenStream) ->
 
 reject_chained_range := (tokens: TokenStream) ->
   tokens.fail_here 'ranges cannot be chained' if tokens.peek_continuation() in RANGE_OPERATORS
+
+# `a...b` or `...b`, which were ranges before `..`; `...` is left to spreads.
+reject_old_range := (tokens: TokenStream) ->
+  is_old_range := tokens.peek().kind == '...' and not at_spread(tokens)
+  tokens.fail_here "write a range with '..', or '..=' to include its end" if is_old_range
 
 at_range_end := (tokens: TokenStream) -> tokens.peek().kind in SPREAD_FOLLOWERS
 

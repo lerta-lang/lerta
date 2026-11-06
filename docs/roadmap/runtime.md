@@ -17,7 +17,7 @@ Each read or write of an array's item checks its index against the length (`lert
 
 A loop whose bounds already keep the index in range checks it again each time.
 
-- **Cost.** `bench/sieve` indexes `Array(n, false)` by `i` of `for i in 2...n` and by `j` of `while j < n`. It takes 0.21 s with the checks and 0.187 s with every check removed by hand, as long as Go's 0.188 s, which proves them in range itself.
+- **Cost.** `bench/sieve` indexes `Array(n, false)` by `i` of `for i in 2..n` and by `j` of `while j < n`. It takes 0.21 s with the checks and 0.187 s with every check removed by hand, as long as Go's 0.188 s, which proves them in range itself.
 - **Tried:**
   - Telling LLVM that the length is `n` right after `Array(n, v)`, as the compiler now does (see [internals](../internals/execution.md)), drops the comparison of `j` with the length, but not the branch on it, as LLVM cannot tell that `j` is not negative (below): it took 9% of the instructions off, and 1.6% of the time on x86-64 Linux, against Go's 0.23 s.
   - Checking the index against `n` itself, as the compiler could for an array that is only indexed and never passed or grown, took 1% off, where removing the checks took 8% (both against the same program built without ThinLTO). LLVM then drops the check of `i`, but not that of `j`: `j` starts at `i * i` and grows by `i` through checked operations, so LLVM cannot tell that it is not negative.

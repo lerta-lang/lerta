@@ -346,16 +346,16 @@ Besides:
 
 #### Range tests written with `in`
 
-- It writes two comparisons joined by `and` that test a value against a start and an end, `x >= a and x <= b` or `a <= x and x < b`, the second either way round, as `x in a..b` or `x in a...b`, after the `and`s before them in a chain.
+- It writes two comparisons joined by `and` that test a value against a start and an end, `x >= a and x <= b` or `a <= x and x < b`, the second either way round, as `x in a..=b` or `x in a..b`, after the `and`s before them in a chain.
 - Only where the value, written the same in both, and the end are names, `@`, fields of them or literals, which run no code, as `and` evaluates the end only where the first holds, and the value is a number or a `Char`.
 - Not in the places that [membership tests](#membership-tests-written-with-in) are not written in.
 
 #### Ranges written with fewer parts
 
-- It writes a range `a...(b + 1)` as `a..b` where `b` is an integer, as the ends of a range in a `for` or an index are. The range then no longer throws where `b + 1` would overflow.
+- It writes a range `a..(b + 1)` as `a..=b` where `b` is an integer, as the ends of a range in a `for` or an index are. The range then no longer throws where `b + 1` would overflow.
 - In an index, it leaves out:
   - a start `0`, but where no end follows;
-  - an end that is the length of what it indexes, `xs[i...xs.length]` written `xs[i..]`, where that is a name, `@` or a field of them, written the same.
+  - an end that is the length of what it indexes, `xs[i..xs.length]` written `xs[i..]`, where that is a name, `@` or a field of them, written the same.
 
 #### Emptiness tests written with `is_empty`
 

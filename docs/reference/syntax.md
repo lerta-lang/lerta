@@ -17,7 +17,7 @@
 
 - Decimal, with a fraction after `.`, an exponent after `e` or `E` with an optional sign, or both: `1.5`, `1e9`, `2.5E-3`.
 - `_` may separate digits in each part.
-- A `.` starts a fraction only before a digit or `_`. So `1.` is an error and `0...3` is a range (see [Float](types.md#float)), while `1._5`, and `0x1.5` after a hexadecimal one, are each one invalid number literal.
+- A `.` starts a fraction only before a digit or `_`. So `1.` is an error and `0..3` is a range (see [Float](types.md#float)), while `1._5`, and `0x1.5` after a hexadecimal one, are each one invalid number literal.
 - Only a decimal literal has an exponent, so `0xE+1` is an addition.
 
 ### Negative literals
@@ -274,7 +274,7 @@ From weakest to strongest:
 | prefix `not` | - |
 | comparisons: `==` `!=` `<` `<=` `>` `>=`, `is`, `as`, `in` | none |
 | `?` (nil coalescing) | right |
-| ranges `...` `..` | none |
+| ranges `..` `..=` | none |
 | `+` `-` `\|` `^` | left |
 | `*` `/` `%` `&` `<<` `>>` | left |
 | prefix `-` | - |
@@ -303,7 +303,7 @@ From weakest to strongest:
   - `x` is not optional unless `contains` takes nil.
   - An array literal `xs` may take its item type from `x`, as [Byte](types.md#byte) says when.
 - `x not in xs` is `not (x in xs)`.
-- `x in a..b` and `x in a...b` compare `x` with the ends: `c in 0x20..0x7e`, `c in 'a'..'z'`.
+- `x in a..b` and `x in a..=b` compare `x` with the ends: `c in 0x20..=0x7e`, `c in 'a'..='z'`.
   - `x` is evaluated first, and each of the three once.
   - The three take one type, as the operands of `<=` do.
   - `x` is a number or a `Char`, so far.

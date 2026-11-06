@@ -24,22 +24,22 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
 ### Ranges
 
 - **A value.** A range is a value of the builtin type `Range<T>`, holding `start`, `end` and `inclusive`.
-  - Unlike `Iter<T>`, it can be traversed any number of times, and stored and passed like any value, as to a query (`where(age: 20..30)`).
+  - Unlike `Iter<T>`, it can be traversed any number of times, and stored and passed like any value, as to a query (`where(age: 20..=30)`).
   - `T` is any [`Comparable`](../reference/builtins.md#equatable-comparable-and-hashable) type, as dates for a query.
-- **Membership.** `r.contains(x)` tells by comparisons whether `x` is in it, so that `in` and `not in` work through [Contains](../reference/builtins.md#contains): `c in 0x20..0x7e`.
+- **Membership.** `r.contains(x)` tells by comparisons whether `x` is in it, so that `in` and `not in` work through [Contains](../reference/builtins.md#contains): `c in 0x20..=0x7e`.
   - An `in` with a range written in it already compares in place, making no value, for numbers and `Char`s (see [the reference](../reference/syntax.md#in)); it then takes any `T`.
 - **Traversal.** Only a range of an integer type is [Iterable](../reference/builtins.md#iterable), as only it has a next item.
   - Its `iter` is the compiler's. Why: no bound names the integer types, and a generic body cannot take `1` as a `T` (see [objects](objects.md#open-questions)).
   - A `for` over a range written in it counts as it does now, making no value.
 - **Steps.** `by` and `reversed` after the end, with no parentheses, make a `Stride<T>` of the range rather than a `Range<T>`.
-  - `0...n by 2` is `0, 2, 4, ...` below `n`.
-  - `0...n reversed` is the same items in the other order, `n - 1` down to `0`, so the last item need not be worked out as with Python's `range(n - 1, -1, -1)`.
-  - Both may follow: `0...10 by 3 reversed` is `9, 6, 3, 0`.
+  - `0..n by 2` is `0, 2, 4, ...` below `n`.
+  - `0..n reversed` is the same items in the other order, `n - 1` down to `0`, so the last item need not be worked out as with Python's `range(n - 1, -1, -1)`.
+  - Both may follow: `0..10 by 3 reversed` is `9, 6, 3, 0`.
   - A step is positive.
   - A `Stride` is Iterable, with no `contains`.
   - Like `in` and `when`, `by` and `reversed` are not keywords.
   - Why a `Stride`, as Swift's `stride` makes no `Range`: a step matters only to traversal, and its type may differ from `T`, as a duration for dates; a second type parameter of `Stride` alone would give that later, so `Range<T>` stays as it is.
-  - Why not a method: `0...n.reversed()` reads as `n.reversed()`.
+  - Why not a method: `0..n.reversed()` reads as `n.reversed()`.
 
 ### Iterables
 

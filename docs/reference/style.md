@@ -80,14 +80,14 @@ In a literal, and in the lines of a `"""` literal but its interpolations:
 
 One space:
 
-- on each side of a binary operator: those of [operators](syntax.md#operators) but `...` and `..`, the words among them included;
+- on each side of a binary operator: those of [operators](syntax.md#operators) but `..` and `..=`, the words among them included;
 - on each side of `=` and the compound assignments (`+=`);
 - on each side of `->`, but after an opening bracket or at the start of a line (`(-> x)`);
 - after a comma, after every `:` and after `not`.
 
 None:
 
-- around the `...` of a range or a spread (`0...n`, `xs...`);
+- around the `..` or `..=` of a range or the `...` of a spread (`0..n`, `xs...`);
 - inside `()` and `[]`;
 - inside the `<>` of type parameters and arguments, or before one that follows a name or `extend` (`Map<K, V>`, `extend<K, V> Map<K, V>`), though the syntax allows a space there;
 - before the `[]` of an array type (`Int[]`);
@@ -162,9 +162,9 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 
 ### Ranges
 
-- Parenthesize an end that is an operation (`0...(n - 1)`) for readability. `...` and `..` bind weaker than arithmetic, so the parentheses do not change the meaning.
-- Write `a..b`, not `a...(b + 1)`, of integers.
-- Leave out the ends of an index that are its bounds: `xs[...n]`, not `xs[0...n]`, and `xs[i..]`, not `xs[i...xs.length]`.
+- Parenthesize an end that is an operation (`0..(n - 1)`) for readability. `..` and `..=` bind weaker than arithmetic, so the parentheses do not change the meaning.
+- Write `a..=b`, not `a..(b + 1)`, of integers.
+- Leave out the ends of an index that are its bounds: `xs[..n]`, not `xs[0..n]`, and `xs[i..]`, not `xs[i..xs.length]`.
 
 ### Cast fallbacks
 
@@ -190,7 +190,7 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 
 ### Range tests
 
-- Write `x in a..b`, not `x >= a and x <= b`, and `x in a...b`, not `x >= a and x < b`, where `x` and `b` run no code.
+- Write `x in a..=b`, not `x >= a and x <= b`, and `x in a..b`, not `x >= a and x < b`, where `x` and `b` run no code.
 
 ### Negated is tests
 
