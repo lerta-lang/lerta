@@ -12,7 +12,7 @@ import tokenize from './lexer/tokens'
 import lsp_command from './lsp/server'
 import parse from './parser/statement'
 import basename from './paths'
-import clean_cache from './runtime_cache'
+import cached_include_dir, clean_cache from './runtime_cache'
 import
   COMMAND_LINE_NAME, given_sources, read_entry_source, SOURCE_EXTENSION, STDIN_NAME
 from './source'
@@ -27,6 +27,7 @@ USAGE := """
                    [-- <arg>...]
          lerta fmt [--fix] <path>...
          lerta lsp
+         lerta cflags
          lerta clean
          lerta dump-tokens <source>
          lerta dump-ast <source>
@@ -159,6 +160,10 @@ fmt_command := (args: String[]) ->
   fail_usage() if paths.is_empty() or paths.any((path) -> not is_value(path))
   exit await format_command(paths, fix)
 
+cflags_command := (args: String[]) ->
+  fail_usage() unless args.is_empty()
+  print "-I#{await cached_include_dir()}"
+
 clean_command := (args: String[]) ->
   fail_usage() unless args.is_empty()
   print "removed #{path}" for path in await clean_cache()
@@ -180,6 +185,7 @@ try
     when 'run' then await run_command(args)
     when 'fmt' then await fmt_command(args)
     when 'lsp' then await lsp_command(args)
+    when 'cflags' then await cflags_command(args)
     when 'clean' then await clean_command(args)
     when 'dump-tokens' then await run_dump(args, dump_file_tokens)
     when 'dump-ast' then await run_dump(args, dump_file_ast)

@@ -121,10 +121,25 @@ missing_link_check := ->
     built := await run_command(compiler, ['build', source, 'missing/../twice.c', '-o', 'prog'], dir)
     expect_status 1, built.status
 
+# A linked C or Objective-C file includes the runtime's header without a flag of its own.
+header_check := (extension: String, flags: String[]) ->
+  name := "#{extension}#{flags.join('_')}"
+  Check name: "lerta build <source> <file#{extension}> #{flags.join(' ')} finds lerta.h", run: ->
+    return nil if extension == '.m' and platform != 'macos'
+    dir := new_cli_dir("extern-header-#{name}")
+    executable := "#{dir}/greeting#{host_executable_suffix}"
+    file := "#{source_dir}/greeting#{extension}"
+    args := ['build', "#{source_dir}/greeting.lerta", file, '-o', executable, flags...]
+    succeed 'build', await run_command(compiler, args, dir)
+    ran := await run_command(executable, [], dir)
+    [compare_text('stdout', "hello\n", ran.stdout_text())..., expect_success('run', ran)...]
+
 export checks: Check[]
 for extension in inputs
   checks.push link_check(extension, flags) for flags in optimizations
 checks.push objective_c_check(flags) for flags in optimizations
+for extension in ['.c', '.m']
+  checks.push header_check(extension, flags) for flags in optimizations
 checks.push split_linker_flags_check()
 checks.push objective_c_without_framework_check()
 checks.push objective_c_off_macos_check()

@@ -355,7 +355,7 @@ export extern lerta_unix_time as time: () -> Float
 ```
 
 - `extern <symbol> as <name>: <function type>` declares a C function by its C symbol, as `name` in the module. Without `as <name>`, its name is the symbol.
-- The function is of the runtime or of a file that `lerta build` links with the program (see [the compiler](compiler.md)).
+- The function is of the runtime or of a file that `lerta build` links with the program (see [the compiler](compiler.md)), which may include the runtime's header, `lerta.h` (see [`lerta cflags`](compiler.md#cflags)).
 - An extern is declared at the top level and can be exported like a function.
 - It is a function value only where a function type is expected (see [function values](#functions-as-values)).
 

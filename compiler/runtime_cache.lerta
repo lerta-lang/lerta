@@ -9,6 +9,7 @@ import build_flags, BuildKind from './clang_flags'
 import CompileError from './errors'
 import LIBUV_PATHS, platform_build, write_libuv_sources from './libuv'
 import PlatformBuild, runtime_c_names from './platform_description'
+import real_path_text from './loader'
 import basename, join from './paths'
 
 RUNTIME_PATHS := [path for path in EMBEDDED_PATHS when path.starts_with('runtime/')]
@@ -83,6 +84,29 @@ remove_abandoned_staging := (cache: String, name: String) ->
       # Another build may have removed it first, and one left in place only takes space.
       continue
 
+HEADER_PATH := 'runtime/lerta.h'
+INCLUDE_PREFIX := 'include-'
+
+# The absolute path of the directory that holds the runtime's header, for C files that a program
+# links with, written into the cache first if it does not have it (see
+# docs/reference/compiler.md#cflags).
+export cached_include_dir := ->
+  header := embedded_source(HEADER_PATH)!
+  dir := join(cache_dir(), "#{INCLUDE_PREFIX}#{texts_hash([header])}")
+  path := join(dir, basename(HEADER_PATH))
+  return real_path_text(dir) if is_file(path)
+  make_dir dir
+  # Written beside its place and renamed there, so that a build that runs meanwhile never reads a
+  # part of it. Another that renames its own there first wrote the same header; on Windows, renaming
+  # onto it fails while a build reads it.
+  staging_path := "#{path}#{STAGING_INFIX}#{process_id}"
+  await write_file(staging_path, header)
+  unless renamed(staging_path, path)
+    await remove_tree(staging_path)
+    failed := CompileError("cannot write the runtime's header into the cache: #{path}")
+    throw failed unless is_file(path)
+  real_path_text dir
+
 # What `clang --version` prints, or nil if clang fails.
 clang_version_text := ->
   ran := await run('clang', '--version', stdout: CAPTURE)
@@ -106,9 +130,9 @@ export cache_dir := ->
   dir
 
 # Removes what builds keep in the cache directory, if there is one: the compiled runtimes, their
-# staging directories and the linker's ThinLTO caches, of this compiler (see LTO_CACHE) or an
-# earlier one, by the names that builds give them, so that nothing else in a directory that
-# `$LERTA_CACHE_DIR` names goes. The paths removed, in the order of their names.
+# staging directories, the runtime's headers and the linker's ThinLTO caches, of this compiler (see
+# LTO_CACHE) or an earlier one, by the names that builds give them, so that nothing else in a
+# directory that `$LERTA_CACHE_DIR` names goes. The paths removed, in the order of their names.
 export clean_cache := (): Promise<String[]> ->
   dir := cache_path()
   return [] unless is_dir(dir)
@@ -126,7 +150,8 @@ export clean_cache := (): Promise<String[]> ->
   removed
 
 is_made_by_builds := (name: String) ->
-  name.starts_with('runtime-') or name == 'thinlto' or name.starts_with('thinlto-devirt-')
+  return true if name == 'thinlto'
+  ['runtime-', 'thinlto-devirt-', INCLUDE_PREFIX].any((prefix) -> name.starts_with(prefix))
 
 default_cache_dir := -> platform == 'windows' then windows_cache_dir() else posix_cache_dir()
 

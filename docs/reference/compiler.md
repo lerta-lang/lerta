@@ -28,6 +28,7 @@
 | [`run`](#run) | Builds and runs a program. |
 | [`fmt`](#fmt) | Checks or fixes the [style](style.md). |
 | [`lsp`](#lsp) | Runs a language server. |
+| [`cflags`](#cflags) | Prints the flag that finds the runtime's header. |
 | [`clean`](#clean) | Empties the [cache](#cache). |
 | [`dump-tokens`, `dump-ast`, `dump-checked`, `dump-llvm`](#dumps) | Print what the compiler makes of a source. |
 
@@ -73,6 +74,7 @@ Usage errors:
 | Archives | `.a`, `.lib` |
 
 - With `-O`, clang compiles `.c`, `.m` and `.ll` files with `-O2 -flto=thin` as it does the program. Objects and archives built without it link too.
+- clang compiles `.c` and `.m` files with the flag that [`cflags`](#cflags) prints, so that they may include `lerta.h`.
 - clang compiles `.m` files without ARC, as it is given no `-fobjc-arc`. The frameworks they use are linked with [`--linker-flag`](#--linker-flag-flag), as `--linker-flag -framework,AVFoundation`.
 - A `.m` file for a target other than macOS is not compiled: the build prints `'<file>' is Objective-C, which links only for macOS` and exits with code 1.
 
@@ -497,6 +499,18 @@ A language server, of the [Language Server Protocol](https://microsoft.github.io
 | A header without a length | Ends the server with status 1, as the next message cannot be found |
 | `exit` | Ends the server with 0 after `shutdown`, and with 1 otherwise |
 
+### cflags
+
+```
+lerta cflags
+```
+
+- Prints `-I<dir>`, the flag that has clang find `lerta.h`, the runtime's header, which declares what C files linked with a program may use, as `LertaString`: `clang -c $(lerta cflags) file.c`.
+- `<dir>` is an absolute path, which is split by the shell where it holds a space.
+- It writes the header into the [cache](#cache) first if it is not there, in `include-<hash>`, the hash being of the header, in 16 hex digits as a runtime's (see [Names](#names)).
+- It takes no arguments.
+- A failure to find the directory, as without `HOME`, is reported as by a build.
+
 ### clean
 
 ```
@@ -505,6 +519,7 @@ lerta clean
 
 - Removes what builds keep in the [cache](#cache), in the directory that a build would take, of this compiler or an earlier one:
   - each entry whose name starts with `runtime-`: the compiled runtimes and their staging directories;
+  - each entry whose name starts with `include-`: the runtime's headers that [`cflags`](#cflags) writes;
   - `thinlto`, and each entry whose name starts with `thinlto-devirt-`: the linker's ThinLTO caches.
 - It prints `removed <path>` for each, in the order of their names, but for one that a build renames or removes meanwhile, as it does with its staging directory.
 - It leaves anything else that the directory holds, as one that `$LERTA_CACHE_DIR` names may hold more.
@@ -563,7 +578,7 @@ lerta clean
 
 - The runtime, with [libuv](../internals/platforms.md#platforms), whose sources the compiler carries, is compiled once for each kind of build and kept in a cache. A build only links it, with the system's libraries that libuv needs.
 - An executable holds Lerta's runtime and standard modules, and libuv: given to others, it goes with the notice of whichever of Lerta's licenses its distributor follows, `LICENSE-MIT` or `LICENSE-APACHE`, and libuv's, `third_party/libuv/LICENSE`.
-- An optimized build keeps what ThinLTO optimizes there too.
+- A build that links a `.c` or `.m` file keeps the runtime's header there too (see [`cflags`](#cflags)), and an optimized build what ThinLTO optimizes.
 
 ### Where
 

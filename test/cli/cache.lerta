@@ -11,7 +11,7 @@ import
   CliRun, cli_work_dir, expect_left, expect_success, succeed, host_platform, host_triple,
   new_cli_dir, new_cli_dirs, run_command, run_in_dir, run_in_new_dir
 from '../lib/cli'
-import is_dir, list_dir, make_dir, remove_tree, stat, write_file from 'std:io'
+import is_dir, list_dir, make_dir, read_file, real_path, remove_tree, stat, write_file from 'std:io'
 import process_id from 'std:process'
 import runtime_c_names from '../../compiler/platform_description'
 
@@ -414,7 +414,7 @@ texts_hash_check := -> Check(name: 'a runtime is named by a 64-bit hash of its t
 # `lerta clean` removes what builds keep in the cache, by their names, and leaves anything else
 # there; without a cache directory, it removes nothing and makes none.
 clean_check := ->
-  Check name: 'lerta clean removes the runtimes and the ThinLTO caches only', run: ->
+  Check name: 'lerta clean removes the runtimes, the headers and the ThinLTO caches only', run: ->
     cache := new_cli_dir('cache-clean')
     made :=
       LTO_CACHE
@@ -422,6 +422,7 @@ clean_check := ->
       'thinlto'
       'thinlto-devirt-0'
       'runtime-debug-x'
+      'include-x'
     make_dir "#{cache}/#{name}" for name in made
     await write_file("#{cache}/#{LTO_CACHE}/entry", b'cached')
     await write_file("#{cache}/runtime-file", b'cached')
@@ -443,7 +444,39 @@ clean_check := ->
       reason_unless(not is_dir(missing), 'clean made the cache directory')...
     ]
 
+# `lerta cflags` writes the runtime's header into the cache, once, and prints the flag that finds
+# it, by an absolute path even for a cache given by a relative one, with which clang compiles a C
+# file that includes it.
+cflags_check := ->
+  Check name: 'lerta cflags writes lerta.h into the cache and prints its directory', run: ->
+    dir := new_cli_dir('cflags')
+    env := { 'LERTA_CACHE_DIR': 'cache' }
+    first := await run_command(compiler, ['cflags'], dir, b'', env)
+    second := await run_command(compiler, ['cflags'], dir, b'', env)
+    reasons := [expect_success('cflags', first)..., expect_success('second cflags', second)...]
+    return reasons unless reasons.is_empty()
+    entries := list_dir("#{dir}/cache")
+    return ["expected one entry in the cache, found: #{entries}"] if entries.length != 1
+    name := entries[0]
+    include_dir := "#{real_path(dir).text()!}/cache/#{name}"
+    hash := name.without_prefix('include-') ? ''
+    header := await read_file("#{include_dir}/lerta.h")
+    c_source := "#{root_dir}/tests/extern/lib/greeting.c"
+    compiled := await run_command('clang', ['-fsyntax-only', "-I#{include_dir}", c_source], dir)
+    [
+      compare_text('stdout', "-I#{include_dir}\n", first.stdout_text())...
+      reason_unless(
+        hash.binary.length == 16 and hash.all(is_hex_digit)
+        "the header's directory #{name} has an invalid hash"
+      )...
+      expect_left("the files of the header's directory", ['lerta.h'], list_dir(include_dir))...
+      reason_unless(header == await read_file("#{root_dir}/runtime/lerta.h"), 'lerta.h differs')...
+      compare_text('second stdout', first.stdout_text(), second.stdout_text())...
+      expect_success('clang', compiled)...
+    ]
+
 export checks :=
+  cflags_check()
   lto_link_flags_check()
   texts_hash_check()
   clean_check()
