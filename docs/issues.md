@@ -37,3 +37,7 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 ## `if c then a else b` fails as a missing block
 
 `c then a else b` is a value, so `if c then 1 else 2` parses as an `if` whose condition is `c then 1 else 2` (`parse_if` in `compiler/parser/statement.lerta`), and fails with `expected indented block, found end of block`, which does not say that the value is written without `if`. Fix: where the condition of an `if`, `unless`, `while` or `until` is a `then` value and no block follows, fail at the keyword with a message that does.
+
+## The main run loop stays off for CoreFoundation loaded after the first wait
+
+`uses_run_loop` (`runtime/loop.c`) looks for CoreFoundation once, at the program's first wait (see [the main run loop](internals/iteration.md#the-main-run-loop)). A program that waits, then loads a framework with `dlopen` and has it post a block to the main dispatch queue, never runs the block. Fix: look again at later waits while it is not found, if that costs a waiting program little.

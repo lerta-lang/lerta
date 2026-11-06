@@ -88,6 +88,7 @@ Usage errors:
 - With `-O`, clang compiles `.c`, `.m` and `.ll` files with `-O2 -flto=thin` as it does the program. Objects and archives built without it link too.
 - clang compiles `.c` and `.m` files with the flag that [`cflags`](#cflags) prints, so that they may include `lerta.h`.
 - clang compiles `.m` files without ARC, as it is given no `-fobjc-arc`. The frameworks they use are linked with [`--linker-flag`](#--linker-flag-flag), as `--linker-flag -framework,AVFoundation`.
+- While a program that links Apple's frameworks, which load CoreFoundation, waits, as in a `sleep`, the main thread's run loop runs, so that blocks on the main dispatch queue, timers, delegates and notifications reach it, on the main thread. The program still ends when its own work does, whatever the run loop has left.
 - A `.m` file for a target other than macOS is not compiled: the build prints `'<file>' is Objective-C, which links only for macOS` and exits with code 1.
 
 #### `-o <output>`

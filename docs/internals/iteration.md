@@ -165,6 +165,13 @@ Fusion generates the loop's source in place (`compiler/codegen/fusion.lerta`), s
   - work on libuv's thread pool (`lerta_loop_work`): the writes out of stdout and stderr (see [output](platforms.md#output)) and the files (see [files](platforms.md#files)).
   - stdin is read on a thread of its own (see [stdin](platforms.md#stdin)).
 
+### The main run loop
+
+- On macOS, a program that has CoreFoundation loaded, as the frameworks that a linked `.m` file uses load it, waits in the main thread's run loop instead of in libuv, so that what Apple's APIs leave to that run loop runs on the main thread while the program waits: blocks on the main dispatch queue, timers, delegates and notifications.
+  - libuv's descriptor, its kqueue, is a source of the run loop, which waits until it is ready or libuv's next timer is due; libuv then runs once without waiting.
+  - Why not always: linking CoreFoundation costs each program about as much at its start as the rest of it, so the runtime calls it through `dlsym`, once it finds it loaded at the first wait.
+- The program still ends when libuv has nothing left to wait for, whatever the run loop has left.
+
 ### Cancel
 
 - **Links.** `await` gives the runtime the body's own `Promise` too (`lerta_promise_wait_in`), which records the promise it awaits (`awaiting`).

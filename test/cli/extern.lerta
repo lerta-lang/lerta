@@ -76,6 +76,23 @@ objective_c_without_framework_check := ->
       reason_unless(built.result.stderr_text().contains(symbol), "no '#{symbol}' on stderr")...
     ]
 
+# What Apple's frameworks have the main run loop run, a block and a timer, runs during a sleep.
+main_run_loop_check := (optimization: String[]) ->
+  name := "lerta run <source> <file.m> #{optimization.join(' ')} runs the main run loop"
+  Check name, run: ->
+    return nil unless platform == 'macos'
+    dir := new_cli_dir("extern-run-loop#{optimization.join('_')}")
+    args := [
+      'run'
+      "#{source_dir}/main_run_loop.lerta"
+      "#{source_dir}/main_run_loop.m"
+      '--linker-flag'
+      '-framework,CoreFoundation'
+      optimization...
+    ]
+    ran := await run_command(compiler, args, dir)
+    [compare_text('stdout', "3\n", ran.stdout_text())..., expect_success('run', ran)...]
+
 objective_c_off_macos_check := ->
   Check name: 'lerta build rejects an Objective-C file for a target other than macOS', run: ->
     objective_c := "#{source_dir}/twice.m"
@@ -140,6 +157,7 @@ for extension in inputs
 checks.push objective_c_check(flags) for flags in optimizations
 for extension in ['.c', '.m']
   checks.push header_check(extension, flags) for flags in optimizations
+checks.push main_run_loop_check(flags) for flags in optimizations
 checks.push split_linker_flags_check()
 checks.push objective_c_without_framework_check()
 checks.push objective_c_off_macos_check()
