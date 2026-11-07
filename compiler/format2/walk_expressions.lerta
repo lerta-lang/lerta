@@ -11,7 +11,8 @@ import FUNCTION_BODIES from '../format/rules'
 import
   COMPARISON, is_block_call, is_block_literal, is_simple, level_of, literal_under_members
 from './forms'
-import CodeGap, OperationShape, ValueKind, ValueShape from './shapes'
+import starts_command from '../format/print_statement'
+import CodeGap, ListShape, OperationShape, ValueKind, ValueShape from './shapes'
 import INSIDE, NONE, ONE, unhandled, Walker from './walk'
 import ListItems from './walk_lists'
 import './walk_statements'
@@ -30,9 +31,7 @@ extend Walker
     kind := @value_kind(after, node, in_block) ? return walk(ONE)
     outer := @shapes
     @shapes = []
-    @bracketless_call = first if kind == BLOCK_CALL
     walk ONE
-    @bracketless_call = nil
     shape := ValueShape(first, kind, last: @at - 1, shapes: @shapes)
     @shapes = outer
     @shapes.push shape
@@ -193,33 +192,57 @@ extend Walker
       @take '.', NONE
     @take IDENTIFIER, NONE
 
-  # A call with parentheses, or without them, whose arguments follow a space on its line.
+  # A call with parentheses, or without them, whose arguments follow a space on its line or are in a
+  # block below it.
   call := (node: Call, before: CodeGap) ->
     unhandled() unless node.type_args.is_empty()
-    start := @at
-    bracketless := @bracketless_call == start
     @chain node.callee, before
-    bare := not @at_kind('(') or @code[@at].spaced
     { args, named_args } := node
     values := [args..., [named.value for named in named_args]...]
-    walk := (i: Int, gap: CodeGap) ->
-      if i < args.length
-        @element args[i], gap
-      else
-        @named named_args[i - args.length], gap
-    if bare
-      # Arguments in a block below the callee are not walked yet.
-      unhandled() if @at in @line_starts
-      @list values.length, ONE, walk, false
+    items := ListItems
+      count: values.length
+      walk: (i, gap) ->
+        if i < args.length
+          @element args[i], gap
+        else
+          @named named_args[i - args.length], gap
+      simple: (i) -> is_simple(values[i])
+      function_last: values.last() is FunctionLiteral
+    if @at_kind('(') and not @code[@at].spaced
+      @bracketed '(', NONE, ')', NONE, items
+      args := @shapes.pop() as ListShape!
+      unbracketable := is_block_call(node) and starts_command(node) and @unbracketable(args)
+      @shapes.push ListShape(args..., unbracketable)
     else
-      items := ListItems
-        walk
-        count: values.length
-        simple: (i) -> is_simple(values[i])
-        function_last: values.last() is FunctionLiteral
-      @bracketed '(', NONE, ')', NONE, items, bracketless
-    # Told once the calls in its arguments are walked.
-    @bracketless_bare = bare if bracketless
+      @unbracketed items
+
+  # Whether no comment is among the arguments in parentheses, none but the last spans lines, and
+  # the first is not `- x`, which would be a subtraction from the callee without them.
+  unbracketable := (args: ListShape) ->
+    { items, open, close } := args
+    leading := [i for i in 0..(items.length - 1)]
+    on_one_line := leading.all((i) -> @code[items[i]].line == @code[items[i + 1] - 1].end_line)
+    spaced_minus := @code[items[0]].kind == '-' and @code[items[0] + 1].spaced
+    on_one_line and not spaced_minus and not @has_comments(open, close)
+
+  # The arguments of a call without parentheses (see ListShape), separated by line ends only in a
+  # block below the callee.
+  unbracketed := (items: ListItems) ->
+    open := @at - 1
+    outer := @shapes
+    @shapes = []
+    walked := @list(items.count, ONE, items.walk, @at in @line_starts)
+    shape := ListShape
+      open
+      bracketed: false
+      close: @at
+      items: walked.starts
+      simple: [i for i in 0..items.count].all(items.simple)
+      commas: walked.commas
+      function_last: items.function_last
+      shapes: @shapes
+    @shapes = outer
+    @shapes.push shape
 
   named := (named: NamedValue, before: CodeGap) ->
     @take IDENTIFIER, before

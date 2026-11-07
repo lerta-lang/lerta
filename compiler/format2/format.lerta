@@ -20,6 +20,7 @@ import break_lines from './lines'
 import rewrites_of from './rewrites'
 import CodeGap, LineStart, Spaces, StatementShape from './shapes'
 import Gap, literal_lines, source_tokens, SourceTokens, TextToken from './text'
+import Tokens from './tokens'
 import walk, Walked from './walk'
 
 # A place where the source differs from the style, at its position in the source.
@@ -47,11 +48,13 @@ struct Parsed
   statements: Statement[]
   text: SourceTokens
 
-# The source laid out, what differs from it, but the stranded comments, and the statements walked.
+# The source laid out, what differs from it, but the stranded comments, the edits of the rewrites
+# that its lines ask for, and the statements walked.
 struct LaidOut
   text: String
   findings: Finding[]
   stranded: Finding[]
+  edits: Edit[]
   statements: StatementShape[]
   skipped: Set<Int>
 
@@ -61,7 +64,7 @@ export format_source := (source: String, path: String) ->
   return Formatted(text: source, findings: []) if is_off_throughout(source)
   parsed := parsed_source(source, path)
   laid := laid_out(parsed)
-  edits := rewrites(parsed)
+  edits := [rewrites(parsed)..., laid.edits...]
   held := held_statements(parsed.text, laid, edits)
   is_held := (at: Position) -> held.any((head) -> head.holds(at))
   layout := [finding for finding in laid.findings when not is_held(finding.at)]
@@ -69,12 +72,7 @@ export format_source := (source: String, path: String) ->
   # A `;` that a rewrite takes out is a gap that the layout decides too.
   found := distinct([rewritten..., layout..., laid.stranded...])
   sorted := found.sorted((a, b) -> a.at.compare(b.at))
-  text :=
-    if applicable(edits).is_empty()
-      checked_layout(laid.text, parsed, path).source
-    else
-      rewritten_text parsed, path, edits
-  Formatted text, findings: sorted
+  Formatted text: rewritten_text(parsed, laid, path), findings: sorted
 
 distinct := (findings: Finding[]) ->
   seen: Set<String>
@@ -98,13 +96,16 @@ rewrites := (parsed: Parsed) ->
 laid_out := (parsed: Parsed) ->
   { source, lexed, statements, text } := parsed
   walked := walk(statements, text, kept_lines(source, lexed))
-  break_lines walked, text
+  # The walk skips the statements kept as they are written, which the lines leave alone.
+  tokens := Tokens(source, text, comments: lexed.comments, kept: Set())
+  edits := break_lines(walked, text, tokens)
   layout := lay_out(text, walked)
   { decisions, texts } := layout
   stranded := [stranded_finding(text, index) for index in walked.stranded]
   found := [findings(text.gaps, decisions)..., token_findings(text.tokens, texts)...]
   LaidOut
     stranded
+    edits
     text: render(texts, decisions)
     findings: found
     statements: walked.statements
@@ -147,41 +148,37 @@ TREE_CHANGES := [BINARY_LITERALS, DOUBLE_NEGATIONS, ELSE_NIL, EMPTY_INITIAL_VALU
 # Only the rewrites of the source itself are reported: one that a round enables, as `b'...'` for the
 # `b"..."` that `"...".binary` is written as, shows once the text written is formatted again.
 # The source with the rewrites applied, round after round, as one may find another in what an
-# earlier one wrote, and laid out. Each round checks that the rewrites that keep the syntax tree do,
-# and the layout that it keeps the tree of the source rewritten. A `;` goes last, once the layout
-# has kept no statement on a line that holds one (see Code kept as written): the layout puts the
-# statement after it on a line of its own where it decides where the statement starts, and its
-# rewrite elsewhere.
-rewritten_text := (parsed: Parsed, path: String, first_edits: Edit[]) ->
+# earlier one wrote, or in the lines that the layout between them decides, and laid out. Each round
+# checks that the rewrites that keep the syntax tree do, and the layout that it keeps the tree of
+# the source rewritten. A `;` goes last, once the layout has kept no statement on a line that holds
+# one (see Code kept as written): the layout puts the statement after it on a line of its own where
+# it decides where the statement starts, and its rewrite elsewhere.
+rewritten_text := (parsed: Parsed, first_laid: LaidOut, path: String) ->
   var current = parsed
-  var edits = first_edits
-  # Whether `current` is laid out: the layout may join the lines of brackets that a rewrite leaves
-  # as long as they span lines, which is then found again.
-  var is_laid = false
-  for _ in 0..MAX_ROUNDS
+  for round in 0..MAX_ROUNDS
+    laid := round == 0 then first_laid else laid_out(current)
+    edits := [rewrites(current)..., laid.edits...]
     chosen := applicable([edit for edit in edits when edit.rule != SEMICOLONS])
-    if chosen.is_empty()
-      break if is_laid
-      current = checked_layout(laid_out(current).text, current, path)
-      is_laid = true
-    else
+    if not chosen.is_empty()
       changing := [edit for edit in chosen when edit.rule in TREE_CHANGES]
       expected := written_program(applied(current.source, changing), path, 'its rewrites')
       current = written_program(applied(current.source, chosen), path, 'its rewrites')
       check_same current, expected, path, 'its rewrites'
-      is_laid = false
-    edits = rewrites(current)
-  laid := is_laid then current else checked_layout(laid_out(current).text, current, path)
-  separators := applicable([edit for edit in rewrites(laid) when edit.rule == SEMICOLONS])
-  return laid.source if separators.is_empty()
-  separated := written_program(applied(laid.source, separators), path, 'its rewrites')
-  check_same separated, laid, path, 'its rewrites'
+    else if laid.text != current.source
+      current = checked_layout(laid.text, current, path)
+    else
+      break
+  separators := applicable([edit for edit in rewrites(current) when edit.rule == SEMICOLONS])
+  return current.source if separators.is_empty()
+  separated := written_program(applied(current.source, separators), path, 'its rewrites')
+  check_same separated, current, path, 'its rewrites'
   separated.source
 
 # The rounds that the rewrites and the layouts between them take at most: one for each that another
-# enables, as `"..."` of `"...".binary` is written `'...'` once it is `b"..."`. What is left after
-# the last is reported once the text written is formatted again.
-MAX_ROUNDS := 8
+# enables, as `"..."` of `"...".binary` is written `'...'` once it is `b"..."`, or that a layout
+# does, as the arguments of a call that its parentheses no longer hold go in a block below it. What
+# is left after the last is reported once the text written is formatted again.
+MAX_ROUNDS := 32
 
 # The program laid out, which must be that of the source.
 checked_layout := (text: String, source: Parsed, path: String) ->

@@ -36,10 +36,13 @@ export struct BlockShape
   # `else` (see Branches).
   joins_if := default false
 
-# A list in brackets, from `open` to `close`, whose items start at `items` (see Long lists).
+# A list in brackets, from `open` to `close`, whose items start at `items` (see Long lists); or the
+# arguments of a call without parentheses, after its callee, which ends at `open`, up to `close`,
+# the token after them.
 export struct ListShape
   open: Int
   close: Int
+  bracketed: Bool
   items: Int[]
   # Whether every item is simple, sharing a line with others where the list breaks.
   simple: Bool
@@ -48,10 +51,11 @@ export struct ListShape
   commas: Bool?
   # Whether the last item is a function, whose body may end the list's line inside the brackets.
   function_last: Bool
-  # Whether the list is the arguments of a call that would take them in a block below its callee
-  # where they break (see Long lists), which the walk leaves as written.
-  bracketless: Bool
   shapes: Shape[]
+  # Whether it is the arguments of a call that could take them without its parentheses (see Calls
+  # without parentheses): none starts as an operand that would continue the callee, none follows a
+  # comment, and none but the last spans lines.
+  unbracketable := default false
 
 # A chain of binary operations of one level, from `first` up to `last`, with the first token of each
 # operand after the first, before which it breaks (see Long operations).
@@ -69,8 +73,8 @@ export enum ValueKind
   # A literal, with members after it or not, that goes in a block without brackets if it does not
   # fit on its line, which the walk leaves as written (see Multi-line literals).
   LITERAL_BLOCK
-  # A call that takes its arguments in a block below it if it does not fit on its line or on the
-  # next, which the walk leaves as written.
+  # A call that takes its arguments in parentheses on its line or on the next, and otherwise in a
+  # block below it (see Calls without parentheses), whose arguments are the last of its shapes.
   BLOCK_CALL
   # A two-way value, `c then a else b`, which is an `if` if it fits neither on its line nor on the
   # next (see Branches), a rewrite that the walk leaves as written.
@@ -86,16 +90,9 @@ export struct ValueShape
   kind: ValueKind
   shapes: Shape[]
 
-# A call that is a statement, from `first` up to `last`, whose callee could take its arguments
-# without parentheses or in a block (see Calls without parentheses), which the walk leaves as
-# written where they do not fit on the line.
+# A call that is a statement, whose callee could take its arguments without parentheses (see Calls
+# without parentheses), which are the last of its shapes.
 export struct CallShape
-  first: Int
-  last: Int
-  # Whether it is written without parentheses, and its last argument is a function, whose body
-  # decides its own lines.
-  without_parentheses: Bool
-  function_last: Bool
   shapes: Shape[]
 
 # The body of a function after `->`, or of an arm after `then` or `else`, at `head`: on its line, or

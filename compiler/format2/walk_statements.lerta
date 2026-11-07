@@ -1,8 +1,8 @@
 # The walk of statements and blocks (see walk.lerta).
 import
   Assignment, Binding, Call, Case, CaseArm, Condition, Declaration, EnumDeclaration, Extend, Extern,
-  For, FunctionLiteral, If, Import, InterfaceDeclaration, Intrinsic, Pass, Statement, TypeAlias,
-  TypeDeclaration, UnaryOperation, While
+  For, If, Import, InterfaceDeclaration, Intrinsic, Pass, Statement, TypeAlias, TypeDeclaration,
+  UnaryOperation, While
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import BRANCHES, StyleRule from '../format/rules'
@@ -163,19 +163,10 @@ extend Walker
   # CallShape).
   call_statement := (node: Call, before: CodeGap) ->
     return @expression(node, before) unless is_block_call(node)
-    first := @at
     outer := @shapes
     @shapes = []
-    @bracketless_call = first
     @expression node, before
-    @bracketless_call = nil
-    last_arg := node.named_args.is_empty() then node.args.last()
-    shape := CallShape
-      first
-      last: @at - 1
-      without_parentheses: @bracketless_bare
-      function_last: last_arg is FunctionLiteral
-      shapes: @shapes
+    shape := CallShape(shapes: @shapes)
     @shapes = outer
     @shapes.push shape
 
@@ -186,8 +177,7 @@ extend Walker
     if start in @line_starts
       block := @block(statements, @depth + 1, head)
       one := statements.length == 1 and block.statements.length == 1
-      inline := one and is_inline(statements[0]) and not is_bare_call(block.statements[0])
-      joinable := inline and not @has_comments(head, @at)
+      joinable := one and is_inline(statements[0]) and not @has_comments(head, @at)
       @close head, true
       return BodyShape(head, block, joinable, rule)
     unhandled() if statements.length != 1
@@ -248,9 +238,3 @@ extend Walker
       patterns: walked.starts
       breakable: has_subject
       commas: walked.commas
-
-# Whether the statement is a call without parentheses, which the line of `->` or `then` cannot
-# hold (see Calls without parentheses).
-is_bare_call := (statement: StatementShape) ->
-  call := statement.shapes.first() as CallShape ? return false
-  call.without_parentheses
