@@ -5,6 +5,7 @@
 # other targets, each where test-targets.llit says, and `build test-target <target>` those of one
 # here (see build/targets). `build embed <output> <path>...` writes the module that embeds the
 # files, as the build writes build/embedded.lerta, for the tests of it.
+import parse_args, parse_command from 'std:args'
 import is_dir, remove_tree, stat from 'std:io'
 import argv, exit from 'std:process'
 import
@@ -15,20 +16,57 @@ import write_embedded from './build/embed'
 import BuildError, call, captured, command_line_batches, step from './build/steps'
 import test_target, test_targets from './build/targets'
 
-USAGE :=
-  'usage: build <goal> [--target <target>] | build test-targets [<target>...]'
-  'build test-target <target> | build embed <output> <path>...'
-.join(' | ')
+# The goals, as the Makefile names them, and the commands of the other targets' tests and of the
+# embedded module.
+enum Command
+  all
+  'bin/lerta'
+  'bin/test'
+  test
+  test_bootstrap
+  seed
+  check
+  bench
+  bench_http
+  site
+  site_serve
+  test_targets
+  test_target
+  embed
 
-struct Arguments
-  goal: String
+COMMAND_SPEC :=
+  all: { help: 'build the compiler, for the target if given' }
+  test: { help: 'run all the tests' }
+  test_bootstrap: { help: 'check that the compiler builds itself' }
+  seed: { help: 'write the seed anew' }
+  check: { help: 'check the style' }
+  bench: { help: 'run the benchmarks' }
+  bench_http: { help: 'run the benchmarks of std:http' }
+  site: { help: 'write the website' }
+  site_serve: { help: 'write the website and serve it' }
+  test_targets: { help: 'run the tests of the targets that test-targets.llit names' }
+  test_target: { help: 'run the tests of the target here' }
+  embed: { help: 'write the module that embeds the files' }
+
+struct Goal
   target: String?
 
-parse_arguments := ->
-  throw BuildError(message: USAGE, code: 2) if argv.is_empty()
-  return Arguments(goal: argv[0]) if argv.length == 1
-  throw BuildError(message: USAGE, code: 2) if argv.length != 3 or argv[1] != '--target'
-  Arguments goal: argv[0], target: argv[2]
+GOAL_SPEC :=
+  target: { help: 'the target, for all and test-bootstrap; the others but test and seed ignore it' }
+
+struct Targets
+  targets: String[] = default []
+
+TARGETS_SPEC := { targets: { positional: true, value: 'target' } }
+
+struct Target
+  target: String
+
+struct Embed
+  output: String
+  paths: String[] = default []
+
+EMBED_SPEC := { output: { positional: true }, paths: { positional: true, value: 'path' } }
 
 # Every suite runs even if one before it fails. stage2 is built first, as the leak checks run it.
 # Both run under nice, as check does, so that the machine stays usable.
@@ -73,38 +111,45 @@ run_program := (source: String, args: String...) ->
 # target given by mistake cannot change it.
 HOST_ONLY := ['test', 'seed']
 
-run_goal := (goal: String, target: String?) ->
-  if target != nil and goal in HOST_ONLY
-    hint := goal == 'seed' then '' else ': run bin/test --target <target>'
-    throw BuildError(message: "make #{goal} does not take TARGET#{hint}", code: 2)
-  bootstrap := bootstrap_for(target)
-  case goal
-    when 'all' then await make_compiler(bootstrap)
-    when 'bin/lerta' then await make_host_compiler()
-    when 'bin/test' then await make_harness()
-    when 'test-bootstrap' then await test_bootstrap(bootstrap)
-    when 'seed' then await make_seed()
-    when 'test' then await test()
-    when 'check' then await check()
-    when 'bench' then await run_program('bench/run.lerta')
-    when 'bench-http' then await run_program('bench/http/run.lerta')
-    when 'site' then await site()
-    when 'site-serve'
-      await site()
-      await run_program('site/serve.lerta', '--', 'build/site')
-    else throw BuildError(message: "no goal #{goal}: #{USAGE}", code: 2)
+# The bootstrap of the target that the goal's arguments give, of the host if none.
+goal_bootstrap := (args: String[], name: String) ->
+  { target } := parse_args<Goal>(args, GOAL_SPEC, name)
+  if target != nil and name in HOST_ONLY
+    hint := name == 'seed' then '' else ': run bin/test --target <target>'
+    throw BuildError(message: "make #{name} does not take TARGET#{hint}", code: 2)
+  bootstrap_for target
 
 try
-  if argv.length >= 2 and argv[0] == 'embed'
-    await write_embedded(argv[1], argv[2..])
-  else if argv.length >= 1 and argv[0] == 'test-targets'
-    exit await test_targets(argv[1..])
-  else if argv.length >= 1 and argv[0] == 'test-target'
-    throw BuildError(message: USAGE, code: 2) if argv.length != 2
-    exit await test_target(argv[1])
-  else
-    { goal, target } := parse_arguments()
-    await run_goal(goal, target)
+  (command, args) := parse_command<Command>(argv, COMMAND_SPEC)
+  # As parse_command names the command.
+  name := command.to_string().replace('_', '-')
+  # A goal reads its arguments before it does anything, though most ignore the target.
+  is_goal := command not in [Command.embed, Command.test_targets, Command.test_target]
+  bootstrap := is_goal then goal_bootstrap(args, name)
+  # A member is qualified where a function of its name, which runs it, takes the name.
+  case command
+    when all then await make_compiler(bootstrap!)
+    when 'bin/lerta' then await make_host_compiler()
+    when 'bin/test' then await make_harness()
+    when Command.test_bootstrap then await test_bootstrap(bootstrap!)
+    when seed then await make_seed()
+    when Command.test then await test()
+    when Command.check then await check()
+    when bench then await run_program('bench/run.lerta')
+    when bench_http then await run_program('bench/http/run.lerta')
+    when Command.site then await site()
+    when site_serve
+      await site()
+      await run_program('site/serve.lerta', '--', 'build/site')
+    when embed
+      { output, paths } := parse_args<Embed>(args, EMBED_SPEC, name)
+      await write_embedded(output, paths)
+    when Command.test_targets
+      { targets } := parse_args<Targets>(args, TARGETS_SPEC, name)
+      exit await test_targets(targets)
+    when Command.test_target
+      { target } := parse_args<Target>(args, { target: { positional: true } }, name)
+      exit await test_target(target)
 catch error: BuildError
   print_error error.message
   exit error.code

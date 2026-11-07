@@ -15,16 +15,28 @@ import described_build, runtime_c_names from '../../compiler/platform_descriptio
 import BuildError, command_line_batches, piped_to_file from '../../tools/build/steps'
 
 BUILD_TOOL := "#{root_dir}/build/build#{host_executable_suffix}"
-USAGE :=
-  'usage: build <goal> [--target <target>] | build test-targets [<target>...]'
-  'build test-target <target> | build embed <output> <path>...'
-.join(' | ')
 
-# A run that ends with code 2 and prints `message`, as make does for a usage error.
+# A run that ends with code 2 and prints `message` first, as make does for a usage error; the usage
+# message follows the errors that std:args reports.
 usage_check := (name: String, dir_name: String, args: String[], message: String) ->
   Check name: "build/build #{name} is a usage error", run: ->
     ran := await run_command(BUILD_TOOL, args, new_cli_dir(dir_name))
-    [expect_status(2, ran.status)..., compare_output('stderr', b"#{message}\n", ran.stderr)...]
+    lines := ran.stderr_text().split("\n")
+    from_args := message.starts_with('build: ')
+    usage_next := lines.get(1)?.starts_with('usage: build') ? false
+    usage_follows := not from_args or usage_next
+    [
+      expect_status(2, ran.status)...
+      compare_text('stderr', message, lines[0])...
+      (usage_follows then [] else ['no usage message follows the error'])...
+    ]
+
+# A run with `--help` that ends with code 0 and prints the usage message that starts so.
+help_check := (args: String[], usage: String) ->
+  Check name: "build/build #{args.join(' ')} prints the usage", run: ->
+    ran := await run_command(BUILD_TOOL, args, new_cli_dir('build-tool-help'))
+    first_line := ran.stdout_text().split("\n")[0]
+    [expect_status(0, ran.status)..., compare_text('stdout', usage, first_line)...]
 
 # A run of test-targets in a directory of the settings, if any, that ends with code 2 and prints
 # `message`, before it runs any target.
@@ -279,18 +291,62 @@ description_error_check := Check
     ]
 
 export checks :=
-  usage_check('with no argument', 'build-tool-none', [], USAGE)
-  usage_check('with no such goal', 'build-tool-goal', ['nonsense'], "no goal nonsense: #{USAGE}")
-  usage_check('with an option but --target', 'build-tool-option', ['all', '-x', 'y'], USAGE)
-  usage_check('with --target and no target', 'build-tool-no-target', ['all', '--target'], USAGE)
+  usage_check('with no argument', 'build-tool-none', [], 'build: missing the command')
+  usage_check(
+    'with no such goal'
+    'build-tool-goal'
+    ['nonsense']
+    "build: unknown command 'nonsense'"
+  )
+  usage_check(
+    'with an option but --target'
+    'build-tool-option'
+    ['all', '-x', 'y']
+    'build: unknown option -x'
+  )
+  usage_check(
+    'with --target and no target'
+    'build-tool-no-target'
+    ['all', '--target']
+    'build: --target needs a value'
+  )
   usage_check(
     'test --target'
     'build-tool-test-target'
     ['test', '--target', 'x']
     'make test does not take TARGET: run bin/test --target <target>'
   )
-  usage_check('embed with no output', 'build-tool-embed', ['embed'], "no goal embed: #{USAGE}")
-  usage_check('test-target with no target', 'build-tool-test-target-none', ['test-target'], USAGE)
+  usage_check('embed with no output', 'build-tool-embed', ['embed'], 'build: missing <output>')
+  usage_check(
+    'with --target twice'
+    'build-tool-target-twice'
+    ['all', '--target', 'x', '--target', 'y']
+    'build: --target is given twice'
+  )
+  usage_check(
+    'with an argument after the goal'
+    'build-tool-extra'
+    ['all', 'extra']
+    "build: unexpected argument 'extra'"
+  )
+  help_check(['--help'], 'usage: build <command> [<argument>...]')
+  help_check(['all', '--help'], 'usage: build all [options]')
+  help_check(['embed', '-h'], 'usage: build embed [options] <output> [<path>...]')
+  help_check(['-h'], 'usage: build <command> [<argument>...]')
+  help_check(['test-targets', '--help'], 'usage: build test-targets [options] [<target>...]')
+  help_check(['test-target', '--help'], 'usage: build test-target [options] <target>')
+  usage_check(
+    'test-targets with an option'
+    'build-tool-targets-option'
+    ['test-targets', '-x']
+    'build: unknown option -x'
+  )
+  usage_check(
+    'test-target with no target'
+    'build-tool-test-target-none'
+    ['test-target']
+    'build: missing <target>'
+  )
   usage_check(
     'test-target of no short name'
     'build-tool-test-target-name'
@@ -301,7 +357,7 @@ export checks :=
     'test-target with two targets'
     'build-tool-test-target-two'
     ['test-target', 'linux-i386', 'linux-amd64']
-    USAGE
+    "build: unexpected argument 'linux-amd64'"
   )
   settings_check('without settings', 'build-tool-no-settings', nil, [], SETTINGS_USAGE)
   settings_check('of no target', 'build-tool-no-targets', 'targets: Map()', [], SETTINGS_USAGE)
