@@ -1,7 +1,7 @@
 # Standard modules
 
 - `'std:<name>'` is the Lerta file `std/<name>.lerta` of the repository. The compiler carries it, and a program [imports](modules.md) it as any module.
-- The standard modules so far: `'std:async'`, `'std:codable'`, `'std:http'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:process'`, `'std:scanner'` and `'std:time'` (below), and `'std:builtins'`, the module of the [builtins](builtins.md).
+- The standard modules so far: `'std:async'`, `'std:codable'`, `'std:enums'`, `'std:http'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:process'`, `'std:scanner'` and `'std:time'` (below), and `'std:builtins'`, the module of the [builtins](builtins.md).
 - A standard module may import the files of `std/`'s directories, as `std/internal/`, by relative paths, as a file imports another: `import JsonWriter from './internal/json_writer'`.
   - Those files are not standard modules: a program cannot import them as `std:...`.
   - Their warnings show only when a standard module that imports them is built on its own.
@@ -102,6 +102,17 @@
 - A record: `begin_record`, then `read_field(): String?`, as `read_key`. `is_field(key, name)` tells the field whose key it is, `skip_value` skips the value of a key that is none, and `fail_missing_field(name)` throws for a field that needs a key.
 - A union: `peek_kind(): Int` gives the kind of the value, without reading it: `KIND_BOOL`, `KIND_NUMBER`, `KIND_TEXT` (a `String`, a `Binary`, a `Char` or an enum's member), `KIND_RECORD` (a class or struct) or `KIND_OTHER`, and the member of that kind is read; `fail_expected(expected)` throws for one of no member's kind.
 - `fail_member(enum_name, name)` throws for a name read that names no member.
+
+## std:enums
+
+| Name | |
+|---|---|
+| `Enum` | The interface of the [enums](types.md#enums), which only bounds type parameters, as `<E: Enum>`. |
+| `parse<E: Enum>(text: String): E?` | The member of `E` whose text is the `String`, or `nil`: `parse<TokenKind>('(')`. |
+| `members<E: Enum>(): E[]` | The members of `E`, in the order declared. |
+
+- The type argument is written, as no argument tells it.
+- `Enum` is satisfied by the enums only, which the compiler tells, as it does for [Codable](#codable). Its members, `to_string: () -> String` and `equals: (Self) -> Bool`, let an `E` give its text and be compared, as an enum is: `a == b`, `members<E>().index_of(e)`.
 
 ## std:http
 

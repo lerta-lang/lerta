@@ -1,17 +1,20 @@
 # Enums: their declarations, the expressions that name their members, `E.MEMBER`, or `MEMBER` or
 # `'text'` alone where an E is expected, and `E.parse`.
 import COMPLETION_NAME, probe_enum from './completion_probe'
-import EnumDeclaration, Expression, Identifier, Member, StringLiteral from '../ast'
+import Call, EnumDeclaration, Expression, Identifier, Member, Position, StringLiteral from '../ast'
 import fail, fail_already_defined, fail_already_member from './diagnostics'
 import has_function from './functions'
 import builtin_export, builtin_type, has_import, imported_type from './imports'
 import record_member from './member'
 import EnumParse, EnumValue from './member_targets'
 import lookup, qualified_name, record_reference from './name'
-import Body, declared_symbol, has_declared_type, Shared from './shared'
+import EnumQuery, EnumQueryKind from './references'
+import expect_type from './expression'
+import resolve from './type_names'
+import Body, declared_symbol, has_declared_type, ProgramWide, Shared from './shared'
 import
-  EnumMember, EnumType, FunctionType, inner_of_expected, is_kind, optional_type, string_type, Type,
-  UnionType
+  ArrayType, EnumMember, EnumType, format_type, FunctionType, inner_of_expected, InterfaceType,
+  is_kind, optional_type, string_type, Type, TypeParameterType, UnionType
 from '../types'
 
 # Registers the module's enums, after its classes and structs (see add_objects).
@@ -59,6 +62,51 @@ export enum_parse_type := (body: Body, member: Member) ->
   type := qualifying_enum(body, member) ? return nil
   record_member body, member, EnumParse(type)
   FunctionType params: [string_type], result: optional_type(type)
+
+# `parse<E>(text)` of std:enums, the member of the enum E whose text is the String, or nil, and
+# `members<E>()`, its members in their order.
+export type_of_enum_query := (body: Body, call: Call, kind: EnumQueryKind) ->
+  { program } := body
+  callee := call.callee as Identifier!
+  unless call.named_args.is_empty()
+    fail program, call.position, "#{callee.name} takes no named arguments"
+  if call.type_args.length != 1
+    fail program, call.position, "#{callee.name} takes one type argument, an enum"
+  written := call.type_args[0]
+  type := resolve(program, body.resolver, written)
+  reject_non_enum body, type, written.position
+  arguments := kind == PARSE then 'one argument, the text' else 'no arguments'
+  arity := kind == PARSE then 1 else 0
+  fail program, call.position, "#{callee.name} takes #{arguments}" if call.args.length != arity
+  expect_type body, arg, string_type for arg in call.args
+  record_reference body, callee, EnumQuery(kind, type)
+  case kind
+    when PARSE then optional_type(type)
+    when MEMBERS then ArrayType(element: type)
+
+ENUMS_MODULE := 'std:enums'
+
+# Whether the interface type is std:enums' Enum, which the enums satisfy.
+export is_enum_bound := (program: ProgramWide, bound: InterfaceType) ->
+  is_declared_by := (shared: Shared) ->
+    shared.name == bound.module and is_enum_declaration(shared, bound.name)
+  program.shared.any is_declared_by
+
+# Whether the interface of the name, declared in the module, is std:enums' Enum.
+is_enum_declaration := (shared: Shared, name: String) ->
+  is_entry := shared.path == nil and shared.program.entry_path == ENUMS_MODULE
+  name == 'Enum' and (shared.name == ENUMS_MODULE or is_entry)
+
+# Whether the type is a type parameter that Enum bounds, which stands for an enum.
+export is_enum_parameter := (body: Body, type: Type) ->
+  return false if type is not TypeParameterType or not type.standing
+  bound := body.resolver.bounds[type.name]
+  bound != nil and is_enum_bound(body.program, bound)
+
+# Rejects a type that does not satisfy Enum.
+export reject_non_enum := (body: Body, type: Type, at: Position) ->
+  return if type is EnumType or is_enum_parameter(body, type)
+  fail body.program, at, "#{format_type(type)} does not satisfy Enum: it is not an enum"
 
 # The enum E of `E.x`, where no local takes its name, or of `mod.E.x` (see qualified_name).
 qualifying_enum := (body: Body, member: Member) ->

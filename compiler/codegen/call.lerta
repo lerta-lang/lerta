@@ -5,8 +5,8 @@ import generate_statement from './function'
 import BuiltinMethod from '../checker/builtins'
 import EnumParse, EnumValue, InterfaceProperty, Method, Property from '../checker/member_targets'
 import
-  CodableConversion, CollectionMaker, Constructor, ExternReference, FunctionReference, ScopedLocal,
-  TopLevelValue
+  CodableConversion, CollectionMaker, Constructor, EnumQuery, ExternReference, FunctionReference,
+  ScopedLocal, TopLevelValue
 from '../checker/references'
 import
   ExtensionSource, InterfaceMethod, MethodSource, OwnMethod, UnionMethod
@@ -15,7 +15,7 @@ import Instance from '../checker/generics'
 import arguments_of from '../checker/shared'
 import info_of, is_argument from '../checker/object_types'
 import call_builtin_method, may_leave_exception, takes_object from './builtins'
-import emit_array_filled, emit_assume_length from './array'
+import emit_array_filled, emit_array_new, emit_assume_length, emit_push from './array'
 import emit_conversion from './checked_int'
 import emit_member_value from './boxes'
 import emit_closure_call, function_type_of from './closure'
@@ -42,7 +42,7 @@ import emit_map_new, emit_map_set, emit_set_add from './map'
 import apply_operator_method from './operator'
 import nil_constant from './optional'
 import emit_runtime_call, emit_valueless_call from './runtime_calls'
-import ArrayType, is_set, MapType, ObjectType, TupleType, Type from '../types'
+import ArrayType, EnumType, is_set, MapType, ObjectType, TupleType, Type from '../types'
 
 export generate_call := (g: Generator, call: Call): String ->
   callee := call.callee
@@ -69,6 +69,7 @@ generate_named_call := (g: Generator, call: Call, callee: Identifier) ->
   case reference
     when CollectionMaker then generate_new_collection(g, call, reference.type)
     when CodableConversion then generate_codable_conversion(g, call, reference)
+    when EnumQuery then generate_enum_query(g, call, reference)
     when Constructor then generate_construction(g, call, reference.type)
     when ExternReference
       emit_call := (operands: String[]) ->
@@ -126,6 +127,18 @@ generate_codable_conversion := (g: Generator, call: Call, conversion: CodableCon
   result := borrowing_all(g, call.args, emit_call)
   emit_exception_check g
   result
+
+# The enum is known, as codegen generates instances, not generics as they stand.
+generate_enum_query := (g: Generator, call: Call, query: EnumQuery) ->
+  type := query.type as EnumType!
+  case query.kind
+    when PARSE
+      borrowing_all g, arguments_of(g.facts, call), (operands) ->
+        emit_parse g.ir, operands[0], type
+    when MEMBERS
+      array := emit_array_new(g.ir, type)
+      emit_push g.ir, array, "#{index}", type for index in 0..type.members.length
+      array
 
 # A member that is called: `E.parse`, a field that holds a function, or a method.
 generate_member_call := (g: Generator, call: Call, member: Member) ->

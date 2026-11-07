@@ -4,31 +4,29 @@
 # NodeFacts.intrinsic_calls).
 import scan from 'std:scanner'
 import
-  Assignment, Binding, BinaryOperation, Call, Catch, copy_identifier, Declaration, Expression,
-  Identifier, If, Intrinsic, IsTest, Member, NamedType, NilLiteral, Position, Statement,
-  StringLiteral, This, Throw, Try, UnaryOperation
+  Binding, BinaryOperation, Call, copy_identifier, Declaration, Expression, Identifier, If,
+  Intrinsic, IsTest, Member, NilLiteral, Position, Statement, StringLiteral, This, Throw,
+  UnaryOperation
 from '../ast'
 import fail from './diagnostics'
-import may_name_member from './enums'
+import may_name_member, type_of_enum_query from './enums'
 import expect_type, set_type, type_of from './expression'
 import type_of_codable_call from './codable'
 import ExternReference from './references'
 import add_intrinsic, builtins_declarer from './imports'
-import qualified_name, record_reference from './name'
-import constructed_type from './object'
+import record_reference from './name'
 import is_contextual from './literals'
-import compares_by_contents from './equality'
 import has_method from './member'
 import Body, Shared from './shared'
 import Local from './scopes'
-import check_block, check_if_condition, check_statement, define_local, nothing from './statement'
+import check_block, check_if_condition, define_local, nothing from './statement'
 import CLOSING_BRACKETS, lex, OPENING_BRACKETS, Token, TokenKind from '../lexer/tokens'
 import is_standard_name, module_location from '../source'
 import
-  ArrayType, format_type, inner_of, is_one_of_kinds, OptionalType, string_type, Type, void_type
+  ArrayType, format_type, is_one_of_kinds, OptionalType, string_type, Type, void_type
 from '../types'
 
-INTRINSICS := ['assert', 'assert_throws', 'dbg', 'encode_value', 'decode_value']
+INTRINSICS := ['assert', 'dbg', 'encode_value', 'decode_value', 'parse', 'members']
 
 # Only a standard module declares intrinsics, and only those that the compiler gives.
 export declare_intrinsics := (shared: Shared, statements: Statement[]) ->
@@ -47,16 +45,18 @@ export struct IntrinsicCode
   statements: Statement[]
   value: Expression?
 
-# The type of the call. `encode_value` and `decode_value` of std:codable are calls of the code
-# that codegen makes for each type (see type_of_codable_call); the others give code of their own.
+# The type of the call. `encode_value` and `decode_value` of std:codable, and `parse` and
+# `members` of std:enums, are calls of the code that codegen makes for each type (see
+# type_of_codable_call and type_of_enum_query); the others give code of their own.
 export type_of_intrinsic_call := (body: Body, call: Call, name: String, expected: Type?) ->
   return type_of_codable_call(body, call, ENCODE) if name == 'encode_value'
   return type_of_codable_call(body, call, DECODE) if name == 'decode_value'
+  return type_of_enum_query(body, call, PARSE) if name == 'parse'
+  return type_of_enum_query(body, call, MEMBERS) if name == 'members'
   reject_named_arguments body, call, name
   code :=
     case name
       when 'assert' then IntrinsicCode(statements: assertion(body, call), value: nil)
-      when 'assert_throws' then IntrinsicCode(statements: thrown_assertion(body, call), value: nil)
       else debugged(body, call, expected)
   body.facts.intrinsic_calls[call] = code
   value := code.value ? return void_type
@@ -159,60 +159,6 @@ copied_path := (path: Expression): Expression ->
     when Member then Member(path..., object: copied_path(path.object))
     else panic('not a path')
 
-# `assert_throws expected, body`: calls the body, and throws an AssertionError unless it throws an
-# error of the type that `expected` constructs, equal to it by `==` if the type compares by its
-# contents, and otherwise of the same message. An error of another type goes on.
-thrown_assertion := (body: Body, call: Call) ->
-  program := body.program
-  usage := "assert_throws takes the error it expects, such as ValueError('bad'), and a function"
-  fail program, call.position, usage if call.args.length != 2
-  (expected_value, function) := (call.args[0], call.args[1])
-  error_type :=
-    constructed_type_name(body, expected_value) ? fail(program, expected_value.position, usage)
-  at := call.position
-  prefix := local_prefix('assert_throws', at)
-  name := (suffix: String) -> named("#{prefix}.#{suffix}", at)
-  # The error is kept in a var, then in a const, which narrowing takes, as it takes no var at the
-  # top level.
-  kept_type := NamedType(error_type..., optional: true)
-  kept := Declaration
-    position: at
-    mutable: true
-    type: kept_type
-    value: NilLiteral(at)
-    name: name('kept')
-  keep := Assignment(position: at, operator: '=', target: name('kept'), value: name('caught'))
-  catch_clause := Catch(position: at, name: name('caught'), type: error_type, body: [keep])
-  attempt :=
-    Try(position: at, catches: [catch_clause], finally_body: nil, body: [call_of(name('body'), at)])
-  declarations: Statement[] =
-    held_local(body, "#{prefix}.expected", expected_value, nil)
-    held_local(body, "#{prefix}.body", function, nil)
-    kept
-    attempt
-  check_statement body, statement for statement in declarations[2..]
-  declarations.push held_local(body, "#{prefix}.thrown", name('kept'), nil)
-  error := inner_of(type_of(body, name('thrown')))
-  test :=
-    if compares_by_contents(program, error)
-      BinaryOperation position: at, operator: '==', left: name('thrown'), right: name('expected')
-    else
-      present :=
-        BinaryOperation(position: at, operator: '!=', left: name('thrown'), right: NilLiteral(at))
-      same := BinaryOperation
-        position: at
-        operator: '=='
-        left: member(name('thrown'), 'message')
-        right: member(name('expected'), 'message')
-      BinaryOperation position: at, operator: 'and', left: present, right: same
-  shown := ->
-    thrown := shown_error(body, name('thrown'), format_type(error))
-    expected := shown_error(body, name('expected'), format_type(error))
-    texts: Expression[] = [label_text('thrown', at), thrown, label_text('expected', at), expected]
-    texts
-  statements: Statement[] = [declarations..., guard(body, call, test, shown)]
-  statements
-
 # `dbg(value)`: writes where the call is, its code and the literal of the value to stderr, and
 # gives the value, which it evaluates once, typed where it is expected.
 debugged := (body: Body, call: Call, expected: Type?) ->
@@ -247,22 +193,6 @@ stderr_write := (body: Body, text: Expression): Statement ->
   set_type body, call, void_type
   call
 
-# The name of the type that the expression constructs, `T(...)` or `module.T(...)`, as a type name.
-constructed_type_name := (body: Body, expression: Expression) ->
-  call := expression as Call ? return nil
-  callee := call.callee
-  # `module.T` names the type by the name that the module's export is imported by.
-  type_callee := callee is Member then qualified_name(body, callee) else callee
-  return nil if type_callee == nil or constructed_type(body, type_callee) == nil
-  name :=
-    case callee
-      when Identifier then callee.name
-      when Member
-        object := callee.object as Identifier ? return nil
-        "#{object.name}.#{callee.name.name}"
-      else return nil
-  NamedType name, args: [], position: callee.position
-
 # The label and the literal of the operand, or nothing if its type has no literal (see
 # literal_text).
 operand_text := (body: Body, shown: Shown): Expression ->
@@ -279,18 +209,6 @@ literal_text := (body: Body, value: Expression): Expression? ->
   return member_call(value, 'to_literal') if has_literal(body, type, value.position)
   return nil if type is not OptionalType or not has_literal(body, type.inner, value.position)
   present_or value, 'nil', (inner) -> member_call(inner, 'to_literal')
-
-# The error that a failed assert_throws shows: its literal if its type has one, and otherwise its
-# type and the literal of its message, `Type: 'message'`; `nothing` for nil.
-shown_error := (body: Body, error: Expression, type_name: String): Expression ->
-  at := error.position
-  error_type := inner_of(type_of(body, error))
-  text_of := (value: Expression) ->
-    return member_call(value, 'to_literal') if has_literal(body, error_type, at)
-    message := member_call(member(value, 'message'), 'to_literal')
-    concatenation text("#{type_name}: ", at), message
-  return text_of(error) unless type_of(body, error) is OptionalType
-  present_or error, 'nothing', text_of
 
 # An array has a to_literal only where its items have one, which looking it up for other items
 # would report as an error.

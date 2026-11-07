@@ -42,7 +42,7 @@ The runtime's errors are exceptions too, of types that `std:builtins` exports, e
 | `ValueError` | an argument of a value that a function does not take, as `split('')`, `exit(256)`, `sleep(-1)`; a negative count, length or limit (`repeat(-1)`, `truncate(-1)`; 0 is taken); `zip` of Iterables of different lengths; `c + n` or `c - n` of a `Char` past the Unicode scalar values |
 | `InitError` | a top-level value used before it is initialized (see [top-level values](functions.md#top-level-values)) |
 | `CancelledError` | the `await` of a promise that is cancelled (see [functions that await](functions.md#functions-that-await)) |
-| `AssertionError` | a failed [`assert`](#assert), or `assert_throws` of [std:test](std.md#stdtest) |
+| `AssertionError` | a failed [`assert`](#assert) |
 
 ### assert
 
