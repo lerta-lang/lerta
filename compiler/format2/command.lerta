@@ -1,0 +1,38 @@
+# The command line of `lerta fmt2 [--fix] <file>...`, which runs format2 as `lerta fmt` runs the
+# formatter, for its tests until it replaces it.
+import is_file, read_text, write_file from 'std:io'
+import CompileError from '../errors'
+import format_source from './format'
+
+export format2_command := (paths: String[], fix: Bool) ->
+  var status = 0
+  for path in paths
+    if not is_file(path)
+      print_error "'#{path}' is not a file"
+      status = 1
+    else if not await format_file(path, fix)
+      status = 1
+  status
+
+# Whether the file is in the style, or is written so with `fix`.
+format_file := (path: String, fix: Bool) ->
+  source := await read_text(path) ? return failed("#{path}: the file is not valid UTF-8")
+  formatted :=
+    try
+      format_source source, path
+    catch error: CompileError
+      return failed(error.message)
+  findings :=
+    if fix and formatted.text != source
+      await write_file(path, formatted.text)
+      format_source(formatted.text, path).findings
+    else
+      formatted.findings
+  for finding in findings
+    { at, rule } := finding
+    print_error "#{path}:#{at.line}:#{at.column}: #{rule.message} (#{rule.label})"
+  findings.is_empty()
+
+failed := (message: String) ->
+  print_error message
+  false

@@ -88,6 +88,12 @@
   - Since which statements are kept shows only once they are printed, the source is printed again with the annotations left on their lines, and with the imports that the kept statements use, if any.
 - **Diff.** The lines that differ are found by Myers's algorithm (`format/diff.lerta`).
 
+`compiler/format2/`, run by the hidden `lerta fmt2` for its tests, is to replace it. It decides each gap between the tokens and the comments of the source, which it reports with the rule of the decision where the source differs:
+
+- **Walk.** The first pass walks the syntax tree over the tokens and decides the gaps between them: the spaces inside a statement and the line start of each statement with its depth (`format2/walk.lerta`).
+- **Layout.** The second decides the gaps between the tokens and the comments, the indentation and the blank lines (`format2/format.lerta`).
+- A statement that holds a construct that the walk does not handle yet keeps its gaps as written.
+
 ## The language server
 
 `lerta lsp` is in `compiler/lsp/`.

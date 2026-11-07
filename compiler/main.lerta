@@ -8,6 +8,7 @@ import executable_suffix, target_triple from './clang_flags'
 import check_program, generate_ir, write_ir from './compile'
 import CompileError from './errors'
 import format_command from './format/command'
+import format2_command from './format2/command'
 import tokenize from './lexer/tokens'
 import lsp_command from './lsp/server'
 import parse from './parser/statement'
@@ -153,12 +154,21 @@ default_output := (source: String, target: String?) ->
   fail_usage() if stem.is_empty()
   "#{stem}#{executable_suffix(target)}"
 
-# `--fix` may come before the paths, of which there is at least one.
 fmt_command := (args: String[]) ->
+  (paths, fix) := fmt_arguments(args)
+  exit await format_command(paths, fix)
+
+# Not in the usage: it runs the formatter that is to replace that of `fmt`, for its tests.
+fmt2_command := (args: String[]) ->
+  (paths, fix) := fmt_arguments(args)
+  exit await format2_command(paths, fix)
+
+# `--fix` may come before the paths, of which there is at least one.
+fmt_arguments := (args: String[]) ->
   fix := not args.is_empty() and args[0] == '--fix'
   paths := fix then args[1..] else args
   fail_usage() if paths.is_empty() or paths.any((path) -> not is_value(path))
-  exit await format_command(paths, fix)
+  (paths, fix)
 
 cflags_command := (args: String[]) ->
   fail_usage() unless args.is_empty()
@@ -184,6 +194,7 @@ try
     when 'build' then await build_command(args)
     when 'run' then await run_command(args)
     when 'fmt' then await fmt_command(args)
+    when 'fmt2' then await fmt2_command(args)
     when 'lsp' then await lsp_command(args)
     when 'cflags' then await cflags_command(args)
     when 'clean' then await clean_command(args)

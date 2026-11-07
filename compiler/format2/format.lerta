@@ -1,0 +1,156 @@
+# `lerta fmt2`, the formatter that is to replace compiler/format: decides each gap between the text
+# tokens of the source (see text.lerta), reports where the source differs from that by the rule of
+# the decision, and writes the tokens with the gaps decided.
+import scan from 'std:scanner'
+import Position from '../ast'
+import lex from '../lexer/tokens'
+import parse from '../parser/statement'
+import
+  BLANK_LINES, COMMENTS, LAYOUT, SEMICOLONS, STRANDED_COMMENTS, StyleRule
+from '../format/rules'
+import Gap, source_tokens, SourceTokens, TextToken from './text'
+import CodeGap, LineStart, Spaces, walk from './walk'
+
+# A place where the source differs from the style, at its position in the source.
+export struct Finding
+  at: Position
+  rule: StyleRule
+
+export struct Formatted
+  text: String
+  findings: Finding[]
+
+# The text of a gap, and the rule that decides it.
+struct Decision
+  text: String
+  rule: StyleRule
+
+# Throws a CompileError if the source does not parse.
+export format_source := (source: String, path: String) ->
+  lexed := lex(source, path)
+  text := source_tokens(source, lexed)
+  walked := walk(parse(lexed.tokens, path), text)
+  decisions := decide(text, walked.gaps)
+  stranded := [stranded_finding(text, index) for index in walked.stranded]
+  found := [findings(text.gaps, decisions)..., stranded...].sorted((a, b) -> a.at.compare(b.at))
+  Formatted text: render(text.tokens, decisions), findings: found
+
+stranded_finding := (text: SourceTokens, index: Int) ->
+  Finding at: text.ending_comments[index]!.start, rule: STRANDED_COMMENTS
+
+decide := (text: SourceTokens, code_gaps: Map<Int, CodeGap>) ->
+  layout := Layout(text, code_gaps)
+  [layout.decide(gap, index) for gap, index in text.gaps]
+
+# The second pass: decides each gap between text tokens, in order, from the gaps between code
+# tokens that the walk decides, and the lines laid out before it.
+class Layout
+  text: SourceTokens
+  code_gaps: Map<Int, CodeGap>
+  # The depth of the last line start.
+  var depth = 0
+  # The columns that the last line start moves the indentation of its source line by, which the
+  # lines after it that keep their source text move by too, so that their blocks stay as deep as
+  # they are under it. A block that the source indents by other than two spaces thus keeps its
+  # width there, unreported, until the walk handles the statement that holds it.
+  var shift = 0
+
+  decide := (gap: Gap, index: Int) ->
+    { tokens } := @text
+    case
+      when index == 0 then Decision(text: '', rule: LAYOUT)
+      when index == tokens.length then Decision(text: "\n", rule: ending_rule(gap))
+      else @decide_before(tokens[index], gap)
+
+  decide_before := (token: TextToken, gap: Gap) ->
+    { code } := @text
+    has_code := token.next_code < code.length
+    code_gap := has_code then @code_gaps[token.next_code] else END
+    return @kept(gap) unless code_gap
+    comment := token.comment
+    return Decision(text: '  ', rule: COMMENTS) if comment and not comment.own_line
+    case code_gap
+      when Spaces
+        # A line break inside a statement stays, as long lines are not broken or joined yet, with
+        # its indentation.
+        return line_feed(gap, max(0, indentation(gap.text) + @shift)) if "\n" in gap.text
+        Decision text: ' '.repeat(code_gap.count), rule: code_gap.rule
+      when LineStart
+        next_column := has_code then code[token.next_code].column else 1
+        # A comment before a dedent indented deeper than the line after it, as at the end of a
+        # block, is indented as the line before it.
+        dedent := code_gap.depth < @depth
+        deeper_comment := comment and dedent and comment.column > next_column
+        @depth = code_gap.depth unless deeper_comment
+        @shift = 2 * @depth - token.line_indentation
+        line_feed gap, 2 * @depth
+
+  # A gap that the walk does not decide keeps its source text, spaces at the ends of lines too,
+  # unreported, as the walk vouches only for the statements that it handles; but the indentation
+  # after it moves with the line start before it.
+  kept := (gap: Gap) ->
+    { text } := gap
+    return Decision(text, rule: LAYOUT) unless "\n" in text
+    head := text.binary[..(text.binary.length - indentation(text))].text()!
+    Decision text: head + ' '.repeat(max(0, indentation(text) + @shift)), rule: LAYOUT
+
+# The end of the source starts a line at depth 0, which a comment before it is indented by.
+END := LineStart(depth: 0)
+
+ending_rule := (gap: Gap) -> line_feeds(gap.text) > 1 then BLANK_LINES else LAYOUT
+
+# A line feed, after a blank line where the source has one, and an indentation of `columns`.
+line_feed := (gap: Gap, columns: Int) ->
+  feeds := line_feeds(gap.text)
+  blank := feeds > 1
+  text := (blank then "\n\n" else "\n") + ' '.repeat(columns)
+  rule :=
+    case
+      when ';' in gap.text then SEMICOLONS
+      # Spaces before the first line feed come before any extra line feed.
+      when not gap.text.starts_with("\n") then LAYOUT
+      when feeds > 2 then BLANK_LINES
+      else LAYOUT
+  Decision text, rule
+
+line_feeds := (text: String) -> text.split("\n").length - 1
+
+# The spaces after the last line feed of the text of a gap.
+indentation := (text: String) -> text.split("\n").last()!.count()
+
+render := (tokens: TextToken[], decisions: Decision[]) ->
+  var text = decisions[0].text
+  text += token.text + decisions[index + 1].text for token, index in tokens
+  text
+
+# A finding for each gap whose decision differs from the source, at the first character that
+# differs, once on each line for each rule.
+findings := (gaps: Gap[], decisions: Decision[]) ->
+  found: Finding[]
+  reported: Set<String>
+  for gap, index in gaps
+    decision := decisions[index]
+    at := first_difference(gap, decision.text) ? continue
+    { rule } := decision
+    key := "#{at.line} #{rule.label} #{rule.message}"
+    continue if key in reported
+    reported.add key
+    found.push { at, rule }
+  found
+
+first_difference := (gap: Gap, decided: String) ->
+  source := scan(gap.text)
+  expected := scan(decided)
+  var line = gap.start.line
+  var column = gap.start.column
+  while true
+    c := source.next()
+    return Position(line, column) if c != expected.next()
+    if c == "\n"
+      line += 1
+      column = 1
+    else if c
+      column += 1
+    else
+      return nil
+  nil

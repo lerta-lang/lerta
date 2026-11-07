@@ -1,0 +1,135 @@
+# The source as text tokens: the code tokens of the lexer, without its layout tokens, and the
+# comments, in the order of the source, with the gaps of text between them.
+import scan, Scanner from 'std:scanner'
+import Position from '../ast'
+import Comment, Lexed, Token, TokenKind from '../lexer/tokens'
+
+export struct TextToken
+  text: String
+  start: Position
+  # The comment that the token is, or nil for a code token.
+  comment: Comment?
+  # The index among the code tokens of the token itself, or of the first after the comment.
+  next_code: Int
+  # The columns before the first text token of its line in the source.
+  line_indentation: Int
+
+# The text between two text tokens, and before the first and after the last, from `start`.
+export struct Gap
+  text: String
+  start: Position
+
+export struct SourceTokens
+  tokens: TextToken[]
+  # The gap before each token, and the one after the last.
+  gaps: Gap[]
+  code: Token[]
+  # The indexes of the code tokens that start a line, after a layout token.
+  line_starts: Set<Int>
+  # The comments that end a line, by the index of the code token before them.
+  ending_comments := comments_by_code_before(@tokens)
+
+LAYOUT_KINDS: TokenKind[] = [NEWLINE, INDENT, DEDENT, EOF]
+
+is_layout := (token: Token) -> token.kind in LAYOUT_KINDS
+
+export source_tokens := (source: String, lexed: Lexed) ->
+  code := [token for token in lexed.tokens when not is_layout(token)]
+  reader := SourceReader(scanner: scan(source))
+  tokens: TextToken[]
+  gaps: Gap[]
+  var next_comment = 0
+  { comments } := lexed
+  for token, index in code
+    while next_comment < comments.length and comes_before(comments[next_comment], token)
+      comment := comments[next_comment]
+      gaps.push reader.gap_to(comment.line, comment.column)
+      tokens.push reader.comment(comment, index)
+      next_comment += 1
+    gaps.push reader.gap_to(token.line, token.column)
+    tokens.push reader.code(token, index)
+  for comment in comments[next_comment..]
+    gaps.push reader.gap_to(comment.line, comment.column)
+    tokens.push reader.comment(comment, code.length)
+  gaps.push reader.rest()
+  SourceTokens tokens, gaps, code, line_starts: line_start_indexes(lexed.tokens)
+
+comments_by_code_before := (tokens: TextToken[]) ->
+  comments: Map<Int, TextToken>
+  for token in tokens
+    comment := token.comment ? continue
+    comments[token.next_code - 1] = token unless comment.own_line
+  comments
+
+line_start_indexes := (tokens: Token[]) ->
+  starts: Set<Int>
+  var index = 0
+  var after_layout = true
+  for token in tokens
+    if is_layout(token)
+      after_layout = true
+    else
+      starts.add index if after_layout
+      after_layout = false
+      index += 1
+  starts
+
+comes_before := (comment: Comment, token: Token) ->
+  Position(line: comment.line, column: comment.column).compare(token.position()) == LESS
+
+# Reads the source from its start, as far as each text token asks, tracking the line and the column.
+class SourceReader
+  scanner: Scanner
+  var line = 1
+  var column = 1
+  # Where the next gap starts, and the spaces after a comment, which start it.
+  var gap_start = Position(line: 1, column: 1)
+  var carried = ''
+  # The line of the last text token, and the columns before the first text token on it.
+  var last_line = 0
+  var last_indentation = 0
+
+  gap_to := (line: Int, column: Int) -> @gap(@text_to(line, column))
+
+  rest := -> @gap(@scanner.rest())
+
+  gap := (text: String) ->
+    gap := Gap(text: @carried + text, start: @gap_start)
+    @carried = ''
+    gap
+
+  code := (token: Token, index: Int) ->
+    text := @text_to(token.end_line, token.end_column)
+    @gap_start = { line: @line, column: @column }
+    start := token.position()
+    TextToken text, start, comment: nil, next_code: index, line_indentation: @indentation_at(start)
+
+  # The comment runs to the end of its line, without the spaces after it, which the next gap holds.
+  comment := (comment: Comment, next_code: Int) ->
+    raw := @scanner.take_while((c) -> c != "\n")
+    @column += raw.count()
+    text := raw.trim_end()
+    @carried = raw.binary[text.binary.length..].text()!
+    @gap_start = { line: comment.line, column: comment.column + text.count() }
+    start := Position(line: comment.line, column: comment.column)
+    TextToken text, start, comment, next_code, line_indentation: @indentation_at(start)
+
+  indentation_at := (start: Position) ->
+    if start.line != @last_line
+      @last_line = start.line
+      @last_indentation = start.column - 1
+    @last_indentation
+
+  text_to := (line: Int, column: Int) ->
+    taken := @scanner.mark()
+    while @line < line or (@line == line and @column < column)
+      c := @scanner.next() ? break
+      @step c
+    taken()
+
+  step := (c: Char) ->
+    if c == "\n"
+      @line += 1
+      @column = 1
+    else
+      @column += 1

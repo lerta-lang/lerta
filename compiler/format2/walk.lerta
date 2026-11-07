@@ -1,0 +1,533 @@
+# The first pass of the formatter: walks the syntax tree over the code tokens, in the order of the
+# source, and decides each gap between two code tokens that it walks: the spaces inside a statement
+# (docs/reference/style.md#spacing), and the line starts of statements. A statement that holds a
+# construct it does not walk yet is skipped, and its gaps keep their source text.
+import
+  ArrayLiteral, ArrayTypeName, Assignment, Await, BinaryOperation, Binding, BooleanLiteral, Call,
+  Coalesce, Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression, Extend,
+  Extern, FloatLiteral, For, FunctionLiteral, Identifier, If, Import, Index, IntegerLiteral,
+  InterfaceDeclaration, Interpolation, Intrinsic, is_exported, Jump, MapLiteral, Member, NamedType,
+  NamedValue, NilLiteral, Parameter, Pass, Position, Range, RecordLiteral, Return, Statement,
+  StringLiteral, This, Throw, TupleItem, TupleLiteral, TypeAlias, TypeDeclaration, TypeName,
+  UnaryOperation, Unwrap, While, Yield
+from '../ast'
+import CLOSING_BRACKETS, OPENING_BRACKETS, Token, TokenKind from '../lexer/tokens'
+import INSIDE_BRACES, SPACING, StyleRule from '../format/rules'
+import SourceTokens, TextToken from './text'
+
+# The spaces of a gap inside a line.
+export struct Spaces
+  count: Int
+  rule: StyleRule
+
+# A gap that starts a line at a depth.
+export struct LineStart
+  depth: Int
+
+export type CodeGap = Spaces | LineStart
+
+NONE := Spaces(count: 0, rule: SPACING)
+ONE := Spaces(count: 1, rule: SPACING)
+INSIDE := Spaces(count: 1, rule: INSIDE_BRACES)
+
+# The gaps that the walk decides, each by the index of the code token after it, and the comments
+# that end a line where the formatter cannot place them, which it reports, keeping their statements
+# as they are written (docs/reference/style.md#comments): by the index of the code token before
+# them.
+export struct Walked
+  gaps: Map<Int, CodeGap>
+  stranded: Int[]
+
+export walk := (statements: Statement[], text: SourceTokens) ->
+  walker :=
+    Walker(code: text.code, line_starts: text.line_starts, ending_comments: text.ending_comments)
+  walker.block statements, 0
+  walker.resume_at walker.code.length
+  Walked gaps: walker.gaps, stranded: walker.stranded
+
+# A construct that the walk does not handle yet, whose statement it skips.
+struct Unhandled: Error
+
+unhandled := -> throw Unhandled('not walked yet')
+
+class Walker
+  code: Token[]
+  # Those of the code tokens where a statement may start.
+  line_starts: Set<Int>
+  ending_comments: Map<Int, TextToken>
+  stranded: Int[] = []
+  # The gaps of the statement being walked, which those of the block that holds it take once it is
+  # walked through.
+  var gaps: Map<Int, CodeGap> = Map()
+  # The index of the code token that starts at each position.
+  starts := index_by_position(@code)
+  var at = 0
+  # The parentheses around an expression, which the syntax tree leaves out, that its chain has
+  # opened and not closed yet (see chain).
+  var open_groups = 0
+  # The depth of the statement being walked, and the line where it starts.
+  var depth = 0
+  var statement_line = 1
+  # Where the statements that the walk skips start, up to the next statement that it resumes at.
+  var skipped_from: Int? = nil
+
+  block := (statements: Statement[], depth: Int): void ->
+    (outer_depth, outer_line) := (@depth, @statement_line)
+    @depth = depth
+    @statement_on_line statement, { depth } for statement in statements
+    @depth = outer_depth
+    @statement_line = outer_line
+
+  statement_on_line := (statement: Statement, line: LineStart) ->
+    first := @statement_start(statement)
+    @resume_at first if first
+    start := @at
+    return @skip(start) if first != start or @skipped_from != nil
+    # A statement that the walk skips starts its line still.
+    @gaps[start] = line
+    outer := @gaps
+    @gaps = Map()
+    try
+      @statement_line = @code[start].line
+      @statement statement, line
+      outer[gap] = decided for (gap, decided) in @gaps.entries()
+    catch _: Unhandled
+      @skip start
+    @gaps = outer
+
+  skip := (start: Int) ->
+    earliest := min(@skipped_from ? start, start)
+    @skipped_from = earliest
+
+  # The index of the code token that starts the statement, if it starts a line.
+  statement_start := (statement: Statement) ->
+    return nil if is_destructuring_part(statement)
+    at := @starts[statement.position] ? return nil
+    start := is_exported(statement) then at - 1 else at
+    start in @line_starts then start
+
+  # Ends the skipping at the code token at `index`.
+  resume_at := (index: Int) ->
+    return if @skipped_from == nil or index < @at
+    @at = index
+    @skipped_from = nil
+
+  statement := (statement: Statement, before: CodeGap): void ->
+    case statement
+      when If then @if_statement(statement, before)
+      when While then @while_statement(statement, before)
+      when For then @for_statement(statement, before)
+      when Declaration then @declaration(statement, before)
+      when Assignment then @assignment(statement, before)
+      when
+        Pass, Import, TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern,
+        Intrinsic, Extend
+      then unhandled()
+      else @expression(statement, before)
+
+  if_statement := (node: If, before: CodeGap): void ->
+    keyword := @code[@at].kind
+    unhandled() if node.nil_safe or keyword not in ['if', 'unless']
+    @take keyword, before
+    @condition node.condition, keyword
+    @block node.then_body, @depth + 1
+    return if node.else_body.is_empty()
+    first := node.else_body[0]
+    @resume_at (@starts[first.position] ? unhandled()) - 1
+    @take 'else', LineStart(@depth)
+    if first is If and @at not in @line_starts
+      @if_statement first, ONE
+    else
+      @block node.else_body, @depth + 1
+
+  while_statement := (node: While, before: CodeGap) ->
+    keyword := @code[@at].kind
+    unhandled() unless keyword in ['while', 'until']
+    @take keyword, before
+    @condition node.condition, keyword
+    @block node.body, @depth + 1
+
+  for_statement := (node: For, before: CodeGap) ->
+    @take 'for', before
+    @take IDENTIFIER, ONE
+    if node.index
+      @take ',', NONE
+      @take IDENTIFIER, ONE
+    @take_spelled 'in', ONE
+    @expression node.iterable, ONE
+    @block node.body, @depth + 1
+
+  # The condition after the keyword; that of `unless` or `until` is `not` of what is written.
+  condition := (condition: Condition, keyword: TokenKind) ->
+    case condition
+      when Binding
+        @take IDENTIFIER, ONE
+        @take ':=', ONE
+        @expression condition.value, ONE
+      when UnaryOperation
+        written := keyword in ['unless', 'until'] then condition.operand else condition
+        @expression written, ONE
+      else @expression(condition, ONE)
+
+  declaration := (node: Declaration, before: CodeGap) ->
+    unhandled() if node.weak
+    var next = before
+    if node.exported
+      @take 'export', next
+      next = ONE
+    if node.mutable
+      @take 'var', next
+      next = ONE
+    @take IDENTIFIER, next
+    if type := node.type
+      @take ':', NONE
+      @type type, ONE
+    return if node.omits_value
+    @take node.mutable or node.type then '=' else ':=', ONE
+    @expression node.value, ONE
+
+  assignment := (node: Assignment, before: CodeGap) ->
+    @expression node.target, before
+    @take_spelled node.operator, ONE
+    @expression node.value, ONE
+
+  type := (type: TypeName, before: CodeGap): void ->
+    case type
+      when NamedType
+        @take IDENTIFIER, before
+        unless type.args.is_empty()
+          @take '<', NONE
+          @list type.args.length, NONE, (i, gap) -> @type(type.args[i], gap)
+          @take '>', NONE
+        @take '?', NONE if type.optional
+      when ArrayTypeName
+        @type type.element, before
+        @take '[', NONE
+        @take ']', NONE
+        @take '?', NONE if type.optional
+      else unhandled()
+
+  # An expression, with the parentheses around it.
+  expression := (node: Expression, before: CodeGap): void ->
+    outer_groups := @open_groups
+    @open_groups = 0
+    @chain node, before
+    unhandled() if @open_groups != 0
+    @open_groups = outer_groups
+
+  # The expression and those at its start, as the left operand of an operation, whose parentheses
+  # an expression opens at its start: each that the chain closes after its end is around it.
+  chain := (node: Expression, before: CodeGap): void ->
+    var first = before
+    for _ in 0..@groups_at_start(node)
+      @take_before_operand '(', first
+      first = NONE
+      @open_groups += 1
+    @node node, first
+    while @open_groups > 0 and @at_kind(')')
+      @take ')', NONE
+      @open_groups -= 1
+
+  # The parentheses at the start of the node that group it: all of those in a row, but the last of a
+  # tuple, or of the parameters of a function literal, rather than one around `-> body`.
+  groups_at_start := (node: Expression) ->
+    var count = 0
+    count += 1 while @kind_at(@at + count) == '('
+    for offset in 0..count
+      return offset if @opens_own(leftmost(node), @at + offset)
+    count
+
+  # Whether the `(` at `open` is the node's own: the first of a run of them whose contents hold a
+  # comma of a tuple, or are followed by the `->` or the `:` of a function literal, as no group is.
+  opens_own := (node: Expression, open: Int) ->
+    close := @closing(open)
+    case node
+      when TupleLiteral then @has_comma(open + 1, close)
+      when FunctionLiteral then @kind_at(close + 1) == '->' or @kind_at(close + 1) == ':'
+      else false
+
+  # The index of the bracket that closes the one at `open`.
+  closing := (open: Int) ->
+    var depth = 0
+    for index in open..@code.length
+      kind := @code[index].kind
+      depth += 1 if kind in OPENING_BRACKETS
+      depth -= 1 if kind in CLOSING_BRACKETS
+      return index if depth == 0
+    @code.length
+
+  # Whether a comma is between `start` and `end`, outside the brackets there.
+  has_comma := (start: Int, end: Int) ->
+    var depth = 0
+    for index in start..end
+      kind := @code[index].kind
+      depth += 1 if kind in OPENING_BRACKETS
+      depth -= 1 if kind in CLOSING_BRACKETS
+      return true if depth == 0 and kind == ','
+    false
+
+  node := (node: Expression, before: CodeGap): void ->
+    case node
+      when Identifier then @take(IDENTIFIER, before)
+      when StringLiteral then @take(STRING, before)
+      when Interpolation then @take(node.binary then BINARY else INTERPOLATED, before)
+      when BooleanLiteral then @take(node.value then 'true' else 'false', before)
+      when NilLiteral then @take('nil', before)
+      when IntegerLiteral then @number(node.text, INTEGER, before)
+      when FloatLiteral then @number(node.text, FLOAT, before)
+      when This then @take('@', before)
+      when Jump then @take(node.kind == 'break' then 'break' else 'continue', before)
+      when Member then @member(node, before)
+      when Call then @call(node, before)
+      when Index
+        unhandled() if node.default_value
+        @chain node.object, before
+        @take '[', NONE
+        @expression node.index, NONE
+        @take ']', NONE
+      when Unwrap
+        @chain node.operand, before
+        @take '!', NONE
+      when UnaryOperation then @unary(node, before)
+      when BinaryOperation
+        @chain node.left, before
+        @operator node.operator, ONE
+        @expression node.right, ONE
+      when Coalesce
+        @chain node.value, before
+        @take '?', ONE
+        @expression node.fallback, ONE
+      when Range then @range(node, before)
+      when Conditional
+        @chain node.condition, before
+        @take 'then', ONE
+        @expression node.then_value, ONE
+        unless node.without_else
+          @take 'else', ONE
+          @expression node.else_value, ONE
+      when ArrayLiteral
+        @take '[', before
+        @list node.elements.length, NONE, (i, gap) -> @element(node.elements[i], gap)
+        @take ']', NONE
+      when MapLiteral
+        @take '{', before
+        @list node.entries.length, INSIDE, (i, gap) ->
+          entry := node.entries[i]
+          @expression entry.key, gap
+          @take ':', NONE
+          @expression entry.value, ONE
+        @take '}', INSIDE
+      when RecordLiteral then @record(node, before)
+      when TupleLiteral
+        @take '(', before
+        @list node.items.length, NONE, (i, gap) -> @expression(node.items[i], gap)
+        @take ')', NONE
+      when FunctionLiteral then @function(node, before)
+      when Return
+        @take 'return', before
+        @expression value, ONE if value := node.value
+      when Throw
+        @take 'throw', before
+        @expression node.message, ONE
+      when Yield
+        @take 'yield', before
+        @expression node.value, ONE
+      when Await
+        @take 'await', before
+        @expression node.operand, ONE
+      else unhandled()
+
+  # A negative literal is the two tokens `-` and the number.
+  number := (text: String, kind: TokenKind, before: CodeGap) ->
+    if text.starts_with('-')
+      @take '-', before
+      @take kind, NONE
+    else
+      @take kind, before
+
+  member := (node: Member, before: CodeGap) ->
+    if node.object is This and @at_kind('@')
+      @take '@', before
+    else
+      @chain node.object, before
+      @take '.', NONE
+    @take IDENTIFIER, NONE
+
+  # A call with parentheses, or without them, whose arguments follow a space.
+  call := (node: Call, before: CodeGap) ->
+    unhandled() unless node.type_args.is_empty()
+    @chain node.callee, before
+    if @at_kind('(') and not @code[@at].spaced
+      @take '(', NONE
+      @arguments node, NONE
+      @take ')', NONE
+    else
+      @arguments node, ONE
+
+  arguments := (node: Call, first: CodeGap) ->
+    { args, named_args } := node
+    @list args.length + named_args.length, first, (i, gap) ->
+      if i < args.length
+        @element args[i], gap
+      else
+        @named named_args[i - args.length], gap
+
+  named := (named: NamedValue, before: CodeGap) ->
+    @take IDENTIFIER, before
+    @take ':', NONE
+    @expression named.value, ONE
+
+  # An item of a list, which may be a spread, `xs...`.
+  element := (node: Expression, before: CodeGap) ->
+    if node is Comprehension and node.spread
+      @expression node.iterable, before
+      @take '...', NONE
+    else
+      @expression node, before
+
+  unary := (node: UnaryOperation, before: CodeGap) ->
+    if node.operator == '-'
+      # `- 1`, which `-1` would make a literal.
+      operand := @kind_at(@at + 1)
+      unhandled() if operand == INTEGER or operand == FLOAT
+      @take_before_operand '-', before
+      @expression node.operand, NONE
+    else if @at_kind('not')
+      @take_before_operand 'not', before
+      @expression node.operand, ONE
+    else
+      # `x not in xs`, which is read as `not (x in xs)`.
+      test := node.operand as BinaryOperation ? unhandled()
+      unhandled() if test.operator != 'in'
+      @chain test.left, before
+      @take_before_operand 'not', ONE
+      @take_spelled 'in', ONE
+      @expression test.right, ONE
+
+  range := (node: Range, before: CodeGap) ->
+    operator: TokenKind = node.inclusive then '..=' else '..'
+    if start := node.start
+      @chain start, before
+      @take operator, NONE
+    else
+      @take operator, before
+    @expression end, NONE if end := node.end
+
+  record := (node: RecordLiteral, before: CodeGap) ->
+    @take '{', before
+    spread := node.spread
+    spread_count := spread then 1 else 0
+    @list spread_count + node.fields.length, INSIDE, (i, gap) ->
+      if item := i == 0 then spread
+        @element item, gap
+      else
+        field := node.fields[i - spread_count]
+        @take IDENTIFIER, gap
+        if @at_kind(':')
+          @take ':', NONE
+          @expression field.value, ONE
+    @take '}', INSIDE
+
+  function := (node: FunctionLiteral, before: CodeGap) ->
+    unhandled() if node.weak or not node.type_params.is_empty()
+    var arrow_before = before
+    if @at_kind('(')
+      @take '(', before
+      @list node.params.length, NONE, (i, gap) -> @parameter(node.params[i], gap)
+      @take ')', NONE
+      arrow_before = ONE
+    if type := node.return_type
+      @take ':', NONE
+      @type type, ONE
+      arrow_before = ONE
+    arrow := @take('->', arrow_before)
+    if @at in @line_starts
+      # A body under a head on a later line of its statement would be deeper still.
+      unhandled() if @code[arrow].line != @statement_line
+      @block node.body, @depth + 1
+    else
+      unhandled() if node.body.length != 1
+      @statement node.body[0], ONE
+
+  parameter := (node: Parameter, before: CodeGap) ->
+    @take IDENTIFIER, before
+    if type := node.type
+      @take ':', NONE
+      @type type, ONE
+    @take '...', NONE if node.variadic
+    if default := node.default
+      @take '=', ONE
+      @expression default, ONE
+
+  # `count` items separated by commas, the first after `first`.
+  list := (count: Int, first: CodeGap, item: (Int, CodeGap) -> void) ->
+    for i in 0..count
+      @take ',', NONE if i > 0
+      item i, i == 0 then first else ONE
+
+  # An operator, which a shift writes as two tokens, `<` and `<`.
+  operator := (operator: String, before: CodeGap) ->
+    if operator == '<<' or operator == '>>'
+      half := operator == '<<' then '<' else '>'
+      @take_spelled half, before
+      @take_spelled half, NONE
+    else
+      @take_spelled operator, before
+
+  # A token that an operand follows, which a comment after it would leave at the start of a line.
+  take_before_operand := (kind: TokenKind, before: CodeGap) ->
+    index := @take(kind, before)
+    if index in @ending_comments
+      @stranded.push index
+      unhandled()
+    index
+
+  take := (kind: TokenKind, before: CodeGap) -> @take_if((token) -> token.kind == kind, before)
+
+  take_spelled := (spelling: String, before: CodeGap) ->
+    @take_if (token) -> spelling_of(token) == spelling, before
+
+  # The index of the next code token, which must be as `expected`, consumed, with the gap before it.
+  take_if := (expected: (Token) -> Bool, before: CodeGap) ->
+    unhandled() if @skipped_from != nil or @at == @code.length or not expected(@code[@at])
+    @gaps[@at] = before
+    @at += 1
+    @at - 1
+
+  at_kind := (kind: TokenKind) -> @kind_at(@at) == kind
+
+  kind_at := (index: Int) -> index < @code.length then @code[index].kind
+
+# A declaration of those that a destructuring stands for, whose position need not be where its line
+# starts: the one of the value, whose name cannot be written, or one of a name from it.
+is_destructuring_part := (statement: Statement) ->
+  declaration := statement as Declaration ? return false
+  { name, value } := declaration
+  from_holder := value is Member and is_holder(value.object)
+  is_holder(name) or value is TupleItem or from_holder
+
+# The name of what holds a value that a destructuring takes apart, which cannot be written.
+is_holder := (expression: Expression) -> expression is Identifier and '.' in expression.name
+
+# The expression at the left end of the node, whose parentheses are where the node's start.
+leftmost := (node: Expression): Expression ->
+  case node
+    when Call then leftmost(node.callee)
+    when BinaryOperation then leftmost(node.left)
+    when Member, Index then leftmost(node.object)
+    when Unwrap then leftmost(node.operand)
+    when Coalesce then leftmost(node.value)
+    when Conditional then leftmost(node.condition)
+    when Range
+      start := node.start ? return node
+      leftmost start
+    else node
+
+# A word, as `in`, is an identifier.
+spelling_of := (token: Token) ->
+  token.kind == IDENTIFIER then token.text else token.kind.to_string()
+
+index_by_position := (code: Token[]) ->
+  starts: Map<Position, Int>
+  starts[token.position()] = index for token, index in code
+  starts

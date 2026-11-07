@@ -4,7 +4,8 @@
 # <name>.formatted (the input itself if it is missing) and report <name>.remaining, what it cannot
 # fix, failing likewise; and `lerta fmt <name>.lerta` must then report that too. Then the command
 # line: the paths it takes, and what it does with a file that does not parse. Whether the code of
-# the repository is in the style is checked by `make check`.
+# the repository is in the style is checked by `make check`. The cases of tests/format2 check
+# `lerta fmt2`, the formatter that is to replace that of `lerta fmt`, likewise.
 import Check, run_checks, select from './lib/report'
 import compare_text, expect_status from './lib/expect'
 import
@@ -13,13 +14,15 @@ from './lib/lerta'
 import list_dir, make_dir, stat, write_file from 'std:io'
 
 work_dir := suite_dir('format')
-cases_dir := "#{root_dir}/tests/format"
 
 fmt := (cwd: String, args: String[]) -> await run_file(compiler, ['fmt', args...], cwd)
+fmt2 := (cwd: String, args: String[]) -> await run_file(compiler, ['fmt2', args...], cwd)
 
-case_check := (name: String) ->
-  Check name: "tests/format/#{name}", run: ->
-    dir := "#{work_dir}/#{name}"
+# A case of tests/<cases>, which `lerta <command>` formats.
+case_check := (cases: String, command: String, name: String) ->
+  Check name: "tests/#{cases}/#{name}", run: ->
+    cases_dir := "#{root_dir}/tests/#{cases}"
+    dir := "#{work_dir}/#{cases}/#{name}"
     make_dir dir
     input := await read_text_or_throw("#{cases_dir}/#{name}.in")
     file := "#{name}.lerta"
@@ -27,10 +30,11 @@ case_check := (name: String) ->
     expected_report := await read_text_or("#{cases_dir}/#{name}.report", '')
     remaining := await read_text_or("#{cases_dir}/#{name}.remaining", '')
     remaining_status := remaining.is_empty() then 0 else 1
-    checked := await fmt(dir, [file])
-    fixed := await fmt(dir, ['--fix', file])
+    run := (args: String[]) -> await run_file(compiler, [command, args...], dir)
+    checked := await run([file])
+    fixed := await run(['--fix', file])
     formatted := await read_text_or_throw("#{dir}/#{file}")
-    rechecked := await fmt(dir, [file])
+    rechecked := await run([file])
     [
       expect_run(checked, expected_report, expected_report.is_empty() then 0 else 1, 'report')...
       expect_run(fixed, remaining, remaining_status, '--fix stderr')...
@@ -262,10 +266,46 @@ command_checks: Check[] =
       ]
   }
 
-names := [file.without_suffix('.in')! for file in list_dir(cases_dir) when file.ends_with('.in')]
+fmt2_checks: Check[] =
+  { name: 'lerta fmt2 reports a path that is not a file, and goes on with the others', run: ->
+    dir := await tree('fmt2_missing', { 'a.lerta': "x  := 1\n" })
+    result := await fmt2(dir, ['missing.lerta', '.', 'a.lerta'])
+    spacing := 'put one space here, or none (Spacing)'
+    expected := "'missing.lerta' is not a file\n'.' is not a file\na.lerta:1:3: #{spacing}\n"
+    expect_run result, expected, 1
+  }
+  { name: 'lerta fmt2 reports a file that does not parse, and leaves it', run: ->
+    dir := await tree('fmt2_parse', { 'bad.lerta': "(\n" })
+    result := await fmt2(dir, ['--fix', 'bad.lerta'])
+    [
+      expect_run(result, "bad.lerta:1:1: '(' is never closed\n", 1)...
+      await expect_files(dir, { 'bad.lerta': "(\n" })...
+    ]
+  }
+  { name: 'lerta fmt2 --fix leaves a file in the style as it is', run: ->
+    dir := await tree('fmt2_styled', { 'a.lerta': "x := 1\n" })
+    path := "#{dir}/a.lerta"
+    await make_old([path])
+    time := modified_time(path)
+    [expect_run(await fmt2(dir, ['--fix', 'a.lerta']), '', 0)..., expect_unchanged(path, time)...]
+  }
+
+case_checks := (cases: String, command: String) ->
+  files := list_dir("#{root_dir}/tests/#{cases}")
+  [
+    case_check(cases, command, file.without_suffix('.in')!)
+    for file in files
+    when file.ends_with('.in')
+  ]
 
 # The number of the checks that failed.
 export suite := ->
   title := 'format checks'
-  checks := select(title, [(case_check(name) for name in names)..., command_checks...]) ? return 0
+  all_checks := [
+    case_checks('format', 'fmt')...
+    case_checks('format2', 'fmt2')...
+    command_checks...
+    fmt2_checks...
+  ]
+  checks := select(title, all_checks) ? return 0
   await run_checks(title, checks)
