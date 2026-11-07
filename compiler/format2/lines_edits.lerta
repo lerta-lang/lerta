@@ -1,7 +1,9 @@
 # The rewrites that the lines of a statement ask for (see lines.lerta), each the edit of the changes
 # to its tokens that lay it out.
 import Position from '../ast'
-import CALLS_WITHOUT_PARENTHESES, LONG_LISTS, StyleRule from '../format/rules'
+import
+  CALLS_WITHOUT_PARENTHESES, JOINED_LITERALS, LONG_LISTS, MULTI_LINE_LITERALS, StyleRule
+from '../format/rules'
 import Change from './edits'
 import Breaker from './lines'
 import ListShape from './shapes'
@@ -88,13 +90,61 @@ extend Breaker
 
   # The arguments on the line of the callee, separated by commas: a rewrite where they are in a
   # block below it, or lack commas.
-  join_arguments := (list: ListShape) ->
+  join_arguments := (list: ListShape) -> @rewrite(LONG_LISTS, @on_one_line(list.items, ' '))
+
+  # The changes that put the items on the line of the token before them, the first after `opening`,
+  # separated by commas.
+  on_one_line := (items: Int[], opening: String) ->
     changes: Change[]
-    for item, i in list.items
+    for item, i in items
       has_comma := i > 0 and @code[item - 1].kind == ','
-      on_line := item not in @line_starts
-      continue if on_line and (i == 0 or has_comma)
+      written := item not in @line_starts and (has_comma or (i == 0 and opening == ' '))
+      continue if written
       before := has_comma then item - 2 else item - 1
-      separator := i == 0 then ' ' else ', '
+      separator := i == 0 then opening else ', '
       changes.push { from: @tokens.end(before), to: @tokens.start(item), text: separator }
-    @rewrite LONG_LISTS, changes
+    changes
+
+  # The block literal in its brackets on the line of the head of its value, as `[` and `]`, or as
+  # `{ ` and ` }`, before the members after it.
+  bracket := (literal: ListShape, opening: String, closing: String, members: Bool) ->
+    last := literal.close - 1
+    to := members then @tokens.start(literal.close) else @tokens.end(last)
+    @rewrite JOINED_LITERALS, [
+      @on_one_line(literal.items, ' ' + opening)...
+      { from: @tokens.end(last), to, text: closing }
+    ]
+
+  # The literal without its brackets, in a block below the head of its value, and the members after
+  # it on the line after the block, as deep as the line of the head: whether its items are where a
+  # block can take them, on lines of their own, which they then keep, or on the line of its opening
+  # bracket, none spanning lines; and no comment ends the line of that bracket.
+  unbracket := (literal: ListShape, members: Bool) ->
+    { open, close, items } := literal
+    first := items[0]
+    on_lines := first in @line_starts
+    column := @code[first].column
+    spans := (i: Int) -> @code[items[i]].line != @code[@item_last(literal, i)].end_line
+    # A comment after the opening bracket would go on the line of the head, where no block follows.
+    return false if open in @ending_comments
+    return false if not on_lines and [i for i in 0..items.length].any(spans)
+    indentation := on_lines then column - 1 else @source_indentation(open) + 2
+    opening :=
+      if on_lines
+        Change from: @tokens.end(open - 1), to: @tokens.end(open), text: ''
+      else
+        @line_start open - 1, first, indentation
+    closing :=
+      case
+        when members then @line_start(close - 1, close + 1, @source_indentation(open))
+        when close in @line_starts then @line_left_out(close)
+        else @tokens.removed_with_spaces_before(close)
+    @rewrite MULTI_LINE_LITERALS, [opening, closing]
+    true
+
+  # The line of the code token, which holds it alone, left out, as a comment may end the line before
+  # it.
+  line_left_out := (index: Int) ->
+    start := Position(line: @code[index].line, column: 1)
+    return Change(from: start, to: @tokens.end(index), text: '') unless index + 1 < @code.length
+    Change from: start, to: @tokens.start(index + 1), text: ' '.repeat(@code[index + 1].column - 1)

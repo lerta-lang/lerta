@@ -7,7 +7,8 @@
 # lines_edits.lerta), and the statement laid out once it is applied.
 import Token from '../lexer/tokens'
 import
-  BRANCHES, COMMENTS, LAYOUT, LINE_LENGTH, LONG_LISTS, LONG_OPERATIONS, SPACING, StyleRule
+  BRANCHES, COMMENTS, LAYOUT, LINE_LENGTH, LONG_LISTS, LONG_OPERATIONS, MULTI_LINE_LITERALS,
+  SPACING, StyleRule
 from '../format/rules'
 import Edit from './edits'
 import
@@ -71,9 +72,9 @@ export class Breaker
   # a block (see list).
   opened := Set<Int>()
   blocks := Set<Int>()
-  # The arguments without parentheses that must go in a block below their callee, by its last
-  # token, as those of a value do.
-  arguments_below := Set<Int>()
+  # The lists without brackets that must go in a block below the token before them, by that token:
+  # the arguments of a value, and block literals.
+  in_blocks := Set<Int>()
   # The heads of the bodies that may go on their line whose statement is a call without
   # parentheses, which takes them there (see parenthesize): the width of its last token counts the
   # `)` until the body goes in a block.
@@ -320,8 +321,10 @@ export class Breaker
       when BELOW_COMMENT then below(COMMENTS)
       when BRANCH then below(BRANCHES)
       when LITERAL_BLOCK
-        # A block without brackets is a rewrite, which the walk leaves as written.
-        @keeps = true if not on_line() or @takes_lines(first, last)
+        if @literal_block(value, depth)
+          literal := value.shapes[0] as ListShape!
+          @decide [literal.shapes..., value.shapes[1..]...]
+          return
       when OPERATION
         if on_line() or (not on_next_line() and @starts_on_line(value))
           @flatten first, LONG_OPERATIONS
@@ -341,7 +344,7 @@ export class Breaker
           @parenthesize args
         else if not bracketed
           # Which a value cannot take on its line.
-          @arguments_below.add args.open
+          @in_blocks.add args.open
         else if not args.function_last and not @breaks(first, last + 1)
           # Unless a function's body takes the lines below.
           @unparenthesize args, "\n" + ' '.repeat(@source_indentation(args.open) + 2)
@@ -359,6 +362,31 @@ export class Breaker
         else
           below LINE_LENGTH
     @decide value.shapes
+
+  # A literal on its line, in its brackets, if it fits there and spans no lines, and otherwise in a
+  # block below the head of the value at `depth`, without them, with the members after it on the
+  # line after the block, as deep as the line of the head (see Multi-line literals): whether a
+  # rewrite of its brackets does so, which leaves its items as written for now.
+  literal_block := (value: ValueShape, depth: Int) ->
+    { first, last } := value
+    literal := value.shapes[0] as ListShape!
+    { bracketed, close } := literal
+    members := bracketed then close < last else close <= last
+    fits := (extra: Int, whole: Bool) ->
+      @fits(first, last, @column_of(first) + extra, whole) and not @takes_lines(first, last)
+    if bracketed
+      rewritten := not fits(0, false) and @unbracket(literal, members)
+      # Laid out in its brackets until its items are where a block can take them.
+      @flatten first, LINE_LENGTH unless rewritten
+      return rewritten
+    opening := literal.braced then '{ ' else '['
+    closing := literal.braced then ' }' else ']'
+    if fits(opening.count() + closing.count(), true)
+      @bracket literal, opening, closing, members
+      return true
+    @in_blocks.add literal.open
+    @gaps[close] = LineStart(depth: depth - 1, rule: MULTI_LINE_LITERALS) if members
+    false
 
   # Whether the first operand and operator of the operation that is the value fit on its line.
   starts_on_line := (value: ValueShape) ->
@@ -395,7 +423,7 @@ export class Breaker
     in_block := items[0] in @line_starts
     spanning :=
       in_block and (leading.any(spans) or (spans(items.length - 1) and not list.function_last))
-    may_join := open not in @arguments_below and not leading_lines and not spanning
+    may_join := open not in @in_blocks and not leading_lines and not spanning
     # Up to the body of a function last, whose lines are its own.
     body := list.shapes.last() as BodyShape?
     line_last := list.function_last and body != nil then body.head else last

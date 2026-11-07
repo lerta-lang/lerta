@@ -2,8 +2,8 @@
 import
   ArrayLiteral, BooleanLiteral, Call, Case, Declaration, EnumDeclaration, Expression, Extend,
   Extern, FloatLiteral, For, Identifier, If, Import, Index, IntegerLiteral, InterfaceDeclaration,
-  Intrinsic, is_spread, MapLiteral, Member, NamedValue, NilLiteral, RecordLiteral, Statement,
-  StringLiteral, Try, TupleItem, TypeAlias, TypeDeclaration, While
+  Intrinsic, is_spread, MapLiteral, Member, NamedValue, NilLiteral, Position, RecordLiteral,
+  Statement, StringLiteral, Try, TupleItem, TypeAlias, TypeDeclaration, While
 from '../ast'
 import is_command_callee from '../format/print_statement'
 
@@ -71,6 +71,21 @@ export is_block_literal := (literal: Expression) ->
 is_shorthand := (field: NamedValue) ->
   value := field.value
   value is Identifier and value.name == field.name.name
+
+# Whether the literal is written in a block without brackets, whose position is that of its first
+# item (see parse_block_literal), where one in brackets is that of its opening bracket.
+export is_written_in_block := (literal: Expression) ->
+  first := first_item_position(literal) ? return false
+  first.compare(literal.position) == EQUAL
+
+first_item_position := (literal: Expression): Position? ->
+  case literal
+    when ArrayLiteral then literal.elements.first()?.position
+    when MapLiteral then literal.entries.first()?.key.position
+    when RecordLiteral
+      spread := literal.spread ? return literal.fields.first()?.name.position
+      spread.position
+    else nil
 
 # The literal that the members of the value follow, as `[...].join('')`.
 export literal_under_members := (value: Expression): Expression? ->

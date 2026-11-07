@@ -9,7 +9,8 @@ from '../ast'
 import TokenKind from '../lexer/tokens'
 import FUNCTION_BODIES from '../format/rules'
 import
-  COMPARISON, is_block_call, is_block_literal, is_simple, level_of, literal_under_members
+  COMPARISON, is_block_call, is_block_literal, is_simple, is_written_in_block, level_of,
+  literal_under_members
 from './forms'
 import starts_command from '../format/print_statement'
 import CodeGap, ListShape, OperationShape, ValueKind, ValueShape from './shapes'
@@ -41,7 +42,9 @@ extend Walker
     return nil if @in_brackets or not in_block
     case node
       when Case then BRANCH
-      when ArrayLiteral, RecordLiteral, MapLiteral then is_block_literal(node) then LITERAL_BLOCK
+      when ArrayLiteral, RecordLiteral, MapLiteral
+        # One written in a block is one, as a spread may start a record there.
+        is_block_literal(node) or is_written_in_block(node) then LITERAL_BLOCK
       when FunctionLiteral then nil
       when BinaryOperation then OPERATION
       when Conditional then TWO_WAY
@@ -150,7 +153,7 @@ extend Walker
         @breaks_operations = breaks
         @value @take('then', ONE), node.then_value, false, false
         @value @take('else', ONE), node.else_value, false, false unless node.without_else
-      when ArrayLiteral then @bracketed('[', before, ']', NONE, @element_items(node.elements))
+      when ArrayLiteral then @literal(node, '[', before, ']', NONE, @element_items(node.elements))
       when MapLiteral then @map(node, before)
       when RecordLiteral then @record(node, before)
       when TupleLiteral
@@ -225,15 +228,27 @@ extend Walker
     spaced_minus := @code[items[0]].kind == '-' and @code[items[0] + 1].spaced
     on_one_line and not spaced_minus and not @has_comments(open, close)
 
-  # The arguments of a call without parentheses (see ListShape), separated by line ends only in a
-  # block below the callee.
-  unbracketed := (items: ListItems) ->
+  # A literal in its brackets, or without them in a block below the head of a value (see Block
+  # literals).
+  literal := (
+    node: Expression, open: TokenKind, before: CodeGap, close: TokenKind, inside: CodeGap,
+    items: ListItems
+  ) ->
+    if is_written_in_block(node)
+      @unbracketed items, open == '{'
+    else
+      @bracketed open, before, close, inside, items
+
+  # A list without brackets (see ListShape), separated by line ends only in a block below the token
+  # before it.
+  unbracketed := (items: ListItems, braced = false) ->
     open := @at - 1
     outer := @shapes
     @shapes = []
     walked := @list(items.count, ONE, items.walk, @at in @line_starts)
     shape := ListShape
       open
+      braced
       bracketed: false
       close: @at
       items: walked.starts
@@ -327,7 +342,7 @@ extend Walker
       count: entries.length
       simple: (i) -> is_simple(entries[i].key) and is_simple(entries[i].value)
       function_last: [entry.value for entry in entries].last() is FunctionLiteral
-    @bracketed '{', before, '}', INSIDE, items
+    @literal node, '{', before, '}', INSIDE, items
 
   record := (node: RecordLiteral, before: CodeGap) ->
     { spread, fields } := node
@@ -345,7 +360,7 @@ extend Walker
       simple: (i) -> i >= spread_count and is_simple(fields[i - spread_count].value)
       function_last: [field.value for field in fields].last() is FunctionLiteral
     # `{}`, of no fields, has no space inside.
-    @bracketed '{', before, '}', items.count == 0 then NONE else INSIDE, items
+    @literal node, '{', before, '}', items.count == 0 then NONE else INSIDE, items
 
   function := (node: FunctionLiteral, before: CodeGap) ->
     unhandled() if node.weak or not node.type_params.is_empty()
