@@ -83,6 +83,15 @@ See [the reference](../reference/std.md#stdprocess).
 - `lerta test`, which runs the tests of a program, each apart, and reports those that fail. Its tests are functions found by a rule yet to be decided.
 - Package management.
 
+### Playground
+
+A page of the site where code is edited and run in the browser.
+
+1. At first, a server compiles and runs the code and returns its output, as the Go and Rust playgrounds do. It needs no wasm, and every feature works, but the code runs in a sandbox: a container without network, with limits on time and memory.
+2. Later, the server compiles to [WebAssembly](runtime.md#platforms) and the browser runs it, so that the server runs no code it is given.
+
+- Not adopted: the compiler in the browser too. It would need LLVM there, tens of megabytes, or a backend of its own that writes wasm.
+
 ### LLVM in process
 
 LLVM emits objects, and `lld` links them, on all platforms.

@@ -120,6 +120,12 @@ The size classes of the allocator ([internals](../internals/memory.md#allocation
   - The platform functions are replaced, as the allocator's regions are by a static heap (see [allocation](../internals/memory.md#allocation)). The rest of the runtime needs only what [the runtime rules](../internals/architecture.md#runtime-rules) allow of the C library.
   - Beware of code bloat from monomorphization. Remedies when needed: merging instances with identical machine code at link time (LLVM mergefunc, lld ICF), and a build option to switch to dispatch through interfaces.
   - Where there is no guard page, the remaining stack is checked at function entry (the Go approach).
+- **WebAssembly** as a target, first `wasm32-wasi`, then the browser, for the [playground](programs.md#playground).
+  - The IR needs little change: exceptions are return values and coroutine frames are on the heap, so neither wasm's exception handling nor stack switching is needed.
+  - libuv has no wasm port: the platform functions and the event loop are replaced, as on microcontrollers. In the browser, the loop yields to the host's, and `print`, `stdin` and timers go through JS.
+  - No threads: output, stdin and files are synchronous there, in place of their threads and libuv's thread pool.
+  - `run` and `std:net` are not available at first; sockets may come with WASI preview 2.
+  - A stack overflow traps without the panic's message.
 
 ## Open questions
 
