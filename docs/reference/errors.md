@@ -42,6 +42,24 @@ The runtime's errors are exceptions too, of types that `std:builtins` exports, e
 | `ValueError` | an argument of a value that a function does not take, as `split('')`, `exit(256)`, `sleep(-1)`; a negative count, length or limit (`repeat(-1)`, `truncate(-1)`; 0 is taken); `zip` of Iterables of different lengths; `c + n` or `c - n` of a `Char` past the Unicode scalar values |
 | `InitError` | a top-level value used before it is initialized (see [top-level values](functions.md#top-level-values)) |
 | `CancelledError` | the `await` of a promise that is cancelled (see [functions that await](functions.md#functions-that-await)) |
+| `AssertionError` | a failed [`assert`](#assert), or `assert_throws` of [std:test](std.md#stdtest) |
+
+### assert
+
+```lerta
+assert scores['ann'] == 3
+assert value is String
+print value.to_upper()
+```
+
+- `assert condition` throws an `AssertionError` unless the condition holds: a `Bool`, or an optional value, which holds when it is not nil, as the condition of an `if`.
+- What follows is narrowed where the condition holds, as after a guard (see [narrowing](control-flow.md#narrowing)): above, `value` is a `String` after the second assert.
+- The message tells where the call is and quotes it, as `scores.lerta:4:1: assert scores['ann'] == 3`: its line, through the line that closes the brackets it opens, without a comment after it.
+- Of a comparison (`==`, `!=`, `<`, `<=`, `>`, `>=`, `in`) or `x is T`, the message gives a line for each operand that is not written as a literal, `  left: 2`, `  right: ...` or `  value: ...`, with its [literal](builtins.md#literal):
+  - for a value of an optional type, `nil` or the literal of what it holds;
+  - none for a value whose type has no `to_literal`.
+- Each operand is evaluated once, before the comparison: the message gives the value that was compared. An operand that takes its type from the other, as `1` in `small == 1` of an `Int8`, is typed as it is in the comparison.
+- `assert` can only be called, not used as a value. A name of the program's own hides it, as it hides any builtin.
 
 ### try and catch
 

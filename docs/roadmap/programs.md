@@ -72,7 +72,6 @@ See [the reference](../reference/std.md#stdprocess).
 - Text helpers:
   - `skip(count)` of a [Scanner](../reference/std.md#stdscanner);
   - `s.index_of(part)`: the byte offset of the first occurrence of `part`, or nil.
-- For tests: `assert(condition)`, which throws, and `assert_equal(actual, expected)`, which says both values as their [literals](../reference/builtins.md#literal).
 - `dbg(x)`, which prints the expression and its literal to stderr and gives `x`.
 
 ## Tools

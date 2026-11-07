@@ -10,6 +10,7 @@
 | Function | |
 |---|---|
 | `panic(message: String): never` | Stops the program at once (see [panics](errors.md#panics)). |
+| `assert condition` | Throws an `AssertionError` unless the condition holds (see [assert](errors.md#assert)). |
 | `print<T: Stringable>(x: T)` | Writes `x.to_string()` and a newline to stdout. |
 | `print_error<T: Stringable>(x: T)` | Likewise, to stderr. |
 | `min<T: Comparable>(a: T, b: T): T` | The lesser argument by [compare](#equatable-comparable-and-hashable), the first of equal ones: `min(3, 1)` is `1`. |
