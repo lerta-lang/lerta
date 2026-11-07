@@ -777,7 +777,6 @@ print kind == '('
 - `enum Name` declares, at the top level, a type whose values are its members, listed one per line in the indented block below: at least one.
 - A member is a name, `INTEGER`, or a string literal without interpolation, `'('`.
 - Its text is the name, or the literal's value. No two members have the same text, so `IDENTIFIER` and `'IDENTIFIER'` cannot both be members.
-- A name member cannot be `parse`, which `Name.parse` takes; `'parse'` can.
 - The members carry no data.
 
 ### Naming a member
@@ -788,7 +787,7 @@ print kind == '('
   - in the other operand of `==` and `!=`;
   - in the items of an array literal after `in`: `kind in ['(', '->']`;
   - in the patterns of a [`case`](control-flow.md#case-with-a-subject) on an enum.
-- A string literal there that is no such member is an error, `'INTEGER'` included. Where no enum is expected, it is a `String`, as it is where the union holds a `String` too; a member declared as a string literal then has no spelling but through `Name.parse`.
+- A string literal there that is no such member is an error, `'INTEGER'` included. Where no enum is expected, it is a `String`, as it is where the union holds a `String` too; a member declared as a string literal then has no spelling but through `parse` of [std:enums](std.md#stdenums).
 - A member name alone cannot take the place of another name in scope, such as a local, a function or an import of the same name; it must be qualified there.
 - Without an expected enum, a member name alone is an undefined name.
 
@@ -797,7 +796,7 @@ print kind == '('
 - `==` and `!=` compare two values of the same enum. There is no ordering.
 - An enum can be a [`Map`](#map) key.
 - It is `Stringable`: `kind.to_string()` gives the member's text, `'INTEGER'` or `'('`.
-- `Name.parse(text)` gives the member whose text is the `String` `text`, or `nil`. It must be called.
+- `parse<Name>(text)` of [std:enums](std.md#stdenums) gives the member whose text is the `String` `text`, or `nil`, and `members<Name>()` the members in order.
 
 ## Anonymous structs
 

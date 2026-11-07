@@ -191,7 +191,8 @@ LertaString *lerta_binary_push(LertaString *binary, uint8_t byte);
 LertaString *lerta_string_push(LertaString *s, uint32_t c);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
 uint64_t lerta_string_hash(const LertaString *s);
-// The place of `text` among an enum's `count` member texts, or -1 if none has it (`E.parse`).
+// The place of `text` among an enum's `count` member texts, or -1 if none has it (`parse<E>` of
+// std:enums).
 int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const LertaString *text);
 
 // Binary (binary.c): the same representation as String, without the UTF-8 guarantee.

@@ -42,7 +42,7 @@ The members of a type, one per line, are declared as locals are (see [declaratio
 - Inside methods, `@` is the object and `@x` its member `x`; `@.x` is an error.
 - An initializer can use `@` only to read a field set before it (`@name`). The object is not complete yet, so it cannot be passed on, and its methods cannot be called.
 - `p.x` reads a field; `p.m(...)` calls a method.
-- There are no static members, except an [enum](types.md#enums)'s builtin `parse`. Write functions related to a type as module functions. `extend` adds methods, not functions without a receiver.
+- There are no static members. Write functions related to a type as module functions. `extend` adds methods, not functions without a receiver.
 
 #### Methods
 

@@ -79,7 +79,7 @@ What `std:builtins`, in the files of `std/builtins/`, cannot write in Lerta (see
   - Their loads and stores have a type-based alias tag of their own (see [alias analysis](memory.md#alias-analysis)).
 - `s.binary` passes on the String itself.
 - An enum's `to_string` and `to_literal` (since an enum cannot be extended) index a constant array of the members' texts, or of the members as declared, that the compiler generates for the enum, by the value: the member's place among the members, as an `i64`.
-- `E.parse` has the runtime's `lerta_enum_parse` compare its argument with each text in turn, allocating nothing.
+- `parse<E>` of std:enums has the runtime's `lerta_enum_parse` compare its argument with each text in turn, allocating nothing.
 - A `Float`'s `to_float32` and a `Float32`'s `to_float` are an `fptrunc` and an `fpext`.
 - The checker resolves the name of such a method once, to a member of `BuiltinMember` (`compiler/checker/builtins.lerta`). Codegen generates it by a `case` on that member with no `else`, so that a member that codegen does not handle is a compile error.
 - **Slices.** An index by a range is no method, so that the program cannot call it by name:

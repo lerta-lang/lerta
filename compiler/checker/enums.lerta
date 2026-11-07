@@ -1,20 +1,20 @@
 # Enums: their declarations, the expressions that name their members, `E.MEMBER`, or `MEMBER` or
-# `'text'` alone where an E is expected, and `E.parse`.
+# `'text'` alone where an E is expected, and std:enums' `parse` and `members`.
 import COMPLETION_NAME, probe_enum from './completion_probe'
 import Call, EnumDeclaration, Expression, Identifier, Member, Position, StringLiteral from '../ast'
 import fail, fail_already_defined, fail_already_member from './diagnostics'
 import has_function from './functions'
 import builtin_export, builtin_type, has_import, imported_type from './imports'
 import record_member from './member'
-import EnumParse, EnumValue from './member_targets'
+import EnumValue from './member_targets'
 import lookup, qualified_name, record_reference from './name'
 import EnumQuery, EnumQueryKind from './references'
 import expect_type from './expression'
 import resolve from './type_names'
 import Body, declared_symbol, has_declared_type, ProgramWide, Shared from './shared'
 import
-  ArrayType, EnumMember, EnumType, format_type, FunctionType, inner_of_expected, InterfaceType,
-  is_kind, optional_type, string_type, Type, TypeParameterType, UnionType
+  ArrayType, EnumMember, EnumType, format_type, inner_of_expected, InterfaceType, is_kind,
+  optional_type, string_type, Type, TypeParameterType, UnionType
 from '../types'
 
 # Registers the module's enums, after its classes and structs (see add_objects).
@@ -29,8 +29,6 @@ export add_enums := (shared: Shared, declarations: EnumDeclaration[]) ->
         case member
           when Identifier then member.name
           when StringLiteral then member.value
-      if member is Identifier and text == 'parse'
-        fail program, member.position, "'parse' cannot name a member: #{name}.parse parses one"
       # A name and a literal of the same text would have the same to_string and parse.
       if members.any((each) -> each.text == text)
         fail_already_member program, member.position, text, name
@@ -49,19 +47,11 @@ export type_of_qualified_member := (body: Body, member: Member, expected: Type?)
   type := qualifying_enum(body, member) ? return nil
   { name, position } := member.name
   probe_enum body, type if name == COMPLETION_NAME
-  fail body.program, position, "#{type.name}.parse must be called" if name == 'parse'
   no_member := -> fail(body.program, position, "#{type.name} has no member '#{name}'")
   record_member body, member, EnumValue(name_index(type, name) ? no_member())
   where_expected := expected_enum(expected)?.symbol == type.symbol
   body.facts.unqualifiable.add member if where_expected and not is_name_taken(body, name)
   type
-
-# `E.parse`, the member whose to_string gives a String, or nil.
-export enum_parse_type := (body: Body, member: Member) ->
-  return nil if member.name.name != 'parse'
-  type := qualifying_enum(body, member) ? return nil
-  record_member body, member, EnumParse(type)
-  FunctionType params: [string_type], result: optional_type(type)
 
 # `parse<E>(text)` of std:enums, the member of the enum E whose text is the String, or nil, and
 # `members<E>()`, its members in their order.

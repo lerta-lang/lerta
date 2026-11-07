@@ -11,7 +11,6 @@ The planned design of classes and structs, interfaces, generics and equality.
 - **Static members,** called on the type, as `Date.parse(text)`.
   - Why: a function made for a type is found by the type, as std:json finds `from_json` (see [programs](programs.md#standard-library)).
   - An interface may have them, as `from_json: static (J) -> Self`, which only bounds type parameters, as `Self` does.
-  - Enum's builtin `parse` becomes one.
   - They replace the rule that functions related to a type are module functions ([the reference](../reference/objects.md#members)).
 - **Local types.** Classes, structs, enums and type aliases declared inside a function, visible in its scope.
   - Their methods and initializers do not see the function's locals, so that a type does not become a closure.

@@ -286,4 +286,4 @@ The signatures of the methods of the builtin types, by type. What each does is i
 [Enums](types.md#enums).
 
 - `to_string(): String`, `to_literal(): String`
-- static `E.parse(text: String): E?`
+- The member of a text, and the members in order: `parse` and `members` of [std:enums](std.md#stdenums).
