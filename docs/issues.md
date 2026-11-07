@@ -21,3 +21,7 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 ## The main run loop stays off for CoreFoundation loaded after the first wait
 
 `uses_run_loop` (`runtime/loop.c`) looks for CoreFoundation once, at the program's first wait (see [the main run loop](internals/iteration.md#the-main-run-loop)). A program that waits, then loads a framework with `dlopen` and has it post a block to the main dispatch queue, never runs the block. Fix: look again at later waits while it is not found, if that costs a waiting program little.
+
+## fmt writes a program that does not parse for an operation after a comment in block arguments
+
+`x := f`, over the arguments `1`, a comment on a line of its own and `2 +  3`, makes `lerta fmt` fail with `the formatter would write a program that does not parse, which is a bug`; with `2` in place of `2 +  3`, it does not. The operation after the comment is laid out where it cannot be read back, by `value_after` or `bracketed_or` (`compiler/format/print_literal.lerta`, `compiler/format/printing.lerta`) for arguments that a comment puts in a block. Fix: find the form that the formatter writes there, and lay the operation out on a line of its own in the block.
