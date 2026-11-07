@@ -25,7 +25,7 @@ import check_block, check_if_condition, check_statement, define_local, nothing f
 import CLOSING_BRACKETS, lex, OPENING_BRACKETS, Token, TokenKind from '../lexer/tokens'
 import is_standard_name, module_location from '../source'
 import
-  format_type, inner_of, is_one_of_kinds, OptionalType, string_type, Type, void_type
+  ArrayType, format_type, inner_of, is_one_of_kinds, OptionalType, string_type, Type, void_type
 from '../types'
 
 INTRINSICS := ['assert', 'assert_throws', 'dbg', 'encode_value', 'decode_value']
@@ -292,7 +292,10 @@ shown_error := (body: Body, error: Expression, type_name: String): Expression ->
   return text_of(error) unless type_of(body, error) is OptionalType
   present_or error, 'nothing', text_of
 
-has_literal := (body: Body, type: Type, at: Position) ->
+# An array has a to_literal only where its items have one, which looking it up for other items
+# would report as an error.
+has_literal := (body: Body, type: Type, at: Position): Bool ->
+  return has_literal(body, type.element, at) if type is ArrayType
   has_method body, type, Identifier(name: 'to_literal', position: at)
 
 # `if v := value then present(v) else absent`, of a name that no source can write.

@@ -31,7 +31,7 @@
 n := dbg(xs.length) + 1
 ```
 
-- It writes a line to stderr, `scores.lerta:4:6: dbg(xs.length) = 3`: where the call is, its code as written, through its `)`, and the [literal](#literal) of `x`, as [`assert`](errors.md#assert) gives an operand's; `<T>` for a value of a type `T` that has no `to_literal`. An array, map or set of items that have none is an error, as a call of its `to_literal` is.
+- It writes a line to stderr, `scores.lerta:4:6: dbg(xs.length) = 3`: where the call is, its code as written, through its `)`, and the [literal](#literal) of `x`, as [`assert`](errors.md#assert) gives an operand's; `<T>` for a value of a type `T` that has no `to_literal`, as `<Point[]>` for an array of items that have none, or a map or set of them.
 - It gives `x`, which it evaluates once, typed as it is where the call's value is expected: `small: Int8 = dbg(3)`. A value of type `nil`, `void` or `never` is an error.
 - It writes as `print_error` does, which a name of the program's own does not hide.
 - It can only be called, not used as a value.
