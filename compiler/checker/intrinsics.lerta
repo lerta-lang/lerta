@@ -10,9 +10,11 @@ import
 from '../ast'
 import fail from './diagnostics'
 import may_name_member from './enums'
-import type_of from './expression'
-import add_intrinsic from './imports'
-import qualified_name from './name'
+import expect_type, set_type, type_of from './expression'
+import type_of_codable_call from './codable'
+import ExternReference from './references'
+import add_intrinsic, builtins_declarer from './imports'
+import qualified_name, record_reference from './name'
 import constructed_type from './object'
 import is_contextual from './literals'
 import compares_by_contents from './equality'
@@ -22,9 +24,11 @@ import Local from './scopes'
 import check_block, check_if_condition, check_statement, define_local, nothing from './statement'
 import CLOSING_BRACKETS, lex, OPENING_BRACKETS, Token, TokenKind from '../lexer/tokens'
 import is_standard_name, module_location from '../source'
-import format_type, inner_of, OptionalType, Type, void_type from '../types'
+import
+  format_type, inner_of, is_one_of_kinds, OptionalType, string_type, Type, void_type
+from '../types'
 
-INTRINSICS := ['assert', 'assert_throws']
+INTRINSICS := ['assert', 'assert_throws', 'dbg', 'encode_value', 'decode_value']
 
 # Only a standard module declares intrinsics, and only those that the compiler gives.
 export declare_intrinsics := (shared: Shared, statements: Statement[]) ->
@@ -37,14 +41,26 @@ export declare_intrinsics := (shared: Shared, statements: Statement[]) ->
     fail program, name.position, "no intrinsic '#{name.name}'" unless name.name in INTRINSICS
     add_intrinsic shared, name
 
-export type_of_intrinsic_call := (body: Body, call: Call, name: String) ->
+# The code that the checker makes for a call of an intrinsic, which codegen generates in its place:
+# its statements, then its value, if it gives one.
+export struct IntrinsicCode
+  statements: Statement[]
+  value: Expression?
+
+# The type of the call. `encode_value` and `decode_value` of std:codable are calls of the code
+# that codegen makes for each type (see type_of_codable_call); the others give code of their own.
+export type_of_intrinsic_call := (body: Body, call: Call, name: String, expected: Type?) ->
+  return type_of_codable_call(body, call, ENCODE) if name == 'encode_value'
+  return type_of_codable_call(body, call, DECODE) if name == 'decode_value'
   reject_named_arguments body, call, name
-  statements :=
+  code :=
     case name
-      when 'assert' then assertion(body, call)
-      else thrown_assertion(body, call)
-  body.facts.intrinsic_calls[call] = statements
-  void_type
+      when 'assert' then IntrinsicCode(statements: assertion(body, call), value: nil)
+      when 'assert_throws' then IntrinsicCode(statements: thrown_assertion(body, call), value: nil)
+      else debugged(body, call, expected)
+  body.facts.intrinsic_calls[call] = code
+  value := code.value ? return void_type
+  type_of body, value
 
 reject_named_arguments := (body: Body, call: Call, name: String) ->
   return if call.named_args.is_empty() and call.type_args.is_empty()
@@ -197,6 +213,40 @@ thrown_assertion := (body: Body, call: Call) ->
   statements: Statement[] = [declarations..., guard(body, call, test, shown)]
   statements
 
+# `dbg(value)`: writes where the call is, its code and the literal of the value to stderr, and
+# gives the value, which it evaluates once, typed where it is expected.
+debugged := (body: Body, call: Call, expected: Type?) ->
+  fail body.program, call.position, 'dbg takes one value' if call.args.length != 1
+  at := call.position
+  name := "#{local_prefix('dbg', at)}.value"
+  held := held_local(body, name, call.args[0], expected)
+  # nil alone has no type to hold it by, and void and never have no value.
+  held_type := type_of(body, named(name, at))
+  if is_one_of_kinds(held_type, ['nil', 'void', 'never'])
+    message := "dbg takes a value, not one of type #{format_type(held_type)}"
+    fail body.program, call.args[0].position, message
+  shown := literal_text(body, named(name, at)) ? text(
+    "<#{format_type(type_of(body, named(name, at)))}>"
+    at
+  )
+  line :=
+    concatenation(concatenation(text("#{quoted_call(body, call)} = ", at), shown), text("\n", at))
+  IntrinsicCode statements: [held, stderr_write(body, line)], value: named(name, at)
+
+# The call of std:builtins' C function that writes the text to stderr, typed here rather than
+# checked, as a name of the program's own could hide the function's.
+stderr_write := (body: Body, text: Expression): Statement ->
+  program := body.program
+  symbol := 'lerta_print_stderr'
+  expect_type body, text, string_type
+  callee := named(symbol, text.position)
+  call := Call(callee, position: text.position, args: [text], named_args: [], type_args: [])
+  declarer := builtins_declarer(program, 'print_error')
+  record_reference body, callee, ExternReference(symbol, module_index: declarer.index, name: symbol)
+  set_type body, callee, program.extern_types[symbol]!.type
+  set_type body, call, void_type
+  call
+
 # The name of the type that the expression constructs, `T(...)` or `module.T(...)`, as a type name.
 constructed_type_name := (body: Body, expression: Expression) ->
   call := expression as Call ? return nil
@@ -309,9 +359,12 @@ code_at := (source: String, tokens: Token[], at: Position) ->
   parts.push columns(lines[last.end_line - 1], 1, last.end_column)
   parts.join "\n"
 
-# The place of the last token of the code that starts at `start`, before the end of its line or a
-# bracket that it does not open.
+# The place of the last token of the call whose callee is at `start`: the `)` that closes its
+# arguments if they are in parentheses, as the call may be part of an expression; else the last
+# before the end of its line or a bracket that it does not open.
 last_of_code := (tokens: Token[], start: Int) ->
+  next := tokens[start + 1]
+  in_parentheses := next.kind == '(' and not next.spaced
   var depth = 0
   var last = start
   for i in start..tokens.length
@@ -321,6 +374,7 @@ last_of_code := (tokens: Token[], start: Int) ->
     else if kind in CLOSING_BRACKETS
       break if depth == 0
       depth -= 1
+      return i if depth == 0 and in_parentheses
     else if depth == 0 and kind in LINE_ENDS
       break
     last = i
