@@ -1,0 +1,84 @@
+# What the walk asks about the syntax: predicates, and the precedence of operators (see walk.lerta).
+import
+  ArrayLiteral, BooleanLiteral, Call, Case, Declaration, EnumDeclaration, Expression, Extend,
+  Extern, FloatLiteral, For, Identifier, If, Import, Index, IntegerLiteral, InterfaceDeclaration,
+  Intrinsic, is_spread, MapLiteral, Member, NamedValue, NilLiteral, RecordLiteral, Statement,
+  StringLiteral, Try, TupleItem, TypeAlias, TypeDeclaration, While
+from '../ast'
+import is_command_callee from '../format/print_statement'
+
+# A declaration of those that a destructuring stands for, whose position need not be where its line
+# starts: the one of the value, whose name cannot be written, or one of a name from it.
+export is_destructuring_part := (statement: Statement) ->
+  declaration := statement as Declaration ? return false
+  { name, value } := declaration
+  from_holder := value is Member and is_holder(value.object)
+  is_holder(name) or value is TupleItem or from_holder
+
+# The name of what holds a value that a destructuring takes apart, which cannot be written.
+is_holder := (expression: Expression) -> expression is Identifier and '.' in expression.name
+
+# The precedence of a binary operator, as those of operators in docs/reference/syntax.md.
+export COMPARISON := 0
+
+export level_of := (operator: String) ->
+  case operator
+    when 'or' then 1
+    when 'and' then 2
+    when '+', '-', '|', '^' then 3
+    when '*', '/', '%', '&', '<<', '>>' then 4
+    else COMPARISON
+
+# A string longer than this may stand for a line of text, which a list puts on a line of its own.
+SHORT_STRING := 12
+
+# A name or a short literal, which shares a line with others in a long list (see Long lists).
+export is_simple := (node: Expression) ->
+  case node
+    when Identifier, IntegerLiteral, FloatLiteral, BooleanLiteral, NilLiteral then true
+    when StringLiteral then node.value.count() <= SHORT_STRING
+    else false
+
+# A statement that the line of `->`, `then` or `else` can hold: one that holds no block, nor
+# declares; and not the name `pass` alone, which there would be the arm that does nothing.
+export is_inline := (statement: Statement) ->
+  case statement
+    when
+      Declaration, While, For, TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias,
+      Extern, Intrinsic, Extend, Import, Case, Try
+    then false
+    when If then statement.nil_safe
+    when Identifier then statement.name != 'pass'
+    else true
+
+# A call whose callee could take its arguments without parentheses, or in a block.
+export is_block_call := (node: Expression) ->
+  call := node as Call ? return false
+  has_arguments := not call.args.is_empty() or not call.named_args.is_empty()
+  has_arguments and call.type_args.is_empty() and is_command_callee(call.callee)
+
+# A literal that a block without brackets can hold: one that reads as the literal there, with more
+# than one element, no spread, and no name alone for a field, which would read as an element.
+export is_block_literal := (literal: Expression) ->
+  case literal
+    when ArrayLiteral then literal.elements.length > 1 and not literal.elements.any(is_spread)
+    when RecordLiteral
+      shorthand := literal.fields.any((field) -> is_shorthand(field))
+      not literal.fields.is_empty() and not shorthand and literal.spread == nil
+    when MapLiteral then not literal.entries.is_empty()
+    else false
+
+is_shorthand := (field: NamedValue) ->
+  value := field.value
+  value is Identifier and value.name == field.name.name
+
+# The literal that the members of the value follow, as `[...].join('')`.
+export literal_under_members := (value: Expression): Expression? ->
+  object :=
+    case value
+      when Member then value.object
+      when Call then value.callee
+      when Index then value.object
+      else return nil
+  return object if object is ArrayLiteral or object is RecordLiteral or object is MapLiteral
+  literal_under_members object

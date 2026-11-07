@@ -1,0 +1,361 @@
+# The walk of expressions (see walk.lerta).
+import
+  ArrayLiteral, ArrayTypeName, Await, BinaryOperation, BooleanLiteral, Call, Case, Coalesce,
+  Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, Identifier, Index,
+  IntegerLiteral, Interpolation, Jump, MapLiteral, Member, NamedType, NamedValue, NilLiteral,
+  Parameter, Range, RecordLiteral, Return, StringLiteral, This, Throw, TupleLiteral, TypeName,
+  UnaryOperation, Unwrap, Yield
+from '../ast'
+import TokenKind from '../lexer/tokens'
+import FUNCTION_BODIES from '../format/rules'
+import
+  COMPARISON, is_block_call, is_block_literal, is_simple, level_of, literal_under_members
+from './forms'
+import CodeGap, OperationShape, ValueKind, ValueShape from './shapes'
+import INSIDE, NONE, ONE, unhandled, Walker from './walk'
+import ListItems from './walk_lists'
+import './walk_statements'
+
+extend Walker
+  # The value after the token at `after`: after `=`, `:=`, a compound assignment or `return` if
+  # `in_block`, and otherwise after a key, `then` or `else`, where it takes the next line only after
+  # a comment (see ValueShape). That after `then` or `else` is an operand, which `breaks` tells.
+  value := (after: Int, node: Expression, in_block: Bool, breaks = true) ->
+    first := @at
+    walk := (gap: CodeGap) ->
+      if breaks
+        @whole node, gap
+      else
+        @operand node, gap
+    kind := @value_kind(after, node, in_block) ? return walk(ONE)
+    outer := @shapes
+    @shapes = []
+    @bracketless_call = first if kind == BLOCK_CALL
+    walk ONE
+    @bracketless_call = nil
+    shape := ValueShape(first, kind, last: @at - 1, shapes: @shapes)
+    @shapes = outer
+    @shapes.push shape
+
+  value_kind := (after: Int, node: Expression, in_block: Bool): ValueKind? ->
+    return BELOW_COMMENT if after in @ending_comments
+    return nil if @in_brackets or not in_block
+    case node
+      when Case then BRANCH
+      when ArrayLiteral, RecordLiteral, MapLiteral then is_block_literal(node) then LITERAL_BLOCK
+      when FunctionLiteral then nil
+      when BinaryOperation then OPERATION
+      when Conditional then TWO_WAY
+      else
+        if literal := literal_under_members(node)
+          return LITERAL_BLOCK if is_block_literal(literal)
+        is_block_call(node) and @on_own_line then BLOCK_CALL else OTHER
+
+  type := (type: TypeName, before: CodeGap): void ->
+    case type
+      when NamedType
+        @take IDENTIFIER, before
+        unless type.args.is_empty()
+          @take '<', NONE
+          @list type.args.length, NONE, (i, gap) -> @type(type.args[i], gap), false
+          @take '>', NONE
+        @take '?', NONE if type.optional
+      when ArrayTypeName
+        @type type.element, before
+        @take '[', NONE
+        @take ']', NONE
+        @take '?', NONE if type.optional
+      else unhandled()
+
+  # A whole value, as an item or a value after `=`, whose operations may break.
+  whole := (node: Expression, before: CodeGap) ->
+    breaks := @breaks_operations
+    @breaks_operations = true
+    @expression node, before
+    @breaks_operations = breaks
+
+  # An operand, or a head, whose operations stay on its line.
+  operand := (node: Expression, before: CodeGap) ->
+    breaks := @breaks_operations
+    @breaks_operations = false
+    @expression node, before
+    @breaks_operations = breaks
+
+  # An expression, with the parentheses around it.
+  expression := (node: Expression, before: CodeGap): void ->
+    outer_groups := @open_groups
+    @open_groups = 0
+    @chain node, before
+    unhandled() if @open_groups != 0
+    @open_groups = outer_groups
+
+  # The expression and those at its start, as the left operand of an operation, whose parentheses
+  # an expression opens at its start: each that the chain closes after its end is around it.
+  chain := (node: Expression, before: CodeGap): void ->
+    @node_start = @at
+    var first = before
+    groups := @groups_at_start(node)
+    for _ in 0..groups
+      @take_before_operand '(', first
+      first = NONE
+      @open_groups += 1
+    # An operation in parentheses stays on its line, which its `)` would end otherwise.
+    breaks := @breaks_operations
+    @breaks_operations = false if groups > 0
+    @node node, first
+    @breaks_operations = breaks
+    while @open_groups > 0 and @at_kind(')')
+      @take ')', NONE
+      @open_groups -= 1
+
+  # The parentheses at the start of the node that group it: all of those in a row, but the last of a
+  # tuple, or of the parameters of a function literal, rather than one around `-> body`.
+  node := (node: Expression, before: CodeGap): void ->
+    case node
+      when Identifier then @take(IDENTIFIER, before)
+      when StringLiteral then @take(STRING, before)
+      when Interpolation then @take(node.binary then BINARY else INTERPOLATED, before)
+      when BooleanLiteral then @take(node.value then 'true' else 'false', before)
+      when NilLiteral then @take('nil', before)
+      when IntegerLiteral then @number(node.text, INTEGER, before)
+      when FloatLiteral then @number(node.text, FLOAT, before)
+      when This then @take('@', before)
+      when Jump then @take(node.kind == 'break' then 'break' else 'continue', before)
+      when Member then @member(node, before)
+      when Call then @call(node, before)
+      when Index
+        unhandled() if node.default_value
+        @chain node.object, before
+        index := node.index
+        items := ListItems
+          count: 1
+          walk: (_, gap) -> @expression(index, gap)
+          simple: (_) -> false
+          function_last: index is FunctionLiteral
+        @bracketed '[', NONE, ']', NONE, items
+      when Unwrap
+        @chain node.operand, before
+        @take '!', NONE
+      when UnaryOperation then @unary(node, before)
+      when BinaryOperation then @binary(node, before)
+      when Coalesce
+        @chain node.value, before
+        @take '?', ONE
+        @operand node.fallback, ONE
+      when Range then @range(node, before)
+      when Conditional
+        # Its parts are operands, whose operations stay on their lines.
+        breaks := @breaks_operations
+        @breaks_operations = false
+        @chain node.condition, before
+        @breaks_operations = breaks
+        @value @take('then', ONE), node.then_value, false, false
+        @value @take('else', ONE), node.else_value, false, false unless node.without_else
+      when ArrayLiteral then @bracketed('[', before, ']', NONE, @element_items(node.elements))
+      when MapLiteral then @map(node, before)
+      when RecordLiteral then @record(node, before)
+      when TupleLiteral
+        { items } := node
+        tuple_items := ListItems
+          count: items.length
+          walk: (i, gap) -> @expression(items[i], gap)
+          simple: (i) -> is_simple(items[i])
+        @bracketed '(', before, ')', NONE, tuple_items
+      when FunctionLiteral then @function(node, before)
+      when Case then @case_value(node, before)
+      when Return
+        return_at := @take('return', before)
+        @value return_at, value, true if value := node.value
+      when Throw
+        @take 'throw', before
+        @expression node.message, ONE
+      when Yield
+        @take 'yield', before
+        @expression node.value, ONE
+      when Await
+        @take 'await', before
+        @operand node.operand, ONE
+      else unhandled()
+
+  # A negative literal is the two tokens `-` and the number.
+  number := (text: String, kind: TokenKind, before: CodeGap) ->
+    if text.starts_with('-')
+      @take '-', before
+      @take kind, NONE
+    else
+      @take kind, before
+
+  member := (node: Member, before: CodeGap) ->
+    if node.object is This and @at_kind('@')
+      @take '@', before
+    else
+      @chain node.object, before
+      @take '.', NONE
+    @take IDENTIFIER, NONE
+
+  # A call with parentheses, or without them, whose arguments follow a space on its line.
+  call := (node: Call, before: CodeGap) ->
+    unhandled() unless node.type_args.is_empty()
+    start := @at
+    bracketless := @bracketless_call == start
+    @chain node.callee, before
+    bare := not @at_kind('(') or @code[@at].spaced
+    { args, named_args } := node
+    values := [args..., [named.value for named in named_args]...]
+    walk := (i: Int, gap: CodeGap) ->
+      if i < args.length
+        @element args[i], gap
+      else
+        @named named_args[i - args.length], gap
+    if bare
+      # Arguments in a block below the callee are not walked yet.
+      unhandled() if @at in @line_starts
+      @list values.length, ONE, walk, false
+    else
+      items := ListItems
+        walk
+        count: values.length
+        simple: (i) -> is_simple(values[i])
+        function_last: values.last() is FunctionLiteral
+      @bracketed '(', NONE, ')', NONE, items, bracketless
+    # Told once the calls in its arguments are walked.
+    @bracketless_bare = bare if bracketless
+
+  named := (named: NamedValue, before: CodeGap) ->
+    @take IDENTIFIER, before
+    @value @take(':', NONE), named.value, false
+
+  # An item of a list, which may be a spread, `xs...`.
+  element := (node: Expression, before: CodeGap) ->
+    if node is Comprehension and node.spread
+      @expression node.iterable, before
+      @take '...', NONE
+    else
+      @expression node, before
+
+  unary := (node: UnaryOperation, before: CodeGap) ->
+    if node.operator == '-'
+      # `- 1`, which `-1` would make a literal.
+      operand := @kind_at(@at + 1)
+      unhandled() if operand == INTEGER or operand == FLOAT
+      @take_before_operand '-', before
+      @operand node.operand, NONE
+    else if @at_kind('not')
+      @take_before_operand 'not', before
+      @operand node.operand, ONE
+    else
+      # `x not in xs`, which is read as `not (x in xs)`.
+      test := node.operand as BinaryOperation ? unhandled()
+      unhandled() if test.operator != 'in'
+      @chain test.left, before
+      @take_before_operand 'not', ONE
+      @take_spelled 'in', ONE
+      @operand test.right, ONE
+
+  # A binary operation, and the chain of those of its level on its left, which breaks where it is a
+  # whole value (see OperationShape).
+  binary := (node: BinaryOperation, before: CodeGap) ->
+    first := @node_start
+    breaks := @breaks_operations
+    outer := @shapes
+    @shapes = [] if breaks
+    @breaks_operations = false
+    @chain node.left, before
+    operator := @at
+    @operator node.operator, ONE
+    right := @at
+    @expression node.right, ONE
+    @operations[node] = { first, operator, right, end: @at }
+    @breaks_operations = breaks
+    return unless breaks
+    operands := [@operations[operation]!.right for operation in @operation_chain(node)]
+    shape := OperationShape(first, operands, last: @at - 1, shapes: @shapes)
+    @shapes = outer
+    @shapes.push shape
+
+  # The operations of the chain from its first, innermost on the left, to `node`: those of its level
+  # on its left, outside parentheses. A comparison takes no chain.
+  operation_chain := (node: BinaryOperation) ->
+    level := level_of(node.operator)
+    chain := [node]
+    return chain if level == COMPARISON
+    while left := chain.last()!.left as BinaryOperation?
+      in_parentheses := @operations[left]!.end != @operations[chain.last()!]!.operator
+      break if level_of(left.operator) != level or in_parentheses
+      chain.push left
+    chain.reversed()
+
+  range := (node: Range, before: CodeGap) ->
+    operator: TokenKind = node.inclusive then '..=' else '..'
+    if start := node.start
+      @chain start, before
+      @take operator, NONE
+    else
+      @take operator, before
+    @operand end, NONE if end := node.end
+
+  map := (node: MapLiteral, before: CodeGap) ->
+    { entries } := node
+    walk := (i: Int, gap: CodeGap) ->
+      @expression entries[i].key, gap
+      @value @take(':', NONE), entries[i].value, false
+    items := ListItems
+      walk
+      count: entries.length
+      simple: (i) -> is_simple(entries[i].key) and is_simple(entries[i].value)
+      function_last: [entry.value for entry in entries].last() is FunctionLiteral
+    @bracketed '{', before, '}', INSIDE, items
+
+  record := (node: RecordLiteral, before: CodeGap) ->
+    { spread, fields } := node
+    spread_count := spread then 1 else 0
+    walk := (i: Int, gap: CodeGap) ->
+      if item := i == 0 then spread
+        @element item, gap
+      else
+        field := fields[i - spread_count]
+        @take IDENTIFIER, gap
+        @value @take(':', NONE), field.value, false if @at_kind(':')
+    items := ListItems
+      walk
+      count: spread_count + fields.length
+      simple: (i) -> i >= spread_count and is_simple(fields[i - spread_count].value)
+      function_last: [field.value for field in fields].last() is FunctionLiteral
+    @bracketed '{', before, '}', INSIDE, items
+
+  function := (node: FunctionLiteral, before: CodeGap) ->
+    unhandled() if node.weak or not node.type_params.is_empty()
+    var arrow_before = before
+    if @at_kind('(')
+      { params } := node
+      items := ListItems
+        count: params.length
+        walk: (i, gap) -> @parameter(params[i], gap)
+        simple: (i) -> params[i].default == nil
+      @bracketed '(', before, ')', NONE, items
+      arrow_before = ONE
+    if type := node.return_type
+      @take ':', NONE
+      @type type, ONE
+      arrow_before = ONE
+    arrow := @take('->', arrow_before)
+    @shapes.push @body(arrow, node.body, FUNCTION_BODIES)
+
+  parameter := (node: Parameter, before: CodeGap) ->
+    @take IDENTIFIER, before
+    if type := node.type
+      @take ':', NONE
+      @type type, ONE
+    @take '...', NONE if node.variadic
+    if default := node.default
+      @take '=', ONE
+      @expression default, ONE
+
+  # An operator, which a shift writes as two tokens, `<` and `<`.
+  operator := (operator: String, before: CodeGap) ->
+    if operator == '<<' or operator == '>>'
+      half := operator == '<<' then '<' else '>'
+      @take_spelled half, before
+      @take_spelled half, NONE
+    else
+      @take_spelled operator, before

@@ -1,0 +1,132 @@
+# The walk of lists in brackets, and of the parentheses that group an expression (see walk.lerta).
+import
+  BinaryOperation, Call, Coalesce, Conditional, Expression, FunctionLiteral, Index, Member, Range,
+  TupleLiteral, Unwrap
+from '../ast'
+import CLOSING_BRACKETS, OPENING_BRACKETS, TokenKind from '../lexer/tokens'
+import is_simple from './forms'
+import CodeGap, ListShape from './shapes'
+import NONE, ONE, unhandled, Walker from './walk'
+import './walk_expressions'
+
+# The items of a list in brackets: how many, how to walk each with the gap before it, which are
+# simple (see Long lists), and whether the last is a function.
+export struct ListItems
+  count: Int
+  walk: (Int, CodeGap) -> void
+  simple: (Int) -> Bool
+  function_last := default false
+
+# The first token of each item of a list, and whether commas separate them (see ListShape.commas).
+struct WalkedList
+  starts: Int[]
+  commas: Bool?
+
+extend Walker
+  groups_at_start := (node: Expression) ->
+    var count = 0
+    count += 1 while @kind_at(@at + count) == '('
+    for offset in 0..count
+      return offset if @opens_own(leftmost(node), @at + offset)
+    count
+
+  # Whether the `(` at `open` is the node's own: the first of a run of them whose contents hold a
+  # comma of a tuple, or are followed by the `->` or the `:` of a function literal, as no group is.
+  opens_own := (node: Expression, open: Int) ->
+    close := @closing_bracket(open)
+    case node
+      when TupleLiteral then @has_comma(open + 1, close)
+      when FunctionLiteral then @kind_at(close + 1) == '->' or @kind_at(close + 1) == ':'
+      else false
+
+  # The index of the bracket that closes the one at `open`.
+  closing_bracket := (open: Int) ->
+    var depth = 0
+    for index in open..@code.length
+      kind := @code[index].kind
+      depth += 1 if kind in OPENING_BRACKETS
+      depth -= 1 if kind in CLOSING_BRACKETS
+      return index if depth == 0
+    @code.length
+
+  # Whether a comma is between `start` and `end`, outside the brackets there.
+  has_comma := (start: Int, end: Int) ->
+    var depth = 0
+    for index in start..end
+      kind := @code[index].kind
+      depth += 1 if kind in OPENING_BRACKETS
+      depth -= 1 if kind in CLOSING_BRACKETS
+      return true if depth == 0 and kind == ','
+    false
+
+  element_items := (elements: Expression[]) ->
+    ListItems
+      count: elements.length
+      walk: (i, gap) -> @element(elements[i], gap)
+      simple: (i) -> is_simple(elements[i])
+      function_last: elements.last() is FunctionLiteral
+
+  # A list in brackets (see ListShape), whose items are whole values; `bracketless` if it is the
+  # arguments of a call that would take them in a block.
+  bracketed := (
+    open: TokenKind
+    before: CodeGap
+    close: TokenKind
+    inside: CodeGap
+    items: ListItems
+    bracketless = false
+  ) ->
+    open_at := @take(open, before)
+    outer := @save()
+    @shapes = []
+    @in_brackets = true
+    @on_own_line = false
+    @breaks_operations = true
+    walked := @list(items.count, inside, items.walk)
+    close_at := @take(close, inside)
+    simple := [i for i in 0..items.count].all(items.simple)
+    shape := ListShape
+      simple
+      bracketless
+      open: open_at
+      close: close_at
+      items: walked.starts
+      commas: walked.commas
+      function_last: items.function_last
+      shapes: @shapes
+    @restore outer
+    @shapes.push shape
+
+  # `count` items, the first after `first`, separated by commas, or by line ends where `lines`
+  # allows them.
+  list := (count: Int, first: CodeGap, item: (Int, CodeGap) -> void, lines = true) ->
+    starts: Int[]
+    var commas = 0
+    for i in 0..count
+      if i > 0
+        if @at_kind(',')
+          @take ',', NONE
+          commas += 1
+        else
+          unhandled() if not lines or @at not in @line_starts
+          @without_commas.add @at
+      starts.push @at
+      item i, i == 0 then first else ONE
+    var separated: Bool?
+    separated = true if commas == max(count - 1, 0)
+    separated = false if commas == 0 and count > 1
+    WalkedList starts, commas: separated
+
+# The expression at the left end of the node, whose parentheses are where the node's start.
+leftmost := (node: Expression): Expression ->
+  case node
+    when Call then leftmost(node.callee)
+    when BinaryOperation then leftmost(node.left)
+    when Member, Index then leftmost(node.object)
+    when Unwrap then leftmost(node.operand)
+    when Coalesce then leftmost(node.value)
+    when Conditional then leftmost(node.condition)
+    when Range
+      start := node.start ? return node
+      leftmost start
+    else node

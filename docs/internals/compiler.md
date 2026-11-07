@@ -90,7 +90,7 @@
 
 `compiler/format2/`, run by the hidden `lerta fmt2` for its tests, is to replace it. It decides each gap between the tokens and the comments of the source, which it reports with the rule of the decision where the source differs:
 
-- **Walk.** The first pass walks the syntax tree over the tokens and decides the gaps between them: the spaces inside a statement and the line start of each statement with its depth (`format2/walk.lerta`).
+- **Walk.** The first pass walks the syntax tree over the tokens and decides the gaps between them: the spaces inside a statement and the line start of each statement with its depth (`format2/walk.lerta`, whose walker `walk_statements.lerta`, `walk_expressions.lerta` and `walk_lists.lerta` extend, asking `forms.lerta` about the syntax).
 - **Lines.** Between them, `format2/lines.lerta` breaks and joins the lines of each statement that the walk handles, top-down: the walk records the constructs that may break a line (`format2/shapes.lerta`), and each stays on its line if it fits there from where it starts, and otherwise breaks by its rule, which its findings name. A statement that only a rewrite of its tokens would lay out keeps its gaps as written.
 - **Layout.** The second decides the gaps between the tokens and the comments, the indentation and the blank lines (`format2/format.lerta`).
 - A statement that holds a construct that the walk does not handle yet keeps its gaps as written, as does one that [`# fmt: skip` or `# fmt: off`](../reference/compiler.md#code-kept-as-written) marks: the walk asks `format2/kept.lerta` about each statement on lines of its own once it has walked those inside it, which claim their marked lines first.

@@ -1,0 +1,254 @@
+# The walk of statements and blocks (see walk.lerta).
+import
+  Assignment, Binding, Call, Case, CaseArm, Condition, Declaration, EnumDeclaration, Extend, Extern,
+  For, FunctionLiteral, If, Import, InterfaceDeclaration, Intrinsic, Pass, Statement, TypeAlias,
+  TypeDeclaration, UnaryOperation, While
+from '../ast'
+import TokenKind from '../lexer/tokens'
+import BRANCHES, StyleRule from '../format/rules'
+import is_block_call, is_inline from './forms'
+import
+  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, CodeGap, LineStart, StatementShape
+from './shapes'
+import NONE, ONE, unhandled, Unhandled, Walker from './walk'
+import './walk_expressions'
+import './walk_lists'
+
+extend Walker
+  block := (statements: Statement[], depth: Int, head: Int?) ->
+    outer_depth := @depth
+    outer_starts := @block_starts
+    outer_statements := @block_statements
+    @block_starts = []
+    @block_statements = []
+    @depth = depth
+    @statement_on_line statement, { depth }, statements.get(i + 1) for statement, i in statements
+    block := BlockShape(head, starts: @block_starts, statements: @block_statements)
+    @depth = outer_depth
+    @block_starts = outer_starts
+    @block_statements = outer_statements
+    block
+
+  # The statement, before `next`, the one after it in its block.
+  statement_on_line := (statement: Statement, line: LineStart, next: Statement?) ->
+    first := @statement_start(statement)
+    @resume_at first if first
+    start := @at
+    return @skip(start) if first != start or @skipped_from != nil
+    # A statement that the walk skips starts its line still.
+    @gaps[start] = line
+    @block_starts.push start
+    outer := @gaps
+    @gaps = Map()
+    outer_walk := @save()
+    @shapes = []
+    @closing = []
+    @closing_block = false
+    @breaks_operations = true
+    @in_brackets = false
+    @on_own_line = true
+    outer_stranded := @stranded.length
+    walked :=
+      try
+        @statement statement, line
+        true
+      catch _: Unhandled
+        false
+    # Asked after the walk, as the statements inside claim their marked lines first.
+    kept := @kept.keeps(@code[start].position(), next then @first_position(next))
+    if kept
+      # A kept statement reports nothing.
+      @stranded = @stranded[..outer_stranded]
+    if walked and not kept
+      outer[gap] = decided for (gap, decided) in @gaps.entries()
+      @block_statements.push { start, end: @at, shapes: @shapes }
+    else
+      @skip start
+    @gaps = outer
+    @restore outer_walk
+
+  statement := (statement: Statement, before: CodeGap): void ->
+    case statement
+      when If then @if_statement(statement, before)
+      when While then @while_statement(statement, before)
+      when For then @for_statement(statement, before)
+      when Declaration then @declaration(statement, before)
+      when Assignment then @assignment(statement, before)
+      when
+        Pass, Import, TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern,
+        Intrinsic, Extend
+      then unhandled()
+      when Call then @call_statement(statement, before)
+      else @expression(statement, before)
+
+  if_statement := (node: If, before: CodeGap): void ->
+    keyword := @code[@at].kind
+    unhandled() if node.nil_safe or keyword not in ['if', 'unless']
+    head := @take(keyword, before)
+    @condition node.condition, keyword
+    @nested_block node.then_body, head
+    return if node.else_body.is_empty()
+    first := node.else_body[0]
+    @resume_at (@starts[first.position] ? unhandled()) - 1
+    else_at := @take('else', LineStart(@depth))
+    if first is If and @at not in @line_starts
+      @if_statement first, ONE
+      return
+    block := @block(node.else_body, @depth + 1, else_at)
+    if_at := @starts[first.position]!
+    if_alone := first is If and node.else_body.length == 1 and @code[if_at].kind == 'if'
+    joins_if := if_alone and not @has_comments(else_at, if_at)
+    @shapes.push BlockShape(block..., joins_if, head: else_at)
+    @close else_at, true
+
+  while_statement := (node: While, before: CodeGap) ->
+    keyword := @code[@at].kind
+    unhandled() unless keyword in ['while', 'until']
+    head := @take(keyword, before)
+    @condition node.condition, keyword
+    @nested_block node.body, head
+
+  for_statement := (node: For, before: CodeGap) ->
+    head := @take('for', before)
+    @take IDENTIFIER, ONE
+    if node.index
+      @take ',', NONE
+      @take IDENTIFIER, ONE
+    @take_spelled 'in', ONE
+    @operand node.iterable, ONE
+    @nested_block node.body, head
+
+  # The block of a statement below its head, which the next token of the statement closes.
+  nested_block := (statements: Statement[], head: Int) ->
+    @shapes.push @block(statements, @depth + 1, head)
+    @close head, true
+
+  # The condition after the keyword; that of `unless` or `until` is `not` of what is written. Its
+  # operations stay on its line, as the lines below it are the block.
+  condition := (condition: Condition, keyword: TokenKind) ->
+    case condition
+      when Binding
+        @take IDENTIFIER, ONE
+        @take ':=', ONE
+        @operand condition.value, ONE
+      when UnaryOperation
+        written := keyword in ['unless', 'until'] then condition.operand else condition
+        @operand written, ONE
+      else @operand(condition, ONE)
+
+  declaration := (node: Declaration, before: CodeGap) ->
+    unhandled() if node.weak
+    var next = before
+    if node.exported
+      @take 'export', next
+      next = ONE
+    if node.mutable
+      @take 'var', next
+      next = ONE
+    @take IDENTIFIER, next
+    if type := node.type
+      @take ':', NONE
+      @type type, ONE
+    return if node.omits_value
+    assign := @take(node.mutable or node.type then '=' else ':=', ONE)
+    @value assign, node.value, true
+
+  assignment := (node: Assignment, before: CodeGap) ->
+    @operand node.target, before
+    @value @take_spelled(node.operator, ONE), node.value, true
+
+  # A call that is a statement, whose callee could take its arguments without parentheses (see
+  # CallShape).
+  call_statement := (node: Call, before: CodeGap) ->
+    return @expression(node, before) unless is_block_call(node)
+    first := @at
+    outer := @shapes
+    @shapes = []
+    @bracketless_call = first
+    @expression node, before
+    @bracketless_call = nil
+    last_arg := node.named_args.is_empty() then node.args.last()
+    shape := CallShape
+      first
+      last: @at - 1
+      without_parentheses: @bracketless_bare
+      function_last: last_arg is FunctionLiteral
+      shapes: @shapes
+    @shapes = outer
+    @shapes.push shape
+
+  # The body after the `->`, `then` or `else` at `head`: a block on the lines below it, or one
+  # statement on its line (see BodyShape).
+  body := (head: Int, statements: Statement[], rule: StyleRule) ->
+    start := @at
+    if start in @line_starts
+      block := @block(statements, @depth + 1, head)
+      one := statements.length == 1 and block.statements.length == 1
+      inline := one and is_inline(statements[0]) and not is_bare_call(block.statements[0])
+      joinable := inline and not @has_comments(head, @at)
+      @close head, true
+      return BodyShape(head, block, joinable, rule)
+    unhandled() if statements.length != 1
+    joinable := is_inline(statements[0])
+    outer_shapes := @shapes
+    outer_line := @on_own_line
+    @shapes = []
+    @on_own_line = false
+    @statement statements[0], ONE
+    statement := StatementShape(start, end: @at, shapes: @shapes)
+    @shapes = outer_shapes
+    @on_own_line = outer_line
+    @close head, false
+    block := BlockShape(head, starts: [start], statements: [statement])
+    BodyShape head, block, joinable, rule
+
+  # `case`, with its subject or without one, and its arms below it (see ArmsShape).
+  case_value := (node: Case, before: CodeGap) ->
+    head := @take('case', before)
+    @operand subject, ONE if subject := node.subject
+    has_subject := node.subject != nil
+    arms := [@arm(arm, has_subject) for arm in node.arms]
+    if otherwise := node.otherwise
+      start := @take('else', LineStart(depth: @depth + 1))
+      body := @body(start, otherwise, BRANCHES)
+      arms.push {
+        start
+        body
+        patterns: []
+        breakable: false
+        then_at: nil
+        commas: true
+        shapes: []
+      }
+    @shapes.push ArmsShape(head, arms)
+    @close head, true
+
+  # An arm, `when` and its patterns, which a subject's may write on lines of their own below it, and
+  # its body, after `then` if it is written.
+  arm := (arm: CaseArm, has_subject: Bool) ->
+    start := @take_spelled('when', LineStart(depth: @depth + 1))
+    outer := @shapes
+    @shapes = []
+    breaks := @breaks_operations
+    @breaks_operations = false
+    { patterns } := arm
+    walked := @list(patterns.length, ONE, (i, gap) -> @expression(patterns[i], gap), has_subject)
+    @breaks_operations = breaks
+    shapes := @shapes
+    @shapes = outer
+    then_at := @at_kind('then') then @take('then', ONE)
+    body := @body(then_at ? start, arm.body, BRANCHES)
+    ArmShape
+      start
+      then_at
+      body
+      shapes
+      patterns: walked.starts
+      breakable: has_subject
+      commas: walked.commas
+
+# Whether the statement is a call without parentheses, which the line of `->` or `then` cannot
+# hold (see Calls without parentheses).
+is_bare_call := (statement: StatementShape) ->
+  call := statement.shapes.first() as CallShape ? return false
+  call.without_parentheses
