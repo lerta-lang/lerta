@@ -50,9 +50,10 @@
 
 ## Intrinsics
 
-`intrinsic name` declares a function that the compiler gives, as it cannot be written in Lerta: `assert` and `dbg` of std:builtins, `encode_value` and `decode_value` of std:codable, and `parse` and `members` of std:enums (`compiler/checker/intrinsics.lerta`).
+`intrinsic name` declares a function that the compiler gives, as it cannot be written in Lerta: `assert` and `dbg` of std:builtins, `encode_value` and `decode_value` of std:codable, and `parse` and `members` of std:enums (`compiler/checker/intrinsics.lerta`). `intrinsic name: Type` declares a value that the compiler gives, as only the build knows it: whether the build is optimized (`VALUE_INTRINSICS`).
 
-- Only a standard module declares one, and only of a name that the compiler knows. Its name is imported and exported as an extern's is, and a name of the module's own hides it.
+- Only a standard module declares one, and only of a name that the compiler knows, a value of the type that the compiler gives it. Its name is imported and exported as an extern's is, and a name of the module's own hides it.
+- A read of a value is typed as its declaration says and recorded (`NodeFacts.intrinsic_values`), as the checker, which `fmt` and the language server run too, knows no build; codegen writes the value of the build in its place, so that an optimized build folds what it decides.
 - A call of one is checked as the code that the checker makes in its place, in the scope of the call, so that what follows sees its locals and its narrowings; codegen generates that code (`NodeFacts.intrinsic_calls`).
   - Its locals have names that no source can write, of the call's position, as `assert@4:1.left`. They are defined as they are typed, not checked as declarations, which at the top level would take a function for one of the module's own.
   - The `throw` that it makes is marked as an assertion's: it takes the message, a `String`, and throws an `AssertionError` of it, which the checker could not construct by its name, as a program may take the name.

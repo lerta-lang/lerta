@@ -127,6 +127,8 @@ export intrinsic_named := (body: Body, callee: Expression) ->
   return nil if lookup(body, name) != nil or has_function(shared, name)
   return nil if body.sees_top_level and name in shared.top_level.names
   exported := export_named(shared, name) as IntrinsicExport ? return nil
+  # A value is read, and so called as any value is.
+  return nil if exported.type
   use_import shared, name
   exported.name
 
@@ -143,7 +145,10 @@ type_of_export := (body: Body, exported: Export, identifier: Identifier, is_call
     when TypeExport then fail(body.program, position, "'#{name}' is a type")
     when InterfaceExport then fail(body.program, position, "'#{name}' is an interface")
     when GenericExport then fail_only_called(body, identifier)
-    when IntrinsicExport then fail(body.program, position, "'#{name}' can only be called")
+    when IntrinsicExport
+      type := exported.type ? fail(body.program, position, "'#{name}' can only be called")
+      body.facts.intrinsic_values[identifier] = exported.name
+      type
     when ExternExport
       fail_only_called body, identifier unless is_callee
       { symbol, module_index } := exported

@@ -19,16 +19,21 @@ import is_contextual from './literals'
 import has_method from './member'
 import Body, Shared from './shared'
 import Local from './scopes'
+import module_resolver, resolve from './type_names'
 import check_block, check_if_condition, define_local, nothing from './statement'
 import CLOSING_BRACKETS, lex, OPENING_BRACKETS, Token, TokenKind from '../lexer/tokens'
 import is_standard_name, module_location from '../source'
 import
-  ArrayType, format_type, is_one_of_kinds, OptionalType, string_type, Type, void_type
+  ArrayType, bool_type, format_type, is_one_of_kinds, OptionalType, string_type, Type, void_type
 from '../types'
 
 INTRINSICS := ['assert', 'dbg', 'encode_value', 'decode_value', 'parse', 'members']
 
-# Only a standard module declares intrinsics, and only those that the compiler gives.
+# The values, by their names, with their types: whether the build is optimized, as by -O.
+VALUE_INTRINSICS := { 'optimized': bool_type }
+
+# Only a standard module declares intrinsics, and only those that the compiler gives: a function
+# without a type, and a value with its type.
 export declare_intrinsics := (shared: Shared, statements: Statement[]) ->
   program := shared.program
   for statement in statements
@@ -36,8 +41,22 @@ export declare_intrinsics := (shared: Shared, statements: Statement[]) ->
     { name } := statement
     unless is_standard_name(module_location(program.entry_path, shared.path))
       fail program, statement.position, 'only a standard module can declare an intrinsic'
-    fail program, name.position, "no intrinsic '#{name.name}'" unless name.name in INTRINSICS
-    add_intrinsic shared, name
+    type := declared_type(shared, statement)
+    known := type then name.name in VALUE_INTRINSICS else name.name in INTRINSICS
+    fail program, name.position, "no intrinsic '#{name.name}'" unless known
+    add_intrinsic shared, name, type
+
+# The type of an intrinsic value, which must be the one that the compiler gives it; nil for a
+# function.
+declared_type := (shared: Shared, statement: Intrinsic) ->
+  type_name := statement.type ? return nil
+  program := shared.program
+  type := resolve(program, module_resolver(shared.index), type_name)
+  expected := VALUE_INTRINSICS[statement.name.name] ? return type
+  if type != expected
+    message := "intrinsic '#{statement.name.name}' is of type #{format_type(expected)}"
+    fail program, type_name.position, message
+  type
 
 # The code that the checker makes for a call of an intrinsic, which codegen generates in its place:
 # its statements, then its value, if it gives one.
