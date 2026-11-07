@@ -11,11 +11,17 @@ export struct Text
   # A closing bracket, before which a comment that ends the line of the last item stays at the end
   # of the line, after the bracket, while one on a line of its own stays inside.
   closes := default false
+  # The rule that decides the text, as a space that it puts, which a difference there is reported
+  # under (see Layout.gaps).
+  rule: StyleRule? = default nil
 
 # Line feeds, `count` of them, after which the next text is indented as deep as the Indents around
 # it.
 export struct Newline
   count: Int
+  # The rule that decides the line feeds, which a difference between the texts around them is
+  # reported under (see Layout.gaps).
+  rule: StyleRule? = default nil
 
 export struct Indent
   doc: Doc
@@ -73,12 +79,15 @@ export struct RulePlace
 export struct Layout
   text: String
   rules: RulePlace[]
+  # Where a rule decides the output itself: the gap from the text before a line feed of the rule to
+  # the text after it, and a text of the rule; `end` is exclusive.
+  gaps: RulePlace[]
 
 export lay_out := (doc: Doc, source: SourceText) ->
   printer := Printer(source)
   printer.run doc
   printer.finish()
-  Layout text: printer.pieces.join(''), rules: printer.rules
+  Layout text: printer.pieces.join(''), rules: printer.rules, gaps: printer.gaps
 
 # A part to print, as deep as `indent`.
 struct Work
@@ -97,6 +106,9 @@ class Printer
   source: SourceText
   pieces: String[] = []
   rules: RulePlace[] = []
+  gaps: RulePlace[] = []
+  # The rule of the line feeds after the last text, and where that text ends (see Layout.gaps).
+  var open_gap: RulePlace? = nil
   # The parts of rules that no text has started yet.
   var unstarted: RuleEnd[] = []
   var line = 1
@@ -133,7 +145,10 @@ class Printer
     inner := (part: Doc, depth: Int) -> Work(doc: part, indent: depth)
     case doc
       when Text then @print_text(doc, indent)
-      when Newline then @new_lines(doc.count, indent)
+      when Newline
+        if gap_rule := doc.rule
+          @open_gap = { rule: gap_rule, start: @place(), end: @place() } if @open_gap == nil
+        @new_lines doc.count, indent
       when Indent then steps.push(inner(doc.doc, indent + 1))
       when Concat then steps.push(inner(part, indent)) for part in doc.docs.reversed()
       when Choice
@@ -169,7 +184,12 @@ class Printer
         @print_comments_before at, indent
         @keep_blank_line at.line
       @source_line = at.line if at.line > @source_line
+    start := @place()
+    unless text.text.is_empty()
+      @gaps.push { gap..., end: start } if gap := @open_gap
+      @open_gap = nil
     @write text.text
+    @gaps.push { start, rule: text_rule, end: @place() } if text_rule := text.rule
 
   # The lines after the first are written as they are, but for the indentation that the first
   # loses or gains.
@@ -421,6 +441,13 @@ export verbatim := (at: Position, last_line: Int): Doc -> Verbatim(at, last_line
 export join := (docs: Doc[]): Doc -> Concat(docs)
 
 export line_feed := (): Doc -> Newline(count: 1)
+
+# A line feed that the rule decides (see Newline.rule).
+export ruled_line_feed := (style_rule: StyleRule): Doc -> Newline(count: 1, rule: style_rule)
+
+# A text that the rule decides (see Text.rule).
+export ruled_text := (value: String, style_rule: StyleRule): Doc ->
+  Text text: value, rule: style_rule
 
 export indent := (doc: Doc): Doc -> Indent(doc)
 

@@ -25,3 +25,7 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 ## fmt writes a program that does not parse for an operation after a comment in block arguments
 
 `x := f`, over the arguments `1`, a comment on a line of its own and `2 +  3`, makes `lerta fmt` fail with `the formatter would write a program that does not parse, which is a bug`; with `2` in place of `2 +  3`, it does not. The operation after the comment is laid out where it cannot be read back, by `value_after` or `bracketed_or` (`compiler/format/print_literal.lerta`, `compiler/format/printing.lerta`) for arguments that a comment puts in a block. Fix: find the form that the formatter writes there, and lay the operation out on a line of its own in the block.
+
+## fmt writes a program that does not parse for a long call after a comment
+
+`# a comment` on the line before `print [1].map((v) -> v + 1000000000000000000 + 2000000000000000000 + 3000000000000000 + 40000).count()`, a call without parentheses whose argument holds a function with a body too long for its line, makes `lerta fmt` fail with `the formatter would write a program that does not parse, which is a bug`; without the comment, it reports Long lists and breaks the list. Where the formatter lays out the call after the comment is not found yet: `call_statement` (`compiler/format/print_statement.lerta`) and the comments put back by `print_comments_before` (`compiler/format/doc.lerta`) are where to look. Fix: find the text written there and lay it out as without the comment.

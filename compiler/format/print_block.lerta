@@ -3,7 +3,8 @@ import
   Case, CaseArm, Expression, FunctionLiteral, Identifier, Parameter, Position, Statement, Try
 from '../ast'
 import
-  breaking_after, choice, Doc, indent, join, line_feed, rule, separated, text, token
+  breaking_after, choice, Doc, indent, join, line_feed, rule, ruled_line_feed, ruled_text,
+  separated, text, token
 from './doc'
 import result_type_doc, type_doc, type_parameters from './print_type'
 import block_doc, inline_statement from './print_statement'
@@ -23,12 +24,15 @@ export function_doc := (function: FunctionLiteral, context: Context) ->
   # A block that holds a comment stays one, so that the comment stays in it.
   has_comments := context.source.block_has_comments(function.position)
   fits_line := body.length == 1 and is_inline(body[0], context) and not has_comments
+  # Outside brackets, the rule decides whether one statement goes on the line or below it, and one
+  # that a line cannot hold, a declaration or one that holds a block, goes below.
+  decides_space := fits_line and not context.in_brackets
+  space := decides_space then ruled_text(' ', FUNCTION_BODIES) else text(' ')
   # The body goes on the line where the head ends, which its parameters may have broken.
-  on_line := fits_line then join([text(' '), inline_statement(body[0], context)])
-  # One statement that a line cannot hold, a declaration or one that holds a block, goes below: the
-  # break is the rule's.
+  on_line := fits_line then join([space, inline_statement(body[0], context)])
   is_one_below := body.length == 1 and not is_inline(body[0], context) and not has_comments
-  block_break := is_one_below then rule(FUNCTION_BODIES, line_feed()) else line_feed()
+  decides_break := is_one_below or decides_space
+  block_break := decides_break then ruled_line_feed(FUNCTION_BODIES) else line_feed()
   block := indent(join([block_break, block_doc(body, context.in_block())]))
   # Inside brackets, a body that does not go on the line is a block all the same (see Layout). A
   # single statement that would but for a comment of the source after it stays on the line of `->`
@@ -41,7 +45,7 @@ export function_doc := (function: FunctionLiteral, context: Context) ->
     return join([head, text(' '), block_doc(body, context)]) if stays
     return join([head, block])
   if line := on_line
-    join [head, rule(FUNCTION_BODIES, choice(line, block))]
+    join [head, choice(line, block)]
   else
     join [head, block]
 

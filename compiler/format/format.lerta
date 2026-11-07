@@ -45,7 +45,7 @@ export format_source := (source: String, path: String, left_out: AnnotationKey[]
     else
       printed lexed, text_source, path, outside(left_out, kept_lines, text_source), kept_lines
   check_same_program result.statements, result.layout.text, path
-  found := findings(text_source, result.layout.text, result.layout.rules, kept_lines)
+  found := findings(text_source, result.layout, kept_lines)
   in_order := found.sorted((a, b) -> a.at.compare(b.at))
   Formatted text: result.layout.text, findings: in_order
 
@@ -133,11 +133,11 @@ check_same_program := (statements: Statement[], formatted: String, path: String)
 # that differ (see difference_finding), at the ends of lines that are not LF (see
 # line_end_findings), at the lines that it keeps but that are too long (see
 # long_line_findings), and at the comments that strand an operand.
-findings := (source: SourceText, formatted: String, rules: RulePlace[], kept_lines: Set<Int>) ->
+findings := (source: SourceText, layout: Layout, kept_lines: Set<Int>) ->
   # A copy, as a last line without LF gets an empty one after it, and the lines are compared
   # without it.
   old := [source.lines...]
-  new := formatted.split("\n")
+  new := layout.text.split("\n")
   result := line_end_findings(source)
   old.push '' unless old.last()!.is_empty()
   differing: Set<Int>
@@ -150,7 +150,7 @@ findings := (source: SourceText, formatted: String, rules: RulePlace[], kept_lin
       held.push { rule: SEMICOLONS, at } if at := source.separators[line + 1]
     if held.is_empty()
       for place in places_of(old, new, hunk)
-        result.push difference_finding(old, new, place, rules, source)
+        result.push difference_finding(old, new, place, layout, source)
     else
       result.append held
   stranded: Finding[] = [
@@ -184,7 +184,7 @@ places_of := (old: String[], new: String[], hunk: Hunk) ->
 # The first difference of the place, with the innermost rule whose part holds that place in the
 # formatted text, or else the rule that the kind of difference points to.
 difference_finding := (
-  old: String[], new: String[], place: Hunk, rules: RulePlace[], source: SourceText
+  old: String[], new: String[], place: Hunk, layout: Layout, source: SourceText
 ): Finding ->
   old_lines := old[place.old_start..(place.old_start + place.old_count)]
   new_lines := new[place.new_start..(place.new_start + place.new_count)]
@@ -206,8 +206,10 @@ difference_finding := (
       spaced_within := old_line.trim_start() != new_line.trim_start()
       spaced_only := spaced_within and without_spaces(old_line) == without_spaces(new_line)
       last_line := in_new.line + (spaced_only then 1 else place.new_count)
-      inner := innermost_rule(rules, in_new, marks_from)
-      found := inner then inner else first_rule_from(rules, in_new, last_line)
+      # A rule that decides the output there itself, or else the innermost rule whose part holds it.
+      decided := gap_rule(layout.gaps, in_new)
+      inner := decided then decided else innermost_rule(layout.rules, in_new, marks_from)
+      found := inner then inner else first_rule_from(layout.rules, in_new, last_line)
       differing := (lines: String[]) -> spaced_only then lines[..1] else lines
       found ? kind_of_difference(differing(old_lines), differing(new_lines), source, at.line)
   # Lines that the formatter joins into one still too long are to be shortened by hand.
@@ -249,6 +251,11 @@ innermost_rule := (rules: RulePlace[], at: Position, marks_from: Position) ->
     marks := place.start == place.end and marks_from <= place.start and place.start <= at
     marks or (place.start <= at and at < place.end)
   [place for place in rules when holds(place)].max_by((place) -> place.start)?.rule
+
+# The rule of the gap or the text that holds the position, the last of them if several do (see
+# Layout.gaps).
+gap_rule := (gaps: RulePlace[], at: Position) ->
+  [gap for gap in gaps when gap.start <= at and at < gap.end].last()?.rule
 
 # The rule of the first part that starts from the position up to the line, as one that the
 # difference begins just before.
