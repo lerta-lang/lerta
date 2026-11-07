@@ -1,0 +1,135 @@
+# What the walk records of the statements that it handles for breaking their lines (see
+# lines.lerta): the constructs that may break a line, or must, over the indexes of their code
+# tokens. Each gap that one of them may break is flat in the walk's decision until it breaks it.
+import LAYOUT, StyleRule from '../format/rules'
+
+# The spaces of a gap inside a line; where the source breaks the line there, `joined` is the rule
+# that joins it.
+export struct Spaces
+  count: Int
+  rule: StyleRule
+  joined := default LAYOUT
+
+# A gap that starts a line at a depth, which `rule` decides where the source does not break the line
+# there.
+export struct LineStart
+  depth: Int
+  rule := default LAYOUT
+
+export type CodeGap = Spaces | LineStart
+
+# A statement on a line of its own, or on the line of `->`, `then` or `else`, from its first code
+# token up to `end`, which is not its own.
+export struct StatementShape
+  start: Int
+  end: Int
+  shapes: Shape[]
+
+# Statements, one level deeper than the line of `head`, or at depth 0 without one: those on lines
+# of their own that the walk handles, and where each statement on a line of its own starts, those
+# that it skips included.
+export struct BlockShape
+  head: Int?
+  starts: Int[]
+  statements: StatementShape[]
+  # Whether it is the block of an `else` that holds one `if` alone, which goes on the line of
+  # `else` (see Branches).
+  joins_if := default false
+
+# A list in brackets, from `open` to `close`, whose items start at `items` (see Long lists).
+export struct ListShape
+  open: Int
+  close: Int
+  items: Int[]
+  # Whether every item is simple, sharing a line with others where the list breaks.
+  simple: Bool
+  # Whether a comma separates the items, as on one line, or a line end does, as one on each line;
+  # nil where the source mixes them.
+  commas: Bool?
+  # Whether the last item is a function, whose body may end the list's line inside the brackets.
+  function_last: Bool
+  # Whether the list is the arguments of a call that would take them in a block below its callee
+  # where they break (see Long lists), which the walk leaves as written.
+  bracketless: Bool
+  shapes: Shape[]
+
+# A chain of binary operations of one level, from `first` up to `last`, with the first token of each
+# operand after the first, before which it breaks (see Long operations).
+export struct OperationShape
+  first: Int
+  operands: Int[]
+  last: Int
+  shapes: Shape[]
+
+export enum ValueKind
+  # After a comment that ends the line of the token before it: on the next line, always.
+  BELOW_COMMENT
+  # An `if`, a `case` or a `try`: on the next line, always (see Branches).
+  BRANCH
+  # A literal, with members after it or not, that goes in a block without brackets if it does not
+  # fit on its line, which the walk leaves as written (see Multi-line literals).
+  LITERAL_BLOCK
+  # A call that takes its arguments in a block below it if it does not fit on its line or on the
+  # next, which the walk leaves as written.
+  BLOCK_CALL
+  # A two-way value, `c then a else b`, which is an `if` if it fits neither on its line nor on the
+  # next (see Branches), a rewrite that the walk leaves as written.
+  TWO_WAY
+  OPERATION
+  OTHER
+
+# The value after `=`, `:=`, a compound assignment, `return`, a key, `then` or `else`, from `first`
+# up to `last` (see Long operations).
+export struct ValueShape
+  first: Int
+  last: Int
+  kind: ValueKind
+  shapes: Shape[]
+
+# A call that is a statement, from `first` up to `last`, whose callee could take its arguments
+# without parentheses or in a block (see Calls without parentheses), which the walk leaves as
+# written where they do not fit on the line.
+export struct CallShape
+  first: Int
+  last: Int
+  # Whether it is written without parentheses, and its last argument is a function, whose body
+  # decides its own lines.
+  without_parentheses: Bool
+  function_last: Bool
+  shapes: Shape[]
+
+# The body of a function after `->`, or of an arm after `then` or `else`, at `head`: on its line, or
+# in a block below it (see Function bodies and Branches).
+export struct BodyShape
+  head: Int
+  block: BlockShape
+  # Whether it can go on the line of its head: one statement that a line can hold, without comments.
+  joinable: Bool
+  rule: StyleRule
+
+# An arm of a `case`, from `when` (or `else`, without patterns), with the first token of each
+# pattern, and `then` if it is written.
+export struct ArmShape
+  start: Int
+  patterns: Int[]
+  # Whether the patterns may go on lines of their own below `when`, as those of a subject may.
+  breakable: Bool
+  then_at: Int?
+  # Whether a comma separates the patterns, rather than a line end (see ListShape.commas).
+  commas: Bool?
+  body: BodyShape
+  shapes: Shape[]
+
+# The arms of a `case` at `head`, one level deeper than its line.
+export struct ArmsShape
+  head: Int
+  arms: ArmShape[]
+
+export type Shape =
+  ListShape | OperationShape | ValueShape | CallShape | BodyShape | BlockShape | ArmsShape
+
+# The token after a block, or after a body on the line of its head, that its statement goes on
+# with, and its gap where the body is on that line.
+export struct Closer
+  at: Int
+  flat: CodeGap

@@ -2,6 +2,7 @@
 # comments, in the order of the source, with the gaps of text between them.
 import scan, Scanner from 'std:scanner'
 import Position from '../ast'
+import common_indentation, is_blank from '../lexer/string_literal'
 import Comment, Lexed, Token, TokenKind from '../lexer/tokens'
 
 export struct TextToken
@@ -28,6 +29,10 @@ export struct SourceTokens
   line_starts: Set<Int>
   # The comments that end a line, by the index of the code token before them.
   ending_comments := comments_by_code_before(@tokens)
+  # The comments on lines of their own, by the index of the code token after them: the greatest
+  # column of those before it, which tells whether one is inside the block that the token ends (see
+  # has_comments in walk.lerta).
+  own_line_comments := own_line_columns(@tokens)
 
 LAYOUT_KINDS: TokenKind[] = [NEWLINE, INDENT, DEDENT, EOF]
 
@@ -60,6 +65,14 @@ comments_by_code_before := (tokens: TextToken[]) ->
     comment := token.comment ? continue
     comments[token.next_code - 1] = token unless comment.own_line
   comments
+
+own_line_columns := (tokens: TextToken[]) ->
+  columns: Map<Int, Int>
+  for token in tokens
+    comment := token.comment ? continue
+    continue unless comment.own_line
+    columns[token.next_code] = max(columns[token.next_code] ? 0, comment.column)
+  columns
 
 line_start_indexes := (tokens: Token[]) ->
   starts: Set<Int>
@@ -133,3 +146,15 @@ class SourceReader
       @column = 1
     else
       @column += 1
+
+# The lines of a `"""` or `'''` literal after its first, without the indentation that they share in
+# the source, a blank one empty, the last ending with the closing quotes (see Multi-line literals).
+export literal_lines := (text: String) ->
+  lines := text.split("\n")[1..]
+  last := lines.pop()
+  quotes_at := last.binary.length - 3
+  lines.push last.binary[..quotes_at].text()!
+  width := common_indentation(lines)
+  dedented := [is_blank(line) then '' else line.binary[width..].text()! for line in lines]
+  dedented.push dedented.pop() + last.binary[quotes_at..].text()!
+  dedented
