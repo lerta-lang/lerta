@@ -306,6 +306,7 @@ Type arguments are inferred from the arguments, matched against the parameters' 
 - The exception: `X?` after `X` makes it `X?`, unless the receiver of a generic method gave `X` (`[1].contains(m[k])` with `m[k]` an `Int?` is an error).
 - `nil`, a `throw` and similar values give no type. A type argument that nothing gives must be written.
 - Written type arguments come between the name and the parentheses, which are then required: `empty<String>()`, or for a [generic method](objects.md#generic-methods) its own, `xs.map<String>(...)`.
+  - The first ones may be written alone, and the others are inferred: `decode<Config>(reader)` of `decode<T, D>(decoder: D)` takes `D` from `reader`.
 - The types that the type arguments make in the parameters and the result must be valid where the call is. `T[]` with `T = Int?`, an array that cannot hold its items, or `Map<K, V>` with a key type that a [map](types.md#map) cannot have, is an error at the call.
 - A type parameter cannot stand for a union member so far.
 

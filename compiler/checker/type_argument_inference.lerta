@@ -129,19 +129,18 @@ class Inferrer
 
 widens := (bound: Type, type: Type) -> type is OptionalType then type.inner == bound else false
 
-# `f<Int>(x)` gives all the type arguments; `x.f<Int>(y)`, those of the method's own, as the
-# receiver gives the extend's.
+# `f<Int>(x)` gives the first type arguments, and the others are inferred; `x.f<Int>(y)` gives
+# those of the method's own, as the receiver gives the extend's.
 written_bindings := (body: Body, call: Call, generic: GenericFunction) ->
   bindings: Map<String, TypeBinding>
   { name } := generic
   type_params := generic.literal.type_params
-  return bindings if call.type_args.is_empty()
-  if call.type_args.length != type_params.length
+  if call.type_args.length > type_params.length
     counts := "takes #{type_params.length} type argument(s), got #{call.type_args.length}"
     fail body.program, call.position, "'#{name.name}' #{counts}"
-  for (type_param, type_name) in type_params.zip(call.type_args)
+  for type_name, i in call.type_args
     type := resolve(body.program, body.resolver, type_name)
-    bindings[type_param.name.name] = { type, at: type_name.position }
+    bindings[type_params[i].name.name] = { type, at: type_name.position }
   bindings
 
 # A literal whose type may depend on what is expected of it, or a name that may stand for a

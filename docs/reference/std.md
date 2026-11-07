@@ -64,7 +64,7 @@
 | `Codable` | The interface of the types that the compiler writes and reads by their parts (below). |
 | `Encoder`, `Decoder` | The interfaces of what a format writes and reads a value through (below). |
 | `encode<E: Encoder, T: Codable>(encoder: E, value: T)` | Writes the value through the encoder. |
-| `decode<T: Codable, D: Decoder>(decoder: D): T` | The value of type `T` that the decoder reads, both type arguments written, as `decode<Config, LineReader>(reader)` of a `LineReader` class. |
+| `decode<T: Codable, D: Decoder>(decoder: D): T` | The value of type `T` that the decoder reads, `T` written, as `decode<Config>(reader)`. |
 | `KIND_BOOL`, `KIND_NUMBER`, `KIND_TEXT`, `KIND_RECORD`, `KIND_OTHER` | The kinds that a `Decoder`'s `peek_kind` gives (below). |
 
 - A format is a class or struct with the members of `Encoder` or `Decoder`, as std:json's own `JsonWriter` and `JsonReader`; a union of such types is not one. The code that the compiler generates for each type calls its methods directly, with no interface value between.
