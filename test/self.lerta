@@ -39,12 +39,14 @@ run_driver := (
   extra_env: Map<String, String> = Map()
 ) ->
   no_retry: String[] = retry then [] else ['--no-retry']
+  # Two at once, unless the check gives its own count, as an option may not be given twice.
+  gives_jobs := args.any((arg) -> arg in ['-j', '--jobs'] or arg.starts_with('--jobs='))
+  jobs: String[] = gives_jobs then [] else ['-j', '2']
   env := { 'LERTA_TEST_RUN_DIR': harness_dir, 'LERTA_TEST_FAILED_FILE': failed_file }
   env[name] = value for (name, value) in extra_env.entries()
   ran := run
     driver
-    '-j'
-    '2'
+    jobs...
     no_retry...
     args...
     cwd: root_dir
@@ -184,16 +186,26 @@ thrown_checks :=
   thrown_check(CheckFailed(['x']), ['x'])
   thrown_check(ValueError('y'), ['threw:', '  y'])
 
-# The problem is the line that the usage follows.
+# The problem is the line that the usage follows, after the program's name, as std:args writes it.
 usage_check := (args: String[], problem: String) ->
   Check name: "bin/test #{args.join(' ')} is a usage error", run: ->
     ran := await run_driver(args, await new_failed_file([]))
     [
       expect_status(2, ran.status)...
       reason_unless(
-        ran.stderr.starts_with("#{problem}\nusage: bin/test ")
+        ran.stderr.starts_with("test: #{problem}\nusage: test ")
         "no #{problem} and usage on stderr: #{ran.stderr}"
       )...
+    ]
+
+# A run with `-h` or `--help` prints the usage and runs nothing.
+help_check := (args: String[]) ->
+  Check name: "bin/test #{args.join(' ')} prints the usage and runs nothing", run: ->
+    ran := await run_driver(args, await new_failed_file([]))
+    [
+      expect_status(0, ran.status)...
+      reason_unless(ran.stdout.starts_with('usage: test '), "no usage on stdout: #{ran.stdout}")...
+      compare_text('stderr', '', ran.stderr)...
     ]
 
 # A check of the format suite, whose one case runs fast.
@@ -201,12 +213,23 @@ format_case := 'tests/format/calls'
 format_key := "format checks\t#{format_case}"
 
 driver_checks :=
-  usage_check(
-    ['nothing']
-    'not a suite: nothing (the suites: run, cli, format, runtime, leaks, self)'
-  )
+  usage_check(['nothing'], "<run|cli|format|runtime|leaks|self> takes a Suite, not 'nothing'")
   usage_check(['-k'], '-k needs a value')
-  usage_check(['-j', '0'], '-j needs a count above 0: 0')
+  help_check(['--help'])
+  help_check(['-h'])
+  help_check(['nothing', '--help'])
+  help_check(['--target', 'x', 'cli', '--help'])
+  usage_check(['--jobs=-1'], '--jobs takes a count above 0, not -1')
+  usage_check(['-j', '2', '-j', '3'], '--jobs is given twice')
+  usage_check(['-j', 'x'], "--jobs takes an Int, not 'x'")
+  usage_check(['--nope'], 'unknown option --nope')
+  Check(name: 'bin/test runs a suite given twice once', run: ->
+    once := await run_driver(['format', '-k', format_case, '--list'], await new_failed_file([]))
+    twice :=
+      await run_driver(['format', 'format', '-k', format_case, '--list'], await new_failed_file([]))
+    [expect_status(0, twice.status)..., compare_text('stdout', once.stdout, twice.stdout)...]
+  )
+  usage_check(['-j', '0'], '--jobs takes a count above 0, not 0')
   usage_check(['cli', '--target', 'x86_64-w64-mingw32'], '--target is for the run suite alone')
   usage_check(['--target', 'x86_64-w64-mingw32', '--failed'], '--failed is for the host alone')
   Check(name: 'bin/test fails when no check is selected', run: ->
