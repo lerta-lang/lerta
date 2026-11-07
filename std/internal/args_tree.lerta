@@ -1,0 +1,92 @@
+# A value as an Encoder writes it, which std:args reads its spec and the defaults of its fields from
+# (see std/args.lerta).
+
+export enum NodeKind
+  NIL
+  BOOL
+  STRING
+  # A number, a Char or an enum's member, as its text.
+  TEXT
+  LIST
+  RECORD
+
+export class Node
+  kind: NodeKind
+  text := default ''
+  var flag = false
+  items: Node[] = default []
+  fields: (String, Node)[] = default []
+
+  # The text that a usage message shows of the value: nil for nil, false, blank text, and a list
+  # whose items show nothing.
+  shown := (): String? ->
+    case @kind
+      when NIL then nil
+      when BOOL then @flag then 'true'
+      when STRING, TEXT then @text.trim().is_empty() then nil else @text
+      when LIST
+        text := [item.shown() ? '' for item in @items].join(' ').trim()
+        text.is_empty() then nil else text
+      when RECORD then nil
+
+# Writes a value into a tree of Nodes, whose root is the value.
+export class TreeWriter
+  var root: Node? = nil
+  # The lists and records being written, the innermost last, and the field each record writes.
+  var open: Node[] = []
+  var field_names: String[] = []
+
+  add := (node: Node): void ->
+    if container := @open.last()
+      case container.kind
+        when LIST then container.items.push(node)
+        else container.fields.push((@field_names.pop(), node))
+    else
+      @root = node
+
+  leaf := (text: String) -> @add(Node(text, kind: TEXT))
+
+  begin := (kind: NodeKind) ->
+    node := Node(kind)
+    @add node
+    @open.push node
+
+  end := (): void -> @open.pop()
+
+  write_nil := -> @add(Node(kind: NIL))
+  write_bool := (value: Bool) ->
+    node := Node(kind: BOOL)
+    node.flag = value
+    @add node
+  write_int := (value: Int) -> @leaf("#{value}")
+  write_uint64 := (value: UInt64) -> @leaf("#{value}")
+  write_float := (value: Float) -> @leaf("#{value}")
+  write_float32 := (value: Float32) -> @leaf("#{value}")
+  write_string := (value: String) -> @add(Node(text: value, kind: STRING))
+  write_binary := (value: Binary): void -> unsupported('a Binary')
+  write_char := (value: Char) -> @leaf("#{value}")
+  # A member is written as the command line takes it, with `-` for `_`.
+  write_member := (enum_name: String, member: String) -> @leaf(member.replace('_', '-'))
+  begin_array := -> @begin(LIST)
+  next_item := (): void -> return
+  end_array := -> @end()
+  begin_tuple := (count: Int): void -> unsupported('a tuple')
+  end_tuple := (): void -> return
+  begin_set := -> @begin(LIST)
+  end_set := -> @end()
+  begin_entries := (): void -> unsupported('a map')
+  next_entry := (): void -> return
+  entry_value := (): void -> return
+  end_entry := (): void -> return
+  end_entries := (): void -> return
+  begin_map := (): void -> unsupported('a map')
+  write_key := (key: String): void -> return
+  end_map := (): void -> return
+  begin_record := -> @begin(RECORD)
+  write_field := (name: String) -> @field_names.push(name)
+  end_record := -> @end()
+  enter := (address: Int): void -> return
+  leave := (): void -> return
+
+unsupported := (what: String) ->
+  throw ValueError("std:args: the spec holds #{what}, which std:args does not read")

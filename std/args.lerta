@@ -1,0 +1,298 @@
+# Command-line arguments read into a struct, whose fields are the options and the positional
+# arguments, and the usage message made of it (see docs/reference/std.md#stdargs).
+import Codable, decode, encode from 'std:codable'
+import Enum, members from 'std:enums'
+import exit, program from 'std:process'
+import Field, fields_of from './internal/args_fields'
+import ArgsError, ArgsReader, Given from './internal/args_reader'
+import Node, TreeWriter from './internal/args_tree'
+
+export ArgsError from './internal/args_reader'
+
+# Reads the arguments into a T, as the spec says how, for the command of the name if given; prints
+# the usage message and exits with 0 for `-h` or `--help`, or with 2, after the error, for arguments
+# that do not fit.
+export parse_args := <T: Codable, S: Codable>(args: String[], spec: S, command: String? = nil): T ->
+  form := form_of<T>(spec, command)
+  if wants_help(form.parts, args)
+    print form.usage()
+    exit 0
+  try
+    form.read args
+  catch error: ArgsError
+    exit_with form.usage(), error.message
+
+# As parse_args, but throws an ArgsError for arguments that do not fit, and takes `-h` and `--help`
+# as any other unknown option.
+export decode_args := <T: Codable, S: Codable>(
+  args: String[]
+  spec: S
+  command: String? = nil
+): T -> form_of<T>(spec, command).read(args)
+
+# The usage message that parse_args prints.
+export usage := <T: Codable, S: Codable>(spec: S, command: String? = nil) ->
+  form_of<T>(spec, command).usage()
+
+# The command that the first argument names, a member of C named as the member with `-` for `_`,
+# and the arguments after it; prints the usage message, of the commands with what the spec says of
+# each, and exits, as parse_args does.
+export parse_command := <C: Enum, S: Codable>(args: String[], spec: S): (C, String[]) ->
+  commands := members<C>()
+  helps := read_spec(spec, [command.to_string() for command in commands], ['help'])
+  rows := [
+    (option_name(command.to_string()), helps[command.to_string()]?.help ? '')
+    for command in commands
+  ]
+  text :=
+    ["usage: #{program} <command> [<argument>...]", '', 'commands:', table(rows)...].join("\n")
+  first := args.first() ? exit_with(text, 'missing the command')
+  if first == '-h' or first == '--help'
+    print text
+    exit 0
+  command := commands.find((each) -> option_name(each.to_string()) == first)
+  (command ? exit_with(text, "unknown command '#{first}'"), args[1..])
+
+exit_with := (usage: String, message: String) ->
+  print_error "#{program}: #{message}"
+  print_error usage
+  exit 2
+
+# What the spec says of a field.
+struct FieldSpec
+  short: String? = default nil
+  help: String? = default nil
+  value: String? = default nil
+  positional := default false
+  after_dashes := default false
+
+SPEC_KEYS := ['short', 'help', 'value', 'positional', 'after_dashes']
+
+# What the spec, a record of records, says of each of the names, which are all it may name, by the
+# keys that it may give.
+read_spec := <S: Codable>(spec: S, names: String[], keys: String[]): Map<String, FieldSpec> ->
+  writer := TreeWriter()
+  encode writer, spec
+  specs: Map<String, FieldSpec>
+  for (name, node) in record_fields(writer.root!, 'the spec')
+    invalid "the spec names '#{name}', which is not one of #{names.join(', ')}" unless name in names
+    specs[name] = field_spec(name, node, keys)
+  specs
+
+field_spec := (name: String, node: Node, keys: String[]) ->
+  var spec = FieldSpec()
+  for (key, value) in record_fields(node, "the spec of #{name}")
+    unless key in keys
+      invalid "the spec of #{name} gives '#{key}', which is not one of #{keys.join(', ')}"
+    spec =
+      case key
+        when 'short' then { spec..., short: text_of(value, name, key) }
+        when 'help' then { spec..., help: text_of(value, name, key) }
+        when 'value' then { spec..., value: text_of(value, name, key) }
+        when 'positional' then { spec..., positional: flag_of(value, name, key) }
+        else { spec..., after_dashes: flag_of(value, name, key) }
+  spec
+
+record_fields := (node: Node, what: String) ->
+  invalid "#{what} is no struct" if node.kind != RECORD
+  node.fields
+
+text_of := (node: Node, name: String, key: String) ->
+  invalid "#{key} of #{name} is no String" if node.kind != STRING
+  node.text
+
+flag_of := (node: Node, name: String, key: String) ->
+  invalid "#{key} of #{name} is no Bool" if node.kind != BOOL
+  node.flag
+
+# A spec that does not fit the struct is the program's bug, not its user's.
+invalid := (message: String) -> throw ValueError("std:args: #{message}")
+
+option_name := (name: String) -> name.replace('_', '-')
+
+char_count := (text: String) -> [c for c in text].length
+
+# A field with what the spec says of it.
+struct Part
+  field: Field
+  spec: FieldSpec
+
+  is_positional := -> @spec.positional or @spec.after_dashes
+
+  # Whether the reader gives it even if the arguments do not, so that it needs no default: a switch,
+  # false then, and the field after `--`, empty then.
+  is_given_always := -> @field.kind == SWITCH or @spec.after_dashes
+
+  # Its option: `-x` for a name of one letter, else `--` and the name with `-` for `_`.
+  option := ->
+    char_count(@field.name) == 1 then "-#{@field.name}" else "--#{option_name(@field.name)}"
+
+  # How a message names it.
+  label := -> @is_positional() then "<#{@value_name()}>" else @option()
+
+  # What a usage message calls its value.
+  value_name := ->
+    return value if value := @spec.value
+    return @field.name.replace('_', ' ') if @is_positional()
+    case @field.kind
+      when INTEGER then @field.expected.split(' ').last()!.to_lower()
+      when MEMBER then @field.expected
+      else @field.kind.to_string().to_lower()
+
+# The fields of T with what the spec says of them, for the command of the name if given.
+class Form<T: Codable>
+  parts: Part[]
+  command: String?
+
+  read := (args: String[]): T ->
+    given := sort_arguments(@parts, args)
+    labels := Map([(part.field.name, part.label()) for part in @parts])
+    decode<T>(ArgsReader(given, labels))
+
+  usage := ->
+    name := @command then "#{program} #{@command}" else program
+    positionals := [synopsis(part) for part in @parts when part.is_positional()]
+    rows := [option_row(part) for part in @parts when not part.is_positional()]
+    head := ["usage: #{name} [options]", positionals...].join(' ')
+    [head, '', 'options:', table([rows..., ('-h, --help', 'show this help')])...].join("\n")
+
+form_of := <T: Codable, S: Codable>(spec: S, command: String?) ->
+  fields := fields_of<T>()
+  specs := read_spec(spec, [field.name for field in fields], SPEC_KEYS)
+  parts := [Part(field, spec: specs[field.name] ? FieldSpec()) for field in fields]
+  check_parts parts
+  Form<T>(parts, command)
+
+# Rejects parts that could not be told apart on the command line, or positional arguments that
+# could not be taken in order.
+check_parts := (parts: Part[]) ->
+  options := ['-h', '--help']
+  take := (option: String) ->
+    invalid "#{option} names two options" if option in options
+    options.push option
+  positionals := [part for part in parts when part.spec.positional]
+  for part in parts
+    { field, spec } := part
+    name := field.name
+    invalid "#{name} is both positional and after_dashes" if spec.positional and spec.after_dashes
+    # A switch is false unless given, so it cannot be true by default.
+    if field.kind == SWITCH and field.shown_default != nil
+      invalid "#{name} is a Bool, which cannot be true by default"
+    if field.kind == SWITCH and field.list
+      invalid "#{name} is a list of Bools, which a switch cannot be"
+    if part.is_positional()
+      invalid "#{name} is positional, which a Bool cannot be" if field.kind == SWITCH
+      invalid "#{name} has a short option, as no positional argument does" if spec.short != nil
+    else
+      take part.option()
+    if short := spec.short
+      if char_count(short) != 1
+        invalid "the short option of #{name} is not one character: '#{short}'"
+      take "-#{short}"
+  for part, i in positionals[..max(positionals.length - 1, 0)]
+    if part.field.list
+      invalid "#{part.field.name} takes the rest, so no positional argument can follow it"
+    following := positionals[i + 1]
+    if following.field.required and not part.field.required
+      invalid
+        "#{following.field.name} is required, so it cannot follow #{part.field.name}, which is not"
+  after := [part for part in parts when part.spec.after_dashes]
+  invalid 'more than one field is after_dashes' if after.length > 1
+  for part in after
+    invalid "#{part.field.name} is after_dashes, so it must be a list" unless part.field.list
+
+# The options of the parts, `--name` and the short ones, that are no positional arguments.
+options_of := (parts: Part[]) ->
+  options: Map<String, Part>
+  for part in parts
+    continue if part.is_positional()
+    options[part.option()] = part
+    options["-#{short}"] = part if short := part.spec.short
+  options
+
+# Whether `-h` or `--help` is where an option may be: not as an option's value, nor after `--`. It
+# looks past arguments that do not fit, so that a command line that fails can ask for the usage.
+wants_help := (parts: Part[], args: String[]) ->
+  options := options_of(parts)
+  var i = 0
+  while i < args.length
+    arg := args[i]
+    i += 1
+    return false if arg == '--'
+    continue if not arg.starts_with('-') or arg == '-'
+    (option, inline) := split_inline_value(arg)
+    return true if inline == nil and option in ['-h', '--help']
+    part := options[option] ? continue
+    i += 1 if inline == nil and part.field.kind != SWITCH
+  false
+
+# The texts of each field that the arguments give, in the order of the fields.
+sort_arguments := (parts: Part[], args: String[]): Given[] ->
+  options := options_of(parts)
+  texts: Map<String, String[]>
+  add := (part: Part, text: String) ->
+    name := part.field.name
+    throw ArgsError("#{part.label()} is given twice") if name in texts and not part.field.list
+    texts[name] = [(texts[name] ? [])..., text]
+  positionals := [part for part in parts when part.spec.positional]
+  var next = 0
+  add_positional := (text: String) ->
+    part := positionals.get(next) ? throw ArgsError("unexpected argument '#{text}'")
+    add part, text
+    next += 1 unless part.field.list
+  var i = 0
+  while i < args.length
+    arg := args[i]
+    i += 1
+    if arg == '--'
+      rest := args[i..]
+      if after := parts.find((part) -> part.spec.after_dashes)
+        add after, text for text in rest
+      else
+        add_positional text for text in rest
+      break
+    if arg.starts_with('-') and arg != '-'
+      (option, inline) := split_inline_value(arg)
+      part := options[option] ? throw ArgsError("unknown option #{option}")
+      if part.field.kind == SWITCH
+        throw ArgsError("#{option} takes no value") if inline != nil
+        add part, 'true'
+      else
+        value := inline ? args.get(i) ? throw ArgsError("#{option} needs a value")
+        i += 1 if inline == nil
+        add part, value
+    else
+      add_positional arg
+  [
+    { field: part.field, texts: texts[part.field.name] ? [] }
+    for part in parts
+    when part.field.name in texts or part.is_given_always()
+  ]
+
+# A long option and the value that follows its `=`, as `--jobs=4`, or the option alone.
+split_inline_value := (arg: String): (String, String?) ->
+  return (arg, nil) unless arg.starts_with('--')
+  (option, value) := arg.split_once('=') ? return (arg, nil)
+  (option, value)
+
+# The usage of a positional argument: `<file>`, with `...` for a list, in brackets if it may be left
+# out, and after `--` for the arguments after it.
+synopsis := (part: Part) ->
+  { field } := part
+  name := "<#{part.value_name()}>#{field.list then '...' else ''}"
+  return "[-- #{name}]" if part.spec.after_dashes
+  field.required then name else "[#{name}]"
+
+# An option, with its short option and value, and its help with its default.
+option_row := (part: Part) ->
+  { field, spec } := part
+  short := spec.short then "-#{spec.short}, " else ''
+  value := field.kind == SWITCH then '' else " <#{part.value_name()}>"
+  shown := field.shown_default
+  default := shown then " (default: #{shown})" else ''
+  ("#{short}#{part.option()}#{value}", "#{spec.help ? ''}#{default}".trim_start())
+
+# Rows of two columns, the first padded to the widest.
+table := (rows: (String, String)[]) ->
+  width := [char_count(left) for (left, _) in rows].max() ? 0
+  ["  #{left.pad_end(width)}  #{right}".trim_end() for (left, right) in rows]

@@ -1,0 +1,359 @@
+import ArgsError, decode_args, parse_command, usage from 'std:args'
+import program from 'std:process'
+
+# Runs a test at once, and prints its name once it has passed.
+test := (name: String, body: () -> void) ->
+  body()
+  print name
+
+enum Color
+  red
+  green
+  light_blue
+
+# The message of the ArgsError that reading the arguments throws, or 'no error'.
+args_error := (read: () -> void) ->
+  try
+    read()
+    'no error'
+  catch error: ArgsError
+    error.message
+
+# The message of the ValueError that a spec or a struct std:args cannot read throws, or 'no error'.
+invalid := (run: () -> String) ->
+  try
+    run()
+    'no error'
+  catch error: ValueError
+    error.message
+
+struct Options
+  verbose: Bool
+  n := default 1
+  ratio := default 0.5
+  level: Int8 = default 0
+  size := default 0.to_uint64()!
+  mark: Char = default '*'
+  color: Color = default red
+  output: String?
+  include: String[] = default []
+
+OPTIONS_SPEC := { verbose: { short: 'v' }, include: { short: 'I' } }
+
+options := (args: String[]) ->
+  a := decode_args<Options>(args, OPTIONS_SPEC)
+  numbers := "#{a.n} #{a.ratio} #{a.level} #{a.size}"
+  "#{a.verbose} #{numbers} #{a.mark} #{a.color} #{a.output ? 'nil'} #{a.include}"
+
+test 'a field is an option, which takes the next argument or what follows = after --name', ->
+  assert options([]) == 'false 1 0.5 0 0 * red nil []'
+  args := ['-v', '-n', '3', '--ratio', '2.5', '--level=-7', '--size', '9', '--mark', '#']
+  assert options(args) == 'true 3 2.5 -7 9 # red nil []'
+  args2 := ['--color', 'light-blue', '--output', '-', '-I', 'a', '--include=b', '-I', '--c']
+  assert options(args2) == "false 1 0.5 0 0 * light_blue - ['a', 'b', '--c']"
+  assert options(['--output=x=y', '--verbose']) == 'true 1 0.5 0 0 * red x=y []'
+  assert options(['--output=']) == 'false 1 0.5 0 0 * red  []'
+  assert options(['--output', '']) == 'false 1 0.5 0 0 * red  []'
+
+struct Kinds
+  mark: Char
+  ratio: Float32
+  size: UInt64
+  names: String[]?
+  tags: Set<String> = default Set()
+
+KINDS_SPEC := { names: { help: 'names' } }
+
+test 'a required field of each kind, an optional list and a set', ->
+  kinds := decode_args<Kinds>(
+    ['--mark', 'm', '--ratio', '1.5', '--size', '18446744073709551615', '--tags', 'a']
+    KINDS_SPEC
+  )
+  assert "#{kinds.mark} #{kinds.ratio} #{kinds.size}" == 'm 1.5 18446744073709551615'
+  assert kinds.names == nil
+  assert [tag for tag in kinds.tags] == ['a']
+  more := decode_args<Kinds>(
+    ['--mark', 'm', '--ratio', '0', '--size', '0', '--names', 'a', '--names', 'b']
+    KINDS_SPEC
+  )
+  assert more.names! == ['a', 'b']
+
+struct Copy
+  force: Bool
+  source: String
+  target: String?
+  rest: String[] = default []
+  program_args: String[]
+
+COPY_SPEC :=
+  source: { positional: true }
+  target: { positional: true }
+  rest: { positional: true }
+  program_args: { after_dashes: true }
+
+copy := (args: String[]) ->
+  c := decode_args<Copy>(args, COPY_SPEC)
+  "#{c.force} #{c.source} #{c.target ? 'nil'} #{c.rest} #{c.program_args}"
+
+struct Files
+  files: String[]
+
+test 'positional fields take the arguments in order, and the field after_dashes those after --', ->
+  assert copy(['a']) == 'false a nil [] []'
+  assert copy(['a', '--force', 'b', 'c', 'd']) == "true a b ['c', 'd'] []"
+  assert copy(['-', 'b', '--', '-f', 'x']) == "false - b [] ['-f', 'x']"
+  assert copy(['a', '--']) == 'false a nil [] []'
+  files := decode_args<Files>(['a', '--', '-b', '--'], { files: { positional: true } }).files
+  assert files == ['a', '-b', '--']
+
+struct Errors
+  verbose: Bool
+  n: Int8 = default 0
+  ratio := default 0.0
+  size := default 0.to_uint64()!
+  count := default 0
+  mark: Char = default '*'
+  color: Color = default red
+  tags: Set<String> = default Set()
+  name: String
+  file: String
+
+ERRORS_SPEC := { verbose: { short: 'v' }, file: { positional: true } }
+
+error_of := (args: String[]) -> args_error(-> decode_args<Errors>(args, ERRORS_SPEC))
+
+# The message of each line of arguments after `f --name x`, which fit but for what follows.
+error_after := (args: String[]) -> error_of(['f', '--name', 'x', args...])
+
+test 'arguments that do not fit throw an ArgsError that names the option or the argument', ->
+  assert error_of(['--name', 'x']) == 'missing <file>'
+  assert error_of(['f']) == 'missing --name'
+  assert error_of(['f', 'g', '--name', 'x']) == "unexpected argument 'g'"
+  assert error_of(['f', '--name']) == '--name needs a value'
+  assert error_of(['f', '--name', '-h']) == 'no error'
+  assert error_after(['--name', 'y']) == '--name is given twice'
+  assert error_after(['--verbose', '-v']) == '--verbose is given twice'
+  assert error_after(['--tags', 'a', '--tags', 'a']) == '--tags is given twice'
+  assert error_after(['--verbose=true']) == '--verbose takes no value'
+  assert error_after(['--nope']) == 'unknown option --nope'
+  assert error_after(['-h']) == 'unknown option -h'
+  assert error_after(['-n=3']) == 'unknown option -n=3'
+  assert error_after(['--c', '1']) == 'unknown option --c'
+  assert error_after(['--', 'g']) == "unexpected argument 'g'"
+  assert error_after([]) == 'no error'
+
+test 'a value that is no value of the field type throws an ArgsError', ->
+  assert error_after(['-n', 'one']) == "-n takes an Int8, not 'one'"
+  assert error_after(['-n', '128']) == "-n takes an Int8, not '128'"
+  for text in ['', '+5', ' 5', '0x10', "\u{661}"]
+    assert error_after(['--count', text]) == "--count takes an Int, not '#{text}'"
+  assert error_after(['--ratio', 'half']) == "--ratio takes a Float, not 'half'"
+  assert error_after(['--ratio', 'nan']) == "--ratio takes a Float, not 'nan'"
+  for text in ['', '-1', '18446744073709551616', "\u{661}"]
+    assert error_after(['--size', text]) == "--size takes a UInt64, not '#{text}'"
+  assert error_after(['--mark', 'ab']) == "--mark takes one character, not 'ab'"
+  assert error_after(['--color', 'blue']) == "--color takes a Color, not 'blue'"
+  assert error_after(['--color', 'light_blue']) == "--color takes a Color, not 'light_blue'"
+
+struct Ratio
+  ratio := default 0.0
+
+test 'a Float takes inf', ->
+  assert decode_args<Ratio>(['--ratio', '-inf'], { ratio: { help: 'r' } }).ratio < 0.0
+
+struct Run
+  optimize: Bool
+  jobs := default 8
+  level: Int8 = default 0
+  name := default 'out'
+  prefix := default ''
+  blanks := default ['']
+  mark: Char = default ' '
+  color: Color = default light_blue
+  tags := default ['a', 'b']
+  output: String?
+  include_dir: String[] = default []
+  source: String
+  linked_files: String[] = default []
+  program_args: String[]
+
+RUN_SPEC :=
+  optimize: { short: 'O', help: 'optimize' }
+  jobs: { short: 'j', help: 'run this many at once' }
+  output: { short: 'o', value: 'file', help: 'write the executable here' }
+  source: { positional: true }
+  linked_files: { positional: true, value: 'linked file' }
+  program_args: { after_dashes: true, value: 'argument' }
+
+# The usage message, with the program named `tool`, as the tests run under another name.
+usage_of := (text: String) -> text.replace("usage: #{program}", 'usage: tool')
+
+struct Required
+  name: String
+  file: String
+  more: String[]
+
+struct Optional
+  file: String?
+
+test 'the usage message shows the positional arguments, then the options with their defaults', ->
+  expected :=
+    'usage: tool run [options] <source> [<linked file>...] [-- <argument>...]'
+    ''
+    'options:'
+    '  -O, --optimize        optimize'
+    '  -j, --jobs <int>      run this many at once (default: 8)'
+    '  --level <int8>        (default: 0)'
+    '  --name <text>         (default: out)'
+    '  --prefix <text>'
+    '  --blanks <text>'
+    '  --mark <char>'
+    '  --color <Color>       (default: light-blue)'
+    '  --tags <text>         (default: a b)'
+    '  -o, --output <file>   write the executable here'
+    '  --include-dir <text>'
+    '  -h, --help            show this help'
+  assert usage_of(usage<Run>(RUN_SPEC, 'run')) == expected.join("\n")
+  spec := { file: { positional: true }, more: { positional: true } }
+  required := "usage: tool [options] <file> <more>...\n\noptions:\n  --name <text>\n" +
+    '  -h, --help     show this help'
+  assert usage_of(usage<Required>(spec)) == required
+  optional := "usage: tool [options] [<file>]\n\noptions:\n  -h, --help  show this help"
+  assert usage_of(usage<Optional>({ file: { positional: true } })) == optional
+
+enum Command
+  build
+  dump_tokens
+
+struct Build
+  output: String?
+
+struct Colors
+  colors: Color[]
+
+test 'a required list of an enum takes its members', ->
+  spec := { colors: { positional: true } }
+  assert decode_args<Colors>(['red', 'light-blue'], spec).colors == [red, light_blue]
+
+test 'parse_command takes the command that the first argument names, with - for _', ->
+  spec := { build: { help: 'build the program' } }
+  (command, rest) := parse_command<Command>(['dump-tokens', '-x', 'a'], spec)
+  assert command == dump_tokens
+  assert rest == ['-x', 'a']
+  (built, args) := parse_command<Command>(['build', '--output', 'p'], spec)
+  assert built == build
+  assert decode_args<Build>(args, { output: { short: 'o' } }).output == 'p'
+
+struct Point
+  x: Int
+
+struct Plain
+  name := default ''
+  file: String?
+  files: String[] = default []
+  more: String[] = default []
+  flag: Bool
+
+test 'a spec that does not fit the struct throws a ValueError', ->
+  assert
+    invalid(-> usage<Plain>({ nope: { help: 'x' } })) ==
+      "std:args: the spec names 'nope', which is not one of name, file, files, more, flag"
+  assert
+    invalid(-> usage<Plain>({ name: { hlep: 'x' } })).starts_with(
+      "std:args: the spec of name gives 'hlep', which is not one of short, help, value"
+    )
+  assert invalid(-> usage<Plain>({ name: { help: true } })) == 'std:args: help of name is no String'
+  assert invalid(-> usage<Plain>({ name: { short: 5 } })) == 'std:args: short of name is no String'
+  assert
+    invalid(-> usage<Plain>({ name: { value: 1.5 } })) == 'std:args: value of name is no String'
+  assert
+    invalid(-> usage<Plain>({ name: { positional: 'yes' } })) ==
+      'std:args: positional of name is no Bool'
+  assert invalid(-> usage<Plain>({ name: 1 })) == 'std:args: the spec of name is no struct'
+  assert
+    invalid(-> usage<Plain>({ name: { short: 'ab' } })) ==
+      "std:args: the short option of name is not one character: 'ab'"
+
+test 'options that two fields would share, or positional arguments out of order, throw', ->
+  assert
+    invalid(-> usage<Plain>({ name: { short: 'n' }, file: { short: 'n' } })) ==
+      'std:args: -n names two options'
+  assert invalid(-> usage<Plain>({ name: { short: 'h' } })) == 'std:args: -h names two options'
+  assert
+    invalid(-> usage<Plain>({ file: { positional: true, short: 'f' } })) ==
+      'std:args: file has a short option, as no positional argument does'
+  assert
+    invalid(-> usage<Plain>({ flag: { positional: true } })) ==
+      'std:args: flag is positional, which a Bool cannot be'
+  assert
+    invalid(-> usage<Plain>({ files: { positional: true }, more: { positional: true } })) ==
+      'std:args: files takes the rest, so no positional argument can follow it'
+  assert
+    invalid(-> usage<Plain>({ name: { positional: true, after_dashes: true } })) ==
+      'std:args: name is both positional and after_dashes'
+  assert
+    invalid(-> usage<Plain>({ name: { after_dashes: true } })) ==
+      'std:args: name is after_dashes, so it must be a list'
+  assert
+    invalid(-> usage<Plain>({ files: { after_dashes: true }, more: { after_dashes: true } })) ==
+      'std:args: more than one field is after_dashes'
+
+struct Ordered
+  first: String?
+  second: String
+
+struct Nested
+  point: Point
+
+struct Mapped
+  counts: Map<String, Int> = default Map()
+
+struct Lists
+  lists: String[][] = default []
+
+struct MaybeFlag
+  flag: Bool?
+
+struct Help
+  help: Bool
+
+struct TrueFlag
+  on := default true
+
+struct Flags
+  flags: Bool[] = default []
+
+struct RequiredEnum
+  order: Ordering
+
+struct Letters
+  a: Bool
+  all: Bool
+
+test 'a struct that std:args cannot read arguments into throws a ValueError', ->
+  assert
+    invalid(-> usage<Ordered>({ first: { positional: true }, second: { positional: true } })) ==
+      'std:args: second is required, so it cannot follow first, which is not'
+  assert
+    invalid(-> usage<Nested>({ point: { help: 'x' } })) ==
+      'std:args: point is a class or struct, which std:args does not read'
+  assert
+    invalid(-> usage<Mapped>({ counts: { help: 'x' } })) ==
+      'std:args: counts is a map, which std:args does not read'
+  assert
+    invalid(-> usage<Lists>({ lists: { help: 'x' } })) ==
+      'std:args: lists is a list of lists, which std:args does not read'
+  assert
+    invalid(-> usage<MaybeFlag>({ flag: { help: 'x' } })) ==
+      'std:args: flag is an optional Bool, which std:args does not read'
+  assert invalid(-> usage<Help>({ help: { short: 'x' } })) == 'std:args: --help names two options'
+  assert
+    invalid(-> usage<TrueFlag>({ on: { help: 'x' } })) ==
+      'std:args: on is a Bool, which cannot be true by default'
+  assert
+    invalid(-> usage<Flags>({ flags: { help: 'x' } })) ==
+      'std:args: flags is a list of Bools, which a switch cannot be'
+  assert
+    invalid(-> usage<RequiredEnum>({ order: { help: 'x' } })) ==
+      'std:args: order is an enum without a default, which std:args does not read'
+  assert invalid(-> usage<Letters>({ all: { short: 'a' } })) == 'std:args: -a names two options'

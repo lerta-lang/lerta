@@ -1,0 +1,182 @@
+# The fields of the struct that std:args reads the arguments into, which it finds by having the code
+# that the compiler generates read the struct through a Probe (see std/args.lerta). That code asks
+# `is_field` of each field in turn for each key it reads, then reads the value by the method of its
+# type, and calls `fail_missing_field` for a field without a default whose key it did not read.
+import Codable, decode, encode from 'std:codable'
+import TreeWriter from './args_tree'
+
+# How a field takes its value from the command line.
+export enum FieldKind
+  SWITCH
+  TEXT
+  INTEGER
+  UINT64
+  FLOAT
+  FLOAT32
+  CHAR
+  MEMBER
+
+export class Field
+  name: String
+  var kind: FieldKind = TEXT
+  # What read_integer is told, as `an Int8`, with its range, or the name of an enum, for INTEGER
+  # and MEMBER.
+  var expected = ''
+  var least = 0
+  var most = 0
+  var optional = false
+  var list = false
+  var required = false
+  # The default, as a usage message shows it, or nil.
+  var shown_default: String? = nil
+
+# The fields of T, in their order, with what they take.
+export fields_of := <T: Codable>(): Field[] ->
+  fields := [kind_of<T>(name) for name in field_names<T>()]
+  find_defaults<T>(fields)
+  fields
+
+# The names of the fields: the probe gives one key that no field has.
+field_names := <T: Codable>() ->
+  probe := Probe(keys: [''], target: nil)
+  read<T>(probe)
+  probe.names
+
+# The field of the name, with its kind: the probe gives its key alone, and stops at the first read
+# of a value that is no list or optional.
+kind_of := <T: Codable>(name: String) ->
+  field := Field(name)
+  read<T>(Probe(keys: [name], target: field))
+  # A switch is given or not, so it has no nil.
+  unsupported field, 'an optional Bool' if field.kind == SWITCH and field.optional
+  field
+
+# Marks the fields without a default as required, and shows the defaults of the others: T is read
+# with a stand-in value for each required field, which the probe finds one by one, then written.
+find_defaults := <T: Codable>(fields: Field[]) ->
+  while true
+    required := [field for field in fields when field.required]
+    probe := Probe(keys: [field.name for field in required], target: nil)
+    try
+      value := decode<T>(probe)
+      writer := TreeWriter()
+      encode writer, value
+      for (name, node) in writer.root!.fields
+        field := fields.find((each) -> each.name == name)!
+        field.shown_default = node.shown() unless field.required
+      return
+    catch missing: Missing
+      field := fields.find((each) -> each.name == missing.name)!
+      # A required list stands in empty, but no member stands in for a required enum.
+      unsupported field, 'an enum without a default' if field.kind == MEMBER and not field.list
+      field.required = true
+
+# Reads T, as far as the probe lets it.
+read := <T: Codable>(probe: Probe) ->
+  try
+    decode<T>(probe)
+    return
+  catch _: Found | Missing
+    return
+
+# Ends a read once the probe has found what it was to find.
+struct Found: Error
+  message := 'found'
+
+# The field of the name has no default and was not given.
+struct Missing: Error
+  name: String
+  message := 'missing'
+
+# A Decoder that gives the keys, then tells the kind of the target's value, or gives a stand-in
+# value of each kind: an empty list, false, zero, or an empty String.
+class Probe
+  keys: String[]
+  target: Field?
+  var names: String[] = []
+  var at = 0
+  var depth = 0
+
+  begin_record := (): void ->
+    @depth += 1
+    @unsupported 'a class or struct' if @depth > 1
+  read_field := ->
+    return nil if @at == @keys.length
+    @at += 1
+    @keys[@at - 1]
+  is_field := (key: String, name: String) ->
+    @names.push name unless name in @names
+    key == name
+  skip_value := (): void -> return
+  fail_missing_field := (name: String) -> throw Missing(name)
+
+  # The target takes the kind, or nil if the probe gives stand-ins.
+  found := (kind: FieldKind) ->
+    target := @target ? return
+    target.kind = kind
+    throw Found()
+
+  read_nil := ->
+    if target := @target
+      @unsupported 'a list of optionals' if target.list
+      target.optional = true
+    false
+  read_bool := ->
+    @found SWITCH
+    false
+  read_string := ->
+    @found TEXT
+    ''
+  read_integer := (expected: String, least: Int, most: Int) ->
+    if target := @target
+      target.expected = expected
+      target.least = least
+      target.most = most
+    @found INTEGER
+    least
+  read_uint64 := ->
+    @found UINT64
+    0.to_uint64()!
+  read_float := ->
+    @found FLOAT
+    0.0
+  read_float32 := ->
+    @found FLOAT32
+    0.0.to_float32()
+  read_char := ->
+    @found CHAR
+    [c for c in ' '][0]
+  read_member := (enum_name: String) ->
+    target := @target ? throw Found()
+    target.expected = enum_name
+    @found MEMBER
+    ''
+  begin_array := ->
+    target := @target ? return
+    @unsupported 'a list of lists' if target.list
+    target.list = true
+  begin_set := -> @begin_array()
+  # The target's list has an item, whose kind it tells; a stand-in list has none.
+  next_item := -> @target != nil
+  read_binary := (): Binary -> @unsupported('a Binary')
+  begin_tuple := (count: Int): void -> @unsupported('a tuple')
+  next_tuple_item := (count: Int): void -> return
+  end_tuple := (count: Int): void -> return
+  begin_map := (): void -> @unsupported('a map')
+  read_key := (): String? -> nil
+  begin_entries := (): void -> @unsupported('a map')
+  next_entry := -> false
+  entry_value := (): void -> return
+  end_entry := (): void -> return
+  fail_duplicate := -> throw Found()
+  peek_kind := (): Int -> @unsupported('a union')
+  fail_expected := (expected: String) -> throw Found()
+  fail_member := (enum_name: String, name: String) -> throw Found()
+
+  unsupported := (what: String) ->
+    unsupported_field @target?.name ? @keys.get(@at - 1) ? 'a field', what
+
+unsupported := (field: Field, what: String) -> unsupported_field(field.name, what)
+
+unsupported_field := (name: String, what: String) ->
+  throw ValueError("std:args: #{name} is #{what}, which std:args does not read")

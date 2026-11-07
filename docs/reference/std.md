@@ -1,10 +1,72 @@
 # Standard modules
 
 - `'std:<name>'` is the Lerta file `std/<name>.lerta` of the repository. The compiler carries it, and a program [imports](modules.md) it as any module.
-- The standard modules so far: `'std:async'`, `'std:codable'`, `'std:enums'`, `'std:http'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:process'`, `'std:scanner'` and `'std:time'` (below), and `'std:builtins'`, the module of the [builtins](builtins.md).
+- The standard modules so far: `'std:args'`, `'std:async'`, `'std:codable'`, `'std:enums'`, `'std:http'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:process'`, `'std:scanner'` and `'std:time'` (below), and `'std:builtins'`, the module of the [builtins](builtins.md).
 - A standard module may import the files of `std/`'s directories, as `std/internal/`, by relative paths, as a file imports another: `import JsonWriter from './internal/json_writer'`.
   - Those files are not standard modules: a program cannot import them as `std:...`.
   - Their warnings show only when a standard module that imports them is built on its own.
+
+## std:args
+
+```lerta
+import argv from 'std:process'
+import parse_args from 'std:args'
+
+struct Args
+  lines: Bool
+  jobs: Int = default 4
+  files: String[]
+
+SPEC :=
+  lines: { short: 'l', help: 'count lines only' }
+  jobs: { short: 'j', help: 'run this many at once' }
+  files: { positional: true, value: 'file' }
+
+args := parse_args<Args>(argv, SPEC)
+```
+
+| Name | |
+|---|---|
+| `parse_args<T: Codable, S: Codable>(args: String[], spec: S, command: String? = nil): T` | The arguments read into a `T`, as the spec says how (below), for the command of the name if given. For `-h` or `--help` where an option may be, not as an option's value nor after `--`, it prints the usage message and exits with 0, though other arguments do not fit; for arguments that do not fit, it prints `<program>: ` and the error to stderr, then the usage message, and exits with 2. |
+| `decode_args<T: Codable, S: Codable>(args: String[], spec: S, command: String? = nil): T` | As `parse_args`, but throws an `ArgsError` for arguments that do not fit, and takes `-h` and `--help` as any other unknown option. |
+| `usage<T: Codable, S: Codable>(spec: S, command: String? = nil): String` | The usage message that `parse_args` prints. |
+| `parse_command<C: Enum, S: Codable>(args: String[], spec: S): (C, String[])` | The member of `C` that the first argument names, with `-` for `_`, and the arguments after it, for `parse_args` of that command's struct. Its spec gives the `help` of each member. It prints the usage message of the commands and exits as `parse_args` does, for `-h` or `--help` first, no argument or an unknown command. |
+| `ArgsError` | An [error](errors.md) whose message tells what does not fit, as `--jobs takes an Int, not 'x'` or `missing <file>`. |
+
+The fields of `T` are the options and the positional arguments:
+
+- A field is an option, `--` and its name with `-` for `_`, or `-x` for a name of one letter.
+  - A `Bool` is a switch, true if given and false if not, with no default written. Another field takes a value, the next argument even if it starts with `-`, or what follows `=` after a `--` option: `--jobs 4`, `--jobs=4`. A `String` takes it as it is, a number or a `Char` as its text, in the type's range, and an enum's member as its name with `-` for `_`, as a command.
+  - A list takes one value each time it is given; another field given twice is an error.
+  - A field with a [default](objects.md#members) or of an optional type may be left out; the others are required.
+- `--` ends the options: the arguments after it are positional, or go to the field that is `after_dashes`.
+- `-` alone is a positional argument; any other argument that starts with `-` is an option, so a positional argument such as `-5` goes after `--`.
+
+The spec is an anonymous struct of a field of `T` each, which gives some of these:
+
+| Key | |
+|---|---|
+| `short: String` | A short option of one character: `short: 'j'` gives `-j`. |
+| `help: String` | What the usage message says of it. |
+| `value: String` | What the usage message calls its value, or the positional argument. |
+| `positional: Bool` | It takes positional arguments, in the order of the fields: one, or the rest for a list. A required one cannot follow one that may be left out, nor anything follow a list. |
+| `after_dashes: Bool` | It takes the arguments after `--`, a list, empty without `--`, with no default written. |
+
+The usage message is made of them:
+
+```
+usage: wc [options] <file>...
+
+options:
+  -l, --lines       count lines only
+  -j, --jobs <int>  run this many at once (default: 4)
+  -h, --help        show this help
+```
+
+- `<program>` is std:process's [`program`](#stdprocess), and the command follows it if given.
+- A positional argument is shown as `<name>`, with `...` for a list and in brackets if it may be left out; the field that is `after_dashes` as `[-- <name>...]`.
+- An option's value is called after its type, as `<int>` or `<text>`, unless the spec says otherwise. Its default is the one that `T` gives, unless it is nil, false, blank or a list of nothing to show. To find them, std:args reads a `T` with a stand-in value for each required field, through a `Decoder` of its own, and writes it.
+- A spec or a `T` that std:args cannot read arguments into throws a `ValueError` whatever the arguments are: a spec of a name or a key that is none, of a value of another type, or of two options of one name, or a field of a type that is no `Bool`, `String`, number, `Char` or enum, or an optional or a list of one; a list of optional values, a `Bool` of the default true or a list of them, or a required enum.
 
 ## std:async
 
@@ -100,6 +162,7 @@
 - Another map: `begin_entries`, then `next_entry(): Bool` before each entry, false at the end, its key, `entry_value`, its value and `end_entry`.
 - `fail_duplicate()` throws for an item of a set, or a key of an entry, that came before, as a key of a map of `String` keys read twice throws.
 - A record: `begin_record`, then `read_field(): String?`, as `read_key`. `is_field(key, name)` tells the field whose key it is, `skip_value` skips the value of a key that is none, and `fail_missing_field(name)` throws for a field that needs a key.
+  - For each key, `is_field` is asked of the fields in their order until one has it, all of them for a key that none has; the value of a key read twice is that of the last. After the last key, `fail_missing_field` is called for each field in turn that has no default, is not optional and was not given, of which the first throws. [std:args](#stdargs) finds the fields of a struct by these.
 - A union: `peek_kind(): Int` gives the kind of the value, without reading it: `KIND_BOOL`, `KIND_NUMBER`, `KIND_TEXT` (a `String`, a `Binary`, a `Char` or an enum's member), `KIND_RECORD` (a class or struct) or `KIND_OTHER`, and the member of that kind is read; `fail_expected(expected)` throws for one of no member's kind.
 - `fail_member(enum_name, name)` throws for a name read that names no member.
 

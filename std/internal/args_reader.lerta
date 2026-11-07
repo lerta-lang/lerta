@@ -1,0 +1,97 @@
+# A Decoder that reads the struct of std:args from the texts that the command line gives each field
+# (see std/args.lerta).
+import Field from './args_fields'
+
+export struct ArgsError: Error
+  message: String
+
+# The texts that the command line gives a field.
+export struct Given
+  field: Field
+  texts: String[]
+
+export class ArgsReader
+  given: Given[]
+  # How a message names each field, by its name: by its option, as `--jobs`, or as a positional
+  # argument, as `<file>`.
+  labels: Map<String, String>
+  var at = 0
+  var current: Given? = nil
+  var item = 0
+
+  begin_record := (): void -> return
+  read_field := ->
+    return nil if @at == @given.length
+    @current = @given[@at]
+    @at += 1
+    @item = 0
+    @current!.field.name
+  is_field := (key: String, name: String) -> key == name
+  skip_value := (): void -> return
+  fail_missing_field := (name: String) -> throw ArgsError("missing #{@labels[name]!}")
+
+  label := -> @labels[@current!.field.name]!
+
+  # The next text of the field being read.
+  text := ->
+    given := @current!
+    @item += 1
+    given.texts[@item - 1]
+
+  fail := (what: String, text: String) ->
+    throw ArgsError("#{@label()} takes #{what}, not '#{text}'")
+
+  read_nil := -> false
+  # A switch is true if given, and given no text if not.
+  read_bool := -> not @current!.texts.is_empty()
+  read_string := -> @text()
+  read_integer := (expected: String, least: Int, most: Int) ->
+    text := @text()
+    value := text.parse_int() ? @fail(expected, text)
+    @fail expected, text if value < least or value > most
+    value
+  read_uint64 := ->
+    text := @text()
+    @fail 'a UInt64', text unless text.is_digits()
+    var value = 0.to_uint64()!
+    ten := 10.to_uint64()!
+    for c in text
+      try
+        value = value * ten + c.hex_value()!.to_uint64()!
+      catch _: ArithmeticError
+        @fail 'a UInt64', text
+    value
+  read_float := ->
+    text := @text()
+    text.parse_float() ? @fail('a Float', text)
+  read_float32 := ->
+    text := @text()
+    text.parse_float()?.to_float32() ? @fail('a Float32', text)
+  read_char := ->
+    text := @text()
+    chars := [c for c in text]
+    @fail 'one character', text if chars.length != 1
+    chars[0]
+  # A member is given with `-` for `_`, as a command is, and only so.
+  read_member := (enum_name: String) ->
+    text := @text()
+    @fail "a #{enum_name}", text if '_' in text
+    text.replace '-', '_'
+  fail_member := (enum_name: String, name: String) ->
+    @fail "a #{enum_name}", @current!.texts[@item - 1]
+  begin_array := (): void -> return
+  begin_set := (): void -> return
+  next_item := -> @item < @current!.texts.length
+  read_binary := (): Binary -> throw ValueError('std:args reads no Binary')
+  begin_tuple := (count: Int): void -> return
+  next_tuple_item := (count: Int): void -> return
+  end_tuple := (count: Int): void -> return
+  begin_map := (): void -> return
+  read_key := (): String? -> nil
+  begin_entries := (): void -> return
+  next_entry := -> false
+  entry_value := (): void -> return
+  end_entry := (): void -> return
+  fail_duplicate := -> throw ArgsError("#{@label()} is given twice")
+  peek_kind := (): Int -> throw ValueError('std:args reads no union')
+  fail_expected := (expected: String) -> throw ValueError("std:args reads no #{expected}")
