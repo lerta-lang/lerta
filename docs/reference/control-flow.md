@@ -102,6 +102,7 @@ A `const`, a `var`, a parameter or a loop variable takes a narrower type where a
 | `x == v` (`v` cannot be nil) | `T` | `x` unchanged |
 | `x != v` | `x` unchanged | `T` |
 | `x is T` (`x` of a union, optional or not) | `T` | the union of the other members (one alone is that member), optional if `x` was |
+| `x is T` (`x` of an interface, optional or not) | `T` | `x` unchanged |
 
 - `v` cannot be nil when it is a literal or a value of a type that is not optional.
 - `not` swaps where its operand holds and where it does not.

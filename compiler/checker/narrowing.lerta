@@ -9,7 +9,9 @@ import FieldPath, narrowable from './narrowable'
 import Local from './scopes'
 import Body from './shared'
 import resolve from './type_names'
-import inner_of, is_kind, other_members, OptionalType, Type, UnionType from '../types'
+import
+  inner_of, InterfaceType, is_kind, other_members, OptionalType, Type, UnionType
+from '../types'
 
 # A local or a path of fields, and the narrower type it has.
 export struct Narrowing
@@ -138,8 +140,11 @@ tested_narrowings := (body: Body, condition: Condition) ->
   value := narrowable(body, test.value) ? return nil
   { subject } := value
   if is_type := test.is_type
-    return nil unless inner_of(value.declared) is UnionType
+    declared := inner_of(value.declared)
     type := resolve(body.program, body.resolver, is_type)
+    # An interface value that does not hold the type is still of the interface.
+    return narrowings_only_where([{ subject, type }], true) if declared is InterfaceType
+    return nil unless declared is UnionType
     others := other_members(value.current, type)
     where_false: Narrowing[] = others then [{ subject, type: others }] else []
     return ConditionNarrowings(where_false, where_true: [{ subject, type }])

@@ -749,6 +749,13 @@ type Expr = Num | Add | Mul
 - In each, also a type alias of a union of some of the members: `x is T` then tells whether `x` holds one of them.
 - For a narrowed local, any member of the type it was declared with.
 
+#### Interface values
+
+- `x is T`, `x as T?` and `x as T!` also take a value of an [interface type](objects.md#interface-values), optional or not, and a class or struct `T` that satisfies the interface: whether the value holds an object of `T`, as a `catch` tells, and that object.
+- `is` narrows the value to `T` where it holds, and leaves it of the interface where it does not: `if error is IndexError`.
+- Another `T` is an error: `Point is no class or struct that satisfies Error`.
+- A `case` does not take interface values so far.
+
 ## Enums
 
 ```lerta

@@ -40,8 +40,8 @@ import emit_box, emit_unbox from './boxes'
 import emit_branch, IrBuilder from './ir_builder'
 import emit_adapter_iter from './iter'
 import
-  binary_constant, constant_operand, constructor_symbol, emit_release, emit_release_value,
-  emit_retain, emit_retain_value, ir_type, string_constant
+  binary_constant, constant_operand, constructor_symbol, emit_interface_data, emit_release,
+  emit_release_value, emit_retain, emit_retain_value, ir_type, string_constant
 from './lerta_ir'
 import emit_map_length from './map'
 import generate_binary, generate_coalesce, generate_unary, generate_unwrap from './operator'
@@ -207,6 +207,7 @@ generate_cast := (g: Generator, cast: Cast) ->
   object := generate(g, cast.value)
   member := type_of(g, cast.type)
   value_type := type_of(g, cast.value)
+  return emit_interface_cast(g, cast, object) if inner_of(value_type) is InterfaceType
   return emit_narrowed_cast(g, cast, object) unless inner_of(value_type) is UnionType
   holds := emit_member_test(g, object, cast.value, cast.type)
   if cast.throws
@@ -226,14 +227,34 @@ generate_cast := (g: Generator, cast: Cast) ->
   emit_release ir, object
   result
 
+# The object that the interface value holds, owned as the value is, if it is of the class or struct,
+# and otherwise nil, or a throw.
+emit_interface_cast := (g: Generator, cast: Cast, value: String) ->
+  ir := g.ir
+  value_type := type_of(g, cast.value)
+  holds := emit_member_test(g, value, cast.value, cast.type)
+  object := emit_interface_data(ir, emit_narrowed(ir, value, value_type, inner_of(value_type)))
+  if cast.throws
+    fails := ir.negate(holds)
+    while_holding g, value, value_type, -> throw_if(g, fails, FAILED_CAST)
+    return object
+  result := ir.assign("select i1 #{holds}, ptr #{object}, ptr null")
+  emit_retain ir, result
+  emit_release_value ir, value, value_type
+  result
+
 # An i1: whether the object, the value of a union type or of a member it is narrowed to, optional
-# or not, holds the type.
+# or not, holds the type; or whether an interface value holds an object of the class or struct.
 emit_member_test := (g: Generator, object: String, value: Expression, type_name: TypeName) ->
   value_type := type_of(g, value)
   type := type_of(g, type_name)
   # A value narrowed to one member is held as the member itself, not boxed in the union, so there is
   # no header to test, and whether it holds the type is known.
   held := inner_of(value_type)
+  if held is InterfaceType
+    test_object := (each: String) -> emit_type_test(g.ir, emit_interface_data(g.ir, each), type)
+    return test_object(object) unless value_type is OptionalType
+    return emit_present_test(g.ir, object, value_type, test_object)
   unless held is UnionType
     return 'false' unless is_assignable(held, type)
     return value_type is OptionalType then emit_is_present(g.ir, object, value_type) else 'true'
@@ -454,6 +475,10 @@ export held_value := (g: Generator, local: CodegenLocal) ->
 # The value of the declared type as the narrower one where it is narrowed: without nil, or as one
 # member of its union, out of its box if the union holds one; borrowed as `value` is.
 export emit_narrowed := (ir: IrBuilder, value: String, declared: Type, type: Type) ->
+  # An interface value narrowed to a class or struct is the object it holds.
+  if inner_of(declared) is InterfaceType and inner_of(type) is not InterfaceType
+    held := declared is OptionalType then emit_unwrap(ir, value, declared) else value
+    return emit_interface_data(ir, held)
   unless is_boxed_narrowing(declared, type)
     present := declared is OptionalType and type is not OptionalType
     return present then emit_unwrap(ir, value, declared) else value

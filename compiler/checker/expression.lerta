@@ -39,14 +39,15 @@ import
 from './object'
 import char_as_text, type_of_binary, type_of_coalesce, type_of_unary from './operator'
 import check_return, check_yield, type_of_await from './result'
-import check_interpolated from './satisfaction'
+import check_interpolated, satisfies from './satisfaction'
 import Body from './shared'
 import type_of_tuple, type_of_tuple_item from './tuple'
 import resolve from './type_names'
 import
   binary_type, bool_type, boxes_into, float_type, format_type, format_types, inner_of,
-  inner_of_expected, is_assignable, is_float, is_integer, is_kind, is_one_of_kinds, never_type,
-  nil_type, optional_type, OptionalType, settles_into, string_type, Type, UnionType, void_type
+  InterfaceType, inner_of_expected, is_assignable, is_float, is_integer, is_kind, is_one_of_kinds,
+  never_type, nil_type, ObjectType, optional_type, OptionalType, settles_into, string_type, Type,
+  UnionType, void_type
 from '../types'
 
 export type_of := (body: Body, expression: Expression, expected: Type? = nil) ->
@@ -233,6 +234,7 @@ check_member_type := (body: Body, value: Expression, type_name: TypeName, type: 
   program := body.program
   value_type := unnarrowed_type(body, value, type_of(body, value))
   union := inner_of(value_type)
+  return check_interface_member(body, union, type_name, type) if union is InterfaceType
   unless union is UnionType
     message := "expected a value of a union type, got #{format_type(value_type)}"
     fail program, value.position, message
@@ -241,6 +243,14 @@ check_member_type := (body: Body, value: Expression, type_name: TypeName, type: 
     types := "the types #{format_type(union)} or a union of them"
     message := "#{format_type(type)} is not one of #{types}"
     fail program, type_name.position, message
+  type
+
+# An interface value holds an object of a class or struct that satisfies the interface.
+check_interface_member := (body: Body, bound: InterfaceType, type_name: TypeName, type: Type) ->
+  body.facts.types[type_name] = type
+  if type is not ObjectType or not satisfies(body, type, bound, type_name.position)
+    message := "#{format_type(type)} is no class or struct that satisfies #{format_type(bound)}"
+    fail body.program, type_name.position, message
   type
 
 # The type that a local or a path of fields that the value names was declared with, before
