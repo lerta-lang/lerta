@@ -5,7 +5,7 @@
 import scan from 'std:scanner'
 import
   Binding, BinaryOperation, Call, copy_identifier, Declaration, Expression, Identifier, If,
-  Intrinsic, IsTest, Member, NilLiteral, Position, Statement, StringLiteral, This, Throw,
+  Intrinsic, IsTest, Member, NilLiteral, Position, Range, Statement, StringLiteral, This, Throw,
   UnaryOperation
 from '../ast'
 import fail from './diagnostics'
@@ -94,22 +94,41 @@ guard := (body: Body, call: Call, test: Expression, shown: () -> Expression[]): 
   entries.enter_else()
   checked
 
-# The condition with the operands that it compares, or tests by `is`, held (see Held.hold). The
-# right operand of a comparison is typed as the comparison types it: where the left one's type is
-# expected, unless the left one takes its type from it.
+# The condition with the operands that it compares, or tests by `is`, held (see Held.hold), and so
+# those of the one that `not` negates, as `x is not T` and `x not in xs` are read. The test is
+# checked once first, as any test is, so that each operand has the type and the conversion that
+# Held.hold reads; a path is checked there by a copy, as the guard checks the path itself, which
+# narrowing needs.
 held_test := (held: Held, condition: Expression): Expression ->
-  case condition
-    when BinaryOperation
-      { operator } := condition
-      return condition unless operator in COMPARISONS
-      left := held.hold(condition.left, 'left', nil)
-      expects_left := operator != 'in' and not held.takes_context(left)
-      hint := expects_left then type_of(held.body, copied_path(left))
-      BinaryOperation(condition..., left, right: held.hold(condition.right, 'right', hint))
-    when IsTest then IsTest(condition..., value: held.hold(condition.value, 'value', nil))
-    else condition
+  if condition is UnaryOperation and condition.operator == 'not' and is_test(condition.operand)
+    return UnaryOperation(condition..., operand: held_test(held, condition.operand))
+  return condition unless is_test(condition)
+  copied := (operand: Expression, _label: String) ->
+    is_path(operand) then copied_path(operand) else operand
+  type_of held.body, with_operands(condition, copied)
+  with_operands condition, (operand, label) -> held.hold(operand, label)
 
 COMPARISONS := ['==', '!=', '<', '<=', '>', '>=', 'in']
+
+is_test := (expression: Expression) ->
+  expression is IsTest or (expression is BinaryOperation and expression.operator in COMPARISONS)
+
+# The test with each operand, and each part of a range after `in`, which is no value, given by
+# `operand`, in the order that they are evaluated, with a label for the message.
+with_operands := (test: Expression, operand: (Expression, String) -> Expression): Expression ->
+  part := (value: Expression?, label: String) -> value then operand(value, label)
+  case test
+    when BinaryOperation
+      { right } := test
+      left := operand(test.left, 'left')
+      changed_right :=
+        if right is Range
+          Range(right..., start: part(right.start, 'start'), end: part(right.end, 'end'))
+        else
+          operand right, 'right'
+      BinaryOperation(test..., left, right: changed_right)
+    when IsTest then IsTest(test..., value: operand(test.value, 'value'))
+    else test
 
 # An operand that a failed assertion shows, by its label and the expression that reads it again.
 struct Shown
@@ -123,26 +142,26 @@ class Held
   declarations: Declaration[] = []
   shown: Shown[] = []
 
-  # A literal, which takes its type from the other operand, is left as it is, and so is a name or a
-  # path of members, which narrowing needs as it is and which reads the same value again. Any other
-  # operand is held in a local of its own, typed where `hint` is expected, so that the message shows
-  # the value that was tested.
-  hold := (operand: Expression, label: String, hint: Type?) ->
-    return operand if @takes_context(operand)
+  # An operand is held in a local of its own, of the type that the test gave it, so that the message
+  # shows the value that was tested; the guard's test converts the local where it converted the
+  # operand. A path, which narrowing needs as it is and which reads the same value again, is left
+  # as it is, and so is what the source shows: a literal, nil, which makes the test one of nil, or
+  # a name that stands for a member of an enum, which the message leaves out.
+  hold := (operand: Expression, label: String) ->
+    is_written := is_contextual(operand) or operand is NilLiteral or may_name_member(@body, operand)
+    return operand if is_written
     read :=
       if is_path(operand)
         operand
       else
         name := "#{@prefix}.#{label}"
-        @declarations.push held_local(@body, name, operand, hint)
+        facts := @body.facts
+        type := facts.types[operand] ? type_of(@body, operand)
+        facts.conversions.remove operand
+        @declarations.push held_local(@body, name, operand, type)
         named name, operand.position
     @shown.push { label, value: copied_path(read) }
     read
-
-  # Whether the operand takes its type from the other: a literal, or a name that may stand for a
-  # member of an enum.
-  takes_context := (operand: Expression) ->
-    is_contextual(operand) or operand is NilLiteral or may_name_member(@body, operand)
 
 # A name, `@` or a path of members from one.
 is_path := (expression: Expression): Bool ->
@@ -165,7 +184,8 @@ debugged := (body: Body, call: Call, expected: Type?) ->
   fail body.program, call.position, 'dbg takes one value' if call.args.length != 1
   at := call.position
   name := "#{local_prefix('dbg', at)}.value"
-  held := held_local(body, name, call.args[0], expected)
+  value := call.args[0]
+  held := held_local(body, name, value, type_of(body, value, expected))
   # nil alone has no type to hold it by, and void and never have no value.
   held_type := type_of(body, named(name, at))
   if is_one_of_kinds(held_type, ['nil', 'void', 'never'])
@@ -228,13 +248,12 @@ present_or := (value: Expression, absent: String, present: (Expression) -> Expre
 # source can write.
 local_prefix := (name: String, at: Position) -> "#{name}@#{at.line}:#{at.column}"
 
-# The declaration of a local that holds the value, typed where `hint` is expected, and defined in
-# the scope. It is defined here rather than checked as a declaration, which at the top level would
-# take a function for one of the module's own functions, which are known before checking.
-held_local := (body: Body, name: String, value: Expression, hint: Type?) ->
+# The declaration of a local of the type that holds the value, defined in the scope. It is defined
+# here rather than checked as a declaration, which at the top level would take a function for one
+# of the module's own functions, which are known before checking.
+held_local := (body: Body, name: String, value: Expression, type: Type) ->
   at := value.position
   declaration := Declaration(value, position: at, mutable: false, type: nil, name: named(name, at))
-  type := type_of(body, value, hint)
   define_local
     body
     Local(type, identifier: declaration.name, declared: true, scope_depth: body.scopes.depth())
