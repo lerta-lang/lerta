@@ -1,9 +1,10 @@
 # The source as text tokens: the code tokens of the lexer, without its layout tokens, and the
 # comments, in the order of the source, with the gaps of text between them.
 import scan, Scanner from 'std:scanner'
-import Position from '../ast'
+import is_exported, Position, Statement from '../ast'
 import common_indentation, is_blank from '../lexer/string_literal'
 import Comment, Lexed, Token, TokenKind from '../lexer/tokens'
+import is_destructuring_part from './forms'
 
 export struct TextToken
   text: String
@@ -33,10 +34,27 @@ export struct SourceTokens
   # column of those before it, which tells whether one is inside the block that the token ends (see
   # has_comments in walk.lerta).
   own_line_comments := own_line_columns(@tokens)
+  # The index of the code token at each position.
+  starts := index_by_position(@code)
+
+  # Where the first token of the statement is, which is `export` for an exported one.
+  first_position := (statement: Statement) ->
+    at := @starts[statement.position] ? return statement.position
+    @is_exported_at(statement, at) then @code[at - 1].position() else statement.position
+
+  # The index of the code token that starts the statement, if it starts a line.
+  statement_start := (statement: Statement) ->
+    return nil if is_destructuring_part(statement)
+    at := @starts[statement.position] ? return nil
+    start := @is_exported_at(statement, at) then at - 1 else at
+    start in @line_starts then start
+
+  is_exported_at := (statement: Statement, at: Int) ->
+    is_exported(statement) and at > 0 and @code[at - 1].kind == 'export'
 
 LAYOUT_KINDS: TokenKind[] = [NEWLINE, INDENT, DEDENT, EOF]
 
-is_layout := (token: Token) -> token.kind in LAYOUT_KINDS
+export is_layout := (token: Token) -> token.kind in LAYOUT_KINDS
 
 export source_tokens := (source: String, lexed: Lexed) ->
   code := [token for token in lexed.tokens when not is_layout(token)]
@@ -58,6 +76,11 @@ export source_tokens := (source: String, lexed: Lexed) ->
     tokens.push reader.comment(comment, code.length)
   gaps.push reader.rest()
   SourceTokens tokens, gaps, code, line_starts: line_start_indexes(lexed.tokens)
+
+index_by_position := (code: Token[]) ->
+  starts: Map<Position, Int>
+  starts[token.position()] = index for token, index in code
+  starts
 
 comments_by_code_before := (tokens: TextToken[]) ->
   comments: Map<Int, TextToken>

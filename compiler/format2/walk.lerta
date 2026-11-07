@@ -6,10 +6,9 @@
 # constructs of the statements that it walks that may break a line (see shapes.lerta), whose gaps
 # it decides flat, for lines.lerta to break. Its methods for each construct are in
 # walk_statements.lerta, walk_expressions.lerta and walk_lists.lerta.
-import BinaryOperation, is_exported, Position, Statement from '../ast'
+import BinaryOperation, Statement from '../ast'
 import Token, TokenKind from '../lexer/tokens'
 import INSIDE_BRACES, SPACING from '../format/rules'
-import is_destructuring_part from './forms'
 import KeptLines from './kept'
 import BlockShape, Closer, CodeGap, LineStart, Shape, Spaces, StatementShape from './shapes'
 import SourceTokens, TextToken from './text'
@@ -24,7 +23,8 @@ export INSIDE := Spaces(count: 1, rule: INSIDE_BRACES)
 # as they are written (docs/reference/style.md#comments): by the index of the code token before
 # them; the code tokens of the statements that it skips; the statements that it walks, with the
 # tokens that close their bodies; and the items of lists that a line end separates from the item
-# before them, rather than a comma, which they would take on one line.
+# before them, rather than a comma, which they would take on one line; and the statements on lines
+# of their own that it walks, at every depth.
 export struct Walked
   gaps: Map<Int, CodeGap>
   stranded: Int[]
@@ -32,14 +32,15 @@ export struct Walked
   block: BlockShape
   closers: Map<Int, Closer>
   without_commas: Set<Int>
+  statements: StatementShape[]
 
 export walk := (statements: Statement[], text: SourceTokens, kept: KeptLines) ->
   { code, line_starts, ending_comments, own_line_comments } := text
-  walker := Walker(code, line_starts, ending_comments, own_line_comments, kept)
+  walker := Walker(text, code, line_starts, ending_comments, own_line_comments, kept)
   block := walker.block(statements, 0, nil)
   walker.resume_at walker.code.length
   { gaps, stranded, skipped, closers, without_commas } := walker
-  Walked gaps, stranded, skipped, block, closers, without_commas
+  Walked gaps, stranded, skipped, block, closers, without_commas, statements: walker.walked
 
 # A construct that the walk does not handle yet, whose statement it skips.
 export struct Unhandled: Error
@@ -55,6 +56,8 @@ struct OperationTokens
   end: Int
 
 export class Walker
+  # The source, which says where its statements start.
+  text: SourceTokens
   code: Token[]
   # Those of the code tokens where a statement may start.
   line_starts: Set<Int>
@@ -67,8 +70,7 @@ export class Walker
   # The gaps of the statement being walked, which those of the block that holds it take once it is
   # walked through.
   var gaps: Map<Int, CodeGap> = Map()
-  # The index of the code token that starts at each position.
-  starts := index_by_position(@code)
+  starts := @text.starts
   var at = 0
   # The parentheses around an expression, which the syntax tree leaves out, that its chain has
   # opened and not closed yet (see chain).
@@ -82,6 +84,8 @@ export class Walker
   var shapes: Shape[] = []
   var block_starts: Int[] = []
   var block_statements: StatementShape[] = []
+  # The statements on lines of their own walked, at every depth.
+  walked: StatementShape[] = []
   # Whether the expression being walked is a whole value, whose operations may break (see Long
   # operations); whether it is inside brackets; and whether it is on a line of its own, rather than
   # on that of `->` or `then`.
@@ -119,21 +123,9 @@ export class Walker
     @in_brackets = state.in_brackets
     @on_own_line = state.on_own_line
 
-  # Where the first token of the statement is, which is `export` for an exported one.
-  first_position := (statement: Statement) ->
-    at := @starts[statement.position] ? return statement.position
-    is_exported(statement) then @code[at - 1].position() else statement.position
-
   skip := (start: Int) ->
     earliest := min(@skipped_from ? start, start)
     @skipped_from = earliest
-
-  # The index of the code token that starts the statement, if it starts a line.
-  statement_start := (statement: Statement) ->
-    return nil if is_destructuring_part(statement)
-    at := @starts[statement.position] ? return nil
-    start := is_exported(statement) then at - 1 else at
-    start in @line_starts then start
 
   # Ends the skipping at the code token at `index`.
   resume_at := (index: Int) ->
@@ -206,8 +198,3 @@ struct WalkState
 # A word, as `in`, is an identifier.
 spelling_of := (token: Token) ->
   token.kind == IDENTIFIER then token.text else token.kind.to_string()
-
-index_by_position := (code: Token[]) ->
-  starts: Map<Position, Int>
-  starts[token.position()] = index for token, index in code
-  starts

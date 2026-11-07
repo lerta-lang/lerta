@@ -1,18 +1,24 @@
-# `lerta fmt2`, the formatter that is to replace compiler/format: decides each gap between the text
-# tokens of the source (see text.lerta), reports where the source differs from that by the rule of
-# the decision, and writes the tokens with the gaps decided.
+# `lerta fmt2`, the formatter that is to replace compiler/format: rewrites the tokens of the source
+# that the style writes otherwise (see rewrites.lerta), decides each gap between the text tokens of
+# the source (see text.lerta), reports where the source differs from that by the rule of the
+# rewrite or the decision, and writes the tokens with the gaps decided.
 import scan from 'std:scanner'
-import Position from '../ast'
-import lex from '../lexer/tokens'
+import Position, Statement from '../ast'
+import dump_ast_without_positions from '../ast_dump'
+import CompileError from '../errors'
+import lex, Lexed from '../lexer/tokens'
 import parse from '../parser/statement'
 import
-  BLANK_LINES, COMMENTS, LAYOUT, SEMICOLONS, STRANDED_COMMENTS, StyleRule
+  BINARY_LITERALS, BLANK_LINES, COMMENTS, DOUBLE_NEGATIONS, ELSE_NIL, EMPTY_INITIAL_VALUES, LAYOUT,
+  RANGE_ENDS, SEMICOLONS, STRANDED_COMMENTS, StyleRule
 from '../format/rules'
 import is_off_throughout from '../format/format'
 import common_indentation, is_blank from '../lexer/string_literal'
+import applicable, applied, Edit from './edits'
 import kept_lines from './kept'
 import break_lines from './lines'
-import CodeGap, LineStart, Spaces from './shapes'
+import rewrites_of from './rewrites'
+import CodeGap, LineStart, Spaces, StatementShape from './shapes'
 import Gap, literal_lines, source_tokens, SourceTokens, TextToken from './text'
 import walk, Walked from './walk'
 
@@ -25,24 +31,177 @@ export struct Formatted
   text: String
   findings: Finding[]
 
+# A program that the formatter would change, which is a fault of the formatter.
+export struct ChangedProgram: Error
+  message: String
+
 # The text of a gap, and the rule that decides it.
 struct Decision
   text: String
   rule: StyleRule
 
-# Throws a CompileError if the source does not parse.
+# The source lexed and parsed, and its text tokens.
+struct Parsed
+  source: String
+  lexed: Lexed
+  statements: Statement[]
+  text: SourceTokens
+
+# The source laid out, what differs from it, but the stranded comments, and the statements walked.
+struct LaidOut
+  text: String
+  findings: Finding[]
+  stranded: Finding[]
+  statements: StatementShape[]
+  skipped: Set<Int>
+
+# Throws a CompileError if the source does not parse. The layout of a statement that holds a
+# rewrite is reported once the rewrite is applied, as the rewrite may change it.
 export format_source := (source: String, path: String) ->
   return Formatted(text: source, findings: []) if is_off_throughout(source)
+  parsed := parsed_source(source, path)
+  laid := laid_out(parsed)
+  edits := rewrites(parsed)
+  held := held_statements(parsed.text, laid, edits)
+  is_held := (at: Position) -> held.any((head) -> head.holds(at))
+  layout := [finding for finding in laid.findings when not is_held(finding.at)]
+  rewritten := [Finding(at: edit.at, rule: edit.rule) for edit in edits]
+  # A `;` that a rewrite takes out is a gap that the layout decides too.
+  found := distinct([rewritten..., layout..., laid.stranded...])
+  sorted := found.sorted((a, b) -> a.at.compare(b.at))
+  text :=
+    if applicable(edits).is_empty()
+      checked_layout(laid.text, parsed, path).source
+    else
+      rewritten_text parsed, path, edits
+  Formatted text, findings: sorted
+
+distinct := (findings: Finding[]) ->
+  seen: Set<String>
+  found: Finding[]
+  for finding in findings
+    { at, rule } := finding
+    key := "#{at.line}:#{at.column} #{rule.label} #{rule.message}"
+    continue if key in seen
+    seen.add key
+    found.push finding
+  found
+
+parsed_source := (source: String, path: String) ->
   lexed := lex(source, path)
-  text := source_tokens(source, lexed)
-  walked := walk(parse(lexed.tokens, path), text, kept_lines(source, lexed))
+  Parsed source, lexed, statements: parse(lexed.tokens, path), text: source_tokens(source, lexed)
+
+rewrites := (parsed: Parsed) ->
+  { source, lexed, statements, text } := parsed
+  rewrites_of statements, source, text, lexed, kept_lines(source, lexed)
+
+laid_out := (parsed: Parsed) ->
+  { source, lexed, statements, text } := parsed
+  walked := walk(statements, text, kept_lines(source, lexed))
   break_lines walked, text
   layout := lay_out(text, walked)
   { decisions, texts } := layout
   stranded := [stranded_finding(text, index) for index in walked.stranded]
-  found := [findings(text.gaps, decisions)..., token_findings(text.tokens, texts)..., stranded...]
-  sorted := found.sorted((a, b) -> a.at.compare(b.at))
-  Formatted text: render(texts, decisions), findings: sorted
+  found := [findings(text.gaps, decisions)..., token_findings(text.tokens, texts)...]
+  LaidOut
+    stranded
+    text: render(texts, decisions)
+    findings: found
+    statements: walked.statements
+    skipped: walked.skipped
+
+# The part of the innermost statement that holds an edit, from its start up to the end of the line
+# `last`, where the edit ends, which leaves out the blocks below its head.
+struct Held
+  from: Position
+  last: Int
+
+  holds := (at: Position) -> @from.compare(at) != GREATER and at.line <= @last
+
+# A statement that the walk skips keeps its gaps, which report nothing.
+held_statements := (text: SourceTokens, laid: LaidOut, edits: Edit[]) ->
+  held: Held[]
+  for edit in edits
+    # That of a `;` is the layout's (see rewritten_text).
+    continue if edit.rule == SEMICOLONS
+    change := edit.change ? continue
+    continue if text.starts[edit.at] ? -1 in laid.skipped
+    var innermost: StatementShape?
+    for statement in laid.statements
+      continue unless spans(text, statement, change.from)
+      innermost = statement if innermost == nil or statement.start > innermost.start
+    held.push { from: text.code[innermost.start].position(), last: change.to.line } if innermost
+  held
+
+spans := (text: SourceTokens, statement: StatementShape, at: Position) ->
+  first := text.code[statement.start]
+  last := text.code[statement.end - 1]
+  ends_after := at.compare({ line: last.end_line, column: last.end_column }) == LESS
+  first.position().compare(at) != GREATER and ends_after
+
+# The rules whose rewrites change the syntax tree; the others give the same tree, which the
+# formatter checks. A comparison of trees cannot check these, which change it by design;
+# tests/format2/rewritten_forms.lerta checks that each form means what its rewrite does.
+TREE_CHANGES := [BINARY_LITERALS, DOUBLE_NEGATIONS, ELSE_NIL, EMPTY_INITIAL_VALUES, RANGE_ENDS]
+
+# Only the rewrites of the source itself are reported: one that a round enables, as `b'...'` for the
+# `b"..."` that `"...".binary` is written as, shows once the text written is formatted again.
+# The source with the rewrites applied, round after round, as one may find another in what an
+# earlier one wrote, and laid out. Each round checks that the rewrites that keep the syntax tree do,
+# and the layout that it keeps the tree of the source rewritten. A `;` goes last, once the layout
+# has kept no statement on a line that holds one (see Code kept as written): the layout puts the
+# statement after it on a line of its own where it decides where the statement starts, and its
+# rewrite elsewhere.
+rewritten_text := (parsed: Parsed, path: String, first_edits: Edit[]) ->
+  var current = parsed
+  var edits = first_edits
+  # Whether `current` is laid out: the layout may join the lines of brackets that a rewrite leaves
+  # as long as they span lines, which is then found again.
+  var is_laid = false
+  for _ in 0..MAX_ROUNDS
+    chosen := applicable([edit for edit in edits when edit.rule != SEMICOLONS])
+    if chosen.is_empty()
+      break if is_laid
+      current = checked_layout(laid_out(current).text, current, path)
+      is_laid = true
+    else
+      changing := [edit for edit in chosen when edit.rule in TREE_CHANGES]
+      expected := written_program(applied(current.source, changing), path, 'its rewrites')
+      current = written_program(applied(current.source, chosen), path, 'its rewrites')
+      check_same current, expected, path, 'its rewrites'
+      is_laid = false
+    edits = rewrites(current)
+  laid := is_laid then current else checked_layout(laid_out(current).text, current, path)
+  separators := applicable([edit for edit in rewrites(laid) when edit.rule == SEMICOLONS])
+  return laid.source if separators.is_empty()
+  separated := written_program(applied(laid.source, separators), path, 'its rewrites')
+  check_same separated, laid, path, 'its rewrites'
+  separated.source
+
+# The rounds that the rewrites and the layouts between them take at most: one for each that another
+# enables, as `"..."` of `"...".binary` is written `'...'` once it is `b"..."`. What is left after
+# the last is reported once the text written is formatted again.
+MAX_ROUNDS := 8
+
+# The program laid out, which must be that of the source.
+checked_layout := (text: String, source: Parsed, path: String) ->
+  laid := written_program(text, path, 'its layout')
+  check_same laid, source, path, 'its layout'
+  laid
+
+written_program := (text: String, path: String, what: String) ->
+  try
+    parsed_source text, path
+  catch error: CompileError
+    throw changed(path, "#{what} would not parse: #{error.message}")
+
+check_same := (written: Parsed, expected: Parsed, path: String, what: String) ->
+  same := dump_ast_without_positions(written.statements) ==
+    dump_ast_without_positions(expected.statements)
+  throw changed(path, "#{what} would change the program") unless same
+
+changed := (path: String, message: String) ->
+  ChangedProgram "#{path}: #{message}, which is a fault of the formatter"
 
 stranded_finding := (text: SourceTokens, index: Int) ->
   Finding at: text.ending_comments[index]!.start, rule: STRANDED_COMMENTS

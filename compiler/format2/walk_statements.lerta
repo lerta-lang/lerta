@@ -31,7 +31,7 @@ extend Walker
 
   # The statement, before `next`, the one after it in its block.
   statement_on_line := (statement: Statement, line: LineStart, next: Statement?) ->
-    first := @statement_start(statement)
+    first := @text.statement_start(statement)
     @resume_at first if first
     start := @at
     return @skip(start) if first != start or @skipped_from != nil
@@ -55,13 +55,15 @@ extend Walker
       catch _: Unhandled
         false
     # Asked after the walk, as the statements inside claim their marked lines first.
-    kept := @kept.keeps(@code[start].position(), next then @first_position(next))
+    kept := @kept.keeps(@code[start].position(), next then @text.first_position(next))
     if kept
       # A kept statement reports nothing.
       @stranded = @stranded[..outer_stranded]
     if walked and not kept
       outer[gap] = decided for (gap, decided) in @gaps.entries()
-      @block_statements.push { start, end: @at, shapes: @shapes }
+      walked_statement := StatementShape(start, end: @at, shapes: @shapes)
+      @block_statements.push walked_statement
+      @walked.push walked_statement
     else
       @skip start
     @gaps = outer

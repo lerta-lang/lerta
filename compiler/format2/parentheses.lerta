@@ -1,0 +1,238 @@
+# The parentheses that change nothing, left out (see Parentheses in docs/reference/style.md): those
+# around an expression that binds at least as tightly as its place asks, but those that the style
+# asks for.
+import
+  ArrayLiteral, Assignment, Await, BinaryOperation, Binding, Call, Case, Cast, Coalesce,
+  Comprehension, Conditional, Declaration, Expression, FloatLiteral, FunctionLiteral, Identifier,
+  If, Index, IntegerLiteral, IsTest, MapLiteral, Member, Range, Statement, This, UnaryOperation,
+  Unwrap
+from '../ast'
+import Place, places_of from '../format/places'
+import runs_to_end, starts_with_parenthesis from '../format/print_expression'
+import
+  ADDITIVE, binary_precedence, cast_of, COALESCE, COMPARISON, CONDITIONAL, is_cast, is_negated_test,
+  NOT, OR, POSTFIX, precedence, PREFIX, RANGE
+from '../format/print_operation'
+import PARENTHESES from '../format/rules'
+import Edit from './edits'
+import Tokens from './tokens'
+
+# An expression in its place: how tightly it must bind there, whether it ends what holds it, so
+# that it may run to the end of the line, and whether the style asks for parentheses around it.
+struct Operand
+  expression: Expression
+  level: Int
+  last: Bool
+  clarified := default false
+
+# A place that takes any expression, such as an argument or a value.
+WHOLE_LEVEL := 0
+
+# The edits, and the expressions whose places ask them to bind more tightly than a comparison, which
+# a cast with a fallback written `x as T ? y` would not (see cast_fallback in rewrites.lerta).
+export struct Parentheses
+  edits: Edit[]
+  tight: Set<Expression>
+
+export parentheses_of := (program: Statement[], tokens: Tokens) ->
+  walk := ParenthesesWalk(tokens)
+  # The value that the parser makes for a declaration without one is at its type, and the target of
+  # an assignment, which is no place (see Visit), is no operand.
+  places_of program, { statement: (statement, _) ->
+    case statement
+      when Declaration
+        walk.unwritten.add statement.value if statement.type?.position == statement.value.position
+      when Assignment then walk.operands_checked(whole(statement.target))
+      else pass
+  }
+  places_of program, { before: (value, _: Place) -> walk.visit(value) }
+  tight: Set<Expression>
+  for (expression, operand) in walk.operands.entries()
+    tight.add expression if operand.level > COMPARISON
+  Parentheses tight, edits: walk.found
+
+whole := (value: Expression) -> Operand(expression: value, level: WHOLE_LEVEL, last: true)
+
+class ParenthesesWalk
+  tokens: Tokens
+  found: Edit[] = []
+  unwritten := Set<Expression>()
+  # The operands of the expressions visited, which are checked with them.
+  operands := Map<Expression, Operand>()
+
+  # The expression in its place, in the order of the source.
+  visit := (value: Expression) ->
+    return if value in @unwritten
+    own := @operands[value] ? whole(value)
+    @check own unless value in @operands
+    @operands_checked own
+
+  operands_checked := (own: Operand): void ->
+    parts := operands_of(own)
+    for part in parts
+      @operands[part.expression] = part
+      @check part
+    # Those that are no places (see Visit) are visited here.
+    unvisited := unvisited_parts(own.expression)
+    for part in parts
+      @operands_checked part if part.expression in unvisited
+
+  check := (operand: Operand) -> @found.push(edit) if edit := dropped(@tokens, operand)
+
+# The parts of the expression that places_of does not visit as places (see Visit).
+export unvisited_parts := (expression: Expression): Expression[] ->
+  case expression
+    when Call then [expression.callee]
+    when IsTest then [expression.value]
+    when Comprehension
+      return [] if expression.spread
+      parts := [expression.element]
+      parts.push guard if guard := expression.guard
+      parts
+    else []
+
+# The edit that leaves out the parentheses around the operand, if it is written in them, which
+# change nothing there: all the pairs nested around it, which take the position of the outer, or all
+# but the innermost where one is needed.
+dropped := (tokens: Tokens, operand: Operand) ->
+  { expression, level, last, clarified } := operand
+  open := tokens.at(expression.position) ? return nil
+  return nil unless is_parenthesized(tokens, open, expression, operands_of(operand))
+  close := tokens.matching(open) ? return nil
+  return nil if tokens.code[open].line != tokens.code[close].line
+  var pairs = 1
+  while tokens.is_kind(open + pairs, '(') and tokens.matching(open + pairs) == close - pairs
+    pairs += 1
+  runs_on := runs_to_end(expression) and not last
+  # `-(1).abs()` would read `-1` as one literal.
+  joins_minus := is_number(expression) and tokens.is_kind(open - 1, '-')
+  needed := clarified or precedence(expression) < level or runs_on or joins_minus
+  dropped_pairs := needed then pairs - 1 else pairs
+  return nil if dropped_pairs == 0
+  opening := tokens.run_removed(open, open + dropped_pairs - 1)
+  closing := tokens.run_removed_with_spaces_before(close - dropped_pairs + 1, close)
+  tokens.edit PARENTHESES, [opening, closing]
+
+# Whether the parentheses at the position of the expression are its own: those of an operand that
+# starts it, as `(a) + b`, give their position to what it starts too.
+is_parenthesized := (tokens: Tokens, open: Int, expression: Expression, operands: Operand[]) ->
+  return false unless tokens.is_kind(open, '(')
+  starts_alike := operands.any((operand) -> operand.expression.position == expression.position)
+  # The first item of an array in a block without brackets starts it.
+  first_item := expression is ArrayLiteral then expression.elements.first()?.position
+  not starts_alike and
+    first_item != expression.position and
+    not starts_with_own(tokens, open, expression)
+
+# Whether the `(` at `open` is the expression's own: that of a tuple, of a lazy comprehension, or of
+# the parameters of a function, which `->` or its return type follows.
+starts_with_own := (tokens: Tokens, open: Int, expression: Expression) ->
+  return starts_with_parenthesis(expression) unless expression is FunctionLiteral
+  close := tokens.matching(open) ? return true
+  tokens.is_kind(close + 1, '->') or tokens.is_kind(close + 1, ':')
+
+# The operands of an expression that must bind more tightly than a whole value, or that the style
+# parenthesizes (see operand in compiler/format/print_expression.lerta), with the first of each
+# expression that starts with another.
+operands_of := (operand: Operand): Operand[] ->
+  { expression, last } := operand
+  part := (value: Expression, level: Int, flags: { last: Bool }) ->
+    Operand level, expression: value, last: flags.last
+  case expression
+    when Index then [part(expression.object, POSTFIX, last: false)]
+    when Unwrap then [part(expression.operand, POSTFIX, last: false)]
+    when Member
+      expression.object is This then [] else [part(expression.object, POSTFIX, last: false)]
+    when Call then [part(expression.callee, POSTFIX, last: false)]
+    when UnaryOperation then [unary_operand(expression)]
+    when BinaryOperation then binary_operands(expression, last)
+    when Range then range_ends(expression, last)
+    when IsTest, Cast then [part(expression.value, COALESCE, last: false)]
+    when Coalesce then coalesce_operands(expression, last)
+    when Conditional then conditional_operands(expression, last)
+    when Await then [part(expression.operand, PREFIX, last: true)]
+    when Case then patterns_of(expression)
+    when MapLiteral then [map_key(entry.key) for entry in expression.entries]
+    when Comprehension then comprehension_operands(expression)
+    when If
+      binding := expression.condition as Binding ? return []
+      expression.nil_safe then [part(binding.value, POSTFIX, last: false)] else []
+    else []
+
+# The iterable of a spread, `xs...`, and the element and the guard of a comprehension, which are no
+# places as its lazy functions share them (see Visit).
+comprehension_operands := (comprehension: Comprehension) ->
+  if comprehension.spread
+    return [Operand(expression: comprehension.iterable, level: ADDITIVE, last: false)]
+  parts := [whole(comprehension.element)]
+  parts.push whole(guard) if guard := comprehension.guard
+  parts
+
+# A key that is a name is clarified, as it would be the name of a field.
+map_key := (key: Expression) ->
+  Operand expression: key, level: WHOLE_LEVEL, last: true, clarified: key is Identifier
+
+patterns_of := (case_value: Case) ->
+  patterns: Operand[]
+  for arm in case_value.arms
+    patterns.push { expression: pattern, level: OR, last: false } for pattern in arm.patterns
+  patterns
+
+is_number := (expression: Expression) -> expression is IntegerLiteral or expression is FloatLiteral
+
+# `not (x is not T)` and `-(1)` keep theirs, which `not x is not T` and `-1` would read otherwise.
+unary_operand := (unary: UnaryOperation) ->
+  { operand } := unary
+  if unary.operator == 'not'
+    return Operand(expression: operand, level: NOT, last: true, clarified: is_negated_test(operand))
+  Operand expression: operand, level: PREFIX, last: true, clarified: is_number(operand)
+
+# `and` mixed with `or` is clarified.
+binary_operands := (binary: BinaryOperation, last: Bool) ->
+  level := binary_precedence(binary.operator)
+  compares := level == COMPARISON
+  mixes := (side: Expression) ->
+    binary.operator == 'or' and side is BinaryOperation and side.operator == 'and'
+  left := Operand
+    expression: binary.left
+    level: compares then COALESCE else level
+    last: false
+    clarified: mixes(binary.left)
+  right := Operand
+    last
+    expression: binary.right
+    level: compares then COALESCE else level + 1
+    clarified: mixes(binary.right)
+  [left, right]
+
+# An end that is an operation is clarified (see Ranges).
+range_ends := (range: Range, last: Bool) ->
+  end_of := (value: Expression, flags: { last: Bool }) ->
+    is_operation := value is BinaryOperation or value is UnaryOperation
+    Operand expression: value, level: ADDITIVE, last: flags.last, clarified: is_operation
+  ends: Operand[]
+  ends.push end_of(start, last: false) if start := range.start
+  ends.push end_of(end, last: last) if end := range.end
+  ends
+
+# The parentheses of `(x as T?) ? y` are those of Cast fallbacks, which leaves them out.
+coalesce_operands := (coalesce: Coalesce, last: Bool) ->
+  cast := cast_of(coalesce)
+  value := Operand(expression: coalesce.value, level: RANGE, last: false, clarified: cast != nil)
+  fallback_level := cast != nil and is_cast(coalesce.fallback) then COMPARISON else COALESCE
+  [value, Operand(last, expression: coalesce.fallback, level: fallback_level)]
+
+# A `then`/`else` inside the `then` value of another is clarified.
+conditional_operands := (conditional: Conditional, last: Bool) ->
+  { then_value } := conditional
+  operands :=
+    Operand(expression: conditional.condition, level: OR, last: false)
+    Operand(
+      expression: then_value
+      level: CONDITIONAL
+      last: false
+      clarified: then_value is Conditional
+    )
+  unless conditional.without_else
+    operands.push { last, expression: conditional.else_value, level: CONDITIONAL }
+  operands

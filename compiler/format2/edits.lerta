@@ -1,0 +1,61 @@
+# The edits of the rewrites (see rewrites.lerta), and the source with them applied.
+import Position from '../ast'
+import StyleRule from '../format/rules'
+
+# The text that replaces the source from `from` up to `to`.
+export struct Change
+  from: Position
+  to: Position
+  text: String
+
+# A place where the source breaks a rule that a rewrite applies, reported at `at`, and the change
+# that rewrites it; nil for a rule that is only reported.
+export struct Edit
+  at: Position
+  rule: StyleRule
+  change: Change?
+
+# The edits that apply together: each that overlaps none before it, in the order of the source, the
+# longer first of those that start together. Those left out apply once the others have, as their
+# rewrites are found again in the source rewritten.
+export applicable := (edits: Edit[]) ->
+  changing := [edit for edit in edits when edit.change != nil]
+  chosen: Edit[]
+  var end: Position?
+  for edit in changing.sorted(by_start)
+    change := edit.change!
+    continue if end and change.from.compare(end) == LESS
+    chosen.push edit
+    end = change.to
+  chosen
+
+by_start := (a: Edit, b: Edit) ->
+  starts := a.change!.from.compare(b.change!.from)
+  starts != EQUAL then starts else b.change!.to.compare(a.change!.to)
+
+# The source with the changes of the edits, which applicable chose, applied.
+export applied := (source: String, edits: Edit[]) ->
+  offsets := LineOffsets(source)
+  bytes := source.binary
+  var text = ''
+  var copied = 0
+  for edit in edits
+    change := edit.change!
+    from := offsets.of(change.from)
+    text += bytes[copied..from].text()! + change.text
+    copied = offsets.of(change.to)
+  text + bytes[copied..].text()!
+
+# The byte offsets of positions in a text, whose columns count code points.
+export class LineOffsets
+  text: String
+  starts := [0, [index + 1 for byte, index in @text.binary when byte == b"\n"]...]
+
+  of := (at: Position) ->
+    bytes := @text.binary
+    var offset = @starts[at.line - 1]
+    for _ in 1..at.column
+      offset += 1
+      # The bytes after the first of a character are 0b10xxxxxx.
+      offset += 1 while offset < bytes.length and bytes[offset] & 0xC0 == 0x80
+    offset

@@ -9,15 +9,19 @@ import lines_marked, source_text, SourceText from '../format/source'
 export class KeptLines
   source: SourceText
   marked: Set<Int>
-  # The lines of the statements on lines of their own asked about so far.
+  # The lines of the statements on lines of their own asked about so far, and of those kept.
   claimed := Set<Int>()
+  kept := Set<Int>()
 
   # Whether the statement on lines of its own that starts at `start`, before `next`, where the
   # statement after it in its block starts, holds a marked line that no statement inside it,
   # asked about before it, claims (see claims_marked).
   keeps := (start: Position, next: Position?) ->
     last := @source.statement_last_line(start, next)
-    claims_marked start.line, last, @source, @marked, @claimed
+    is_kept := claims_marked(start.line, last, @source, @marked, @claimed)
+    if is_kept
+      @kept.add line for line in start.line..=last
+    is_kept
 
 # The lines that the comments mark, but not those of the comments that compiler/format cannot place,
 # which format2 reports instead.
