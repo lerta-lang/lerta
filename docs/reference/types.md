@@ -515,7 +515,7 @@ print ages['ann'] ? 0
   - Its types come from the expected type if there is one. Otherwise the key type comes from the keys and the value type from the values, each as an [array](#array-literals)'s item type does: `{ 'a': 1, 'b': 2.5 }` is a `Map<String, Float>`.
   - Of entries with the same key, the last one wins.
   - Keys that are names make an [anonymous struct](#anonymous-structs) instead, and the two kinds cannot be mixed. To use a name's value as a key, put it in parentheses: `{ (k): v }`.
-- The empty map is `Map<K, V>()`, or `Map()` where a map type is expected.
+- The empty map is `Map<K, V>()`, or `Map()` where a map type is expected. `{}` is an [anonymous struct](#anonymous-structs) of no fields.
 - `Map(entries)` or `Map<K, V>(entries)` makes a map of the `(K, V)` [tuples](#tuples) that `entries`, anything a `for` goes through, gives: `Map([(word, word.count()) for word in words])`. Of the same key, the last wins, in the place of the first, as in a literal.
 
 ### Indexing
@@ -808,6 +808,7 @@ divide := (a: Int, b: Int): { quotient: Int, remainder: Int } ->
 
 - `{ x: 1, y: 'a' }` is a value of the anonymous struct type `{ x: Int, y: String }`.
 - `{ x, y }` is short for `{ x: x, y: y }`.
+- `{}` is one of no fields, of the type `{}`. Where a map is expected, it is an error: the empty map is `Map()`.
 - Where an anonymous struct type, or an optional one, is expected, each field the type has takes its type from it. The others, and all fields elsewhere, take the types of their values.
 - A field cannot be nil alone.
 - `?` after the type makes it optional: `{ a: Int }?`.

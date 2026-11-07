@@ -17,9 +17,16 @@ import reject_invalid_instance from './type_validity'
 import needs_context, takes_function_type from './type_argument_inference'
 import is_pattern, infer, substitute from './type_patterns'
 import
-  format_type, inner_of, inner_of_expected, is_one_of_kinds, ObjectType, OptionalType, record_type,
-  RecordField, RecordType, Type
+  format_type, inner_of, inner_of_expected, is_one_of_kinds, MapType, ObjectType, OptionalType,
+  record_type, RecordField, RecordType, Type, UnionType
 from '../types'
+
+# Whether a map is expected, alone or as a member of a union that takes no anonymous struct.
+expects_map := (expected: Type?) ->
+  inner := inner_of_expected(expected)
+  return inner is MapType unless inner is UnionType
+  { members } := inner
+  members.any((member) -> member is MapType) and not members.any((member) -> member is RecordType)
 
 # A call to the name of a class or struct, not shadowed by a local or a function, constructs one.
 export constructed_type := (body: Body, callee: Expression) ->
@@ -243,6 +250,8 @@ is_path := (value: Expression): Bool ->
 # A record where a struct is expected constructs it (see NodeFacts.replacements).
 export type_of_record := (body: Body, record: RecordLiteral, expected: Type?): Type ->
   program := body.program
+  if record.fields.is_empty() and record.spread == nil and expects_map(expected)
+    fail program, record.position, 'the empty map is written `Map()`, and the empty set `Set()`'
   if struct_type := expected_struct(expected)
     construction := struct_construction(struct_type, record.fields, record.spread, record.position)
     body.facts.replacements[record] = construction

@@ -42,7 +42,7 @@ The fields of `T` are the options and the positional arguments:
 - `--` ends the options: the arguments after it are positional, or go to the field that is `after_dashes`.
 - `-` alone is a positional argument; any other argument that starts with `-` is an option, so a positional argument such as `-5` goes after `--`.
 
-The spec is an anonymous struct of a field of `T` each, which gives some of these:
+The spec is an anonymous struct of a field of `T` each, `{}` if it says nothing, which gives some of these:
 
 | Key | |
 |---|---|

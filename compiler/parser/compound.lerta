@@ -146,12 +146,11 @@ parse_comprehension := (
 export parse_map_literal := (tokens: TokenStream, position: Position) ->
   tokens.inside -> parse_map_contents(tokens, position)
 
+# `{}` is an anonymous struct of no fields; the empty map is `Map()`.
 parse_map_contents := (tokens: TokenStream, position: Position): Expression ->
-  if at_record_field(tokens) or item_ends_with_spread(tokens)
+  if at_record_field(tokens) or item_ends_with_spread(tokens) or tokens.peek().kind == '}'
     return parse_record_literal(tokens, position)
   entries := tokens.parse_list_rest<MapEntry>('}', -> parse_map_entry(tokens), [])
-  if entries.is_empty()
-    tokens.fail position, 'the empty map is written `Map()`, and the empty set `Set()`'
   MapLiteral entries, position
 
 parse_map_entry := (tokens: TokenStream) ->
@@ -202,7 +201,7 @@ parse_record_item := (tokens: TokenStream): RecordItem ->
   parse_element(tokens) as Comprehension!
 
 export record_of := (tokens: TokenStream, items: RecordItem[], position: Position) ->
-  if misplaced := [item for item in items[1..] when item is Comprehension].first()
+  if misplaced := [item for item, i in items when i > 0 and item is Comprehension].first()
     tokens.fail misplaced.position, 'a spread comes first in an anonymous struct, once'
   fields := [item for item in items when item is NamedValue]
   first := items.first()
