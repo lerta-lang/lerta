@@ -1,0 +1,100 @@
+# The rewrites that the lines of a statement ask for (see lines.lerta), each the edit of the changes
+# to its tokens that lay it out.
+import Position from '../ast'
+import CALLS_WITHOUT_PARENTHESES, LONG_LISTS, StyleRule from '../format/rules'
+import Change from './edits'
+import Breaker from './lines'
+import ListShape from './shapes'
+
+extend Breaker
+  # The statement keeps its gaps as written, as a rewrite of its tokens lays it out: the edit of the
+  # changes, or a report of the rule where they would take out a comment. Only the first edit of a
+  # statement applies in a round, as the source that another is to change may be laid out otherwise
+  # once the first applies, and they are found again then; the others are reported.
+  rewrite := (rule: StyleRule, changes: Change[]) ->
+    return if changes.is_empty()
+    @keeps = true
+    edit := not @rewritten then @tokens.edit(rule, changes)
+    @rewritten = @rewritten or edit != nil
+    if edit
+      @edits.push edit
+    else if report := @tokens.report(rule, changes[0].from)
+      @edits.push report
+
+  # A comma between each two items that a line end separates, as on one line, or on lines that they
+  # share: a rewrite where it is not.
+  with_commas := (items: Int[]) -> @rewrite(LONG_LISTS, @missing_commas(items))
+
+  missing_commas := (items: Int[]) ->
+    [
+      Change(from: @tokens.end(item - 1), to: @tokens.end(item - 1), text: ',')
+      for item in items[1..]
+      when @code[item - 1].kind != ','
+    ]
+
+  # Each item on a line of its own, without commas, before `close` on a line of its own if it closes
+  # them, as line ends separate items only so: a rewrite where they are not (see line_start).
+  on_own_lines := (items: Int[], close: Int?) ->
+    first := items[0]
+    indentation := @source_indentation(first - 1)
+    changes: Change[]
+    changes.push @line_start(first - 1, first, indentation + 2) unless first in @line_starts
+    for item in items[1..]
+      continue if @code[item - 1].kind != ','
+      if item in @line_starts
+        # The comma alone, as a comment may end its line, and the item indented as the others.
+        changes.push { from: @tokens.end(item - 2), to: @tokens.end(item - 1), text: '' }
+        line := Position(line: @code[item].line, column: 1)
+        changes.push { from: line, to: @tokens.start(item), text: ' '.repeat(indentation + 2) }
+      else
+        changes.push @line_start(item - 2, item, indentation + 2)
+    if close != nil and close not in @line_starts
+      changes.push @line_start(close - 1, close, indentation)
+    @rewrite LONG_LISTS, changes
+
+  # A line start indented by `columns` in the place of the source after the code token at `last`
+  # and before that at `next`. The layout indents it once the rewrite is applied; until then, it is
+  # indented from the line of the source that holds the tokens before it, which a line start that
+  # the layout decides may not have moved yet.
+  line_start := (last: Int, next: Int, columns: Int) ->
+    Change from: @tokens.end(last), to: @tokens.start(next), text: "\n" + ' '.repeat(columns)
+
+  # The columns that the source indents the line that holds the code token by.
+  source_indentation := (index: Int) ->
+    var at = index
+    at -= 1 while at > 0 and at not in @line_starts
+    @code[at].column - 1
+
+  # The arguments without parentheses in them, with commas.
+  parenthesize := (args: ListShape) ->
+    return if args.bracketed
+    { open, close, items } := args
+    last := close - 1
+    @rewrite CALLS_WITHOUT_PARENTHESES, [
+      { from: @tokens.end(open), to: @tokens.start(items[0]), text: '(' }
+      @missing_commas(items)...
+      { from: @tokens.end(last), to: @tokens.end(last), text: ')' }
+    ]
+
+  # The arguments in parentheses without them, where they can go so: `opening` for the `(`, a space
+  # before them on the line of the callee, or a line start before them in a block below it.
+  unparenthesize := (args: ListShape, opening: String) ->
+    return unless args.unbracketable
+    { open, close, items } := args
+    @rewrite CALLS_WITHOUT_PARENTHESES, [
+      { from: @tokens.start(open), to: @tokens.start(items[0]), text: opening }
+      @tokens.removed_with_spaces_before(close)
+    ]
+
+  # The arguments on the line of the callee, separated by commas: a rewrite where they are in a
+  # block below it, or lack commas.
+  join_arguments := (list: ListShape) ->
+    changes: Change[]
+    for item, i in list.items
+      has_comma := i > 0 and @code[item - 1].kind == ','
+      on_line := item not in @line_starts
+      continue if on_line and (i == 0 or has_comma)
+      before := has_comma then item - 2 else item - 1
+      separator := i == 0 then ' ' else ', '
+      changes.push { from: @tokens.end(before), to: @tokens.start(item), text: separator }
+    @rewrite LONG_LISTS, changes
