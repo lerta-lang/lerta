@@ -92,7 +92,7 @@
 
 - **Walk.** The first pass walks the syntax tree over the tokens and decides the gaps between them: the spaces inside a statement and the line start of each statement with its depth (`format2/walk.lerta`).
 - **Layout.** The second decides the gaps between the tokens and the comments, the indentation and the blank lines (`format2/format.lerta`).
-- A statement that holds a construct that the walk does not handle yet keeps its gaps as written.
+- A statement that holds a construct that the walk does not handle yet keeps its gaps as written, as does one that [`# fmt: skip` or `# fmt: off`](../reference/compiler.md#code-kept-as-written) marks: the walk asks `format2/kept.lerta` about each statement on lines of its own once it has walked those inside it, which claim their marked lines first.
 
 ## The language server
 

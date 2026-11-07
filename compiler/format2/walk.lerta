@@ -1,7 +1,8 @@
 # The first pass of the formatter: walks the syntax tree over the code tokens, in the order of the
 # source, and decides each gap between two code tokens that it walks: the spaces inside a statement
 # (docs/reference/style.md#spacing), and the line starts of statements. A statement that holds a
-# construct it does not walk yet is skipped, and its gaps keep their source text.
+# construct it does not walk yet is skipped, and its gaps keep their source text, as do those of a
+# statement that the comments mark to keep as it is written (see kept.lerta).
 import
   ArrayLiteral, ArrayTypeName, Assignment, Await, BinaryOperation, Binding, BooleanLiteral, Call,
   Coalesce, Comprehension, Condition, Conditional, Declaration, EnumDeclaration, Expression, Extend,
@@ -13,6 +14,7 @@ import
 from '../ast'
 import CLOSING_BRACKETS, OPENING_BRACKETS, Token, TokenKind from '../lexer/tokens'
 import INSIDE_BRACES, SPACING, StyleRule from '../format/rules'
+import KeptLines from './kept'
 import SourceTokens, TextToken from './text'
 
 # The spaces of a gap inside a line.
@@ -33,17 +35,18 @@ INSIDE := Spaces(count: 1, rule: INSIDE_BRACES)
 # The gaps that the walk decides, each by the index of the code token after it, and the comments
 # that end a line where the formatter cannot place them, which it reports, keeping their statements
 # as they are written (docs/reference/style.md#comments): by the index of the code token before
-# them.
+# them; and the code tokens of the statements that it skips.
 export struct Walked
   gaps: Map<Int, CodeGap>
   stranded: Int[]
+  skipped: Set<Int>
 
-export walk := (statements: Statement[], text: SourceTokens) ->
-  walker :=
-    Walker(code: text.code, line_starts: text.line_starts, ending_comments: text.ending_comments)
+export walk := (statements: Statement[], text: SourceTokens, kept: KeptLines) ->
+  { code, line_starts, ending_comments } := text
+  walker := Walker(code, line_starts, ending_comments, kept)
   walker.block statements, 0
   walker.resume_at walker.code.length
-  Walked gaps: walker.gaps, stranded: walker.stranded
+  Walked gaps: walker.gaps, stranded: walker.stranded, skipped: walker.skipped
 
 # A construct that the walk does not handle yet, whose statement it skips.
 struct Unhandled: Error
@@ -55,7 +58,9 @@ class Walker
   # Those of the code tokens where a statement may start.
   line_starts: Set<Int>
   ending_comments: Map<Int, TextToken>
-  stranded: Int[] = []
+  kept: KeptLines
+  var stranded: Int[] = []
+  skipped := Set<Int>()
   # The gaps of the statement being walked, which those of the block that holds it take once it is
   # walked through.
   var gaps: Map<Int, CodeGap> = Map()
@@ -74,11 +79,12 @@ class Walker
   block := (statements: Statement[], depth: Int): void ->
     (outer_depth, outer_line) := (@depth, @statement_line)
     @depth = depth
-    @statement_on_line statement, { depth } for statement in statements
+    @statement_on_line statement, { depth }, statements.get(i + 1) for statement, i in statements
     @depth = outer_depth
     @statement_line = outer_line
 
-  statement_on_line := (statement: Statement, line: LineStart) ->
+  # The statement, before `next`, the one after it in its block.
+  statement_on_line := (statement: Statement, line: LineStart, next: Statement?) ->
     first := @statement_start(statement)
     @resume_at first if first
     start := @at
@@ -87,13 +93,29 @@ class Walker
     @gaps[start] = line
     outer := @gaps
     @gaps = Map()
-    try
-      @statement_line = @code[start].line
-      @statement statement, line
+    outer_stranded := @stranded.length
+    walked :=
+      try
+        @statement_line = @code[start].line
+        @statement statement, line
+        true
+      catch _: Unhandled
+        false
+    # Asked after the walk, as the statements inside claim their marked lines first.
+    kept := @kept.keeps(@code[start].position(), next then @first_position(next))
+    if kept
+      # A kept statement reports nothing.
+      @stranded = @stranded[..outer_stranded]
+    if walked and not kept
       outer[gap] = decided for (gap, decided) in @gaps.entries()
-    catch _: Unhandled
+    else
       @skip start
     @gaps = outer
+
+  # Where the first token of the statement is, which is `export` for an exported one.
+  first_position := (statement: Statement) ->
+    at := @starts[statement.position] ? return statement.position
+    is_exported(statement) then @code[at - 1].position() else statement.position
 
   skip := (start: Int) ->
     earliest := min(@skipped_from ? start, start)
@@ -108,7 +130,9 @@ class Walker
 
   # Ends the skipping at the code token at `index`.
   resume_at := (index: Int) ->
-    return if @skipped_from == nil or index < @at
+    from := @skipped_from ? return
+    return if index < @at
+    @skipped.add skipped for skipped in from..index
     @at = index
     @skipped_from = nil
 

@@ -8,8 +8,10 @@ import parse from '../parser/statement'
 import
   BLANK_LINES, COMMENTS, LAYOUT, SEMICOLONS, STRANDED_COMMENTS, StyleRule
 from '../format/rules'
+import is_off_throughout from '../format/format'
+import kept_lines from './kept'
 import Gap, source_tokens, SourceTokens, TextToken from './text'
-import CodeGap, LineStart, Spaces, walk from './walk'
+import CodeGap, LineStart, Spaces, walk, Walked from './walk'
 
 # A place where the source differs from the style, at its position in the source.
 export struct Finding
@@ -27,10 +29,11 @@ struct Decision
 
 # Throws a CompileError if the source does not parse.
 export format_source := (source: String, path: String) ->
+  return Formatted(text: source, findings: []) if is_off_throughout(source)
   lexed := lex(source, path)
   text := source_tokens(source, lexed)
-  walked := walk(parse(lexed.tokens, path), text)
-  decisions := decide(text, walked.gaps)
+  walked := walk(parse(lexed.tokens, path), text, kept_lines(source, lexed))
+  decisions := decide(text, walked)
   stranded := [stranded_finding(text, index) for index in walked.stranded]
   found := [findings(text.gaps, decisions)..., stranded...].sorted((a, b) -> a.at.compare(b.at))
   Formatted text: render(text.tokens, decisions), findings: found
@@ -38,8 +41,8 @@ export format_source := (source: String, path: String) ->
 stranded_finding := (text: SourceTokens, index: Int) ->
   Finding at: text.ending_comments[index]!.start, rule: STRANDED_COMMENTS
 
-decide := (text: SourceTokens, code_gaps: Map<Int, CodeGap>) ->
-  layout := Layout(text, code_gaps)
+decide := (text: SourceTokens, walked: Walked) ->
+  layout := Layout(text, code_gaps: walked.gaps, skipped: walked.skipped)
   [layout.decide(gap, index) for gap, index in text.gaps]
 
 # The second pass: decides each gap between text tokens, in order, from the gaps between code
@@ -47,6 +50,7 @@ decide := (text: SourceTokens, code_gaps: Map<Int, CodeGap>) ->
 class Layout
   text: SourceTokens
   code_gaps: Map<Int, CodeGap>
+  skipped: Set<Int>
   # The depth of the last line start.
   var depth = 0
   # The columns that the last line start moves the indentation of its source line by, which the
@@ -68,7 +72,10 @@ class Layout
     code_gap := has_code then @code_gaps[token.next_code] else END
     return @kept(gap) unless code_gap
     comment := token.comment
-    return Decision(text: '  ', rule: COMMENTS) if comment and not comment.own_line
+    if comment and not comment.own_line
+      # That of a statement that the walk skips keeps its place as written.
+      return @kept(gap) if token.next_code - 1 in @skipped
+      return Decision(text: '  ', rule: COMMENTS)
     case code_gap
       when Spaces
         # A line break inside a statement stays, as long lines are not broken or joined yet, with

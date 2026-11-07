@@ -266,13 +266,33 @@ command_checks: Check[] =
       ]
   }
 
+# Not in the style of `lerta fmt2`, and what it reports on it.
+spaced := "x  := 1\n"
+spacing_report := 'put one space here, or none (Spacing)'
+
 fmt2_checks: Check[] =
-  { name: 'lerta fmt2 reports a path that is not a file, and goes on with the others', run: ->
-    dir := await tree('fmt2_missing', { 'a.lerta': "x  := 1\n" })
-    result := await fmt2(dir, ['missing.lerta', '.', 'a.lerta'])
-    spacing := 'put one space here, or none (Spacing)'
-    expected := "'missing.lerta' is not a file\n'.' is not a file\na.lerta:1:3: #{spacing}\n"
+  { name: 'lerta fmt2 reports a path that names nothing, and goes on with the others', run: ->
+    dir := await tree('fmt2_missing', { 'src/a.lerta': spaced })
+    result := await fmt2(dir, ['missing.lerta', 'src'])
+    expected := "'missing.lerta' is not a file or a directory\nsrc/a.lerta:1:3: #{spacing_report}\n"
     expect_run result, expected, 1
+  }
+  {
+    name: 'lerta fmt2 takes the .lerta files of a directory, in order, but not in . directories'
+    run: ->
+      dir := await tree(
+        'fmt2_walk'
+        {
+          'src/b.lerta': spaced
+          'src/a.lerta': spaced
+          'src/notes.txt': spaced
+          'src/inner/c.lerta': spaced
+          'src/.hidden/d.lerta': spaced
+        }
+      )
+      result := await fmt2(dir, ['src/'])
+      paths := ['src/a.lerta', 'src/b.lerta', 'src/inner/c.lerta']
+      expect_run result, ["#{path}:1:3: #{spacing_report}\n" for path in paths].join(''), 1
   }
   { name: 'lerta fmt2 reports a file that does not parse, and leaves it', run: ->
     dir := await tree('fmt2_parse', { 'bad.lerta': "(\n" })
@@ -280,6 +300,14 @@ fmt2_checks: Check[] =
     [
       expect_run(result, "bad.lerta:1:1: '(' is never closed\n", 1)...
       await expect_files(dir, { 'bad.lerta': "(\n" })...
+    ]
+  }
+  { name: 'lerta fmt2 --fix writes the .lerta files of a directory', run: ->
+    dir := await tree('fmt2_fix_dir', { 'src/a.lerta': spaced, 'src/inner/b.lerta': spaced })
+    styled := "x := 1\n"
+    [
+      expect_run(await fmt2(dir, ['--fix', 'src']), '', 0)...
+      await expect_files(dir, { 'src/a.lerta': styled, 'src/inner/b.lerta': styled })...
     ]
   }
   { name: 'lerta fmt2 --fix leaves a file in the style as it is', run: ->
