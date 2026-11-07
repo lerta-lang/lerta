@@ -47,7 +47,7 @@ import
   binary_type, bool_type, boxes_into, float_type, format_type, format_types, inner_of,
   InterfaceType, inner_of_expected, is_assignable, is_float, is_integer, is_kind, is_one_of_kinds,
   never_type, nil_type, ObjectType, optional_type, OptionalType, settles_into, string_type, Type,
-  UnionType, void_type
+  TypeParameterType, UnionType, void_type
 from '../types'
 
 export type_of := (body: Body, expression: Expression, expected: Type? = nil) ->
@@ -245,11 +245,19 @@ check_member_type := (body: Body, value: Expression, type_name: TypeName, type: 
     fail program, type_name.position, message
   type
 
-# An interface value holds an object of a class or struct that satisfies the interface.
-check_interface_member := (body: Body, bound: InterfaceType, type_name: TypeName, type: Type) ->
+# An interface value holds an object of a class or struct that satisfies the interface. A type
+# parameter bounded by the interface stands for one where the generic body is checked at its
+# definition, and is one in each instance.
+check_interface_member := (
+  body: Body, bound: InterfaceType, type_name: TypeName, type: Type
+): Type ->
   body.facts.types[type_name] = type
+  return type if type is TypeParameterType and body.resolver.bounds[type.name] == bound
+  # The interface itself, as a type parameter bounded by it may stand for.
+  return type if type == bound
   if type is not ObjectType or not satisfies(body, type, bound, type_name.position)
-    message := "#{format_type(type)} is no class or struct that satisfies #{format_type(bound)}"
+    satisfying := "class or struct that satisfies #{format_type(bound)}"
+    message := "#{format_type(type)} is no #{satisfying}, nor a type parameter bounded by it"
     fail body.program, type_name.position, message
   type
 

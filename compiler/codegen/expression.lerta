@@ -207,7 +207,8 @@ generate_cast := (g: Generator, cast: Cast) ->
   object := generate(g, cast.value)
   member := type_of(g, cast.type)
   value_type := type_of(g, cast.value)
-  return emit_interface_cast(g, cast, object) if inner_of(value_type) is InterfaceType
+  is_object_cast := inner_of(value_type) is InterfaceType and member is not InterfaceType
+  return emit_interface_cast(g, cast, object) if is_object_cast
   return emit_narrowed_cast(g, cast, object) unless inner_of(value_type) is UnionType
   holds := emit_member_test(g, object, cast.value, cast.type)
   if cast.throws
@@ -251,6 +252,9 @@ emit_member_test := (g: Generator, object: String, value: Expression, type_name:
   # A value narrowed to one member is held as the member itself, not boxed in the union, so there is
   # no header to test, and whether it holds the type is known.
   held := inner_of(value_type)
+  # An interface value holds a value of its interface, unless it is nil.
+  if held is InterfaceType and type is InterfaceType
+    return value_type is OptionalType then emit_is_present(g.ir, object, value_type) else 'true'
   if held is InterfaceType
     test_object := (each: String) -> emit_type_test(g.ir, emit_interface_data(g.ir, each), type)
     return test_object(object) unless value_type is OptionalType

@@ -752,8 +752,9 @@ type Expr = Num | Add | Mul
 #### Interface values
 
 - `x is T`, `x as T?` and `x as T!` also take a value of an [interface type](objects.md#interface-values), optional or not, and a class or struct `T` that satisfies the interface: whether the value holds an object of `T`, as a `catch` tells, and that object.
+- `T` may also be a type parameter bounded by the interface, as `E` of `<E: Error>`, which is in each instance the class or struct that it stands for, or the interface itself, which every value of it holds, nil aside.
 - `is` narrows the value to `T` where it holds, and leaves it of the interface where it does not: `if error is IndexError`.
-- Another `T` is an error: `Point is no class or struct that satisfies Error`.
+- Another `T` is an error: `Point is no class or struct that satisfies Error, nor a type parameter bounded by it`.
 - A `case` does not take interface values so far.
 
 ## Enums

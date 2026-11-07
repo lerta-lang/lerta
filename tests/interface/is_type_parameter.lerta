@@ -1,0 +1,42 @@
+# A type parameter bounded by an interface tests an interface value in each instance as the type
+# that it stands for.
+struct Bad: Error
+  message: String
+  code: Int
+
+matches := <E: Error>(expected: E, body: () -> void) ->
+  try
+    body()
+  catch e
+    return e is E and e.message == expected.message
+  false
+
+print matches(IndexError('index out of range'), -> print([1][3]))
+print matches(IndexError('x'), -> print([1][3]))
+print matches(Bad(message: 'index out of range', code: 1), -> print([1][3]))
+print matches(Bad(message: 'b', code: 1), -> throw Bad(message: 'b', code: 2))
+print matches(Bad(message: 'b', code: 1), -> print(1))
+narrowed := <E: Error>(error: Error) -> error is E then (error as E!).message else 'other'
+print narrowed<Bad>(Bad(message: 'n', code: 1))
+# `is` narrows to the type parameter, and `as` casts to it.
+message_of := <E: Error>(error: Error) -> error is E then error.message else 'other'
+print message_of<Bad>(Bad(message: 'narrowed', code: 1))
+cast_message := <E: Error>(error: Error?) -> (error as E?)?.message ? 'nil'
+print cast_message<Bad>(Bad(message: 'cast', code: 1))
+print cast_message<Bad>(nil)
+# The interface itself is held by every value of it but nil.
+any_error: Error = IndexError('index out of range')
+print matches(any_error, -> print([1][3]))
+holds := <E: Error>(error: Error?) -> error is E
+print holds<Error>(IndexError('x'))
+print holds<Error>(nil)
+# Of another class, `is` does not hold, `as E?` gives nil and `as E!` throws; of nil too.
+print holds<IndexError>(ValueError('v'))
+print cast_message<IndexError>(ValueError('v'))
+thrown := <E: Error>(error: Error?) ->
+  try
+    print (error as E!).message
+  catch failed: CastError
+    print failed.message
+thrown<IndexError>(ValueError('v'))
+thrown<Error>(nil)
