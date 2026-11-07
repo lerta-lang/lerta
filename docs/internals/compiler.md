@@ -50,7 +50,7 @@
 
 ## Intrinsics
 
-`intrinsic name` declares a function that the compiler gives, as it cannot be written in Lerta: `assert` of std:builtins, `assert_throws` of std:test (`compiler/checker/intrinsics.lerta`).
+`intrinsic name` declares a function that the compiler gives, as it cannot be written in Lerta: `assert` and `dbg` of std:builtins, `assert_throws` of std:test, and `encode_value` and `decode_value` of std:codable (`compiler/checker/intrinsics.lerta`).
 
 - Only a standard module declares one, and only of a name that the compiler knows. Its name is imported and exported as an extern's is, and a name of the module's own hides it.
 - A call of one is checked as the code that the checker makes in its place, in the scope of the call, so that what follows sees its locals and its narrowings; codegen generates that code (`NodeFacts.intrinsic_calls`).
@@ -58,6 +58,8 @@
   - The `throw` that it makes is marked as an assertion's: it takes the message, a `String`, and throws an `AssertionError` of it, which the checker could not construct by its name, as a program may take the name.
 - The message quotes the call from the source, which the loader keeps (`Module.source`), lexed again.
 - `assert c` is `if not c` followed by that `throw`, so that what follows is narrowed as after a guard. The operands of a comparison or of `is` that are no literal and no path are held first, each typed where the other's type is expected, as the comparison types it; the message, made in the branch where `c` fails, reads them again.
+- `encode_value` and `decode_value` are checked as calls of the code that codegen makes for each type (see [representation](representation.md)), with no code in their place.
+- `dbg(x)` holds `x`, typed where the call's value is expected, writes the line through `lerta_print_stderr` of std:builtins, whose reference the checker records itself, as a name of the program's own could hide it, and gives the local as the call's value.
 - `assert_throws expected, body` holds `expected` and `body`, calls `body` in a `try` that catches the type that `expected` constructs into a `var`, copies that into a const, which narrowing takes, and asserts it equal.
 
 ## Defaults

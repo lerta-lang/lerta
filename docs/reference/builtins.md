@@ -11,6 +11,7 @@
 |---|---|
 | `panic(message: String): never` | Stops the program at once (see [panics](errors.md#panics)). |
 | `assert condition` | Throws an `AssertionError` unless the condition holds (see [assert](errors.md#assert)). |
+| `dbg(x)` | Writes `x` to stderr, where the call is and its code, and gives `x` (below). |
 | `print<T: Stringable>(x: T)` | Writes `x.to_string()` and a newline to stdout. |
 | `print_error<T: Stringable>(x: T)` | Likewise, to stderr. |
 | `min<T: Comparable>(a: T, b: T): T` | The lesser argument by [compare](#equatable-comparable-and-hashable), the first of equal ones: `min(3, 1)` is `1`. |
@@ -23,6 +24,17 @@
 - Each writes at once, unbuffered, so that what it prints is out even if a long computation follows.
 - It writes after what the buffer of `stdout` and `stderr` of [std:io](std.md#stdio) holds, once a write out of it in flight is done, so that the output keeps its order.
 - A failed write to stdout is reported by the exit code, as [std:io](std.md#stdio) states.
+
+### dbg
+
+```lerta
+n := dbg(xs.length) + 1
+```
+
+- It writes a line to stderr, `scores.lerta:4:6: dbg(xs.length) = 3`: where the call is, its code as written, through its `)`, and the [literal](#literal) of `x`, as [`assert`](errors.md#assert) gives an operand's; `<T>` for a value of a type `T` that has no `to_literal`. An array, map or set of items that have none is an error, as a call of its `to_literal` is.
+- It gives `x`, which it evaluates once, typed as it is where the call's value is expected: `small: Int8 = dbg(3)`. A value of type `nil`, `void` or `never` is an error.
+- It writes as `print_error` does, which a name of the program's own does not hide.
+- It can only be called, not used as a value.
 
 ### min and max
 

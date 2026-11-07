@@ -72,7 +72,6 @@ See [the reference](../reference/std.md#stdprocess).
 - Text helpers:
   - `skip(count)` of a [Scanner](../reference/std.md#stdscanner);
   - `s.index_of(part)`: the byte offset of the first occurrence of `part`, or nil.
-- `dbg(x)`, which prints the expression and its literal to stderr and gives `x`.
 
 ## Tools
 

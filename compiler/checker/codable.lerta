@@ -1,13 +1,12 @@
 # The types that the compiler converts by their parts, which satisfy Codable, and the calls of the
 # code that it generates for each (see codegen/codable).
-import Call, Expression, Identifier, Position from '../ast'
+import Call, Identifier, Position from '../ast'
 import fail from './diagnostics'
 import type_of from './expression'
-import has_function from './functions'
-import lookup, record_reference from './name'
+import record_reference from './name'
 import CodableConversion, CodableDirection from './references'
 import Body, ProgramWide, Shared from './shared'
-import names_type_or_import, resolve from './type_names'
+import resolve from './type_names'
 import field_type, info_of from './object_types'
 import
   ArrayType, EnumType, format_type, InterfaceType, is_kind, is_number, is_one_of_kinds, is_set,
@@ -126,19 +125,6 @@ export codable_kind := (member: Type) ->
 KIND_WORDS := ['Bool values', 'numbers', 'text', 'classes or structs']
 
 SCALAR_KINDS: TypeKind[] = [NUMBER_KINDS..., 'Bool', 'String', 'Binary', 'Char']
-
-# A call in std:codable of the builtin `encode_value` or `decode_value`, unless the name is taken
-# there.
-export codable_direction := (body: Body, callee: Expression): CodableDirection? ->
-  return nil if callee is not Identifier or not is_codable_module(body.shared)
-  name := callee.name
-  direction :=
-    case name
-      when 'encode_value' then CodableDirection.ENCODE
-      when 'decode_value' then CodableDirection.DECODE
-      else return nil
-  return nil if lookup(body, name) != nil or has_function(body.shared, name)
-  not names_type_or_import(body.shared, name) then direction
 
 # `encode_value(encoder, value)` writes the value, of a Codable type, and `decode_value<T>(decoder)`
 # reads a T. The encoder or decoder is of a class or struct, whose methods the generated code calls.
