@@ -1,6 +1,7 @@
 # Files, and the standard output and error streams (see runtime/file.c, io.c, output.c and stdin.c).
 
 import Signal from 'std:async'
+import platform from './internal/platform'
 import bytes_of from './internal/utf8'
 
 # A failure gives false, nil or, for lerta_open_file, 0, of which the functions below make the
@@ -20,8 +21,7 @@ extern lerta_open_file_failed: (Int) -> Bool
 extern lerta_open_file_append: (Int, Binary) -> Promise
 extern lerta_open_file_end: (Int, Binary) -> void
 extern lerta_open_file_free: (Int, Binary) -> void
-# std:process imports std:io, so std:io reads the platform and the environment itself.
-extern lerta_platform: () -> String
+# std:process imports std:io, so std:io reads the environment itself.
 extern lerta_env: (String) -> Binary?
 
 # A path that holds a NUL byte names nothing, as the system reads a path only up to its first; the
@@ -157,14 +157,14 @@ ends_with_dots := (path: String) ->
   bytes := path.binary
   var end = bytes.length
   end -= 1 while end > 0 and is_separator(bytes[end - 1])
-  after_drive := lerta_platform() == 'windows' and bytes.length >= 2 and bytes[1] == b':'
+  after_drive := platform == 'windows' and bytes.length >= 2 and bytes[1] == b':'
   part_starts := (i: Int) -> is_separator(bytes[i - 1]) or (after_drive and i == 2)
   var start = end
   start -= 1 while start > 0 and not part_starts(start)
   last := bytes[start..end]
   last == b'.' or last == b'..'
 
-is_separator := (byte: Byte) -> byte == b'/' or (lerta_platform() == 'windows' and byte == b'\')
+is_separator := (byte: Byte) -> byte == b'/' or (platform == 'windows' and byte == b'\')
 
 # An empty path names no directory. Each directory that ends before a separator is made first,
 # whether or not that succeeds, since a parent that cannot be made, such as a drive or a network

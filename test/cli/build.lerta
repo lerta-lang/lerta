@@ -614,6 +614,25 @@ escaped_run_check := (program: String, flags: String[]) ->
     expected := await read_file("#{root_dir}/test/cli/escaped_path/#{program}.out")
     [expect_status(0, ran.status)..., compare_output('stdout', expected, ran.stdout)...]
 
+# The intrinsic value `platform` is the system that the program is built for, which the host's is.
+platform_check := ->
+  Check name: 'lerta run gives platform the system of the build', run: ->
+    code := "import platform from 'std:process'; print platform"
+    ran := await run_command(compiler, ['run', '-e', code], cli_work_dir)
+    [
+      expect_status(0, ran.status)...
+      compare_text('stdout', "#{host_platform}\n", ran.stdout_text())...
+    ]
+
+# dump-llvm builds for no target, as the seed is built on every system, so its code reads the system
+# where it runs.
+platform_dump_check := ->
+  Check name: 'lerta dump-llvm reads platform where the code runs', run: ->
+    source := "#{root_dir}/tests/process/posix/platform.lerta"
+    ran := await run_command(compiler, ['dump-llvm', source], cli_work_dir)
+    reads := '@lerta_platform_member(' in ran.stdout_text()
+    [expect_status(0, ran.status)..., (reads then [] else ['no call of lerta_platform_member'])...]
+
 dump_symbols_check := ->
   posix_check 'lerta dump-llvm escapes module paths in symbol names', ->
     (dir, temp) := new_cli_dirs()
@@ -791,6 +810,8 @@ export checks: Check[] = [
     universal_check(['-O', '--source-lines'])
   ] else [])...
   default_output_check()
+  platform_check()
+  platform_dump_check()
   leading_dash_check()
   symlink_output_check()
   missing_output_directory_check()

@@ -304,3 +304,12 @@ LertaString *lerta_platform(void) {
   const char *name = lerta_os_platform();
   return lerta_string_from_c(name);
 }
+
+int64_t lerta_platform_member(const LertaString *const *texts, int64_t count) {
+  const char *name = lerta_os_platform();
+  int64_t length = (int64_t)strlen(name);
+  for (int64_t i = 0; i < count; i++) {
+    if (texts[i]->length == length && memcmp(texts[i]->bytes, name, (size_t)length) == 0) return i;
+  }
+  lerta_panic("no member of Platform names the system");
+}

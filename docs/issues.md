@@ -33,3 +33,7 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 ## fmt writes a program that does not parse for a long call after a comment
 
 `# a comment` on the line before `print [1].map((v) -> v + 1000000000000000000 + 2000000000000000000 + 3000000000000000 + 40000).count()`, a call without parentheses whose argument holds a function with a body too long for its line, makes `lerta fmt` fail with `the formatter would write a program that does not parse, which is a bug`; without the comment, it reports Long lists and breaks the list. Where the formatter lays out the call after the comment is not found yet: `call_statement` (`compiler/format/print_statement.lerta`) and the comments put back by `print_comments_before` (`compiler/format/doc.lerta`) are where to look. Fix: find the text written there and lay it out as without the comment.
+
+## lerta_platform is left in the runtime for the seed
+
+`lerta_platform` (`runtime/process.c`) gives the system's name, which std read as `platform` before the intrinsic value took its place; no source calls it now, but the seed, compiled from a std that did, still does. Fix: once the seed is refreshed, remove it from the runtime and `runtime/lerta.h`.

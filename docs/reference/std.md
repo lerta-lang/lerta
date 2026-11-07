@@ -726,7 +726,9 @@ print datagram.data.text()!
 | `Output` | An enum of where `run` sends a program's output or errors besides a `Writer` or a `Pipe`: `CAPTURE`, `DISCARD` and `STDOUT` (see [RunOptions](#runoptions)). |
 | `Exit` | A struct of how a program ended (below). |
 | `env(name: String): String?` | The value of an environment variable, or nil if it is not set, including for a name that holds `=` or a NUL byte. Throws a `ValueError`, `the environment variable <name> is not valid UTF-8`, if the value is not. |
-| `platform: String` | The system the program runs on: `'linux'`, `'macos'` or `'windows'`. |
+| `Platform` | `enum Platform`: `'macos'`, `'linux'` and `'windows'`, the systems that a program may be built for. |
+| `platform: Platform` | The system the program is built for, which the compiler writes in the code: a member of `enum Platform`, `'macos'`, `'linux'` or `'windows'`. |
+| `optimized: Bool` | Whether the program is built optimized, as by `-O`, which the compiler writes in the code. |
 | `cpu_count: Int` | The number of CPUs that the program may run on when the module runs, at least 1. |
 | `process_id: Int` | The ID of the program's process. |
 | `is_running(id: Int): Bool` | Whether a process with the ID is running, including one that the program may not signal. An ID of 0 or below, or beyond those the system gives, is not. |

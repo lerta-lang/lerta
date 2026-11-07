@@ -49,6 +49,7 @@ from './optional'
 import emit_binary_length, emit_concat from './string'
 import DEAD_OBJECT, FAILED_CAST, throw_if from './runtime_errors'
 import scalar_literal from './scalar'
+import emit_platform_member from './enum'
 import emit_initialized_check from './top_level'
 import generate_yield from './yielding'
 import
@@ -426,10 +427,12 @@ generate_identifier := (g: Generator, identifier: Identifier) ->
 intrinsic_value := (g: Generator, identifier: Identifier, name: String) ->
   case name
     when 'optimized' then g.code.optimized then 'true' else 'false'
-    # The member of Platform that the target's system names, by its place.
+    # The member of Platform that the target's system names, by its place; read where the code
+    # runs, in a build for no target, as the seed's code is, which builds on every system.
     when 'platform'
-      members := (type_of(g, identifier) as EnumType!).members
-      "#{members.index_of({ text: g.code.system, is_name: false }) ? panic('no such system')}"
+      type := type_of(g, identifier) as EnumType!
+      system := g.code.system ? return emit_platform_member(g.ir, type)
+      "#{type.members.index_of({ text: system, is_name: false }) ? panic('no such system')}"
     else panic("no intrinsic value '#{name}'")
 
 # The slot's pointer, once a top-level value is known to be initialized.

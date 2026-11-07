@@ -325,6 +325,9 @@ void lerta_file_close(int64_t file);
 bool lerta_same_env_name(const LertaString *a, const LertaString *b);
 // The system's name: linux, macos or windows.
 LertaString *lerta_platform(void);
+// The place of the system's name among the `count` texts of an enum's members, which the code of
+// a build for no target reads as std's `platform` (see compiler/codegen/enum.lerta).
+int64_t lerta_platform_member(const LertaString *const *texts, int64_t count);
 // The number of CPUs that are online, at least 1.
 int64_t lerta_cpu_count(void);
 // Appends this program's environment variables to the array, as NAME=VALUE Binary values.

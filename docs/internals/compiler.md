@@ -50,7 +50,7 @@
 
 ## Intrinsics
 
-`intrinsic name` declares a function that the compiler gives, as it cannot be written in Lerta: `assert` and `dbg` of std:builtins, `encode_value` and `decode_value` of std:codable, and `parse` and `members` of std:enums (`compiler/checker/intrinsics.lerta`). `intrinsic name: Type` declares a value that the compiler gives, as only the build knows it: whether the build is optimized (`VALUE_INTRINSICS`).
+`intrinsic name` declares a function that the compiler gives, as it cannot be written in Lerta: `assert` and `dbg` of std:builtins, `encode_value` and `decode_value` of std:codable, and `parse` and `members` of std:enums (`compiler/checker/intrinsics.lerta`). `intrinsic name: Type` declares a value that the compiler gives, as only the build knows it: `optimized` of std:process, and `platform`, of std:internal/platform, which std:process exports and std:io reads (`VALUE_INTRINSICS`). `platform` is the member of its enum that the target's system names, which the enum must have for each system; a build for no target, as dump-llvm's, and so the seed, which builds on every system, reads it where the code runs (`lerta_platform_member`).
 
 - Only a standard module declares one, and only of a name that the compiler knows, a value of the type that the compiler gives it. Its name is imported and exported as an extern's is, and a name of the module's own hides it.
 - A read of a value is typed as its declaration says and recorded (`NodeFacts.intrinsic_values`), as the checker, which `fmt` and the language server run too, knows no build; codegen writes the value of the build in its place, so that an optimized build folds what it decides.
