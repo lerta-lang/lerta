@@ -14,7 +14,7 @@ export ArgsError from './internal/args_reader'
 # that do not fit.
 export parse_args := <T: Codable, S: Codable>(args: String[], spec: S, command: String? = nil): T ->
   form := form_of<T>(spec, command)
-  if wants_help(form.parts, args)
+  if asks_for_help(form.parts, args)
     print form.usage()
     exit 0
   try
@@ -33,6 +33,11 @@ export decode_args := <T: Codable, S: Codable>(
 # The usage message that parse_args prints.
 export usage := <T: Codable, S: Codable>(spec: S, command: String? = nil) ->
   form_of<T>(spec, command).usage()
+
+# Whether the arguments ask for the usage message, as parse_args takes them, for a program that
+# prints it itself, as one that cleans up before it exits.
+export wants_help := <T: Codable, S: Codable>(args: String[], spec: S) ->
+  asks_for_help form_of<T>(spec, nil).parts, args
 
 # The command that the first argument names, a member of C named as the member with `-` for `_`,
 # and the arguments after it; prints the usage message, of the commands with what the spec says of
@@ -212,7 +217,7 @@ options_of := (parts: Part[]) ->
 
 # Whether `-h` or `--help` is where an option may be: not as an option's value, nor after `--`. It
 # looks past arguments that do not fit, so that a command line that fails can ask for the usage.
-wants_help := (parts: Part[], args: String[]) ->
+asks_for_help := (parts: Part[], args: String[]) ->
   options := options_of(parts)
   var i = 0
   while i < args.length

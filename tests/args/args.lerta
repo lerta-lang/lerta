@@ -1,4 +1,4 @@
-import ArgsError, decode_args, parse_command, usage from 'std:args'
+import ArgsError, decode_args, parse_command, usage, wants_help from 'std:args'
 import program from 'std:process'
 
 # Runs a test at once, and prints its name once it has passed.
@@ -366,3 +366,18 @@ test 'a struct that needs no spec takes {}', ->
   bare := decode_args<Bare>(['--verbose', '--name', 'x'], {})
   assert bare.verbose
   assert bare.name == 'x'
+
+test 'wants_help tells -h or --help where an option may be', ->
+  spec := { name: { short: 'n' } }
+  assert wants_help<Bare>(['-h'], spec)
+  assert wants_help<Bare>(['--nope', '--help'], spec)
+  assert wants_help<Files>(['a', '-h'], { files: { positional: true } })
+  assert wants_help<Files>(['a', '--nope', 'b', '-h'], { files: { positional: true } })
+  assert not wants_help<Bare>(['--name', '-h'], spec)
+  assert not wants_help<Bare>(['--', '-h'], spec)
+  assert not wants_help<Bare>(['--help=x'], spec)
+  assert not wants_help<Bare>(['--name=-h'], spec)
+  assert not wants_help<Bare>(['-n', '-h'], spec)
+  assert not wants_help<Bare>([], {})
+  assert wants_help<Bare>(['--help'], {})
+  assert not wants_help<Copy>(['a', '--', '-h'], COPY_SPEC)
