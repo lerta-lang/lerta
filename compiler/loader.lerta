@@ -22,6 +22,9 @@ export class Module
   symbol_name: String
   # Its key (see load): `std:name`, or the real path of its file.
   key: String
+  # Its text, from which a compile-time intrinsic quotes the code it is given (see
+  # compiler/checker/intrinsics.lerta).
+  source: String
   program: Statement[]
   # The indexes of the modules that its imports refer to.
   imported: Map<Import, Int>
@@ -38,6 +41,7 @@ export BUILTINS_MODULE := 'std:builtins'
 class LoadingModule
   key: String
   display_path: String?
+  source: String
   program: Statement[]
   imported: Map<Import, Int> = Map()
   # The places of the modules of its import cycle, if it is in one.
@@ -84,7 +88,7 @@ load := (loader: Loader, key: String, source: String, display_path: String?): Pr
   program := parsed_program(loader, tokenize(source, location), location)
   with_builtins := key == BUILTINS_MODULE then program else [builtins_import(), program...]
   id := loader.loaded.length
-  module := LoadingModule(key, display_path, program: with_builtins)
+  module := LoadingModule(key, display_path, source, program: with_builtins)
   loader.loaded.push module
   loader.by_key[key] = id
   for statement in with_builtins
@@ -171,10 +175,10 @@ finished_module := (loader: Loader, id: Int) ->
   index_of := (place: Int) -> loader.loaded[place].index
   imported: Map<Import, Int>
   imported[statement] = index_of(place) for (statement, place) in loading.imported.entries()
-  { index, key, display_path, program } := loading
+  { index, key, display_path, source, program } := loading
   symbol_name := display_path ? "./#{basename(loader.entry_path)}"
   cycle := [index_of(place) for place in loading.cycle]
-  Module index, display_path, symbol_name, key, program, imported, cycle
+  Module index, display_path, symbol_name, key, source, program, imported, cycle
 
 export is_standard_module := (module: Module) ->
   return is_standard_name(path) if path := module.display_path

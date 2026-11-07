@@ -317,7 +317,7 @@ From weakest to strongest:
 
 ## Keywords
 
-`true` `false` `nil` `and` `or` `not` `var` `if` `else` `while` `unless` `until` `for` `break` `continue` `return` `case` `then` `class` `struct` `throw` `import` `export` `extern` `extend` `enum` `interface` `try` `catch` `finally` `yield` `await` are keywords and cannot be used as names.
+`true` `false` `nil` `and` `or` `not` `var` `if` `else` `while` `unless` `until` `for` `break` `continue` `return` `case` `then` `class` `struct` `throw` `import` `export` `extern` `intrinsic` `extend` `enum` `interface` `try` `catch` `finally` `yield` `await` are keywords and cannot be used as names.
 
 ### Contextual words
 

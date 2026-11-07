@@ -29,7 +29,10 @@ import check_loop_jump, type_of_comprehension from './loop'
 import type_of_function_reference from './function_references'
 import type_of_method_call, type_of_property from './member'
 import codable_direction, type_of_codable_call from './codable'
-import generic_callee, named_function_literal, qualified_name, type_of_identifier from './name'
+import
+  generic_callee, intrinsic_named, named_function_literal, qualified_name, type_of_identifier
+from './name'
+import type_of_intrinsic_call from './intrinsics'
 import narrowable from './narrowable'
 import
   constructed_type, expected_struct, positional_value, type_of_construction, type_of_record,
@@ -169,6 +172,7 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
     return made_collection(body, call, type_of_new_set(body, call, expected))
   if makes_builtin(body, call, 'Array')
     return made_collection(body, call, type_of_filled_array(body, call, expected))
+  return type_of_intrinsic_call(body, call, name) if name := intrinsic_named(body, callee)
   if generic := generic_callee(body, callee)
     return type_of_generic_call(body, call, generic, expected)
   if object_type := constructed_type(body, callee)
@@ -253,6 +257,9 @@ export set_type := (body: Body, node: Node, type: Type) ->
 
 check_throw := (body: Body, throw_expression: Throw) ->
   value := throw_expression.message
+  if throw_expression.assertion
+    expect_type body, value, string_type
+    return
   type := type_of(body, value)
   require_type body, value, type, std_interface(body.shared, 'Error', value.position).type
 

@@ -8,7 +8,8 @@ import fail from './diagnostics'
 import function_type_of, generic_function, has_function from './functions'
 import
   builtin_export, Export, ExternExport, FunctionExport, GenericExport, imported_export,
-  InterfaceExport, qualified_import, TypeExport, use_import, value_local, ValueExport
+  InterfaceExport, IntrinsicExport, qualified_import, TypeExport, use_import, value_local,
+  ValueExport
 from './imports'
 import object_type from './object_types'
 import ExternReference, FunctionReference, Reference, ScopedLocal, TopLevelValue from './references'
@@ -117,6 +118,18 @@ export extern_named := (body: Body, name: Identifier) ->
   exported := export_named(body.shared, name.name)
   exported is ExternExport then exported
 
+# The intrinsic that the callee names, declared by the module or imported, unless a local or
+# another name of the module takes the name.
+export intrinsic_named := (body: Body, callee: Expression) ->
+  return nil unless callee is Identifier
+  shared := body.shared
+  name := callee.name
+  return nil if lookup(body, name) != nil or has_function(shared, name)
+  return nil if body.sees_top_level and name in shared.top_level.names
+  exported := export_named(shared, name) as IntrinsicExport ? return nil
+  use_import shared, name
+  exported.name
+
 # The export that the name is imported by, or else that of std:builtins of the name, if any.
 export_named := (shared: Shared, name: String) ->
   imported := shared.imports.names[name] ? return builtin_export(shared, name)
@@ -130,6 +143,7 @@ type_of_export := (body: Body, exported: Export, identifier: Identifier, is_call
     when TypeExport then fail(body.program, position, "'#{name}' is a type")
     when InterfaceExport then fail(body.program, position, "'#{name}' is an interface")
     when GenericExport then fail_only_called(body, identifier)
+    when IntrinsicExport then fail(body.program, position, "'#{name}' can only be called")
     when ExternExport
       fail_only_called body, identifier unless is_callee
       { symbol, module_index } := exported

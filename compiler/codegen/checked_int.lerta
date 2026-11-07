@@ -25,12 +25,14 @@ checked := (g: Generator, operator: String, left: String, right: String, type: T
   sign := is_signed(type) then 's' else 'u'
   operation := ARITHMETIC_INSTRUCTIONS[operator]!
   width := ir_type(type)
-  intrinsic := "llvm.#{sign}#{operation}.with.overflow.#{width}"
+  overflow_intrinsic := "llvm.#{sign}#{operation}.with.overflow.#{width}"
   result_type := "{ #{width}, i1 }"
   ir := g.ir
-  ir.module.declare intrinsic, "declare #{result_type} @#{intrinsic}(#{width}, #{width})"
+  ir.module.declare
+    overflow_intrinsic
+    "declare #{result_type} @#{overflow_intrinsic}(#{width}, #{width})"
   args := "#{width} #{left}, #{width} #{right}"
-  result := ir.assign("call #{result_type} @#{intrinsic}(#{args})")
+  result := ir.assign("call #{result_type} @#{overflow_intrinsic}(#{args})")
   overflowed := ir.assign("extractvalue #{result_type} #{result}, 1")
   throw_if g, overflowed, OVERFLOW
   ir.assign "extractvalue #{result_type} #{result}, 0"

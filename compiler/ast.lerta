@@ -49,6 +49,9 @@ export class Identifier
 export class Throw
   var message: Expression
   var position: Position
+  # Made by the checker for `assert` (see compiler/checker/intrinsics.lerta): the message is a
+  # String, of which an AssertionError is thrown.
+  assertion := default false
 
 # `yield value`
 export class Yield
@@ -511,6 +514,13 @@ export class Extern
   position: Position
   var exported = false
 
+# `intrinsic assert`: a function of a standard module that the compiler gives, as it cannot be
+# written in Lerta (see docs/internals/compiler.md#intrinsics).
+export class Intrinsic
+  name: Identifier
+  position: Position
+  var exported = false
+
 # `extend String` followed by methods, which the type has where the extend is in effect.
 # `extend<T> T[]` declares the type parameters of a generic extend.
 export class Extend
@@ -522,7 +532,7 @@ export class Extend
 # The declarations on the second line are those the checker allows only at the top level.
 export type Statement =
   Expression | Declaration | Assignment | If | While | For | Pass | Import | TypeDeclaration
-  EnumDeclaration | InterfaceDeclaration | TypeAlias | Extern | Extend
+  EnumDeclaration | InterfaceDeclaration | TypeAlias | Extern | Intrinsic | Extend
 
 export type Node = Statement | Binding | TypeName
 
@@ -561,12 +571,15 @@ export is_exported := (statement: Statement) ->
 # A declaration that `export` can precede.
 export type Exportable =
   Declaration | TypeDeclaration | EnumDeclaration | InterfaceDeclaration | TypeAlias | Extern
+  Intrinsic
 
 # The statement, if `export` can precede it.
 export as_exportable := (statement: Statement) ->
   case statement
-    when Declaration, TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern
-      statement
+    when
+      Declaration, TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern,
+      Intrinsic
+    then statement
     else nil
 
 # The statement, if `export` precedes it.

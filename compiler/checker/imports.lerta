@@ -2,7 +2,8 @@
 # it exports for the modules that import it.
 import
   Declaration, EnumDeclaration, Exportable, exported_declaration, Extern, FunctionLiteral,
-  Identifier, Import, InterfaceDeclaration, NamedType, Statement, TypeAlias, TypeDeclaration
+  Intrinsic, Identifier, Import, InterfaceDeclaration, NamedType, Statement, TypeAlias,
+  TypeDeclaration
 from '../ast'
 import Constant from './constants'
 import fail, fail_already_defined from './diagnostics'
@@ -22,6 +23,10 @@ export struct ExternExport
   type: Type
   symbol: String
   module_index: Int
+  name: String
+
+# A function that the compiler gives, which a standard module declares (see Intrinsic).
+export struct IntrinsicExport
   name: String
 
 # A function of another module, whose type is asked of that module, as it may need its body
@@ -52,7 +57,8 @@ export struct InterfaceExport
 # an import cycle can import each other's before any is checked; an export itself is worked out
 # when it is asked for.
 export type Export =
-  ExternExport | FunctionExport | GenericExport | ValueExport | TypeExport | InterfaceExport
+  ExternExport | IntrinsicExport | FunctionExport | GenericExport | ValueExport | TypeExport
+  InterfaceExport
 
 # A name of another module, worked out when it is asked for (see export_of).
 export struct ExportRef
@@ -60,10 +66,10 @@ export struct ExportRef
   name: String
 
 # `name` is the name the module knows it by: its alias, if it has one; `module` is the imported
-# module as the import names it. An extern of the module is its own export.
+# module as the import names it. An extern or an intrinsic of the module is its own export.
 export class ImportedName
   name: Identifier
-  source: ExportRef | ExternExport
+  source: ExportRef | ExternExport | IntrinsicExport
   var used: Bool
   module: String
   # The local of an imported `const`, made once, as narrowed paths compare their roots by identity.
@@ -128,9 +134,11 @@ export export_of := (program: ProgramWide, module_index: Int, name: String): Exp
       type := shared.facts.types[statement.name]
       ValueExport module_index, name, type, constant: shared.top_level.locals[name]?.constant
     # An extern's name is its own import, since add_extern rejects an import of the same name.
-    when Extern
+    # An extern's or an intrinsic's name is its own import, since add_extern and add_intrinsic
+    # reject an import of the same name.
+    when Extern, Intrinsic
       source := shared.imports.names[name]!.source
-      source as ExternExport!
+      source is ExportRef then panic('an extern or an intrinsic is imported') else source
     when TypeDeclaration
       type := object_type(shared, name)!
       TypeExport type, info: program.infos[type.symbol]
@@ -142,7 +150,7 @@ export imported_export := (program: ProgramWide, imported: ImportedName): Export
   source := imported.source
   case source
     when ExportRef then export_of(program, source.module_index, source.name)
-    when ExternExport then source
+    when ExternExport, IntrinsicExport then source
 
 # The module's own names that clash with imports are rejected as they are declared.
 export add_imports := (shared: Shared, statements: Statement[]) ->
@@ -191,7 +199,7 @@ add_import := (shared: Shared, statement: Import, exporter: Int) ->
 export imports_value := (shared: Shared, name: String) ->
   source := shared.imports.names[name]?.source ? return false
   case source
-    when ExternExport then true
+    when ExternExport, IntrinsicExport then true
     when ExportRef
       exported := shared.program.shared[source.module_index].exported[source.name]!
       not names_a_type(exported)
@@ -207,6 +215,13 @@ export add_extern := (shared: Shared, name: Identifier, type: Type, symbol: Stri
   names := shared.imports.names
   fail_already_defined shared.program, name if has_import(shared, name.name)
   source := ExternExport(type, symbol, module_index: shared.index, name: name.name)
+  names[name.name] = ImportedName(name, source, used: true, module: BUILTINS_MODULE)
+
+# An intrinsic that the module declares, which it calls as it calls those it imports.
+export add_intrinsic := (shared: Shared, name: Identifier) ->
+  names := shared.imports.names
+  fail_already_defined shared.program, name if has_import(shared, name.name)
+  source := IntrinsicExport(name.name)
   names[name.name] = ImportedName(name, source, used: true, module: BUILTINS_MODULE)
 
 export has_import := (shared: Shared, name: String) ->

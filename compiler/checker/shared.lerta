@@ -3,9 +3,10 @@
 # what each module declares, by index, so that no two of them refer to each other.
 import
   ArrayLiteral, BinaryOperation, Call, Cast, Exportable, Expression, FunctionLiteral, Identifier,
-  Member, NamedType, Node, Position, StringLiteral
+  Member, NamedType, Node, Position, Statement, StringLiteral
 from '../ast'
 import DiagnosticKind from '../errors'
+import Token from '../lexer/tokens'
 import CompletionProbe from './completion_probe'
 import Constant from './constants'
 import ExtensionMethod, Extensions from './extensions'
@@ -114,6 +115,9 @@ export class NodeFacts
   #   the fields that it reads from its spread (see spread_construction and spread_record).
   # A replacement may be replaced in turn, as `mod.Point(p..., x: 1)` is, twice.
   replacements: Map<Expression, Expression> = Map()
+  # The code that the checker makes for each call of an intrinsic, which codegen generates in its
+  # place (see compiler/checker/intrinsics.lerta).
+  intrinsic_calls: Map<Call, Statement[]> = Map()
   # The arguments of the calls whose variadic arguments are packed into an array, or whose named
   # arguments are gathered into an argument of the last parameter, as codegen passes them (see
   # check_arguments). The calls stay as they are written, since the instances of a generic function
@@ -167,6 +171,9 @@ export class Shared
   # What the module exports from the modules it imports, by name: the name there (see export_ref).
   reexported: Map<String, ExportRef>
   # What is found of the nodes of the module's code; an instance of a generic function has its own.
+  # The tokens of the module's source, lexed again once a call of an intrinsic quotes the code
+  # (see compiler/checker/intrinsics.lerta).
+  var source_tokens: Token[]? = nil
   facts := NodeFacts()
   warnings: Diagnostic[] = []
   functions := Functions()

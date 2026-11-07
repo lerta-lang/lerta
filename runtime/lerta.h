@@ -471,7 +471,8 @@ typedef enum {
   LERTA_IO_ERROR,
   LERTA_VALUE_ERROR,
   LERTA_INIT_ERROR,
-  LERTA_CANCELLED_ERROR
+  LERTA_CANCELLED_ERROR,
+  LERTA_ASSERTION_ERROR
 } LertaErrorKind;
 
 // Throws an error of the kind with the message, borrowed (see

@@ -5,7 +5,7 @@
 import scan from 'std:scanner'
 import builtin_method from '../checker/builtins'
 import COMPLETION_NAME, CompletionProbe from '../checker/completion_probe'
-import export_of, export_ref, ExportRef, ExternExport from '../checker/imports'
+import export_of, export_ref, ExportRef, ExternExport, IntrinsicExport from '../checker/imports'
 import find_extension from '../checker/extensions'
 import members_for from '../checker/interfaces'
 import builtin_property from '../checker/member_targets'
@@ -159,6 +159,7 @@ module_items := (program: ProgramWide, shared: Shared, in_top_level: Bool) ->
           declared := exported_items(program, program.shared[source.module_index])
           declared.find((each) -> each.label == source.name) ? continue
         when ExternExport then extern_item(name, source.type)
+        when IntrinsicExport then intrinsic_item(name)
     items.push { item..., label: name }
   if builtins := shared.imports.builtins
     for item in exported_items(program, program.shared[builtins])
@@ -173,6 +174,7 @@ exported_items := (program: ProgramWide, shared: Shared): CompletionItem[] ->
     continue if has_label(items, name)
     exported := export_of(program, shared.index, name)
     items.push extern_item(name, exported.type) if exported is ExternExport
+    items.push intrinsic_item(name) if exported is IntrinsicExport
   for name in shared.reexported.keys()
     ref := export_ref(program, shared.index, name) ? continue
     declared := exported_items(program, program.shared[ref.module_index])
@@ -188,6 +190,8 @@ add_new := (items: Map<String, CompletionItem>, item: CompletionItem) ->
 
 extern_item := (name: String, type: Type) ->
   CompletionItem label: name, kind: FUNCTION, detail: format_type(type)
+
+intrinsic_item := (name: String) -> CompletionItem(label: name, kind: FUNCTION, detail: nil)
 
 # The top-level names that the module declares.
 names_of := (program: ProgramWide, shared: Shared) ->
@@ -210,7 +214,8 @@ names_of := (program: ProgramWide, shared: Shared) ->
 KEYWORDS :=
   'true', 'false', 'nil', 'and', 'or', 'not', 'var', 'if', 'else', 'while', 'unless', 'until',
   'for', 'break', 'continue', 'return', 'case', 'then', 'class', 'struct', 'throw', 'import',
-  'export', 'extern', 'extend', 'enum', 'interface', 'try', 'catch', 'finally', 'yield', 'await'
+  'export', 'extern', 'intrinsic', 'extend', 'enum', 'interface', 'try', 'catch', 'finally',
+  'yield', 'await'
 
 keyword_items := -> [CompletionItem(label: word, kind: KEYWORD, detail: nil) for word in KEYWORDS]
 

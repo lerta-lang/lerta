@@ -1,0 +1,339 @@
+# Intrinsics: the functions of standard modules that the compiler gives (see Intrinsic). A call of
+# one is checked, and generated, as the code that the checker makes for it in its place, in the
+# scope of the call, so that what follows sees its locals and its narrowings (see
+# NodeFacts.intrinsic_calls).
+import scan from 'std:scanner'
+import
+  Assignment, Binding, BinaryOperation, Call, Catch, copy_identifier, Declaration, Expression,
+  Identifier, If, Intrinsic, IsTest, Member, NamedType, NilLiteral, Position, Statement,
+  StringLiteral, This, Throw, Try, UnaryOperation
+from '../ast'
+import fail from './diagnostics'
+import may_name_member from './enums'
+import type_of from './expression'
+import add_intrinsic from './imports'
+import qualified_name from './name'
+import constructed_type from './object'
+import is_contextual from './literals'
+import compares_by_contents from './equality'
+import has_method from './member'
+import Body, Shared from './shared'
+import Local from './scopes'
+import check_block, check_if_condition, check_statement, define_local, nothing from './statement'
+import CLOSING_BRACKETS, lex, OPENING_BRACKETS, Token, TokenKind from '../lexer/tokens'
+import is_standard_name, module_location from '../source'
+import format_type, inner_of, OptionalType, Type, void_type from '../types'
+
+INTRINSICS := ['assert', 'assert_throws']
+
+# Only a standard module declares intrinsics, and only those that the compiler gives.
+export declare_intrinsics := (shared: Shared, statements: Statement[]) ->
+  program := shared.program
+  for statement in statements
+    continue unless statement is Intrinsic
+    { name } := statement
+    unless is_standard_name(module_location(program.entry_path, shared.path))
+      fail program, statement.position, 'only a standard module can declare an intrinsic'
+    fail program, name.position, "no intrinsic '#{name.name}'" unless name.name in INTRINSICS
+    add_intrinsic shared, name
+
+export type_of_intrinsic_call := (body: Body, call: Call, name: String) ->
+  reject_named_arguments body, call, name
+  statements :=
+    case name
+      when 'assert' then assertion(body, call)
+      else thrown_assertion(body, call)
+  body.facts.intrinsic_calls[call] = statements
+  void_type
+
+reject_named_arguments := (body: Body, call: Call, name: String) ->
+  return if call.named_args.is_empty() and call.type_args.is_empty()
+  fail body.program, call.position, "#{name} takes no named or type arguments"
+
+# `assert condition`: throws an AssertionError if the condition does not hold, and narrows what
+# follows where it does, as a guard. The message tells where, quotes the call, and gives the values
+# of the operands of a comparison or of `is` that the source does not write as literals.
+assertion := (body: Body, call: Call) ->
+  fail body.program, call.position, 'assert takes one condition' if call.args.length != 1
+  held := Held(body, prefix: local_prefix('assert', call.position))
+  test := held_test(held, call.args[0])
+  shown := -> [operand_text(body, each) for each in held.shown]
+  statements: Statement[] = [held.declarations..., guard(body, call, test, shown)]
+  statements
+
+# The guard that throws an AssertionError where the test does not hold, checked so that what
+# follows is narrowed where it does. `shown` gives the texts that the message adds, made where the
+# test does not hold, as the operands are narrowed there.
+guard := (body: Body, call: Call, test: Expression, shown: () -> Expression[]): Statement ->
+  at := call.position
+  failure := Throw(position: at, message: NilLiteral(at), assertion: true)
+  negated := UnaryOperation(operator: 'not', operand: test, position: at)
+  checked := If(position: at, condition: negated, then_body: [failure], else_body: [])
+  entries := check_if_condition(body, checked)
+  enter_failure := ->
+    entries.enter_then()
+    quoted: Expression = text(quoted_call(body, call), at)
+    failure.message = shown().iter().fold(quoted, concatenation)
+  check_block body, checked.then_body, enter_failure, nothing
+  entries.enter_else()
+  checked
+
+# The condition with the operands that it compares, or tests by `is`, held (see Held.hold). The
+# right operand of a comparison is typed as the comparison types it: where the left one's type is
+# expected, unless the left one takes its type from it.
+held_test := (held: Held, condition: Expression): Expression ->
+  case condition
+    when BinaryOperation
+      { operator } := condition
+      return condition unless operator in COMPARISONS
+      left := held.hold(condition.left, 'left', nil)
+      expects_left := operator != 'in' and not held.takes_context(left)
+      hint := expects_left then type_of(held.body, copied_path(left))
+      BinaryOperation(condition..., left, right: held.hold(condition.right, 'right', hint))
+    when IsTest then IsTest(condition..., value: held.hold(condition.value, 'value', nil))
+    else condition
+
+COMPARISONS := ['==', '!=', '<', '<=', '>', '>=', 'in']
+
+# An operand that a failed assertion shows, by its label and the expression that reads it again.
+struct Shown
+  label: String
+  value: Expression
+
+# The locals that hold the operands of an assertion, and the operands that its message shows.
+class Held
+  body: Body
+  prefix: String
+  declarations: Declaration[] = []
+  shown: Shown[] = []
+
+  # A literal, which takes its type from the other operand, is left as it is, and so is a name or a
+  # path of members, which narrowing needs as it is and which reads the same value again. Any other
+  # operand is held in a local of its own, typed where `hint` is expected, so that the message shows
+  # the value that was tested.
+  hold := (operand: Expression, label: String, hint: Type?) ->
+    return operand if @takes_context(operand)
+    read :=
+      if is_path(operand)
+        operand
+      else
+        name := "#{@prefix}.#{label}"
+        @declarations.push held_local(@body, name, operand, hint)
+        named name, operand.position
+    @shown.push { label, value: copied_path(read) }
+    read
+
+  # Whether the operand takes its type from the other: a literal, or a name that may stand for a
+  # member of an enum.
+  takes_context := (operand: Expression) ->
+    is_contextual(operand) or operand is NilLiteral or may_name_member(@body, operand)
+
+# A name, `@` or a path of members from one.
+is_path := (expression: Expression): Bool ->
+  case expression
+    when Identifier, This then true
+    when Member then is_path(expression.object)
+    else false
+
+# A new node of the path, as each place in the code has a node of its own.
+copied_path := (path: Expression): Expression ->
+  case path
+    when Identifier then copy_identifier(path)
+    when This then This(path.position)
+    when Member then Member(path..., object: copied_path(path.object))
+    else panic('not a path')
+
+# `assert_throws expected, body`: calls the body, and throws an AssertionError unless it throws an
+# error of the type that `expected` constructs, equal to it by `==` if the type compares by its
+# contents, and otherwise of the same message. An error of another type goes on.
+thrown_assertion := (body: Body, call: Call) ->
+  program := body.program
+  usage := "assert_throws takes the error it expects, such as ValueError('bad'), and a function"
+  fail program, call.position, usage if call.args.length != 2
+  (expected_value, function) := (call.args[0], call.args[1])
+  error_type :=
+    constructed_type_name(body, expected_value) ? fail(program, expected_value.position, usage)
+  at := call.position
+  prefix := local_prefix('assert_throws', at)
+  name := (suffix: String) -> named("#{prefix}.#{suffix}", at)
+  # The error is kept in a var, then in a const, which narrowing takes, as it takes no var at the
+  # top level.
+  kept_type := NamedType(error_type..., optional: true)
+  kept := Declaration
+    position: at
+    mutable: true
+    type: kept_type
+    value: NilLiteral(at)
+    name: name('kept')
+  keep := Assignment(position: at, operator: '=', target: name('kept'), value: name('caught'))
+  catch_clause := Catch(position: at, name: name('caught'), type: error_type, body: [keep])
+  attempt :=
+    Try(position: at, catches: [catch_clause], finally_body: nil, body: [call_of(name('body'), at)])
+  declarations: Statement[] =
+    held_local(body, "#{prefix}.expected", expected_value, nil)
+    held_local(body, "#{prefix}.body", function, nil)
+    kept
+    attempt
+  check_statement body, statement for statement in declarations[2..]
+  declarations.push held_local(body, "#{prefix}.thrown", name('kept'), nil)
+  error := inner_of(type_of(body, name('thrown')))
+  test :=
+    if compares_by_contents(program, error)
+      BinaryOperation position: at, operator: '==', left: name('thrown'), right: name('expected')
+    else
+      present :=
+        BinaryOperation(position: at, operator: '!=', left: name('thrown'), right: NilLiteral(at))
+      same := BinaryOperation
+        position: at
+        operator: '=='
+        left: member(name('thrown'), 'message')
+        right: member(name('expected'), 'message')
+      BinaryOperation position: at, operator: 'and', left: present, right: same
+  shown := ->
+    thrown := shown_error(body, name('thrown'), format_type(error))
+    expected := shown_error(body, name('expected'), format_type(error))
+    texts: Expression[] = [label_text('thrown', at), thrown, label_text('expected', at), expected]
+    texts
+  statements: Statement[] = [declarations..., guard(body, call, test, shown)]
+  statements
+
+# The name of the type that the expression constructs, `T(...)` or `module.T(...)`, as a type name.
+constructed_type_name := (body: Body, expression: Expression) ->
+  call := expression as Call ? return nil
+  callee := call.callee
+  # `module.T` names the type by the name that the module's export is imported by.
+  type_callee := callee is Member then qualified_name(body, callee) else callee
+  return nil if type_callee == nil or constructed_type(body, type_callee) == nil
+  name :=
+    case callee
+      when Identifier then callee.name
+      when Member
+        object := callee.object as Identifier ? return nil
+        "#{object.name}.#{callee.name.name}"
+      else return nil
+  NamedType name, args: [], position: callee.position
+
+# The label and the literal of the operand, or nothing if its type has no literal (see
+# literal_text).
+operand_text := (body: Body, shown: Shown): Expression ->
+  at := shown.value.position
+  literal := literal_text(body, shown.value) ? return text('', at)
+  concatenation label_text(shown.label, at), literal
+
+label_text := (label: String, at: Position) -> text("\n  #{label}: ", at)
+
+# The literal of the value, nil if its type has none: that of an optional value is `nil` or the
+# literal of what it holds.
+literal_text := (body: Body, value: Expression): Expression? ->
+  type := type_of(body, value)
+  return member_call(value, 'to_literal') if has_literal(body, type, value.position)
+  return nil if type is not OptionalType or not has_literal(body, type.inner, value.position)
+  present_or value, 'nil', (inner) -> member_call(inner, 'to_literal')
+
+# The error that a failed assert_throws shows: its literal if its type has one, and otherwise its
+# type and the literal of its message, `Type: 'message'`; `nothing` for nil.
+shown_error := (body: Body, error: Expression, type_name: String): Expression ->
+  at := error.position
+  error_type := inner_of(type_of(body, error))
+  text_of := (value: Expression) ->
+    return member_call(value, 'to_literal') if has_literal(body, error_type, at)
+    message := member_call(member(value, 'message'), 'to_literal')
+    concatenation text("#{type_name}: ", at), message
+  return text_of(error) unless type_of(body, error) is OptionalType
+  present_or error, 'nothing', text_of
+
+has_literal := (body: Body, type: Type, at: Position) ->
+  has_method body, type, Identifier(name: 'to_literal', position: at)
+
+# `if v := value then present(v) else absent`, of a name that no source can write.
+present_or := (value: Expression, absent: String, present: (Expression) -> Expression) ->
+  at := value.position
+  name := local_prefix('present', at)
+  binding := Binding(value, position: at, name: named(name, at))
+  then_body: Statement[] = [present(named(name, at))]
+  If then_body, position: at, condition: binding, else_body: [text(absent, at)]
+
+# The start of the names of the locals that the code made for a call at the position has, which no
+# source can write.
+local_prefix := (name: String, at: Position) -> "#{name}@#{at.line}:#{at.column}"
+
+# The declaration of a local that holds the value, typed where `hint` is expected, and defined in
+# the scope. It is defined here rather than checked as a declaration, which at the top level would
+# take a function for one of the module's own functions, which are known before checking.
+held_local := (body: Body, name: String, value: Expression, hint: Type?) ->
+  at := value.position
+  declaration := Declaration(value, position: at, mutable: false, type: nil, name: named(name, at))
+  type := type_of(body, value, hint)
+  define_local
+    body
+    Local(type, identifier: declaration.name, declared: true, scope_depth: body.scopes.depth())
+  declaration
+
+named := (name: String, at: Position) -> Identifier(name, position: at)
+
+text := (value: String, at: Position) -> StringLiteral(value, position: at)
+
+member := (object: Expression, name: String) ->
+  Member object, position: object.position, name: named(name, object.position)
+
+member_call := (object: Expression, name: String) -> call_of(member(object, name), object.position)
+
+call_of := (callee: Expression, at: Position) ->
+  Call callee, position: at, args: [], named_args: [], type_args: []
+
+concatenation := (left: Expression, right: Expression): Expression ->
+  BinaryOperation left, right, operator: '+', position: left.position
+
+# Where the call is, as diagnostics name it, and its code as written.
+quoted_call := (body: Body, call: Call) ->
+  shared := body.shared
+  at := call.position
+  program := shared.program
+  module := program.modules[shared.index]
+  location := module_location(program.entry_path, shared.path)
+  tokens := shared.source_tokens ? lex(module.source, location).tokens
+  shared.source_tokens = tokens
+  "#{location}:#{at.line}:#{at.column}: #{code_at(module.source, tokens, at)}"
+
+# The code of the source, of the tokens given, that starts at the position, through the end of its
+# line, or of the line that closes the brackets it opens; a comment after it is left out.
+code_at := (source: String, tokens: Token[], at: Position) ->
+  starts_there := (token: Token) ->
+    token.line == at.line and token.column == at.column and token.kind not in LINE_ENDS
+  start := tokens.find_index(starts_there) ? return ''
+  last := tokens[last_of_code(tokens, start)]
+  lines := source.lines()
+  return columns(lines[at.line - 1], at.column, last.end_column) if last.end_line == at.line
+  parts := [columns(lines[at.line - 1], at.column, INT_MAX)]
+  parts.push lines[line - 1] for line in (at.line + 1)..last.end_line
+  parts.push columns(lines[last.end_line - 1], 1, last.end_column)
+  parts.join "\n"
+
+# The place of the last token of the code that starts at `start`, before the end of its line or a
+# bracket that it does not open.
+last_of_code := (tokens: Token[], start: Int) ->
+  var depth = 0
+  var last = start
+  for i in start..tokens.length
+    kind := tokens[i].kind
+    if kind in OPENING_BRACKETS
+      depth += 1
+    else if kind in CLOSING_BRACKETS
+      break if depth == 0
+      depth -= 1
+    else if depth == 0 and kind in LINE_ENDS
+      break
+    last = i
+  last
+
+LINE_ENDS: TokenKind[] = [NEWLINE, INDENT, DEDENT, EOF]
+
+# The text from the column `start` up to `end`, counted in code points from 1.
+columns := (line: String, start: Int, end: Int) ->
+  scanner := scan(line)
+  scanner.next() for _ in 1..start
+  taken := scanner.mark()
+  for _ in start..end
+    break if scanner.done()
+    scanner.next()
+  taken()

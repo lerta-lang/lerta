@@ -35,12 +35,13 @@ import
   emit_throw_error, generate_try, holding, pop_temporaries, push_temporary, while_holding
 from './exceptions'
 import emit_interface_read, emit_interface_value from './interface'
+import Itab from '../checker/interface_values'
 import emit_box, emit_unbox from './boxes'
 import emit_branch, IrBuilder from './ir_builder'
 import emit_adapter_iter from './iter'
 import
-  binary_constant, constant_operand, emit_release, emit_release_value, emit_retain,
-  emit_retain_value, ir_type, string_constant
+  binary_constant, constant_operand, constructor_symbol, emit_release, emit_release_value,
+  emit_retain, emit_retain_value, ir_type, string_constant
 from './lerta_ir'
 import emit_map_length from './map'
 import generate_binary, generate_coalesce, generate_unary, generate_unwrap from './operator'
@@ -480,8 +481,18 @@ emit_box_value := (ir: IrBuilder, value: String, type: Type) ->
   emit_branch ir, 'ptr', emit_is_present(ir, value, type), box, 'null'
 
 # The Error becomes the exception (see exceptions).
+# An AssertionError of the message, a String, which its constructor takes owned.
+generate_assertion_throw := (g: Generator, message: Expression) ->
+  is_assertion_error := (itab: Itab) -> (itab.type as ObjectType!).name == 'AssertionError'
+  itab := g.code.program.runtime_errors.find(is_assertion_error)!
+  text := generate(g, message)
+  constructor := constructor_symbol(itab.type as ObjectType!)
+  error := g.ir.assign("call ptr #{constructor}(ptr #{text})")
+  emit_throw_error g, emit_interface_value(g, error, itab), false
+
 generate_throw := (g: Generator, throw_expression: Throw) ->
   message := throw_expression.message
+  return generate_assertion_throw(g, message) if throw_expression.assertion
   local := message is Identifier then local_of(g, message)
   rethrows := local is SlotLocal and local.caught
   emit_throw_error g, generate(g, message), rethrows
