@@ -11,7 +11,8 @@ from './clang_flags'
 import generate from './codegen/codegen'
 import check_program, write_ir from './compile'
 import CompileError from './errors'
-import is_absolute, join from './paths'
+import basename, is_absolute, join from './paths'
+import COMMAND_LINE_NAME, SOURCE_EXTENSION, STDIN_NAME from './source'
 import target_system from './platform_description'
 import real_path_text from './loader'
 import cache_dir, cached_include_dir, cached_runtime from './runtime_cache'
@@ -107,11 +108,21 @@ build_universal := (request: BuildRequest, program: ProgramWide, dir: String) ->
   return nil if (await run('lipo', '-create', '-output', executable, slices...)).code != 0
   executable
 
-# The path of the executable that the link writes: the output, or one in `dir`.
+# The path of the executable that the link writes: the output, or one named after the source, as
+# std:process's `program` gives the name to the program, in a directory of `dir` of its own, apart
+# from the files of the build.
 executable_path := (request: BuildRequest, dir: String) ->
-  work_dir := real_path_text(dir)
-  default := join(work_dir, "program#{executable_suffix(request.kind.target)}")
-  link_path real_path_text('.'), request.output ? default
+  return link_path(real_path_text('.'), output) if output := request.output
+  executable_dir := join(real_path_text(dir), 'executable')
+  make_dir executable_dir
+  join executable_dir, "#{program_name(request.source)}#{executable_suffix(request.kind.target)}"
+
+# The source's file name without `.lerta`, or `program` for a source without a file.
+program_name := (source: String) ->
+  name := basename(source)
+  stem := name.without_suffix(SOURCE_EXTENSION) ? name
+  is_given := source in [STDIN_NAME, COMMAND_LINE_NAME]
+  is_given or stem.is_empty() then 'program' else stem
 
 # Has clang compile the program for the request's target in `dir`, into objects whose names relative
 # to it start with `prefix`, and link it there; the executable's path, or nil if clang fails.

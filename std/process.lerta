@@ -13,6 +13,7 @@ extern lerta_program_wait: (Int) -> Promise<Int>
 extern lerta_program_stop: (Int) -> void
 extern lerta_program_free: (Int) -> void
 extern lerta_argv: () -> Binary[]
+extern lerta_program_path: () -> Binary
 # Windows compares the names of variables without case.
 extern lerta_same_env_name as same_env_name: (Binary, Binary) -> Bool
 extern lerta_environ: (Binary[]) -> void
@@ -20,10 +21,9 @@ extern lerta_env: (String) -> Binary?
 extern lerta_platform: () -> String
 extern lerta_cpu_count: () -> Int
 
-export argv := [
-  argument.text() ? throw ValueError('a command-line argument is not valid UTF-8')
-  for argument in lerta_argv()
-]
+NOT_UTF8 := 'a command-line argument is not valid UTF-8'
+
+export argv := [argument.text() ? throw ValueError(NOT_UTF8) for argument in lerta_argv()]
 
 # Where a program's output or errors go, besides a Writer or a Pipe: kept for its Exit, dropped, or,
 # for its errors alone, where its output goes, as `2>&1` does.
@@ -325,6 +325,18 @@ export env := (name: String) ->
   value.text() ? throw ValueError("the environment variable #{name} is not valid UTF-8")
 
 export platform := lerta_platform()
+
+# The last name of the path that the program was started by, as a usage message names it: without
+# `.exe` on Windows, where `\` separates names too.
+export program := program_name(lerta_program_path().text() ? throw ValueError(NOT_UTF8))
+
+program_name := (path: String) ->
+  return path.split('/').last()! unless platform == 'windows'
+  name := path.replace('\\', '/').split('/').last()!
+  # Windows takes the extension in any case, as `TOOL.EXE`.
+  return name unless name.to_lower().ends_with('.exe')
+  bytes := name.binary
+  bytes.text(0, bytes.length - b'.exe'.length)!
 
 export cpu_count := lerta_cpu_count()
 

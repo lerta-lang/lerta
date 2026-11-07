@@ -3,7 +3,7 @@ import Check, posix_check from '../lib/report'
 import compare_output, compare_text, expect_status, reason_unless from '../lib/expect'
 import compiler, root_dir, host_executable_suffix from '../lib/lerta'
 import expect_success, host_platform, new_cli_dir, run_command from '../lib/cli'
-import is_file from 'std:io'
+import is_file, read_file, write_file from 'std:io'
 
 struct BuiltProgram
   dir: String
@@ -413,6 +413,42 @@ argv_check := ->
     "true\ntrue\ntrue\n"
     args: ['hello', 'héllo', '😀']
 
+PRINT_PROGRAM := "#{root_dir}/tests/bin/print_program.lerta"
+
+# `program` is the last name of the path that the program is started by.
+program_name_check := ->
+  Check name: 'a built program names itself by the last name of the path that starts it', run: ->
+    dir := new_cli_dir('program-name')
+    executable := "#{dir}/named#{host_executable_suffix}"
+    built := await run_command(compiler, ['build', PRINT_PROGRAM, '-o', executable], dir)
+    errors := expect_success('build', built)
+    return errors unless errors.is_empty()
+    by_path := await run_command(executable, [], dir)
+    [
+      expect_success('run by path', by_path)...
+      compare_text('stdout by path', "named\n", by_path.stdout_text())...
+    ]
+
+# `lerta run` names the executable after the source's file name, or `program` for standard input and
+# `-e`.
+run_program_name_check := ->
+  Check name: 'lerta run names the program after its source, or program for - and -e', run: ->
+    dir := new_cli_dir('run-program-name')
+    source := await read_file(PRINT_PROGRAM)
+    await write_file("#{dir}/script", source)
+    # The name of each run, what it runs, and the name that it prints.
+    runs :=
+      ('a source', [PRINT_PROGRAM], 'print_program')
+      ('a source without .lerta', ['script'], 'script')
+      ('standard input', ['-'], 'program')
+      ('-e', ['-e', "import program from 'std:process'; print program"], 'program')
+    var reasons: String[] = []
+    for (what, args, expected) in runs
+      ran := await run_command(compiler, ['run', args...], dir, source)
+      stdout := compare_text("stdout of #{what}", "#{expected}\n", ran.stdout_text())
+      reasons = [reasons..., expect_success("run #{what}", ran)..., stdout...]
+    reasons
+
 COLOR_VARIABLES := ['NO_COLOR', 'FORCE_COLOR', 'TERM']
 
 # The variables of `color_variables`, the others of COLOR_VARIABLES unset.
@@ -509,6 +545,8 @@ export checks :=
   merged_output_order_check()
   wc_check()
   argv_check()
+  program_name_check()
+  run_program_name_check()
   empty_temp_dir_check()
   invalid_argument_check()
   decode_argument_bytes_check()

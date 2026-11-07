@@ -27,6 +27,11 @@ LertaArray *lerta_argv(void) {
   return result;
 }
 
+// An empty Binary if the program was started with no arguments at all.
+LertaString *lerta_program_path(void) {
+  return lerta_string_from_c(argument_count > 0 ? arguments[0] : "");
+}
+
 // std:process checks that the code is from 0 to 255.
 void lerta_exit(int64_t code) {
   bool flushed = lerta_output_flush_at_end(false);

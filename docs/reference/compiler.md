@@ -215,7 +215,7 @@ lerta run (<source> | -e <code>) [<file>...] [-O] [--memory-checks] [-Werror] [-
 ```
 
 - It is provisional, until it runs the program directly with JIT (see [the roadmap](../roadmap/programs.md#tools)).
-- It builds the program as [`build`](#build) does, from the same source, files and options, in the temporary directory, for the host.
+- It builds the program as [`build`](#build) does, from the same source, files and options, in the temporary directory, for the host, into an executable named after the source's file name without `.lerta`, or `program` for `-` and `-e`, which [`program`](std.md#stdprocess) gives.
 - With `-e`, the code is the source, as a source of one line written with [`;`](syntax.md#statements): `lerta run -e 'x := 2; print x * 3'`.
   - It is named, and its imports are relative, as those of `-` are, but as `<command line>`.
   - The `<file>`s are then all linked files.

@@ -656,6 +656,7 @@ print datagram.data.text()!
 | Name | |
 |---|---|
 | `argv: String[]` | The command-line arguments, without the program name, read when the module runs. A program that imports `std:process` throws at its start if an argument is not valid UTF-8. |
+| `program: String` | The last name of the path that the program was started by, as a usage message names the program: `tool` for `/usr/bin/tool`, and on Windows, where `\` separates names too, without `.exe`. Empty if the program was started without one. It throws at the start as `argv` does if not valid UTF-8. |
 | `exit(code: Int): never` | Writes out the buffer of `stdout` and `stderr` and ends the program with the exit code, from 0 to 255; another code throws a `ValueError`. A failed write to `stdout` turns 0 into 1 (see [stdout and stderr](#stdout-and-stderr)). |
 | `run(command: String, args: String..., options: RunOptions): Promise<Exit>` | Runs a program with the arguments (below). |
 | `RunOptions` | A struct of the options of `run` (below). |

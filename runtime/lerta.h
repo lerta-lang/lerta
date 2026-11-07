@@ -295,9 +295,10 @@ double lerta_monotonic_time(void);
 // time that the system cannot convert, which std:time throws for.
 int64_t lerta_utc_offset(int64_t seconds);
 
-// Process (process.c). The arguments exclude the program name; they are Binary values, as nothing
-// makes them UTF-8.
+// Process (process.c). The arguments, without the program's path, and the path; they are Binary
+// values, as nothing makes them UTF-8.
 LertaArray *lerta_argv(void);
+LertaString *lerta_program_path(void);
 // Flushes stdout and ends the program; only the objects that nothing in use holds are checked for
 // leaks, and a leak ends it with LERTA_LEAK_EXIT_CODE in place of `code`, which std:process checks
 // is from 0 to 255.
