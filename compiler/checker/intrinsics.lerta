@@ -24,13 +24,14 @@ import check_block, check_if_condition, define_local, nothing from './statement'
 import CLOSING_BRACKETS, lex, OPENING_BRACKETS, Token, TokenKind from '../lexer/tokens'
 import is_standard_name, module_location from '../source'
 import
-  ArrayType, bool_type, format_type, is_one_of_kinds, OptionalType, string_type, Type, void_type
+  ArrayType, format_type, is_one_of_kinds, OptionalType, string_type, Type, void_type
 from '../types'
 
 INTRINSICS := ['assert', 'dbg', 'encode_value', 'decode_value', 'parse', 'members']
 
-# The values, by their names, with their types: whether the build is optimized, as by -O.
-VALUE_INTRINSICS := { 'optimized': bool_type }
+# The values, by their names, with the names of their types: whether the build is optimized, as by
+# -O, and the system that it is for.
+VALUE_INTRINSICS := { 'optimized': 'Bool', 'platform': 'Platform' }
 
 # Only a standard module declares intrinsics, and only those that the compiler gives: a function
 # without a type, and a value with its type.
@@ -53,9 +54,9 @@ declared_type := (shared: Shared, statement: Intrinsic) ->
   program := shared.program
   type := resolve(program, module_resolver(shared.index), type_name)
   expected := VALUE_INTRINSICS[statement.name.name] ? return type
-  if type != expected
-    message := "intrinsic '#{statement.name.name}' is of type #{format_type(expected)}"
-    fail program, type_name.position, message
+  if format_type(type) != expected
+    fail program, type_name.position, "intrinsic '#{statement.name.name}' is of type #{expected}"
+
   type
 
 # The code that the checker makes for a call of an intrinsic, which codegen generates in its place:

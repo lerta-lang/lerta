@@ -19,18 +19,21 @@ import define_raise_error, emit_register_raise from './runtime_errors'
 import define_top_level_globals from './top_level'
 import SourceLines from './source_lines'
 import format_type, Type from '../types'
+import platform from 'std:process'
 
 # How generate emits the IR: each module as an LLVM module of its own, if `separate`, or else all
 # as one; with the exceptions traced, if `traces`; with the instructions telling where they come
 # from in the source, if `source_lines`, of a build that is `optimized` or not (see SourceLines);
 # and with each float operation checking its own result for NaN where it is, if `eager_nan_checks`
-# (see docs/internals/representation.md#floats).
+# (see docs/internals/representation.md#floats); for the `system`, which the intrinsic value
+# `platform` gives.
 export struct GenerateOptions
   separate := default false
   traces := default false
   source_lines := default false
   optimized := default false
   eager_nan_checks := default false
+  system := default platform.to_string()
 
 # Emits LLVM IR for the checked program (see check_modules and
 # docs/internals/architecture.md#per-module-output). Every function has `function_attributes`, if
@@ -38,7 +41,7 @@ export struct GenerateOptions
 export generate := (
   program: ProgramWide, function_attributes: String, coro_end_type: String, options: GenerateOptions
 ) ->
-  { separate, traces, source_lines, optimized, eager_nan_checks } := options
+  { separate, traces, source_lines, optimized, eager_nan_checks, system } := options
   modules := program.modules
   ir_module_of := (module: Module) ->
     source_filename := quoted_name(module.symbol_name)
@@ -62,6 +65,7 @@ export generate := (
       traces
       eager_nan_checks
       optimized
+      system
       module: modules[i]
   generate_module module_code(i, ir_modules[i]) for _, i in modules
   linked := separate then ir_modules else [one]
