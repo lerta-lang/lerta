@@ -2,10 +2,10 @@
 # source by the rule that asks for it (see docs/reference/style.md). Those that need the types of
 # the checking are not here yet.
 import
-  ArrayLiteral, ArrayTypeName, BinaryOperation, Call, Coalesce, Comprehension, Condition,
-  Conditional, Declaration, Expression, For, FunctionLiteral, Identifier, If, Interpolation, Member,
-  NamedType, NilLiteral, Range, RecordLiteral, Statement, StringLiteral, UnaryOperation,
-  UnionTypeName
+  ArrayLiteral, ArrayTypeName, Assignment, BinaryOperation, Binding, Call, Coalesce, Comprehension,
+  Condition, Conditional, Declaration, Expression, For, FunctionLiteral, Identifier, If,
+  Interpolation, Member, NamedType, NilLiteral, Range, RecordLiteral, Statement, StringLiteral,
+  UnaryOperation, UnionTypeName
 from '../ast'
 import TextPart from '../lexer/string_literal'
 import Lexed, Token from '../lexer/tokens'
@@ -16,12 +16,14 @@ import counted_end from '../format/rewrites'
 import
   BINARY_LITERALS, CAST_FALLBACKS, ELSE_NIL, EMPTY_INITIAL_VALUES, ESCAPES,
   FUNCTIONS_WITHOUT_PARAMETERS, NIL_INITIAL_VALUES, RANGE_ENDS, SEMICOLONS, SHORTHAND,
-  STRING_LITERALS
+  STRING_LITERALS, TWO_WAY_VALUES
 from '../format/rules'
 import with_ascii_escapes from '../format/escapes'
 import condition_edit, negated_test from './conditions'
 import Change, Edit from './edits'
+import is_inline from './forms'
 import KeptLines from './kept'
+import WIDTH from './lines'
 import parentheses_of, unvisited_parts from './parentheses'
 import is_layout, SourceTokens from './text'
 import Tokens from './tokens'
@@ -90,9 +92,58 @@ expression_edits := (
 statement_edits := (tokens: Tokens, statement: Statement): Edit?[] ->
   case statement
     when Declaration
-      [nil_initial_value(tokens, statement), empty_initial_value(tokens, statement)]
+      [
+        nil_initial_value(tokens, statement)
+        empty_initial_value(tokens, statement)
+        two_way_value(tokens, statement.value)
+      ]
+    when Assignment then [two_way_value(tokens, statement.value)]
     when For then [counted_range(tokens, statement.iterable)]
     else []
+
+# A report of an `if` that gives a value, of two branches of one expression each, that would fit on
+# its line as `c then a else b`, with its head (see Branches), where each part is on a line of its
+# own without a comment.
+two_way_value := (tokens: Tokens, value: Expression) ->
+  branch := value as If ? return nil
+  { then_body, else_body } := branch
+  # A condition that binds a name is no operand.
+  return nil if branch.nil_safe or branch.condition is Binding
+  return nil if then_body.length != 1 or else_body.length != 1
+  return nil if not then_body.all(is_value) or not else_body.all(is_value)
+  if_at := tokens.at(branch.position) ? return nil
+  then_at := tokens.at(then_body[0].position) ? return nil
+  else_at := tokens.at(else_body[0].position) ? return nil
+  return nil unless tokens.is_kind(else_at - 1, 'else')
+  first_line := tokens.code[if_at].line
+  last_line := tokens.code[else_at].end_line
+  return nil if tokens.comments.any((comment) -> comment.line in first_line..=last_line)
+  # Each part ends its line, as the next part, `else`, or a line no deeper than `else` follows.
+  condition_end := tokens.line_end(if_at + 1) ? return nil
+  then_end := tokens.line_end(then_at) ? return nil
+  else_end := tokens.line_end(else_at) ? return nil
+  after := else_end + 1
+  ends_block :=
+    after == tokens.code.length or tokens.code[after].column <= tokens.code[else_at - 1].column
+  return nil if condition_end + 1 != then_at or then_end + 2 != else_at or not ends_block
+  part := (first: Int, last: Int) -> tokens.slice(tokens.start(first), tokens.end(last))
+  condition := part(if_at + 1, condition_end)
+  written := "#{condition} then #{part(then_at, then_end)} else #{part(else_at, else_end)}"
+  parentheses := added_parentheses(tokens, then_body[0]) + added_parentheses(tokens, else_body[0])
+  # After the head, `x :=` and a space.
+  return nil if tokens.end(if_at - 1).column + written.count() + parentheses > WIDTH
+  tokens.report TWO_WAY_VALUES, tokens.start(if_at)
+
+# The column that a call without parentheses takes for them as a part of an operation: one, as its
+# `(` takes the place of the space after its callee.
+added_parentheses := (tokens: Tokens, statement: Statement) ->
+  call := statement as Call ? return 0
+  first := call.args.first()?.position ? call.named_args.first()?.name.position ? return 0
+  at := tokens.at(first) ? return 0
+  tokens.is_kind(at - 1, '(') then 0 else 1
+
+# A statement that is one expression, which a two-way value can hold.
+is_value := (statement: Statement) -> is_inline(statement) and statement is not Assignment
 
 # `'...'` for `"..."`, and `b'...'` for `b"..."`, where they write the same (see String literals);
 # otherwise the escapes of ASCII characters as Escapes writes them.

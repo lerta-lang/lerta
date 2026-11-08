@@ -8,7 +8,7 @@
 import Token from '../lexer/tokens'
 import
   BRANCHES, COMMENTS, LAYOUT, LINE_LENGTH, LONG_LISTS, LONG_OPERATIONS, MULTI_LINE_LITERALS,
-  SPACING, StyleRule
+  SPACING, StyleRule, TWO_WAY_VALUES
 from '../format/rules'
 import Edit from './edits'
 import
@@ -20,7 +20,7 @@ import Tokens from './tokens'
 import Walked from './walk'
 import './lines_edits'
 
-WIDTH := 100
+export WIDTH := 100
 
 # Decides the gaps of `walked` that line breaks change, and adds the statements that keep theirs
 # as written to those that it skips; the edits of the rewrites that the lines ask for.
@@ -354,7 +354,8 @@ export class Breaker
         else if on_next_line()
           below LINE_LENGTH
         else
-          @keeps = true
+          # Which an `if` writes, a rewrite left to be done by hand.
+          @report_only TWO_WAY_VALUES, first
           return
       else
         if on_line() or not on_next_line()
@@ -513,11 +514,15 @@ export class Breaker
   # body on the line of the patterns, and not before a block there.
   arm := (arm: ArmShape, depth: Int) ->
     { patterns, then_at, body } := arm
+    # The last token of the patterns, before `then` or the block.
+    last := (then_at ? body.block.starts[0]) - 1
     var broken = false
     if arm.breakable
       @undecided.remove patterns[0]
-      last := (then_at ? body.block.starts[0]) - 1
-      if @fits(arm.start, last, @column_of(arm.start), false, false)
+      # Where only a comment after them does not fit, moving them below `when` would not shorten its
+      # line, which they stay on.
+      on_line := @fits(arm.start, last, @column_of(arm.start), false, false)
+      if on_line or (then_at == nil and @end_column(last) - 1 <= WIDTH)
         @flatten pattern, LONG_LISTS for pattern in patterns
         @flatten then_at, LONG_LISTS if then_at
       else if then_at
@@ -526,16 +531,25 @@ export class Breaker
         @lay_out_items patterns, item_last, depth + 1, true, arm.commas, then_at
         @gaps[then_at] = LineStart(depth, rule: LONG_LISTS)
       else
-        @keeps = true
+        @patterns_below arm, last
     @decide arm.shapes
     is_else := patterns.is_empty()
     if then_at == nil and not is_else
+      @add_then last if @fits_after_then(body, last)
       @block_body body, depth + 1
     else if @goes_on_line(body)
       @join_body body
     else
-      @keeps = true if not broken and not is_else
+      @remove_then then_at!, body if not broken and not is_else
       @block_body body, depth + 1
+
+  # Whether the body is one statement that fits on the line of the patterns that end at `last`,
+  # after `then`; not a call without parentheses, which a block after `then` cannot hold.
+  fits_after_then := (body: BodyShape, last: Int) ->
+    statement := body.block.statements.first() ? return false
+    column := @end_column(last) + ' then '.count()
+    fits := @fits(statement.start, statement.end - 1, column, true)
+    body.joinable and not is_unbracketed_call(statement) and fits
 
   # Whether the code tokens from `first` up to `last` fit flat on the line from `column`, where the
   # first starts, with what follows them up to where the line ends, unless not `tail`: at a line

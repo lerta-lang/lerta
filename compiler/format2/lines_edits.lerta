@@ -2,11 +2,11 @@
 # to its tokens that lay it out.
 import Position from '../ast'
 import
-  CALLS_WITHOUT_PARENTHESES, JOINED_LITERALS, LONG_LISTS, MULTI_LINE_LITERALS, StyleRule
+  BRANCHES, CALLS_WITHOUT_PARENTHESES, JOINED_LITERALS, LONG_LISTS, MULTI_LINE_LITERALS, StyleRule
 from '../format/rules'
 import Change from './edits'
 import Breaker from './lines'
-import ListShape from './shapes'
+import ArmShape, BodyShape, ListShape from './shapes'
 
 extend Breaker
   # The statement keeps its gaps as written, as a rewrite of its tokens lays it out: the edit of the
@@ -148,3 +148,37 @@ extend Breaker
     start := Position(line: @code[index].line, column: 1)
     return Change(from: start, to: @tokens.end(index), text: '') unless index + 1 < @code.length
     Change from: start, to: @tokens.start(index + 1), text: ' '.repeat(@code[index + 1].column - 1)
+
+  # The statement keeps its gaps as written, and the rule is reported at the code token, as a
+  # rewrite left to be done by hand would lay it out.
+  report_only := (rule: StyleRule, index: Int) ->
+    @keeps = true
+    report := @tokens.report(rule, @tokens.start(index)) ? return
+    @edits.push report
+
+  # `then` after the patterns that end at `last`.
+  add_then := (last: Int) ->
+    @rewrite BRANCHES, [{ from: @tokens.end(last), to: @tokens.end(last), text: ' then' }]
+
+  # The patterns of the arm, which end at `last`, on lines of their own below `when`, with `then` on
+  # the line after them, as they take where they do not fit on the line of `when`.
+  patterns_below := (arm: ArmShape, last: Int) ->
+    indentation := @source_indentation(arm.start)
+    @rewrite LONG_LISTS, [
+      @line_start(arm.start, arm.patterns[0], indentation + 2)
+      {
+        from: @tokens.end(last)
+        to: @tokens.end(last)
+        text: "\n" + ' '.repeat(indentation) + 'then'
+      }
+    ]
+
+  # The arm without `then`, its body in a block below it.
+  remove_then := (then_at: Int, body: BodyShape) ->
+    start := body.block.starts[0]
+    change :=
+      if start in @line_starts
+        @tokens.removed_with_spaces_before then_at
+      else
+        @line_start then_at - 1, start, @source_indentation(then_at) + 2
+    @rewrite BRANCHES, [change]
