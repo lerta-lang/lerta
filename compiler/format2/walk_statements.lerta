@@ -6,9 +6,10 @@ import
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import BRANCHES, StyleRule from '../format/rules'
-import is_block_call, is_inline from './forms'
+import is_block_call, is_inline, is_written_postfix, takes_postfix from './forms'
 import
-  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, CodeGap, LineStart, StatementShape
+  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, CodeGap, LineStart, PostfixShape,
+  StatementShape
 from './shapes'
 import NONE, ONE, unhandled, Unhandled, Walker from './walk'
 import './walk_expressions'
@@ -83,19 +84,29 @@ extend Walker
       when Call then @call_statement(statement, before)
       else @expression(statement, before)
 
-  if_statement := (node: If, before: CodeGap): void ->
+  # An `if`, which may be the whole body of an `else`, written `else if` or in the block of `else`,
+  # whose postfix form would read as the else's.
+  if_statement := (node: If, before: CodeGap, in_else = false): void ->
+    unhandled() if node.nil_safe
+    if is_written_postfix(node)
+      @postfix_form node.then_body[0], before, -> @postfix_head(node.condition, ['if', 'unless'])
+      return
     keyword := @code[@at].kind
-    unhandled() if node.nil_safe or keyword not in ['if', 'unless']
+    unhandled() unless keyword in ['if', 'unless']
+    alone := in_else or @at in @alone_in_else
     head := @take(keyword, before)
     @condition node.condition, keyword
     @nested_block node.then_body, head
-    return if node.else_body.is_empty()
+    if node.else_body.is_empty()
+      @block_form head, node.then_body unless alone
+      return
     first := node.else_body[0]
     @resume_at (@starts[first.position] ? unhandled()) - 1
     else_at := @take('else', LineStart(@depth))
     if first is If and @at not in @line_starts
-      @if_statement first, ONE
+      @if_statement first, ONE, true
       return
+    @alone_in_else.add @starts[first.position]! if first is If and node.else_body.length == 1
     block := @block(node.else_body, @depth + 1, else_at)
     if_at := @starts[first.position]!
     if_alone := first is If and node.else_body.length == 1 and @code[if_at].kind == 'if'
@@ -104,21 +115,99 @@ extend Walker
     @close else_at, true
 
   while_statement := (node: While, before: CodeGap) ->
+    if is_written_postfix(node)
+      @postfix_form node.body[0], before, -> @postfix_head(node.condition, ['while', 'until'])
+      return
     keyword := @code[@at].kind
     unhandled() unless keyword in ['while', 'until']
     head := @take(keyword, before)
     @condition node.condition, keyword
     @nested_block node.body, head
+    @block_form head, node.body
 
   for_statement := (node: For, before: CodeGap) ->
+    return @postfix_for(node, before) if is_written_postfix(node)
     head := @take('for', before)
+    @loop_head node
+    @nested_block node.body, head
+    # One whose item is taken apart has the declarations that do it in its body.
+    @block_form head, node.body
+
+  # The variables of the loop, and its iterable after `in`.
+  loop_head := (node: For) ->
     @take IDENTIFIER, ONE
     if node.index
       @take ',', NONE
       @take IDENTIFIER, ONE
     @take_spelled 'in', ONE
     @operand node.iterable, ONE
-    @nested_block node.body, head
+
+  # The `for` in its postfix form; with a guard, `s for x in xs when g`, its body is the `if` of it,
+  # as that of `s if g for x in xs` is, which the walk does not handle yet.
+  postfix_for := (node: For, before: CodeGap) ->
+    unhandled() if node.body.length != 1
+    guarded := node.body[0] as If?
+    has_guard := guarded != nil and is_written_postfix(guarded)
+    body := has_guard then guarded!.then_body[0] else node.body[0]
+    @postfix_form body, before, ->
+      @take 'for', ONE
+      @loop_head node
+      return nil unless has_guard
+      guard := @take_spelled('when', ONE)
+      @condition guarded!.condition, 'if'
+      guard
+
+  # The keyword, one of `keywords`, and the condition after it, of a postfix form.
+  postfix_head := (condition: Condition, keywords: TokenKind[]): Int? ->
+    keyword := @code[@at].kind
+    unhandled() unless keyword in keywords
+    @take keyword, ONE
+    @condition condition, keyword
+    nil
+
+  # A statement in its postfix form (see PostfixShape): its body, and the head that `head` walks,
+  # which gives the `when` of a guard.
+  postfix_form := (body: Statement, before: CodeGap, head: () -> Int?) ->
+    outer := @shapes
+    @shapes = []
+    start := @at
+    @statement body, before
+    body_shape := StatementShape(start, end: @at, shapes: @shapes)
+    @shapes = []
+    keyword := @at
+    guard := head()
+    stacked := (body is If or body is While or body is For) and is_written_postfix(body)
+    shape := PostfixShape
+      keyword
+      guard
+      stacked
+      body: body_shape
+      head_last: (guard ? @at) - 1
+      last: @at - 1
+      postfix: true
+      shapes: @shapes
+    @shapes = outer
+    @shapes.push shape
+
+  # The statement at `head` in its block form, which a postfix form may write where its block, just
+  # walked, holds one statement that can take it, and no comment, which the postfix form would have
+  # to move (see PostfixShape).
+  block_form := (head: Int, body: Statement[]) ->
+    block := @shapes.last() as BlockShape!
+    statement := block.statements.first() ? return
+    one := body.length == 1 and block.statements.length == 1
+    return if not one or not takes_postfix(body[0]) or @has_comments(head, statement.end)
+    head_last := block.starts[0] - 1
+    shape := PostfixShape
+      head_last
+      keyword: head
+      last: head_last
+      body: statement
+      postfix: false
+      guard: nil
+      stacked: false
+      shapes: []
+    @shapes.push shape
 
   # The block of a statement below its head, which the next token of the statement closes.
   nested_block := (statements: Statement[], head: Int) ->
@@ -177,7 +266,11 @@ extend Walker
     if start in @line_starts
       block := @block(statements, @depth + 1, head)
       one := statements.length == 1 and block.statements.length == 1
-      joinable := one and is_inline(statements[0]) and not @has_comments(head, @at)
+      # A postfix form inside brackets would not end its line, which it must.
+      first := statements[0]
+      postfix := (first is If or first is While or first is For) and is_written_postfix(first)
+      joinable :=
+        one and is_inline(first) and not (postfix and @in_brackets) and not @has_comments(head, @at)
       @close head, true
       return BodyShape(head, block, joinable, rule)
     unhandled() if statements.length != 1

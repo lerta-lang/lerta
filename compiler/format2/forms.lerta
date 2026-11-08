@@ -1,9 +1,11 @@
 # What the walk asks about the syntax: predicates, and the precedence of operators (see walk.lerta).
 import
-  ArrayLiteral, BooleanLiteral, Call, Case, Declaration, EnumDeclaration, Expression, Extend,
-  Extern, FloatLiteral, For, Identifier, If, Import, Index, IntegerLiteral, InterfaceDeclaration,
-  Intrinsic, is_spread, MapLiteral, Member, NamedValue, NilLiteral, Position, RecordLiteral,
-  Statement, StringLiteral, Try, TupleItem, TypeAlias, TypeDeclaration, While
+  ArrayLiteral, Assignment, Await, BinaryOperation, BooleanLiteral, Call, Case, Coalesce,
+  Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern, FloatLiteral, For,
+  FunctionLiteral, Identifier, If, Import, Index, IntegerLiteral, InterfaceDeclaration, Intrinsic,
+  is_spread, MapLiteral, Member, NamedValue, NilLiteral, Position, Range, RecordLiteral, Return,
+  Statement, StringLiteral, Throw, Try, TupleItem, TypeAlias, TypeDeclaration, UnaryOperation,
+  While, Yield
 from '../ast'
 import is_command_callee from '../format/print_statement'
 
@@ -43,13 +45,73 @@ export is_simple := (node: Expression) ->
 # declares; and not the name `pass` alone, which there would be the arm that does nothing.
 export is_inline := (statement: Statement) ->
   case statement
+    # One in its postfix form, which the line may keep, unless the formatter writes it in a block.
+    when If, While, For
+      postfix := is_written_postfix(statement)
+      postfix then takes_postfix(postfix_body(statement)) else holds_no_block(statement)
+    when Identifier then statement.name != 'pass'
+    else holds_no_block(statement)
+
+# A statement that holds no block, nor declares.
+holds_no_block := (statement: Statement) ->
+  case statement
     when
       Declaration, While, For, TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias,
       Extern, Intrinsic, Extend, Import, Case, Try
     then false
     when If then statement.nil_safe
-    when Identifier then statement.name != 'pass'
     else true
+
+# Whether the `if`, `while` or `for` is written in its postfix form, whose position is that of its
+# body (see parse_postfix_conditions).
+export is_written_postfix := (statement: Statement) ->
+  case statement
+    when If then not statement.nil_safe and at_body(statement.then_body[0], statement.position)
+    when While then at_body(statement.body[0], statement.position)
+    when For then at_body(statement.body.last()!, statement.position)
+    else false
+
+# The statement that the postfix form of the `if`, `while` or `for` follows: that of a `for` is its
+# last, after the declarations that take its item apart, an `if` where it has a guard.
+export postfix_body := (statement: If | While | For) ->
+  case statement
+    when If then statement.then_body[0]
+    when While then statement.body[0]
+    when For then statement.body.last()!
+
+at_body := (body: Statement, position: Position) -> body.position.compare(position) == EQUAL
+
+# A statement that a postfix `if`, `while` or `for` can follow: one that holds no block, nor
+# declares, has no postfix form of its own, and ends with nothing that would take the postfix
+# condition, as a function literal does (see Postfix forms); not the name `pass` alone, whose block
+# stays one.
+export takes_postfix := (statement: Statement) ->
+  is_pass := statement is Identifier and statement.name == 'pass'
+  holds_no_block(statement) and not ends_open(statement) and not is_pass
+
+ends_open := (node: Statement): Bool ->
+  case node
+    when Assignment then ends_open(node.value)
+    when Return
+      value := node.value ? return false
+      ends_open value
+    when Throw then ends_open(node.message)
+    when Yield then ends_open(node.value)
+    when Await then ends_open(node.operand)
+    when BinaryOperation then ends_open(node.right)
+    when UnaryOperation then ends_open(node.operand)
+    when Coalesce then ends_open(node.fallback)
+    when Conditional then ends_open(node.without_else then node.then_value else node.else_value)
+    when Range
+      end := node.end ? return false
+      ends_open end
+    when Call
+      values := [node.args..., [named.value for named in node.named_args]...]
+      last := values.last() ? return false
+      ends_open last
+    when FunctionLiteral, Case, Try then true
+    when If then not node.nil_safe
+    else false
 
 # A call whose callee could take its arguments without parentheses, or in a block.
 export is_block_call := (node: Expression) ->
@@ -78,7 +140,7 @@ export is_written_in_block := (literal: Expression) ->
   first := first_item_position(literal) ? return false
   first.compare(literal.position) == EQUAL
 
-first_item_position := (literal: Expression): Position? ->
+first_item_position := (literal: Expression) ->
   case literal
     when ArrayLiteral then literal.elements.first()?.position
     when MapLiteral then literal.entries.first()?.key.position

@@ -2,11 +2,12 @@
 # to its tokens that lay it out.
 import Position from '../ast'
 import
-  BRANCHES, CALLS_WITHOUT_PARENTHESES, JOINED_LITERALS, LONG_LISTS, MULTI_LINE_LITERALS, StyleRule
+  BRANCHES, CALLS_WITHOUT_PARENTHESES, JOINED_LITERALS, LONG_LISTS, MULTI_LINE_LITERALS,
+  POSTFIX_FORMS, StyleRule
 from '../format/rules'
 import Change from './edits'
 import Breaker from './lines'
-import ArmShape, BodyShape, ListShape from './shapes'
+import ArmShape, BodyShape, ListShape, PostfixShape, Spaces from './shapes'
 
 extend Breaker
   # The statement keeps its gaps as written, as a rewrite of its tokens lays it out: the edit of the
@@ -36,23 +37,42 @@ extend Breaker
 
   # Each item on a line of its own, without commas, before `close` on a line of its own if it closes
   # them, as line ends separate items only so: a rewrite where they are not (see line_start).
-  on_own_lines := (items: Int[], close: Int?) ->
+  on_own_lines := (items: Int[], item_last: (Int) -> Int, close: Int?) ->
     first := items[0]
     indentation := @source_indentation(first - 1)
+    columns := indentation + 2
     changes: Change[]
-    changes.push @line_start(first - 1, first, indentation + 2) unless first in @line_starts
-    for item in items[1..]
-      continue if @code[item - 1].kind != ','
+    for item, i in items
+      has_comma := i > 0 and @code[item - 1].kind == ','
+      continue if i > 0 and not has_comma
       if item in @line_starts
+        continue if i == 0
         # The comma alone, as a comment may end its line, and the item indented as the others.
         changes.push { from: @tokens.end(item - 2), to: @tokens.end(item - 1), text: '' }
         line := Position(line: @code[item].line, column: 1)
-        changes.push { from: line, to: @tokens.start(item), text: ' '.repeat(indentation + 2) }
+        changes.push { from: line, to: @tokens.start(item), text: ' '.repeat(columns) }
       else
-        changes.push @line_start(item - 2, item, indentation + 2)
+        changes.push @line_start(i == 0 then item - 1 else item - 2, item, columns)
+      shift := columns - @source_indentation(item)
+      changes.push change for change in @shifted_lines(item, item_last(i), shift)
     if close != nil and close not in @line_starts
       changes.push @line_start(close - 1, close, indentation)
     @rewrite LONG_LISTS, changes
+
+  # The lines of the code tokens from `first` up to `last` after the first line, moved by `shift`
+  # columns, as the line of `first` is, so that they stay as deep under it; but blank lines.
+  shifted_lines := (first: Int, last: Int, shift: Int) ->
+    changes: Change[]
+    return changes if shift == 0
+    for line in (@code[first].line + 1)..=@code[last].end_line
+      indentation := @tokens.line_indentation(line) ? continue
+      start := Position(line, column: 1)
+      if shift > 0
+        changes.push { from: start, to: start, text: ' '.repeat(shift) }
+      else
+        to := Position(line, column: 1 + min(-shift, indentation))
+        changes.push { from: start, to, text: '' }
+    changes
 
   # A line start indented by `columns` in the place of the source after the code token at `last`
   # and before that at `next`. The layout indents it once the rewrite is applied; until then, it is
@@ -182,3 +202,41 @@ extend Breaker
       else
         @line_start then_at - 1, start, @source_indentation(then_at) + 2
     @rewrite BRANCHES, [change]
+
+  # The statement in its postfix form: its body where its head starts, and the head after it.
+  to_postfix := (shape: PostfixShape) ->
+    { keyword, body } := shape
+    body_last := body.end - 1
+    head := @flat_text(keyword, shape.head_last)
+    @rewrite POSTFIX_FORMS, [
+      { from: @tokens.start(keyword), to: @tokens.start(body.start), text: '' }
+      { from: @tokens.end(body_last), to: @tokens.end(body_last), text: ' ' + head }
+    ]
+
+  # The statement in its block form: its head where its body starts, and the body in the block
+  # below it, `s if g` for that of a `for` with a guard.
+  to_block := (shape: PostfixShape) ->
+    { body, last } := shape
+    body_last := body.end - 1
+    line_start := "\n" + ' '.repeat(@source_indentation(body.start) + 2)
+    head := @flat_text(shape.keyword, shape.head_last)
+    end := shape.guard ? last
+    rest := shape.guard != nil then ' if' else ''
+    # The lines of the guard after its first, which follow the body.
+    guard_lines: Change[] = shape.guard != nil then @shifted_lines(shape.guard, last, 2) else []
+    @rewrite POSTFIX_FORMS, [
+      { from: @tokens.start(body.start), to: @tokens.start(body.start), text: head + line_start }
+      @shifted_lines(body.start, body_last, 2)...
+      { from: @tokens.end(body_last), to: @tokens.end(end), text: rest }
+      guard_lines...
+    ]
+
+  # The code tokens from `first` up to `last` on one line, with the gaps between them flat.
+  flat_text := (first: Int, last: Int) ->
+    var text = ''
+    for at in first..=last
+      text += @tokens.spelling(at)
+      continue if at == last
+      gap := @gaps[at + 1] as Spaces!
+      text += (at + 1 in @without_commas then ',' else '') + ' '.repeat(gap.count)
+    text

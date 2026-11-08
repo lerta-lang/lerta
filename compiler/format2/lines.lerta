@@ -13,7 +13,7 @@ from '../format/rules'
 import Edit from './edits'
 import
   ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, Closer, CodeGap, LineStart, ListShape,
-  OperationShape, Shape, Spaces, StatementShape, ValueShape
+  OperationShape, PostfixShape, Shape, Spaces, StatementShape, ValueShape
 from './shapes'
 import literal_lines, SourceTokens from './text'
 import Tokens from './tokens'
@@ -151,6 +151,7 @@ export class Breaker
     for shape in shapes
       case shape
         when ListShape, OperationShape, ValueShape, CallShape then add_shapes(shape.shapes)
+        when PostfixShape then add_shapes([shape.body.shapes..., shape.shapes...]) if shape.postfix
         when BodyShape then add_body(shape)
         when BlockShape then add_block(shape)
         when ArmsShape
@@ -176,6 +177,7 @@ export class Breaker
             else @undecided.add(shape.first)
           @prepare shape.shapes
         when CallShape then @prepare(shape.shapes)
+        when PostfixShape then @prepare([shape.body.shapes..., shape.shapes...]) if shape.postfix
         when BodyShape then @prepare_body(shape)
         when ArmsShape
           for arm in shape.arms
@@ -219,6 +221,7 @@ export class Breaker
         when BodyShape then @body(shape)
         when BlockShape then @nested_block(shape)
         when ArmsShape then @arms(shape)
+        when PostfixShape then @postfix(shape)
         else pass
 
   list := (list: ListShape) ->
@@ -280,7 +283,7 @@ export class Breaker
       if shares
         @with_commas items
       else
-        @on_own_lines items, close
+        @on_own_lines items, item_last, close
       return
     @gaps[items[0]] = LineStart(depth, rule: LONG_LISTS)
     for i in 1..count
@@ -544,12 +547,52 @@ export class Breaker
       @block_body body, depth + 1
 
   # Whether the body is one statement that fits on the line of the patterns that end at `last`,
-  # after `then`; not a call without parentheses, which a block after `then` cannot hold.
+  # after `then`; not a call without parentheses or a postfix form, which the block after `then`
+  # that the rewrite leaves until the layout joins it cannot hold.
   fits_after_then := (body: BodyShape, last: Int) ->
     statement := body.block.statements.first() ? return false
     column := @end_column(last) + ' then '.count()
     fits := @fits(statement.start, statement.end - 1, column, true)
-    body.joinable and not is_unbracketed_call(statement) and fits
+    held := not is_unbracketed_call(statement) and not is_postfix_form(statement)
+    body.joinable and held and fits
+
+  # A postfix form that takes more than its line, or follows another, or a guard, goes in a block,
+  # and a block form that a postfix form can write and that fits on the line of its head takes it
+  # (see Postfix forms). A postfix form on the line of `->`, `then` or `else` that must go in a
+  # block goes in the block of the body first, where the layout puts it.
+  postfix := (shape: PostfixShape) ->
+    { body } := shape
+    unless shape.postfix
+      # A body that spans lines takes its postfix form once the layout joins them.
+      return if @code[body.start].line != @code[body.end - 1].end_line
+      width := @postfix_width(shape) ? return
+      @to_postfix shape if 2 * @line_depth(shape.keyword) + width <= WIDTH
+      return
+    on_line := @fits(body.start, shape.last, @column_of(body.start), true)
+    in_block := body.start in @line_starts
+    @to_block shape if in_block and (shape.stacked or shape.guard != nil or not on_line)
+    @decide [body.shapes..., shape.shapes...]
+
+  # The columns of the block form's postfix form, the body and its head on one line.
+  postfix_width := (shape: PostfixShape) ->
+    body := @flat_span(shape.body.start, shape.body.end - 1) ? return nil
+    head := @flat_span(shape.keyword, shape.head_last) ? return nil
+    body + 1 + head
+
+  # The columns of the code tokens from `first` up to `last` on one line, with the gaps between them
+  # flat; nil where a line must start among them, after a comment or in a `"""` literal.
+  flat_span := (first: Int, last: Int) ->
+    var width = 0
+    for at in first..=last
+      return nil if is_multi_line(@code[at])
+      width += @widths[at]
+      continue if at == last
+      return nil if at in @ending_comments
+      gap := @gaps[at + 1] ? return nil
+      case gap
+        when Spaces then width += @flat_width(gap, at + 1)
+        else return nil
+    width
 
   # Whether the code tokens from `first` up to `last` fit flat on the line from `column`, where the
   # first starts, with what follows them up to where the line ends, unless not `tail`: at a line
@@ -648,6 +691,11 @@ export class Breaker
         else pass
       at -= 1
     0
+
+# Whether the statement is in a postfix form.
+is_postfix_form := (statement: StatementShape) ->
+  postfix := statement.shapes.first() as PostfixShape ? return false
+  postfix.postfix
 
 # Whether the statement is a call without parentheses.
 is_unbracketed_call := (statement: StatementShape) ->
