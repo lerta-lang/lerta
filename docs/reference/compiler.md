@@ -18,8 +18,9 @@ A build for another target needs more (see [`--target`](#--target-target)).
 
 ## Arguments
 
-- Arguments that do not fit a command's usage print the usage to stderr and exit with code 2.
-- An argument that starts with `-` is taken as an option, but for `-` alone, a source, and the value of `-o`, `-e`, `--target` and `--linker-flag`, which is the next argument whatever it starts with.
+- They are read by [std:args](std.md#stdargs): `lerta -h` lists the commands, and `lerta <command> -h` prints the usage of the command, with what each option does.
+- Arguments that do not fit a command's usage print `lerta: ` and what does not fit, then the usage, to stderr, and exit with code 2.
+- An argument that starts with `-` is taken as an option, but for `-` alone, a source, and the value of an option that takes one, as `-o`, `--target` and `--linker-flag`, which is the next argument whatever it starts with, or what follows `=` after a long option, as `--target=linux-amd64`. An option given twice is an error, but for `--linker-flag`.
 - A path that starts with `-` is written as `./-name.lerta`.
 - A `<source>`, in every command that takes one, is a file, or a standard module as `std:<name>`, such as `std:io`, read from those the compiler carries.
   - An unknown one prints `unknown standard module 'std:<name>'` and exits with code 1.
@@ -47,7 +48,7 @@ A build for another target needs more (see [`--target`](#--target-target)).
 ### build
 
 ```
-lerta build <source> [<file>...] [-o <output>] [-O] [--memory-checks] [-Werror] [--no-trace]
+lerta build <source> [<file>...] [-o <output>] [-O] [--memory-checks] [--werror] [--no-trace]
             [--source-lines] [--eager-nan-checks] [--target <target>] [--linker-flag <flag>...]
 ```
 
@@ -58,15 +59,14 @@ Usage errors:
 - an unknown or repeated option, or an option without its value;
 - a missing source;
 - a file after the source of another kind than [below](#linked-files);
-- without `-o`, a source whose name does not end with `.lerta`, as `std:<name>` and `-` do not;
-- `-e`, which only `run` takes.
+- without `-o`, a source whose name does not end with `.lerta`, as `std:<name>` and `-` do not.
 
 | Option | Effect |
 |---|---|
-| [`-o <output>`](#-o-output) | Names the executable. |
-| [`-O`](#-o) | Optimizes, with ThinLTO. |
+| [`-o <output>`](#-o-output), `--output` | Names the executable. |
+| [`-O`](#-o), `--optimize` | Optimizes, with ThinLTO. |
 | [`--memory-checks`](#--memory-checks) | Keeps the memory checks with `-O`. |
-| [`-Werror`](#-werror) | Makes a warning stop the build. |
+| [`--werror`](#--werror) | Makes a warning stop the build. |
 | [`--no-trace`](#--no-trace) | Leaves out the trace of an uncaught exception. |
 | [`--source-lines`](#--source-lines) | Adds debug information of source positions. |
 | [`--eager-nan-checks`](#--eager-nan-checks) | Checks each float operation for NaN. |
@@ -134,7 +134,7 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 - Keeps the [memory checks](#memory-checks) of a build without `-O` in a build with it.
 - Without `-O`, it changes nothing.
 
-#### `-Werror`
+#### `--werror`
 
 - Makes a warning stop the build, as an error does: the warnings are printed, and the exit code is 1.
 - The bootstrap builds the compiler so (see [internals](../internals/architecture.md#bootstrap)).
@@ -210,19 +210,16 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 ### run
 
 ```
-lerta run (<source> | -e <code>) [<file>...] [-O] [--memory-checks] [-Werror] [--no-trace]
-          [--source-lines] [--eager-nan-checks] [--linker-flag <flag>...] [-- <arg>...]
+lerta run <source> [<file>...] [-O] [--memory-checks] [--werror] [--no-trace] [--source-lines]
+          [--eager-nan-checks] [--linker-flag <flag>...] [-- <arg>...]
 ```
 
 - It is provisional, until it runs the program directly with JIT (see [the roadmap](../roadmap/programs.md#tools)).
-- It builds the program as [`build`](#build) does, from the same source, files and options, in the temporary directory, for the host, into an executable named after the source's file name without `.lerta`, or `program` for `-` and `-e`, which [`program`](std.md#stdprocess) gives.
-- With `-e`, the code is the source, as a source of one line written with [`;`](syntax.md#statements): `lerta run -e 'x := 2; print x * 3'`.
-  - It is named, and its imports are relative, as those of `-` are, but as `<command line>`.
-  - The `<file>`s are then all linked files.
+- It builds the program as [`build`](#build) does, from the same source, files and options, in the temporary directory, for the host, into an executable named after the source's file name without `.lerta`, or `program` for `-`, which [`program`](std.md#stdprocess) gives.
 - It runs it in the current directory, with the arguments after `--`, which go to the program as they are, even those that look like options. The program shares the standard streams.
 - It then removes the directory, as `build` does.
 - It exits with the program's exit code, or, if a signal ended it, 128 plus the signal number (see `run` in [std:process](std.md#stdprocess)). An exit code outside 0 to 255, as the NTSTATUS of a Windows program that crashes, becomes 255.
-- Usage errors: `-o`, `--target`, an argument for the program without `--`, and both a source and `-e`, or neither.
+- Usage errors: those of `build`, and `-o` and `--target`, which it does not take.
 - A compile error or a failure of clang is reported as by `build`, and nothing runs.
 
 ### fmt
@@ -236,8 +233,7 @@ Checks that each file is in the [style](style.md). What of the style it does not
 #### Paths
 
 - The paths are files, and directories, whose `.lerta` files it takes, in the order of their names and through the directories inside them, but for those whose names start with `.`.
-- `--fix` must come first.
-- No path, or another argument that starts with `-`, is a usage error.
+- No path is a usage error.
 
 #### Reports
 
@@ -672,7 +668,7 @@ Diagnostics are printed to stderr, one per line:
 
 ### Warnings
 
-- A warning does not stop the build, unless [`-Werror`](#-werror) is given.
+- A warning does not stop the build, unless [`--werror`](#--werror) is given.
 - The warnings are printed before the errors.
 - The names never used of the top-level code and the imports are not reported with errors, since the part with an error may use them.
 - Those of the standard modules are not reported, since the program cannot act on them. Each standard module builds on its own without warnings.

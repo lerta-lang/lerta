@@ -92,7 +92,7 @@ export make_host_compiler := ->
   await minilerta_program(MAIN, 'build/stage1.ll', STAGE1, (await inputs()).sources)
   return unless is_stale(HOST_COMPILER, [STAGE1])
   make_dir 'bin' unless is_dir('bin')
-  await step(STAGE1, 'build', MAIN, '-o', HOST_COMPILER, '-O', '-Werror')
+  await step(STAGE1, 'build', MAIN, '-o', HOST_COMPILER, '-O', '--werror')
 
 # What builds and checks the compiler for a target, or for the host: the flags that the compiler
 # is given, what a program ends with, the compiler that `make` builds, the bootstrap's directory,
@@ -128,7 +128,7 @@ export make_compiler := (bootstrap: Bootstrap) ->
     '-o'
     compiler
     '-O'
-    '-Werror'
+    '--werror'
     bootstrap.target_flags...
   )
 
@@ -140,7 +140,7 @@ export make_stage2 := (bootstrap: Bootstrap) ->
   stage2 := bootstrap.stage2
   return unless is_stale(stage2, [HOST_COMPILER])
   make_dir bootstrap.dir unless is_dir(bootstrap.dir)
-  await step(HOST_COMPILER, 'build', MAIN, '-o', stage2, '-Werror', bootstrap.target_flags...)
+  await step(HOST_COMPILER, 'build', MAIN, '-o', stage2, '--werror', bootstrap.target_flags...)
 
 # Checks that stage2 and stage3 print the same IR for the compiler, and that minilerta, which
 # bin/lerta builds for the host, as the seed is only ever built there, prints it too.
@@ -158,11 +158,11 @@ export test_bootstrap := (bootstrap: Bootstrap) ->
   if is_stale(stage3_ir, [stage2])
     await step_to_file(stage3_ir, run_stage2[0], run_stage2[1..]..., 'dump-llvm', MAIN)
   if is_stale(stage3, [stage2])
-    stage3_args := ['build', MAIN, '-o', stage3, '-Werror', bootstrap.target_flags...]
+    stage3_args := ['build', MAIN, '-o', stage3, '--werror', bootstrap.target_flags...]
     await step(run_stage2[0], run_stage2[1..]..., stage3_args...)
   if is_stale(minilerta_ir, [HOST_COMPILER])
     minilerta := "#{dir}/minilerta#{HOST_EXE}"
-    await step(HOST_COMPILER, 'build', MINILERTA_MAIN, '-o', minilerta, '-Werror')
+    await step(HOST_COMPILER, 'build', MINILERTA_MAIN, '-o', minilerta, '--werror')
     await step_to_file(minilerta_ir, minilerta, MAIN)
   stage2_text := await read_file(stage2_ir)
   if stage2_text != await read_file(stage3_ir)

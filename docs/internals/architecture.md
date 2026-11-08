@@ -118,7 +118,7 @@ Every build so checks that the seed builds the current source.
 
 ### make test-bootstrap
 
-- `bin/lerta` builds the compiler (stage2), and stage2 builds it again (stage3), both with `-Werror`, as stage1 builds `bin/lerta`; so the compiler's source has no warnings.
+- `bin/lerta` builds the compiler (stage2), and stage2 builds it again (stage3), both with `--werror`, as stage1 builds `bin/lerta`; so the compiler's source has no warnings.
 - `bin/lerta` and stage2 must print the same IR for the compiler with `dump-llvm`.
 - `bin/lerta` also builds `compiler/minilerta.lerta`, for the host, which nothing else builds until `make seed`; it must print the same IR too.
 - Only the IR is compared: the executables differ, since the linker writes a different identifier into each.

@@ -1,6 +1,7 @@
 # The command line of the compiler (see docs/reference/compiler.md#commands).
+import parse_args, parse_command, usage from 'std:args'
 import stdin, stdout from 'std:io'
-import argv, exit from 'std:process'
+import argv, exit, program from 'std:process'
 import dump_ast from './ast_dump'
 import build, build_and_run, BuildRequest from './build'
 import dump_checked from './checked_dump'
@@ -14,169 +15,177 @@ import lsp_command from './lsp/server'
 import parse from './parser/statement'
 import basename from './paths'
 import cached_include_dir, clean_cache from './runtime_cache'
-import
-  COMMAND_LINE_NAME, given_sources, read_entry_source, SOURCE_EXTENSION, STDIN_NAME
-from './source'
+import given_sources, read_entry_source, SOURCE_EXTENSION, STDIN_NAME from './source'
 import dump_tokens from './token_dump'
 
-USAGE := """
-  usage: lerta build <source> [<file>...] [-o <output>] [-O] [--memory-checks] [-Werror]
-                     [--no-trace] [--source-lines] [--eager-nan-checks] [--target <target>]
-                     [--linker-flag <flag>...]
-         lerta run (<source> | -e <code>) [<file>...] [-O] [--memory-checks] [-Werror]
-                   [--no-trace] [--source-lines] [--eager-nan-checks] [--linker-flag <flag>...]
-                   [-- <arg>...]
-         lerta fmt [--fix] <path>...
-         lerta lsp
-         lerta cflags
-         lerta clean
-         lerta dump-tokens <source>
-         lerta dump-ast <source>
-         lerta dump-checked <source>
-         lerta dump-llvm <source>"""
+enum Command
+  build
+  run
+  fmt
+  lsp
+  cflags
+  clean
+  dump_tokens
+  dump_ast
+  dump_checked
+  dump_llvm
 
-is_value := (arg: String) -> not arg.starts_with('-')
+COMMAND_SPEC :=
+  build: { help: 'build an executable of the source' }
+  run: { help: 'build the source and run it' }
+  fmt: { help: 'check the style of the files, or fix it' }
+  lsp: { help: 'serve the language server protocol on standard input and output' }
+  cflags: { help: 'print the flags that C code of externs is compiled with' }
+  clean: { help: 'remove the cache' }
+  dump_tokens: { help: 'print the tokens of the source' }
+  dump_ast: { help: 'print the syntax tree of the source' }
+  dump_checked: { help: 'print the checked program of the source' }
+  dump_llvm: { help: 'print the LLVM IR of the source' }
 
-# A source is a value, or `-` for standard input.
-is_source := (arg: String) -> is_value(arg) or arg == STDIN_ARG
+# The options of build and run, which say how the program is built.
+OPTIONS_SPEC :=
+  optimize: { short: 'O', help: 'optimize, without the memory checks unless asked for' }
+  memory_checks: { help: 'check memory as the program runs' }
+  werror: { help: 'treat warnings as errors' }
+  no_trace: { help: 'print no trace of an uncaught exception' }
+  source_lines: { help: 'show the lines of the source in traces' }
+  eager_nan_checks: { help: 'check for NaN where each operation gives it' }
+  linker_flag: { value: 'flag', help: 'pass the flag to the linker' }
 
-STDIN_ARG := '-'
+struct Build
+  source: String
+  linked_files: String[] = default []
+  output: String?
+  target: String?
+  optimize: Bool
+  memory_checks: Bool
+  werror: Bool
+  no_trace: Bool
+  source_lines: Bool
+  eager_nan_checks: Bool
+  linker_flag: String[] = default []
+
+BUILD_SPEC :=
+  OPTIONS_SPEC...
+  source: { positional: true }
+  linked_files: { positional: true, value: 'file' }
+  output: { short: 'o', value: 'output', help: 'write the executable here' }
+  target: { value: 'target', help: 'build for the target' }
+
+struct Run
+  source: String
+  linked_files: String[] = default []
+  optimize: Bool
+  memory_checks: Bool
+  werror: Bool
+  no_trace: Bool
+  source_lines: Bool
+  eager_nan_checks: Bool
+  linker_flag: String[] = default []
+  program_args: String[]
+
+RUN_SPEC :=
+  OPTIONS_SPEC...
+  source: { positional: true }
+  linked_files: { positional: true, value: 'file' }
+  program_args: { after_dashes: true, value: 'argument' }
+
+struct Fmt
+  fix: Bool
+  paths: String[]
+
+FMT_SPEC :=
+  fix: { help: 'rewrite the files in the style' }
+  paths: { positional: true, value: 'path' }
+
+struct Dump
+  source: String
+
+DUMP_SPEC := { source: { positional: true } }
 
 # The name of the entry source of the argument (see given_sources): standard input, read whole,
 # for `-`.
 entry_name := (arg: String) ->
-  return arg unless arg == STDIN_ARG
+  return arg unless arg == STDIN_NAME_ARG
   text := (await stdin.read_all()).text() ? throw CompileError("#{STDIN_NAME} is not valid UTF-8")
   given_sources[STDIN_NAME] = text
   STDIN_NAME
 
-# The name of the entry source of the code of `-e` (see given_sources).
-code_name := (code: String) ->
-  given_sources[COMMAND_LINE_NAME] = code
-  COMMAND_LINE_NAME
+STDIN_NAME_ARG := '-'
 
-fail_usage := ->
-  print_error USAGE
+# Prints the error and the usage message of the command, as std:args does, and exits with 2, for
+# arguments that std:args takes but the command does not.
+fail_usage := (message: String, usage_text: String) ->
+  print_error "#{program}: #{message}"
+  print_error usage_text
   exit 2
 
 # Prints the IR of the source file, line by line, as it is too large to make one String of.
-run_dump_ir := (args: String[]) ->
-  fail_usage() if args.length != 1 or not is_source(args[0])
-  await write_ir(await generate_ir(await entry_name(args[0]), false), stdout)
+run_dump_ir := (source: String) ->
+  await write_ir(await generate_ir(await entry_name(source), false), stdout)
 
 # Prints what `dump` makes of the source file.
-run_dump := (args: String[], dump: (String) -> Promise<String>) ->
-  fail_usage() if args.length != 1 or not is_source(args[0])
-  await stdout.write(await dump(await entry_name(args[0])))
+run_dump := (source: String, dump: (String) -> Promise<String>) ->
+  await stdout.write(await dump(await entry_name(source)))
 
 # The files that clang links with the program, as it takes them.
 LINKED_EXTENSIONS := ['.c', '.m', '.o', '.ll', '.a', '.obj', '.lib']
 
 is_linked_file := (path: String) -> LINKED_EXTENSIONS.any(path.ends_with)
 
-# The options that each turn one thing on or off.
-SWITCHES :=
-  '-O'
-  '--memory-checks'
-  '-Werror'
-  '--no-trace'
-  '--source-lines'
-  '--eager-nan-checks'
-
-# The request, with no output and no target unless given, and the program's arguments after `--`.
-# Its source is still `-` for standard input.
-parse_build_arguments := (args: String[]) ->
-  values: String[]
-  var code: String?
-  linker_flags: String[]
-  var output: String?
-  var target: String?
-  switches: Set<String>
-  var program_args: String[]?
-  var i = 0
-  # The value is the next argument, even one that starts with `-`, as `-o -out` gives `-out`.
-  take_value := (previous: String?) ->
-    i += 1
-    fail_usage() if previous != nil or i >= args.length
-    args[i]
-  while i < args.length
-    arg := args[i]
-    case arg
-      when '-e' then code = take_value(code)
-      when '-o' then output = take_value(output)
-      when '--target' then target = target_triple(take_value(target))
-      when '--linker-flag' then linker_flags.push(take_value(nil))
-      when '--'
-        program_args = args[(i + 1)..]
-        break
-      else
-        if arg in SWITCHES
-          fail_usage() unless switches.add(arg)
-        else
-          fail_usage() unless is_source(arg)
-          values.push arg
-    i += 1
-  # The first value is the source, unless `-e` gives it.
-  fail_usage() if code == nil and values.is_empty()
-  linked_files := code != nil then values else values[1..]
-  fail_usage() unless linked_files.all(is_linked_file)
-  # `-` is read once the usage is known to be right, by the command (see entry_name).
-  source := code then code_name(code) else values[0]
-  optimize := '-O' in switches
-  memory_checks := '--memory-checks' in switches or not optimize
-  request := BuildRequest
-    linked_files
-    linker_flags
-    output
-    source
-    kind: { optimize, memory_checks, target }
-    warnings_as_errors: '-Werror' in switches
-    traces: '--no-trace' not in switches
-    source_lines: '--source-lines' in switches
-    eager_nan_checks: '--eager-nan-checks' in switches
-  { request, program_args }
+# The request of the arguments that build and run share, for the target, with no output. Its source
+# is still `-` for standard input, read once the arguments are known to be right (see entry_name).
+build_request := (args: Build | Run, target: String?, usage_text: String) ->
+  if file := args.linked_files.find((file) -> not is_linked_file(file))
+    fail_usage "not a file that clang links: #{file}", usage_text
+  memory_checks := args.memory_checks or not args.optimize
+  BuildRequest
+    linked_files: args.linked_files
+    linker_flags: args.linker_flag
+    output: nil
+    source: args.source
+    kind: { optimize: args.optimize, memory_checks, target }
+    warnings_as_errors: args.werror
+    traces: not args.no_trace
+    source_lines: args.source_lines
+    eager_nan_checks: args.eager_nan_checks
 
 build_command := (args: String[]) ->
-  { request, program_args } := parse_build_arguments(args)
-  fail_usage() if program_args != nil or request.source == COMMAND_LINE_NAME
-  output := request.output ? default_output(request.source, request.kind.target)
+  usage_text := usage<Build>(BUILD_SPEC, 'build')
+  arguments := parse_args<Build>(args, BUILD_SPEC, 'build')
+  target := arguments.target then target_triple(arguments.target)
+  request := build_request(arguments, target, usage_text)
+  output := arguments.output ? default_output(request.source, target, usage_text)
   await build({ request..., output, source: await entry_name(request.source) })
 
 # The program is built in the temporary directory, for the host.
 run_command := (args: String[]) ->
-  { request, program_args } := parse_build_arguments(args)
-  fail_usage() if request.output != nil or request.kind.target != nil
-  await build_and_run({ request..., source: await entry_name(request.source) }, program_args ? [])
+  arguments := parse_args<Run>(args, RUN_SPEC, 'run')
+  request := build_request(arguments, nil, usage<Run>(RUN_SPEC, 'run'))
+  await build_and_run(
+    { request..., source: await entry_name(request.source) }
+    arguments.program_args
+  )
 
-default_output := (source: String, target: String?) ->
-  name := basename(source)
-  stem := name.without_suffix(SOURCE_EXTENSION) ? fail_usage()
-  fail_usage() if stem.is_empty()
+# The executable named after the source, which must have a name to take.
+default_output := (source: String, target: String?, usage_text: String) ->
+  no_name := -> fail_usage("no name of an executable in #{source}: give -o", usage_text)
+  stem := basename(source).without_suffix(SOURCE_EXTENSION) ? no_name()
+  no_name() if stem.is_empty()
   "#{stem}#{executable_suffix(target)}"
 
 fmt_command := (args: String[]) ->
-  (paths, fix) := fmt_arguments(args)
+  { paths, fix } := parse_args<Fmt>(args, FMT_SPEC, 'fmt')
   exit await format_command(paths, fix)
 
 # Not in the usage: it runs the formatter that is to replace that of `fmt`, for its tests.
 fmt2_command := (args: String[]) ->
-  (paths, fix) := fmt_arguments(args)
+  { paths, fix } := parse_args<Fmt>(args, FMT_SPEC, 'fmt2')
   exit await format2_command(paths, fix)
 
-# `--fix` may come before the paths, of which there is at least one.
-fmt_arguments := (args: String[]) ->
-  fix := not args.is_empty() and args[0] == '--fix'
-  paths := fix then args[1..] else args
-  fail_usage() if paths.is_empty() or paths.any((path) -> not is_value(path))
-  (paths, fix)
+cflags_command := -> print("-I#{await cached_include_dir()}")
 
-cflags_command := (args: String[]) ->
-  fail_usage() unless args.is_empty()
-  print "-I#{await cached_include_dir()}"
-
-clean_command := (args: String[]) ->
-  fail_usage() unless args.is_empty()
-  print "removed #{path}" for path in await clean_cache()
+clean_command := -> print("removed #{path}") for path in await clean_cache()
 
 # The dumps of one module read no module that it imports.
 dump_file_tokens := (path: String) -> dump_tokens(tokenize(await read_entry_source(path), path))
@@ -186,23 +195,33 @@ dump_file_ast := (path: String) ->
 
 dump_program_checked := (path: String) -> dump_checked(await check_program(path, false))
 
-command := argv.first() ? ''
-args := argv[min(1, argv.length)..]
 # A compile error is the user's, so it is reported without the compiler's trace.
 try
-  case command
-    when 'build' then await build_command(args)
-    when 'run' then await run_command(args)
-    when 'fmt' then await fmt_command(args)
-    when 'fmt2' then await fmt2_command(args)
-    when 'lsp' then await lsp_command(args)
-    when 'cflags' then await cflags_command(args)
-    when 'clean' then await clean_command(args)
-    when 'dump-tokens' then await run_dump(args, dump_file_tokens)
-    when 'dump-ast' then await run_dump(args, dump_file_ast)
-    when 'dump-checked' then await run_dump(args, dump_program_checked)
-    when 'dump-llvm' then await run_dump_ir(args)
-    else fail_usage()
+  if argv.first() == 'fmt2'
+    await fmt2_command(argv[1..])
+  else
+    (command, args) := parse_command<Command>(argv, COMMAND_SPEC)
+    name := command.to_string().replace('_', '-')
+    # Rejects any argument, for the commands that take none.
+    no_arguments := -> parse_args<{}>(args, {}, name)
+    source := -> parse_args<Dump>(args, DUMP_SPEC, name).source
+    case command
+      when Command.build then await build_command(args)
+      when run then await run_command(args)
+      when fmt then await fmt_command(args)
+      when lsp
+        no_arguments()
+        await lsp_command()
+      when cflags
+        no_arguments()
+        await cflags_command()
+      when clean
+        no_arguments()
+        await clean_command()
+      when Command.dump_tokens then await run_dump(source(), dump_file_tokens)
+      when Command.dump_ast then await run_dump(source(), dump_file_ast)
+      when Command.dump_checked then await run_dump(source(), dump_program_checked)
+      when dump_llvm then await run_dump_ir(source())
 catch error: CompileError
   print_error error.message
   exit 1
