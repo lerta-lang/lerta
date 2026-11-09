@@ -1,7 +1,7 @@
 # Compiles the runtime, with libuv, once for each kind of build, and keeps its object files in a
 # cache directory, so that a build only links them (see docs/reference/compiler.md).
 import
-  Buffer, is_dir, is_file, list_dir, make_dir, read_text, remove_tree, rename, write_file
+  Buffer, copy_file, is_dir, is_file, list_dir, make_dir, read_text, remove_tree, rename, write_file
 from 'std:io'
 import env, is_running, platform, process_id, run from 'std:process'
 import embedded_source, EMBEDDED_PATHS from '../build/embedded'
@@ -22,8 +22,10 @@ CORO_END_FILE := 'coro_end_type.txt'
 
 # The runtime's object files, and the attributes that clang gives its functions, as the target's
 # CPU, which the program's functions must have too for LLVM to inline the runtime's into them; and
-# the libraries that libuv is linked with; and the type that clang's LLVM gives llvm.coro.end.
+# the libraries that libuv is linked with; and the type that clang's LLVM gives llvm.coro.end. Its
+# directory keeps the objects of standard modules too (see cached_module_object).
 export struct CachedRuntime
+  dir: String
   objects: String[]
   function_attributes: String
   libraries: String[]
@@ -43,7 +45,7 @@ export cached_runtime := (kind: BuildKind, temp_dir: String) ->
   runtime := ->
     function_attributes := await read_text_or_throw(join(dir, ATTRIBUTES_FILE))
     coro_end_type := await read_text_or_throw(join(dir, CORO_END_FILE))
-    CachedRuntime objects, function_attributes, coro_end_type, libraries: build.libraries
+    CachedRuntime dir, objects, function_attributes, coro_end_type, libraries: build.libraries
   return await runtime() if is_complete(files)
   if files.any(is_file)
     # Another build may have renamed its runtime into place meanwhile, which puts all the files
@@ -85,6 +87,24 @@ remove_abandoned_staging := (cache: String, name: String) ->
     catch _
       # Another build may have removed it first, and one left in place only takes space.
       continue
+
+# Where the runtime's directory keeps the object of a module of the IR: `module-<hash>.o`, the hash
+# being of the IR. The directory's name tells the kind of build, the target and clang, which the
+# module's object depends on as the runtime's do. Only standard modules are kept, whose IR seldom
+# changes, so that the directory does not grow with each change of a program.
+export cached_module_object := (runtime: CachedRuntime, ir: String[]) ->
+  join runtime.dir, "#{MODULE_PREFIX}#{texts_hash(ir)}.o"
+
+MODULE_PREFIX := 'module-'
+
+# Keeps the compiled object at `path` (see cached_module_object). Copied beside its place and
+# renamed there, so that a build that runs meanwhile never reads a part of it; another build that
+# renames its own there first compiled the same IR. The staging file is named as a runtime's
+# staging directory is, after the build's temporary directory too (see STAGING_INFIX).
+export keep_module_object := (object: String, path: String, temp_dir: String) ->
+  staging_path := "#{path}#{STAGING_INFIX}#{process_id}-#{basename(temp_dir)}"
+  await copy_file(object, staging_path)
+  await remove_tree(staging_path) unless renamed(staging_path, path)
 
 HEADER_PATH := 'runtime/lerta.h'
 INCLUDE_PREFIX := 'include-'

@@ -63,6 +63,17 @@ thinlto_entries := (cache: String): String[] ->
     entries.push "#{entry} #{details.modified_time.to_fixed(9)}"
   entries.sorted (a, b) -> a.compare(b)
 
+MODULE_PREFIX := 'module-'
+
+# The objects of standard modules that the runtime `name` keeps, each with when it was written.
+module_objects := (cache: String, name: String): String[] ->
+  dir := "#{cache}/#{name}"
+  objects: String[]
+  for entry in list_dir(dir)
+    continue unless entry.starts_with(MODULE_PREFIX)
+    objects.push "#{entry} #{stat("#{dir}/#{entry}")!.modified_time.to_fixed(9)}"
+  objects.sorted (a, b) -> a.compare(b)
+
 build_in_cache := (cache: String, flags: String[]) ->
   env := { 'LERTA_CACHE_DIR': cache }
   await run_in_new_dir(compiler, ['build', hello, '-o', 'hello', flags...], b'', env)
@@ -70,7 +81,7 @@ build_in_cache := (cache: String, flags: String[]) ->
 complete_runtime := (cache: String, name: String) ->
   dir := "#{cache}/#{name}"
   expected_files := await runtime_file_names()
-  files := list_dir(dir)
+  files := [file for file in list_dir(dir) when not file.starts_with(MODULE_PREFIX)]
   file_reasons := expect_left("the files of #{name}", expected_files, files)
   return file_reasons unless file_reasons.is_empty()
   attributes := await read_text_or_throw("#{dir}/function_attributes.txt")
@@ -132,6 +143,8 @@ cached_runtime_check := (flags: String[], kind: String) ->
       return ["#{flags.join(' ')} left the ThinLTO cache with: #{optimized}"]
     object := "#{cache}/#{name}/allocator.o"
     written := stat(object) ? throw ValueError("no cached object: #{object}")
+    modules := module_objects(cache, name)
+    return ["the build kept no object of a standard module in #{name}"] if modules.is_empty()
     second := await build_in_cache(cache, flags)
     [
       expect_success('second build', second.result)...
@@ -140,6 +153,10 @@ cached_runtime_check := (flags: String[], kind: String) ->
         'the second build recompiled the runtime'
       )...
       reason_unless(thinlto_entries(cache) == optimized, 'the second build optimized again')...
+      reason_unless(
+        module_objects(cache, name) == modules
+        'the second build recompiled the standard modules'
+      )...
       reason_unless(runtimes_in(cache).length == 1, 'the second build changed the cache')...
     ]
 
@@ -308,7 +325,29 @@ concurrent_builds_check := ->
     succeed 'build', ran.result for ran in results
     entries := runtimes_in(cache)
     return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
-    [runtime_name_reasons(entries[0], 'debug')..., await complete_runtime(cache, entries[0])...]
+    name := entries[0]
+    staging := [entry for entry in list_dir("#{cache}/#{name}") when '.staging-' in entry]
+    [
+      runtime_name_reasons(name, 'debug')...
+      await complete_runtime(cache, name)...
+      reason_unless(staging.is_empty(), "the builds left staging files: #{staging}")...
+    ]
+
+own_modules_check := ->
+  Check name: "lerta build keeps no object of the program's own modules", run: ->
+    cache := new_cli_dir('cache-own-modules')
+    succeed 'build', (await build_in_cache(cache, [])).result
+    name := runtimes_in(cache)[0]
+    modules := module_objects(cache, name)
+    return ["the build kept no object of a standard module in #{name}"] if modules.is_empty()
+    other := "#{cli_work_dir}/other.lerta"
+    await write_file(other, "print 'other'\n")
+    env := { 'LERTA_CACHE_DIR': cache }
+    built := await run_in_new_dir(compiler, ['build', other, '-o', 'other'], b'', env)
+    [
+      expect_success('build of another program', built.result)...
+      reason_unless(module_objects(cache, name) == modules, 'the build kept its own module')...
+    ]
 
 empty_runtime_directory_check := ->
   Check name: 'lerta build fills an empty directory named for the runtime', run: ->
@@ -480,6 +519,7 @@ export checks :=
   lto_link_flags_check()
   texts_hash_check()
   clean_check()
+  own_modules_check()
   cached_runtime_check([], 'debug')
   cached_runtime_check(['-O'], 'release')
   cached_runtime_check(['-O', '--memory-checks'], 'release-checked')

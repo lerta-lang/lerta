@@ -588,6 +588,7 @@ lerta clean
 
 - The runtime, with [libuv](../internals/platforms.md#platforms), whose sources the compiler carries, is compiled once for each kind of build and kept in a cache. A build only links it, with the system's libraries that libuv needs.
 - An executable holds Lerta's runtime and standard modules, and libuv: given to others, it goes with the notice of whichever of Lerta's licenses its distributor follows, `LICENSE-MIT` or `LICENSE-APACHE`, and libuv's, `third_party/libuv/LICENSE`.
+- The runtime's directory keeps the object of each standard module that a build compiles too, which a later build of the same module's code links instead of compiling it again (see [Names](#names)). A program's own modules are compiled each time, so that the cache does not grow with each change of them.
 - A build that links a `.c` or `.m` file keeps the runtime's header there too (see [`cflags`](#cflags)), and an optimized build what ThinLTO optimizes.
 
 ### Where
@@ -611,7 +612,7 @@ lerta clean
 
 ### Names
 
-- Each compiled runtime is a directory of its object files, `function_attributes.txt` and `coro_end_type.txt`.
+- Each compiled runtime is a directory of its object files, `function_attributes.txt` and `coro_end_type.txt`, and of the objects of standard modules, `module-<hash>.o`, the hash being of the module's LLVM IR, in 16 hex digits as the runtime's.
 - It is named so that a person can tell them apart, such as `runtime-debug-arm64-apple-darwin25.6.0-clang17-3F9A2C1D8E4B7065`:
   - the kind: `debug`, or `release` with `-O`, or `release-checked` with `-O --memory-checks`;
   - the target, or the host's as `clang --version` gives it;
@@ -627,6 +628,7 @@ lerta clean
 - A build killed meanwhile leaves its staging directory. The next build that compiles the same runtime removes it, as it does that of any process that is no longer running.
   - Since it judges that by process IDs, which are those of its own system, a cache must not be shared with builds on another system or in another container, whose staging directories it would take as left.
 - If the rename fails other than because another build has put the same runtime there, the build prints `cannot move the compiled runtime into the cache: <path>` and exits with code 1.
+- A standard module's object is written beside its place, named after it with `.staging-<process ID>-<name>` added, as a runtime's staging directory is, and renamed into place. A build killed meanwhile leaves that file, which only takes space.
 - A compiled runtime that has lost some of its files is not compiled again, since a build may be linking with the others: the build prints `the cached runtime <path> is incomplete: remove it` and exits with code 1.
 
 ### ThinLTO

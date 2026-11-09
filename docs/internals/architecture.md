@@ -20,6 +20,8 @@
 - The front end checks and generates the whole program at once, but `build` writes one LLVM module per Lerta module (`compiler/codegen/ir_linking.lerta`).
 - clang compiles the modules at once, each in a process of its own, and links them. An optimized build optimizes them in parallel with ThinLTO (`-flto=thin`), which imports into each module the functions of the others that it inlines, the runtime's among them.
   - Why: one large module would be optimized on one thread, and would gain little over full LTO.
+- A standard module's object is kept in the runtime's directory of the cache, by the hash of its IR, and linked by a later build whose IR of it is the same (`cached_module_object` in `compiler/runtime_cache.lerta`; see [the cache](../reference/compiler.md#cache)). The IR is generated each time, since a standard module's IR can differ from one program to another.
+  - Why: compiling the standard modules took most of a small program's build, about 0.4 s of its 0.6 s of CPU time.
 - `dump-llvm` prints the modules as one, which declares nothing of its own, so that the seed is one `.ll` and `make test-bootstrap` compares one.
 
 #### Stable paths for the cache
