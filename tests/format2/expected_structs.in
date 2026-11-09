@@ -1,0 +1,97 @@
+# Each construction of a struct where the struct is expected is written as a record; the others
+# keep the name.
+import TimeoutError from 'std:async'
+import FileStatus, stat from 'std:io'
+
+struct Point
+  x: Int
+  y := default 0
+
+struct Line
+  from: Point
+  to: Point
+
+struct Pair<A, B>
+  first: A
+  second: B
+
+struct Check
+  name: String
+  run: () -> Int
+
+class Box
+  n: Int
+
+struct Empty
+  n := 0
+
+show := (p: Point) -> "#{p.x},#{p.y}"
+
+single: Point = Point(x: 1)
+maybe: Point? = Point(x: 2)
+print show(Point(x: 3, y: 4))
+origin := (): Point -> Point(x: 0)
+x := 5
+print show(Point(x))
+fallback := maybe ? Point(x: 9)
+keyed: Map<Point, Int> = { Point(x: 1): 2 }
+pick := (flag: Bool): Point -> flag then Point(x: 1) else Point(x: 2)
+nudge := (by: Point = Point(x: 1), times = 1) -> by.x * times
+
+made := (make: (Int) -> Point) -> make(1)
+print made((n) -> Point(x: n)).x
+chosen: Point = case x
+  when 5 then Point(x: 7)
+  else Point(x: 8)
+# The first arm gives the type of the others without one written.
+unwritten := case x
+  when 5 then Point(x: 7)
+  else Point(x: 8)
+
+class Holder
+  point: Point = Point(x: 3)
+line: Line = Line(from: Point(x: 1), to: Point(x: 2))
+pair: Pair<Int, String> = Pair(first: 1, second: 'one')
+named: Map<String, Point> = { 'a': Point(x: 6) }
+named['b'] = Point(x: 6)
+
+# The type of an array's items that only they give stays with them, and so does a written type
+# that gives it.
+points: Point[] = [Point(x: 1), Point(x: 2)]
+loose := [Point(x: 1), Point(x: 2)]
+print points.length + loose.length
+
+# A construction keeps the name where a class, an interface or a union is expected, as the left
+# operand of `==`, whose type the right one takes, and in a generic function's code, which is
+# checked only for each instance; and so does one without arguments, as `{}` is an empty map.
+box: Box = Box(n: 1)
+empty: Empty = Empty()
+error: Error = TimeoutError(message: 'late')
+either: Point | Int = Point(x: 7)
+print (Point(x: 1) == single).to_string()
+wrapped := <T>(value: T): Pair<T, Int> -> Pair(first: value, second: 0)
+
+# A block of arguments, and a function last, whose body takes the lines below.
+long: Line = Line(
+  from: Point(x: 111111111111, y: 222222222222)
+  to: Point(x: 333333333333, y: 444444444444)  # A comment after the last.
+)
+to: Point = Point(x: 0)
+# A name alone for a field keeps the braces, as a block would read it as an item of an array.
+the_widest_line_of_them_all_here: Line = Line(to, from: Point(x: 3333333333333333333, y: 4444444444444444444))
+checks: Check[] = [
+  Check(name: 'one', run: -> 1)
+  Check(name: 'two', run: ->
+    two := 2
+    two
+  )
+]
+
+# The import of a struct that only constructions used is left out.
+var out = stat('.')!
+out = FileStatus(kind: stat('.')!.kind, size: 2, modified_time: 0.0)
+print "#{show(single)} #{show(maybe!)} #{show(origin())} #{show(line.to)} #{pair.second}"
+print "#{named.length} #{box.n} #{error.message} #{either is Point} #{wrapped(1).first}"
+print "#{empty.n} #{long.to.x} #{the_widest_line_of_them_all_here.from.x} #{checks.length}"
+print "#{out.size} #{fallback.x} #{keyed.length} #{pick(true).x} #{nudge()} #{Holder().point.x} " +
+  "#{chosen.x} #{unwritten.x}"

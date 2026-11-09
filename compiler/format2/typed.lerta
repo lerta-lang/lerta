@@ -1,11 +1,11 @@
 # The rewrites that need the types of the checking, which reads the nodes that the formatter parsed,
 # so the facts that it records of them are found by those nodes.
-import Cast, Expression, Identifier, Import, ImportName, Statement from '../ast'
+import Call, Cast, Expression, Identifier, Import, ImportName, Member, Statement from '../ast'
 import check_program from '../checker/modules'
 import ImportedName, ModuleAlias from '../checker/imports'
 import NodeFacts, ProgramWide from '../checker/shared'
 import CompileError from '../errors'
-import REDUNDANT_CASTS, UNUSED_IMPORTS from '../format/rules'
+import EXPECTED_TYPES, REDUNDANT_CASTS, UNUSED_IMPORTS from '../format/rules'
 import load_modules from '../loader'
 import Change, Edit from './edits'
 import Tokens from './tokens'
@@ -36,6 +36,8 @@ export typed_program := (path: String, source: String, statements: Statement[]):
 export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[] ->
   case value
     when Cast then [redundant_cast(tokens, value, typed.facts)]
+    when Member then [unqualified(tokens, value, typed.facts)]
+    when Call then [recorded(tokens, value, typed.facts)]
     else []
 
 export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Typed): Edit?[] ->
@@ -89,6 +91,32 @@ left_out_names := (tokens: Tokens, spans: Span[]) ->
       text: ''
     }
   changes
+
+# `MEMBER` for `E.MEMBER` where E is expected (see Expected types).
+unqualified := (tokens: Tokens, member: Member, facts: NodeFacts) ->
+  return nil unless member in facts.unqualifiable
+  first := tokens.at(member.position) ? return nil
+  name := tokens.at(member.name.position) ? return nil
+  return nil unless tokens.is_kind(name - 1, '.')
+  change := Change(from: tokens.start(first), to: tokens.start(name), text: '')
+  tokens.edit_at EXPECTED_TYPES, member.position, [change]
+
+# `{ x: 1 }` for `S(x: 1)` where S is expected (see Expected types): the arguments as they are
+# written, between braces for the parentheses. A construction without them, its arguments in a block
+# below it, or of type arguments, is only reported.
+recorded := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  return nil unless call in facts.recordable
+  callee := tokens.at(call.callee.position) ? return nil
+  open := callee + 1
+  return tokens.report(EXPECTED_TYPES, call.position) unless tokens.is_kind(open, '(')
+  close := tokens.matching(open) ? return nil
+  # A space inside each brace that has the arguments on its line.
+  opening := tokens.code[open + 1].line == tokens.code[open].line then '{ ' else '{'
+  closing := tokens.code[close - 1].end_line == tokens.code[close].line then ' }' else '}'
+  changes :=
+    Change(from: tokens.start(callee), to: tokens.end(open), text: opening)
+    tokens.replaced(close, closing)
+  tokens.edit_at EXPECTED_TYPES, call.position, changes
 
 # `x` for `x as T!` where x is a T already (see Redundant casts). The parentheses that held the cast
 # are left to Parentheses.
