@@ -1,0 +1,53 @@
+# print_trace writes a caught exception's message, and its trace while the runtime keeps it, which
+# is the trace of the exception thrown last.
+import spawn from 'std:async'
+import sleep from 'std:time'
+
+struct Failure: Error
+
+fail := (message: String) -> throw Failure(message)
+
+try
+  fail 'thrown'
+catch error
+  print_trace error
+
+try
+  print [1][2]
+catch error
+  print_trace error
+
+# Thrown again, it goes on with its trace.
+try
+  try
+    fail 'thrown again'
+  catch error
+    throw error
+catch error
+  print_trace error
+
+# Another exception thrown since takes the trace, so the message is written alone.
+try
+  fail 'outer'
+catch outer
+  try
+    fail 'inner'
+  catch inner
+    print inner.message
+  print_trace outer
+
+print_trace Failure('never thrown')
+
+# An await goes on with the trace of what it awaited.
+rejected := (): Promise<Int> ->
+  await sleep(0)
+  fail 'rejected'
+
+main := (): Promise ->
+  try
+    await rejected()
+  catch error
+    print_trace error
+  fail 'uncaught'
+
+spawn main()

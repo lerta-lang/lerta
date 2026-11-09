@@ -111,6 +111,7 @@ make check             # the code in the style (lerta fmt)
 ```
 
 - Every language feature gets run tests in `tests/`: a Lerta source and its expected output, as the top of `test/run.lerta` describes. Programs in `examples/` are run as tests too.
+- A test of values, rather than of what a program writes, checks them with `assert` in the `test`s of [tests/lib/test.lerta](tests/lib/test.lerta), as [tests/args/args.lerta](tests/args/args.lerta) does, and needs no expected file.
 - `make check` checks the tests' style too. Code that breaks it on purpose, as a test of a form that the style rewrites, keeps it with `# fmt: skip` or `# fmt: off` (see [fmt](docs/reference/compiler.md#fmt)). A file that does not parse starts with `# fmt: off`.
 
 #### Testing other targets

@@ -14,6 +14,7 @@
 | `dbg(x)` | Writes `x` to stderr, where the call is and its code, and gives `x` (below). |
 | `print<T: Stringable>(x: T)` | Writes `x.to_string()` and a newline to stdout. |
 | `print_error<T: Stringable>(x: T)` | Likewise, to stderr. |
+| `print_trace(error: Error)` | Writes the message of a caught exception, and its trace, to stderr (below). |
 | `min<T: Comparable>(a: T, b: T): T` | The lesser argument by [compare](#equatable-comparable-and-hashable), the first of equal ones: `min(3, 1)` is `1`. |
 | `max<T: Comparable>(a: T, b: T): T` | The greater argument, likewise. |
 
@@ -24,6 +25,19 @@
 - Each writes at once, unbuffered, so that what it prints is out even if a long computation follows.
 - It writes after what the buffer of `stdout` and `stderr` of [std:io](std.md#stdio) holds, once a write out of it in flight is done, so that the output keeps its order.
 - A failed write to stdout is reported by the exit code, as [std:io](std.md#stdio) states.
+
+### print_trace
+
+```lerta
+try
+  run_job()
+catch error
+  print_trace error
+```
+
+- It writes the message of `error`, a value that satisfies `Error`, and its trace, as an uncaught exception does (see [exceptions](errors.md#exceptions)), to stderr in order with the buffered output, as `print_error` does.
+- The runtime keeps the trace of only the exception thrown last, while its object lives. So the message is written alone once another exception has been thrown since, as in a `try` inside the `catch`, for an error that was never thrown, and in a program built with `--no-trace` (see [the compiler](compiler.md#--no-trace)).
+- It can only be called, not used as a value.
 
 ### dbg
 
