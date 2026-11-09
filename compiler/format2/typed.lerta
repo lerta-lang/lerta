@@ -1,29 +1,94 @@
 # The rewrites that need the types of the checking, which reads the nodes that the formatter parsed,
 # so the facts that it records of them are found by those nodes.
-import Cast, Expression, Statement from '../ast'
+import Cast, Expression, Identifier, Import, ImportName, Statement from '../ast'
 import check_program from '../checker/modules'
+import ImportedName, ModuleAlias from '../checker/imports'
 import NodeFacts, ProgramWide from '../checker/shared'
 import CompileError from '../errors'
-import REDUNDANT_CASTS from '../format/rules'
+import REDUNDANT_CASTS, UNUSED_IMPORTS from '../format/rules'
 import load_modules from '../loader'
 import Change, Edit from './edits'
 import Tokens from './tokens'
 
-# The facts that the checking records of the nodes of the source; nil where the program does not
-# check, whose types are not known: its typed rewrites wait.
-export typed_facts := (path: String, source: String, statements: Statement[]) ->
+# What the checking records of the nodes of the source: the facts, and the names that its imports
+# give that are never used.
+export struct Typed
+  facts: NodeFacts
+  unused_imports: Set<Identifier>
+
+# Nil where the program does not check, whose types are not known: its typed rewrites wait.
+export typed_program := (path: String, source: String, statements: Statement[]): Promise<Typed?> ->
   try
     modules := await load_modules(path, { source, program: statements })
     program := ProgramWide(modules, entry_path: path, finds_all_errors: false)
     check_program program
-    program.shared[modules.last()!.index].facts
+    shared := program.shared[modules.last()!.index]
+    { imports } := shared
+    imported: (ImportedName | ModuleAlias)[] = [
+      imports.names.values()...
+      imports.modules.values()...
+    ]
+    unused_imports := Set([each.name for each in imported when not each.used])
+    { facts: shared.facts, unused_imports }
   catch _: CompileError
     nil
 
-export typed_edits := (tokens: Tokens, value: Expression, facts: NodeFacts): Edit?[] ->
+export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[] ->
   case value
-    when Cast then [redundant_cast(tokens, value, facts)]
+    when Cast then [redundant_cast(tokens, value, typed.facts)]
     else []
+
+export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Typed): Edit?[] ->
+  case statement
+    when Import then [unused_imports(tokens, statement, typed.unused_imports)]
+    else []
+
+# The import without the names that are never used (see Unused names); only reported where it gives
+# none that is, as an import runs the module's top-level code and brings its extends, which leaving
+# it out would lose. One that exports its names is used by the modules that import it.
+unused_imports := (tokens: Tokens, statement: Import, unused: Set<Identifier>) ->
+  return nil if statement.exported
+  if alias := statement.alias
+    return alias in unused then tokens.report(UNUSED_IMPORTS, statement.position)
+  { names } := statement
+  is_unused := (name: ImportName) -> name.alias ? name.name in unused
+  return nil unless names.any(is_unused)
+  return tokens.report(UNUSED_IMPORTS, statement.position) if names.all(is_unused)
+  spans: Span[]
+  for name in names
+    first := tokens.at(name.name.position) ? return nil
+    last := tokens.at((name.alias ? name.name).position) ? return nil
+    spans.push { first, last, unused: is_unused(name) }
+  # At the first name left out, not at the comma before it.
+  first_unused := spans.find((span) -> span.unused)!
+  # A comment after the last name, left out, would stay after a name kept.
+  last_line := tokens.code[spans.last()!.last].end_line
+  if spans.last()!.unused and tokens.comments.any((comment) -> comment.line == last_line)
+    return tokens.report(UNUSED_IMPORTS, tokens.start(first_unused.first))
+  tokens.edit_at UNUSED_IMPORTS, tokens.start(first_unused.first), left_out_names(tokens, spans)
+
+# The tokens of a name of an import, from its name through its alias.
+struct Span
+  first: Int
+  last: Int
+  unused: Bool
+
+# Each unused name left out with the comma and the spaces after it, but those after the last kept
+# name left out from the end of that name, with the commas before them.
+left_out_names := (tokens: Tokens, spans: Span[]) ->
+  var kept_last = spans.length - 1
+  kept_last -= 1 while spans[kept_last].unused
+  changes: Change[]
+  for span, index in spans[..kept_last]
+    next := spans[index + 1].first
+    changes.push { from: tokens.start(span.first), to: tokens.start(next), text: '' } if span.unused
+  if kept_last < spans.length - 1
+    changes.push {
+      from: tokens.end(spans[kept_last].last)
+      to: tokens.end(spans.last()!.last)
+      text: ''
+    }
+  changes
 
 # `x` for `x as T!` where x is a T already (see Redundant casts). The parentheses that held the cast
 # are left to Parentheses.
@@ -34,8 +99,7 @@ redundant_cast := (tokens: Tokens, cast: Cast, facts: NodeFacts) ->
   return nil unless tokens.is_word(as_at, 'as')
   bang := cast_end(tokens, type_at) ? return nil
   change := Change(from: tokens.end(as_at - 1), to: tokens.end(bang), text: '')
-  edit := tokens.edit(REDUNDANT_CASTS, [change]) ? return nil
-  Edit(edit..., at: cast.position, rule: REDUNDANT_CASTS)
+  tokens.edit_at REDUNDANT_CASTS, cast.position, [change]
 
 # The `!` after the type of a cast that starts at `at`; a type holds none.
 cast_end := (tokens: Tokens, at: Int) ->

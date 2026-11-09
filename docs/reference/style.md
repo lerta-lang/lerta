@@ -19,6 +19,7 @@
 ### Unused names
 
 - Name an unused variable `_`.
+- Do not import a name that the module does not use.
 
 ### Removal
 
