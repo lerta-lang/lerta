@@ -50,7 +50,7 @@
 
 ## Intrinsics
 
-`intrinsic name` declares a function that the compiler gives, as it cannot be written in Lerta: `assert` and `dbg` of std:builtins, `encode_value` and `decode_value` of std:codable, and `parse` and `members` of std:enums (`compiler/checker/intrinsics.lerta`). `intrinsic name: Type` declares a value that the compiler gives, as only the build knows it: `optimized` of std:process, and `platform`, of std:internal/platform, which std:process exports and std:io reads (`VALUE_INTRINSICS`). `platform` is the member of its enum that the target's system names, which the enum must have for each system; a build for no target, as dump-llvm's, and so the seed, which builds on every system, reads it where the code runs (`lerta_platform_member`).
+`intrinsic name` declares a function that the compiler gives, as it cannot be written in Lerta: `assert`, `dbg` and `print_trace` of std:builtins, `encode_value` and `decode_value` of std:codable, and `parse` and `members` of std:enums (`compiler/checker/intrinsics.lerta`). `intrinsic name: Type` declares a value that the compiler gives, as only the build knows it: `optimized` of std:process, and `platform`, of std:internal/platform, which std:process exports and std:io reads (`VALUE_INTRINSICS`). `platform` is the member of its enum that the target's system names, which the enum must have for each system; a build for no target, as dump-llvm's, and so the seed, which builds on every system, reads it where the code runs (`lerta_platform_member`).
 
 - Only a standard module declares one, and only of a name that the compiler knows, a value of the type that the compiler gives it. Its name is imported and exported as an extern's is, and a name of the module's own hides it.
 - A read of a value is typed as its declaration says and recorded (`NodeFacts.intrinsic_values`), as the checker, which `fmt` and the language server run too, knows no build; codegen writes the value of the build in its place, so that an optimized build folds what it decides.
@@ -62,6 +62,7 @@
 - `encode_value` and `decode_value` are checked as calls of the code that codegen makes for each type (see [representation](representation.md)), with no code in their place.
 - `parse` and `members` are too, of the enum (`EnumQuery`): codegen makes `parse` as the decoders read a member, through `lerta_enum_parse` and the table of the members' texts, and `members` as an array of the members' values, 0 up to their count. Where the generic is checked as it stands, the enum is a type parameter that `Enum` bounds.
 - `dbg(x)` holds `x`, typed where the call's value is expected, writes the line through `lerta_print_stderr` of std:builtins, whose reference the checker records itself, as a name of the program's own could hide it, and gives the local as the call's value.
+- `print_trace(error)` calls `lerta_print_trace` with the error as an interface value, which no extern can take, typed and recorded by the checker as `dbg`'s call is: the C function takes its data and itab, and writes the trace only if the one that the runtime keeps is of that data.
 
 ## Defaults
 

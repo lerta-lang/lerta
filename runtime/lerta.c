@@ -9,9 +9,13 @@ void lerta_main(void);
 
 LertaException lerta_exception = {NULL, NULL};
 
+static LertaString *message_of(void *data, void *const *itab) {
+  LertaString *(*message)(void *error) = (LertaString * (*)(void *)) itab[0];
+  return message(data);
+}
+
 LertaString *lerta_exception_message(void) {
-  LertaString *(*message)(void *error) = (LertaString * (*)(void *)) lerta_exception.itab[0];
-  return message(lerta_exception.data);
+  return message_of(lerta_exception.data, lerta_exception.itab);
 }
 
 // The trace keeps the first TRACE_ENDS sites pushed, then the last TRACE_ENDS in a ring, so that
@@ -97,10 +101,10 @@ static void write_trace_entry(const LertaTraceSite *site) {
   lerta_stderr_write_text(")\n");
 }
 
-// The entries kept of the pending exception's trace, innermost first, with how many are left out
-// between the two ends.
-static void write_trace(void) {
-  if (trace_owner != lerta_exception.data) return;
+// The entries kept of the trace of the exception, if it is the one that the trace is of, innermost
+// first, with how many are left out between the two ends.
+static void write_trace(void *exception) {
+  if (trace_owner != exception) return;
   int64_t first_end = trace_count <= TRACE_KEPT ? trace_count : TRACE_ENDS;
   for (int64_t i = 0; i < first_end; i++) write_trace_entry(trace_entries[i]);
   if (trace_count <= TRACE_KEPT) return;
@@ -119,7 +123,16 @@ static void write_exception(const char *prefix, bool panicking) {
   lerta_stderr_write_text(prefix);
   lerta_stderr_write_string(message);
   lerta_stderr_write_text("\n");
-  write_trace();
+  write_trace(lerta_exception.data);
+}
+
+void lerta_print_trace(void *data, void *const *itab) {
+  LertaString *message = message_of(data, itab);
+  lerta_output_flush();
+  lerta_stderr_write_string(message);
+  lerta_stderr_write_text("\n");
+  write_trace(data);
+  lerta_release(message);
 }
 
 _Noreturn void lerta_exit_with_exception(void) {

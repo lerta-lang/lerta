@@ -16,6 +16,7 @@ import ExternReference from './references'
 import add_intrinsic, builtins_declarer from './imports'
 import record_reference from './name'
 import is_contextual from './literals'
+import std_interface from './interfaces'
 import has_method from './member'
 import Body, Shared from './shared'
 import Local from './scopes'
@@ -25,11 +26,11 @@ import check_block, check_if_condition, define_local, nothing from './statement'
 import CLOSING_BRACKETS, lex, OPENING_BRACKETS, Token, TokenKind from '../lexer/tokens'
 import is_standard_name, module_location from '../source'
 import
-  ArrayType, bool_type, EnumType, format_type, is_one_of_kinds, OptionalType, string_type, Type,
+  ArrayType, bool_type, EnumType, format_type, FunctionType, is_one_of_kinds, OptionalType, Type,
   void_type
 from '../types'
 
-INTRINSICS := ['assert', 'dbg', 'encode_value', 'decode_value', 'parse', 'members']
+INTRINSICS := ['assert', 'dbg', 'print_trace', 'encode_value', 'decode_value', 'parse', 'members']
 
 # What an intrinsic value is, as a message tells it, and whether a declared type is that.
 struct ValueIntrinsic
@@ -89,6 +90,7 @@ export type_of_intrinsic_call := (body: Body, call: Call, name: String, expected
   code :=
     case name
       when 'assert' then IntrinsicCode(statements: assertion(body, call), value: nil)
+      when 'print_trace' then IntrinsicCode(statements: [traced(body, call)], value: nil)
       else debugged(body, call, expected)
   body.facts.intrinsic_calls[call] = code
   value := code.value ? return void_type
@@ -231,17 +233,28 @@ debugged := (body: Body, call: Call, expected: Type?) ->
     concatenation(concatenation(text("#{quoted_call(body, call)} = ", at), shown), text("\n", at))
   IntrinsicCode statements: [held, stderr_write(body, line)], value: named(name, at)
 
-# The call of std:builtins' C function that writes the text to stderr, typed here rather than
-# checked, as a name of the program's own could hide the function's.
+# `print_trace(error)`: writes the error's message, and its trace if the runtime keeps it, to stderr
+# (see lerta_print_trace in runtime/lerta.c). The C function takes the interface value, which no
+# extern can, to tell whether the trace it keeps is the error's.
+traced := (body: Body, call: Call) ->
+  fail body.program, call.position, 'print_trace takes one error' if call.args.length != 1
+  error := std_interface(body.shared, 'Error', call.position).type
+  runtime_call body, 'lerta_print_trace', call.args[0], { params: [error], result: void_type }
+
+# The call of std:builtins' C function that writes the text to stderr.
 stderr_write := (body: Body, text: Expression): Statement ->
-  program := body.program
-  symbol := 'lerta_print_stderr'
-  expect_type body, text, string_type
-  callee := named(symbol, text.position)
-  call := Call(callee, position: text.position, args: [text], named_args: [], type_args: [])
-  declarer := builtins_declarer(program, 'print_error')
+  type := body.program.extern_types['lerta_print_stderr']!.type as FunctionType!
+  runtime_call body, 'lerta_print_stderr', text, type
+
+# A call of a C function of the runtime, typed here rather than checked, as a name of the program's
+# own could hide an extern's.
+runtime_call := (body: Body, symbol: String, arg: Expression, type: FunctionType): Statement ->
+  expect_type body, arg, type.params[0]
+  callee := named(symbol, arg.position)
+  call := Call(callee, position: arg.position, args: [arg], named_args: [], type_args: [])
+  declarer := builtins_declarer(body.program, 'print_error')
   record_reference body, callee, ExternReference(symbol, module_index: declarer.index, name: symbol)
-  set_type body, callee, program.extern_types[symbol]!.type
+  set_type body, callee, type
   set_type body, call, void_type
   call
 

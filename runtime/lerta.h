@@ -420,6 +420,9 @@ LertaPromise *lerta_stream_flush(int64_t fd);
 bool lerta_stream_is_terminal(int64_t fd);
 void lerta_print_stdout(const LertaString *text);
 void lerta_print_stderr(const LertaString *text);
+// print_trace(error), of the error's data and itab, which the compiler passes as one interface
+// value (lerta.c).
+void lerta_print_trace(void *data, void *const *itab);
 // Stdin (stdin.c): up to 64 KiB of what it has, read on a thread of its own, or NULL at its end.
 LertaPromise *lerta_stdin_read(void);
 
