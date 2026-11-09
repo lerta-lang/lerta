@@ -1,11 +1,13 @@
 # The rewrites that need the types of the checking, which reads the nodes that the formatter parsed,
 # so the facts that it records of them are found by those nodes.
-import Call, Cast, Expression, Identifier, Import, ImportName, Member, Statement from '../ast'
+import
+  Call, Cast, Expression, Identifier, Import, ImportName, Member, NamedValue, Statement
+from '../ast'
 import check_program from '../checker/modules'
 import ImportedName, ModuleAlias from '../checker/imports'
 import NodeFacts, ProgramWide from '../checker/shared'
 import CompileError from '../errors'
-import EXPECTED_TYPES, REDUNDANT_CASTS, UNUSED_IMPORTS from '../format/rules'
+import EXPECTED_TYPES, REDUNDANT_CASTS, SHORTHAND_ARGUMENTS, UNUSED_IMPORTS from '../format/rules'
 import load_modules from '../loader'
 import Change, Edit from './edits'
 import Tokens from './tokens'
@@ -37,7 +39,8 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
   case value
     when Cast then [redundant_cast(tokens, value, typed.facts)]
     when Member then [unqualified(tokens, value, typed.facts)]
-    when Call then [recorded(tokens, value, typed.facts)]
+    when Call
+      [recorded(tokens, value, typed.facts), shorthand_arguments(tokens, value, typed.facts)...]
     else []
 
 export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Typed): Edit?[] ->
@@ -117,6 +120,35 @@ recorded := (tokens: Tokens, call: Call, facts: NodeFacts) ->
     Change(from: tokens.start(callee), to: tokens.end(open), text: opening)
     tokens.replaced(close, closing)
   tokens.edit_at EXPECTED_TYPES, call.position, changes
+
+# `S(x, y: 1)` for `S(x: x, y: 1)` in a construction (see Shorthand): the named arguments that are
+# variables of their names, from the first, up to one that is not or whose name and value are not
+# written alone, as `x: (x)`, in one edit, as each would leave a named argument before those after
+# it; the others, which would move before others, only reported.
+shorthand_arguments := (tokens: Tokens, call: Call, facts: NodeFacts): Edit?[] ->
+  return [] unless call in facts.object_constructions
+  is_shorthand := (named: NamedValue) ->
+    named.value is Identifier and named.value.name == named.name.name
+  changes: Change[]
+  reports: Edit?[]
+  var stays = true
+  for named in call.named_args
+    shorthand := is_shorthand(named)
+    change := shorthand and stays then alone(tokens, named)
+    stays = change != nil
+    if change
+      changes.push change
+    else if shorthand
+      reports.push tokens.report(SHORTHAND_ARGUMENTS, named.name.position)
+  return reports if changes.is_empty()
+  [tokens.edit_at(SHORTHAND_ARGUMENTS, changes[0].from, changes), reports...]
+
+# The name alone for the named argument, where both are single tokens.
+alone := (tokens: Tokens, named: NamedValue) ->
+  name_at := tokens.at(named.name.position) ? return nil
+  value_at := tokens.at(named.value.position) ? return nil
+  return nil if value_at != name_at + 2 or not tokens.is_kind(value_at, IDENTIFIER)
+  Change from: tokens.start(name_at), to: tokens.end(value_at), text: named.name.name
 
 # `x` for `x as T!` where x is a T already (see Redundant casts). The parentheses that held the cast
 # are left to Parentheses.
