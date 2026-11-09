@@ -10,7 +10,7 @@ import lex, Lexed from '../lexer/tokens'
 import parse from '../parser/statement'
 import
   BINARY_LITERALS, BLANK_LINES, COMMENTS, DOUBLE_NEGATIONS, ELSE_NIL, EMPTY_INITIAL_VALUES, LAYOUT,
-  RANGE_ENDS, SEMICOLONS, STRANDED_COMMENTS, StyleRule
+  RANGE_ENDS, REDUNDANT_CASTS, SEMICOLONS, STRANDED_COMMENTS, StyleRule
 from '../format/rules'
 import is_off_throughout from '../format/format'
 import common_indentation, is_blank from '../lexer/string_literal'
@@ -21,6 +21,7 @@ import rewrites_of from './rewrites'
 import CodeGap, LineStart, Spaces, StatementShape from './shapes'
 import Gap, literal_lines, source_tokens, SourceTokens, TextToken from './text'
 import Tokens from './tokens'
+import typed_facts from './typed'
 import walk, Walked from './walk'
 
 # A place where the source differs from the style, at its position in the source.
@@ -64,7 +65,8 @@ export format_source := (source: String, path: String) ->
   return Formatted(text: source, findings: []) if is_off_throughout(source)
   parsed := parsed_source(source, path)
   laid := laid_out(parsed)
-  edits := [rewrites(parsed)..., laid.edits...]
+  first_rewrites := await rewrites(parsed, path)
+  edits := [first_rewrites..., laid.edits...]
   held := held_statements(parsed.text, laid, edits)
   is_held := (at: Position) -> held.any((head) -> head.holds(at))
   layout := [finding for finding in laid.findings when not is_held(finding.at)]
@@ -72,7 +74,7 @@ export format_source := (source: String, path: String) ->
   # A `;` that a rewrite takes out is a gap that the layout decides too.
   found := distinct([rewritten..., layout..., laid.stranded...])
   sorted := found.sorted((a, b) -> a.at.compare(b.at))
-  Formatted text: rewritten_text(parsed, laid, path), findings: sorted
+  Formatted text: await rewritten_text(parsed, laid, first_rewrites, path), findings: sorted
 
 distinct := (findings: Finding[]) ->
   seen: Set<String>
@@ -89,9 +91,12 @@ parsed_source := (source: String, path: String) ->
   lexed := lex(source, path)
   Parsed source, lexed, statements: parse(lexed.tokens, path), text: source_tokens(source, lexed)
 
-rewrites := (parsed: Parsed) ->
+# Checks the program of `parsed`, which each round parses anew: the facts that the checking
+# records of a tree are found by its nodes.
+rewrites := (parsed: Parsed, path: String) ->
   { source, lexed, statements, text } := parsed
-  rewrites_of statements, source, text, lexed, kept_lines(source, lexed)
+  typed := await typed_facts(path, source, statements)
+  rewrites_of statements, source, text, lexed, kept_lines(source, lexed), typed
 
 laid_out := (parsed: Parsed) ->
   { source, lexed, statements, text } := parsed
@@ -143,7 +148,8 @@ spans := (text: SourceTokens, statement: StatementShape, at: Position) ->
 # The rules whose rewrites change the syntax tree; the others give the same tree, which the
 # formatter checks. A comparison of trees cannot check these, which change it by design;
 # tests/format2/rewritten_forms.lerta checks that each form means what its rewrite does.
-TREE_CHANGES := [BINARY_LITERALS, DOUBLE_NEGATIONS, ELSE_NIL, EMPTY_INITIAL_VALUES, RANGE_ENDS]
+TREE_CHANGES :=
+  BINARY_LITERALS, DOUBLE_NEGATIONS, ELSE_NIL, EMPTY_INITIAL_VALUES, RANGE_ENDS, REDUNDANT_CASTS
 
 # Only the rewrites of the source itself are reported: one that a round enables, as `b'...'` for the
 # `b"..."` that `"...".binary` is written as, shows once the text written is formatted again.
@@ -153,11 +159,15 @@ TREE_CHANGES := [BINARY_LITERALS, DOUBLE_NEGATIONS, ELSE_NIL, EMPTY_INITIAL_VALU
 # the source rewritten. A `;` goes last, once the layout has kept no statement on a line that holds
 # one (see Code kept as written): the layout puts the statement after it on a line of its own where
 # it decides where the statement starts, and its rewrite elsewhere.
-rewritten_text := (parsed: Parsed, first_laid: LaidOut, path: String) ->
+rewritten_text := (parsed: Parsed, first_laid: LaidOut, first_rewrites: Edit[], path: String) ->
   var current = parsed
+  var last_rewrites = first_rewrites
+  # Whether the last round changed nothing, so that `last_rewrites` are those of `current`.
+  var settled = false
   for round in 0..MAX_ROUNDS
     laid := round == 0 then first_laid else laid_out(current)
-    edits := [rewrites(current)..., laid.edits...]
+    last_rewrites = await rewrites(current, path) if round > 0
+    edits := [last_rewrites..., laid.edits...]
     chosen := applicable([edit for edit in edits when edit.rule != SEMICOLONS])
     if not chosen.is_empty()
       changing := [edit for edit in chosen when edit.rule in TREE_CHANGES]
@@ -167,8 +177,10 @@ rewritten_text := (parsed: Parsed, first_laid: LaidOut, path: String) ->
     else if laid.text != current.source
       current = checked_layout(laid.text, current, path)
     else
+      settled = true
       break
-  separators := applicable([edit for edit in rewrites(current) when edit.rule == SEMICOLONS])
+  found := settled then last_rewrites else await rewrites(current, path)
+  separators := applicable([edit for edit in found when edit.rule == SEMICOLONS])
   return current.source if separators.is_empty()
   separated := written_program(applied(current.source, separators), path, 'its rewrites')
   check_same separated, current, path, 'its rewrites'

@@ -1,6 +1,6 @@
 # The rewrites that change the tokens of the source, not its layout, each found as an edit of the
-# source by the rule that asks for it (see docs/reference/style.md). Those that need the types of
-# the checking are not here yet.
+# source by the rule that asks for it (see docs/reference/style.md); those that need the types of
+# the checking, where the program checks, by typed.lerta.
 import
   ArrayLiteral, ArrayTypeName, Assignment, BinaryOperation, Binding, Call, Coalesce, Comprehension,
   Condition, Conditional, Declaration, Expression, For, FunctionLiteral, Identifier, If,
@@ -9,6 +9,7 @@ import
 from '../ast'
 import TextPart from '../lexer/string_literal'
 import Lexed, Token from '../lexer/tokens'
+import NodeFacts from '../checker/shared'
 import Place, places_of from '../format/places'
 import fits_single_quotes from '../format/print_expression'
 import cast_of from '../format/print_operation'
@@ -27,9 +28,11 @@ import WIDTH from './lines'
 import parentheses_of, unvisited_parts from './parentheses'
 import is_layout, SourceTokens from './text'
 import Tokens from './tokens'
+import typed_edits from './typed'
 
 export rewrites_of := (
-  program: Statement[], source: String, text: SourceTokens, lexed: Lexed, kept: KeptLines
+  program: Statement[], source: String, text: SourceTokens, lexed: Lexed, kept: KeptLines,
+  facts: NodeFacts?
 ) ->
   tokens := Tokens(source, text, comments: lexed.comments, kept: kept_lines(program, text, kept))
   parentheses := parentheses_of(program, tokens)
@@ -47,6 +50,8 @@ export rewrites_of := (
   places_of program, {
     before: (value, _: Place) ->
       add edit for edit in edits_within(tokens, value, claimed, parentheses.tight)
+      if known := facts
+        add edit for edit in typed_edits(tokens, value, known)
     statement: (statement, _) ->
       add edit for edit in statement_edits(tokens, statement)
   }

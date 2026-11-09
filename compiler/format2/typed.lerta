@@ -1,0 +1,44 @@
+# The rewrites that need the types of the checking, which reads the nodes that the formatter parsed,
+# so the facts that it records of them are found by those nodes.
+import Cast, Expression, Statement from '../ast'
+import check_program from '../checker/modules'
+import NodeFacts, ProgramWide from '../checker/shared'
+import CompileError from '../errors'
+import REDUNDANT_CASTS from '../format/rules'
+import load_modules from '../loader'
+import Change, Edit from './edits'
+import Tokens from './tokens'
+
+# The facts that the checking records of the nodes of the source; nil where the program does not
+# check, whose types are not known: its typed rewrites wait.
+export typed_facts := (path: String, source: String, statements: Statement[]) ->
+  try
+    modules := await load_modules(path, { source, program: statements })
+    program := ProgramWide(modules, entry_path: path, finds_all_errors: false)
+    check_program program
+    program.shared[modules.last()!.index].facts
+  catch _: CompileError
+    nil
+
+export typed_edits := (tokens: Tokens, value: Expression, facts: NodeFacts): Edit?[] ->
+  case value
+    when Cast then [redundant_cast(tokens, value, facts)]
+    else []
+
+# `x` for `x as T!` where x is a T already (see Redundant casts). The parentheses that held the cast
+# are left to Parentheses.
+redundant_cast := (tokens: Tokens, cast: Cast, facts: NodeFacts) ->
+  return nil unless cast in facts.redundant_casts
+  type_at := tokens.at(cast.type.position) ? return nil
+  as_at := type_at - 1
+  return nil unless tokens.is_word(as_at, 'as')
+  bang := cast_end(tokens, type_at) ? return nil
+  change := Change(from: tokens.end(as_at - 1), to: tokens.end(bang), text: '')
+  edit := tokens.edit(REDUNDANT_CASTS, [change]) ? return nil
+  Edit(edit..., at: cast.position, rule: REDUNDANT_CASTS)
+
+# The `!` after the type of a cast that starts at `at`; a type holds none.
+cast_end := (tokens: Tokens, at: Int) ->
+  var index = at
+  index += 1 while index < tokens.code.length and not tokens.is_kind(index, '!')
+  index < tokens.code.length then index
