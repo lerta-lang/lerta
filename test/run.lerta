@@ -191,15 +191,17 @@ command_env := (prefix: String?) ->
   variables['WINEPREFIX'] = prefix if prefix
   variables
 
+# The commands are built at once, after the runtimes, whose cache their builds share.
 build_commands := ->
   cwd := "#{root_dir}/#{COMMANDS_DIR}"
-  for name in names_with_extension(COMMANDS_DIR, 'lerta')
+  build := (name: String) ->
     executable := "#{work_dir}/#{name}#{target.executable_suffix}"
     args := ['build', "#{name}.lerta", '-o', executable, '-O', target.args...]
     built := await run_file(compiler, args, cwd)
     if built.status != 0
       message := "the build of #{COMMANDS_DIR}/#{name} failed (#{built.failure}):\n#{built.errors}"
       throw SetupError(message)
+  await promise for promise in [build(name) for name in names_with_extension(COMMANDS_DIR, 'lerta')]
 
 # The benchmarks (see bench/run.lerta): each source must build without a diagnostic. Each
 # benchmark's main.lerta must then run and print its main.out; the other sources, such as the
