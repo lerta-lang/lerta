@@ -5,7 +5,8 @@ import at_once, Check, CheckFailed, posix_check, run_checks, run_one, select fro
 import compare_text, expect_status, lines, reason_unless from './lib/expect'
 import host_target_name from './lib/cli'
 import
-  exit_in_time, OUTPUT_LIMIT, read_text_or_throw, root_dir, shown_text, suite_dir
+  build_runtimes, cache_dir, exit_in_time, OUTPUT_LIMIT, read_text_or_throw, root_dir, shown_text,
+  suite_dir
 from './lib/lerta'
 import Buffer, list_dir, write_file from 'std:io'
 import platform, run from 'std:process'
@@ -42,7 +43,10 @@ run_driver := (
   # Two at once, unless the check gives its own count, as an option may not be given twice.
   gives_jobs := args.any((arg) -> arg in ['-j', '--jobs'] or arg.starts_with('--jobs='))
   jobs: String[] = gives_jobs then [] else ['-j', '2']
-  env := { 'LERTA_TEST_RUN_DIR': harness_dir, 'LERTA_TEST_FAILED_FILE': failed_file }
+  env :=
+    'LERTA_TEST_RUN_DIR': harness_dir
+    'LERTA_TEST_FAILED_FILE': failed_file
+    'LERTA_TEST_CACHE_DIR': cache_dir
   env[name] = value for (name, value) in extra_env.entries()
   output := Buffer(limit: OUTPUT_LIMIT)
   errors := Buffer(limit: OUTPUT_LIMIT)
@@ -372,4 +376,7 @@ export suite := ->
     title
     [harness_check, harness_listed_check, thrown_checks..., driver_checks..., leak_checks...]
   ) ? return 0
+  # The drivers that the checks run share the cache (see cache_dir), filled first, as each would
+  # compile the runtimes otherwise.
+  await build_runtimes(work_dir, [[], ['-O']])
   await run_checks(title, checks)
