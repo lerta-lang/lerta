@@ -1,13 +1,21 @@
 # The rewrites that need the types of the checking, which reads the nodes that the formatter parsed,
 # so the facts that it records of them are found by those nodes.
 import
-  Call, Cast, Expression, Identifier, Import, ImportName, Member, NamedValue, Statement
+  BinaryOperation, Call, Cast, Expression, Identifier, Import, ImportName, IntegerLiteral, Member,
+  NamedValue, Statement, StringLiteral, Index, This
 from '../ast'
 import check_program from '../checker/modules'
 import ImportedName, ModuleAlias from '../checker/imports'
 import NodeFacts, ProgramWide from '../checker/shared'
 import CompileError from '../errors'
-import EXPECTED_TYPES, REDUNDANT_CASTS, SHORTHAND_ARGUMENTS, UNUSED_IMPORTS from '../format/rules'
+import has_is_empty from '../format/annotations'
+import runs_no_code from '../format/rewrites'
+import bool_type from '../types'
+import CLOSING_BRACKETS, OPENING_BRACKETS from '../lexer/tokens'
+import
+  EMPTINESS_TESTS, EXPECTED_TYPES, MEMBERSHIP_TESTS, REDUNDANT_CASTS, SHORTHAND_ARGUMENTS,
+  UNUSED_IMPORTS
+from '../format/rules'
 import load_modules from '../loader'
 import Change, Edit from './edits'
 import Tokens from './tokens'
@@ -39,8 +47,14 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
   case value
     when Cast then [redundant_cast(tokens, value, typed.facts)]
     when Member then [unqualified(tokens, value, typed.facts)]
+    when BinaryOperation then [emptiness_test(tokens, value, typed.facts)]
     when Call
-      [recorded(tokens, value, typed.facts), shorthand_arguments(tokens, value, typed.facts)...]
+      { facts } := typed
+      [
+        recorded(tokens, value, facts)
+        membership_test(tokens, value, facts)
+        shorthand_arguments(tokens, value, facts)...
+      ]
     else []
 
 export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Typed): Edit?[] ->
@@ -149,6 +163,117 @@ alone := (tokens: Tokens, named: NamedValue) ->
   value_at := tokens.at(named.value.position) ? return nil
   return nil if value_at != name_at + 2 or not tokens.is_kind(value_at, IDENTIFIER)
   Change from: tokens.start(name_at), to: tokens.end(value_at), text: named.name.name
+
+# `x.is_empty()` for a test of the length of x against 0, or of x against '', and `not x.is_empty()`
+# for one that x is not empty (see Emptiness tests), where std gives the type of x `is_empty`; the
+# test as written, `0 == x.length` and `'' == x` too, but the latter of a name alone, whose end is
+# known.
+emptiness_test := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
+  { operator, left, right } := test
+  return nil unless operator in ['==', '!=', '>']
+  written := tested_value(tokens, left, right) ? return nil
+  { value, first, last, start, end } := written
+  return nil if operator == '>' and not written.length_first
+  return nil if not has_is_empty(facts.types[value]) or not is_balanced(tokens, first, last)
+  negation := operator == '==' then '' else 'not '
+  text := "#{negation}#{tokens.slice(tokens.start(first), tokens.end(last))}.is_empty()"
+  at := tokens.start(start)
+  tokens.edit_at EMPTINESS_TESTS, at, [{ from: at, to: tokens.end(end), text }]
+
+# The value that a comparison tests the emptiness of, the tokens from `first` through `last`, and
+# those of the comparison, from `start` through `end`.
+struct TestedValue
+  value: Expression
+  first: Int
+  last: Int
+  start: Int
+  end: Int
+  # Whether it is `x.length` before the operator, which `>` may compare.
+  length_first: Bool
+
+tested_value := (tokens: Tokens, left: Expression, right: Expression): TestedValue? ->
+  if is_zero(right) and left is Member and left.name.name == 'length'
+    name := tokens.at(left.name.position) ? return nil
+    zero := tokens.at(right.position) ? return nil
+    first := tokens.at(left.object.position) ? return nil
+    return nil if not tokens.is_kind(name - 1, '.') or zero != name + 2
+    return {
+      value: left.object
+      first
+      last: name - 2
+      start: first
+      end: zero
+      length_first: true
+    }
+  if is_zero(left) and right is Member and right.name.name == 'length'
+    zero := tokens.at(left.position) ? return nil
+    name := tokens.at(right.name.position) ? return nil
+    first := tokens.at(right.object.position) ? return nil
+    return nil if not tokens.is_kind(name - 1, '.') or first != zero + 2
+    return {
+      value: right.object
+      first
+      last: name - 2
+      start: zero
+      end: name
+      length_first: false
+    }
+  if is_empty_string(right)
+    empty := tokens.at(right.position) ? return nil
+    first := tokens.at(left.position) ? return nil
+    last := empty - 2
+    return nil unless is_postfix(tokens, left, first, last)
+    return { value: left, first, last, start: first, end: empty, length_first: false }
+  if is_empty_string(left) and right is Identifier
+    empty := tokens.at(left.position) ? return nil
+    name := tokens.at(right.position) ? return nil
+    return nil if name != empty + 2
+    return { value: right, first: name, last: name, start: empty, end: name, length_first: false }
+  nil
+
+# Whether the value from `first` through `last` takes `.is_empty()` as written: a name, a member,
+# a call, an index or `@`, or a value in parentheses, not an operation, which would give it to its
+# last operand.
+is_postfix := (tokens: Tokens, value: Expression, first: Int, last: Int) ->
+  case value
+    when Identifier, Member, Call, Index, This then true
+    else tokens.is_kind(first, '(') and tokens.matching(first) == last
+
+is_zero := (value: Expression) -> value is IntegerLiteral and value.value == 0
+
+is_empty_string := (value: Expression) -> value is StringLiteral and value.value.is_empty()
+
+# Whether the brackets that the tokens open they close, so that they are an expression whole.
+is_balanced := (tokens: Tokens, first: Int, last: Int) ->
+  return false if first > last
+  var depth = 0
+  for token in tokens.code[first..=last]
+    depth += 1 if token.kind in OPENING_BRACKETS
+    depth -= 1 if token.kind in CLOSING_BRACKETS
+    return false if depth < 0
+  depth == 0
+
+# `(x in xs)` for `xs.contains(x)` (see Membership tests), where neither runs code, as `x in xs`
+# evaluates x first; the parentheses are left to Parentheses, and `not` before it to Negated in
+# tests.
+membership_test := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  member := call.callee as Member ? return nil
+  has_one := call.args.length == 1 and call.named_args.is_empty() and call.type_args.is_empty()
+  return nil if member.name.name != 'contains' or not has_one or facts.types[call] != bool_type
+  item := call.args[0]
+  return nil if not runs_no_code(member.object) or not runs_no_code(item)
+  first := tokens.at(member.object.position) ? return nil
+  name := tokens.at(member.name.position) ? return nil
+  # `@contains(x)` has no `.`.
+  last := tokens.is_kind(name - 1, '.') then name - 2 else name - 1
+  open := name + 1
+  return nil if not tokens.is_kind(open, '(') or not is_balanced(tokens, first, last)
+  close := tokens.matching(open) ? return nil
+  collection := tokens.slice(tokens.start(first), tokens.end(last))
+  text := "(#{tokens.slice(tokens.start(open + 1), tokens.end(close - 1))} in #{collection})"
+  tokens.edit_at MEMBERSHIP_TESTS, member.name.position, [
+    { from: tokens.start(first), to: tokens.end(close), text }
+  ]
 
 # `x` for `x as T!` where x is a T already (see Redundant casts). The parentheses that held the cast
 # are left to Parentheses.
