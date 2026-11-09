@@ -286,6 +286,7 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 ### Nil initial values
 
 - Write `var found: String?`, not `var found: String? = nil`.
+- Write a field `parent: Node?`, not `parent: Node? = default nil`: its argument may be left out either way.
 
 ### Empty initial values
 

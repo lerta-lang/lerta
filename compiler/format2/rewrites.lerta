@@ -4,8 +4,8 @@
 import
   ArrayLiteral, ArrayTypeName, Assignment, BinaryOperation, Binding, Call, Coalesce, Comprehension,
   Condition, Conditional, Declaration, Expression, For, FunctionLiteral, Identifier, If,
-  Interpolation, Member, NamedType, NilLiteral, Pass, Range, RecordLiteral, Statement,
-  StringLiteral, UnaryOperation, UnionTypeName
+  Interpolation, Member, MemberDeclaration, NamedType, NilLiteral, Pass, Range, RecordLiteral,
+  Statement, StringLiteral, TypeDeclaration, UnaryOperation, UnionTypeName
 from '../ast'
 import TextPart from '../lexer/string_literal'
 import Lexed, Token from '../lexer/tokens'
@@ -15,7 +15,7 @@ import cast_of from '../format/print_operation'
 import counted_end from '../format/rewrites'
 import
   BINARY_LITERALS, CAST_FALLBACKS, ELSE_NIL, EMPTY_INITIAL_VALUES, ESCAPES,
-  FUNCTIONS_WITHOUT_PARAMETERS, NIL_INITIAL_VALUES, RANGE_ENDS, SEMICOLONS, SHORTHAND,
+  FUNCTIONS_WITHOUT_PARAMETERS, NIL_DEFAULTS, NIL_INITIAL_VALUES, RANGE_ENDS, SEMICOLONS, SHORTHAND,
   STRING_LITERALS, TWO_WAY_VALUES
 from '../format/rules'
 import with_ascii_escapes from '../format/escapes'
@@ -104,6 +104,7 @@ statement_edits := (tokens: Tokens, statement: Statement): Edit?[] ->
         two_way_value(tokens, statement.value)
       ]
     when Assignment then [two_way_value(tokens, statement.value)]
+    when TypeDeclaration then [nil_default(tokens, member) for member in statement.members]
     when For then [counted_range(tokens, statement.iterable)]
     else []
 
@@ -229,6 +230,19 @@ nil_initial_value := (tokens: Tokens, declaration: Declaration) ->
   return nil if not tokens.is_kind(nil_at, 'nil') or not tokens.is_kind(nil_at - 1, '=')
   change := Change(from: tokens.end(nil_at - 2), to: tokens.end(nil_at), text: '')
   tokens.edit NIL_INITIAL_VALUES, [change]
+
+# `x: T?` for `x: T? = default nil` of a field (see Nil initial values), which takes nil where
+# its argument is left out; but not where the `?` is not written on the type itself, as `A | B?`
+# or an alias of an optional type: the formatter cannot tell it optional.
+nil_default := (tokens: Tokens, member: MemberDeclaration) ->
+  { type, value, has_default } := member
+  written := type ? return nil
+  return nil if not written.optional or not has_default or value is not NilLiteral
+  nil_at := tokens.at(value.position) ? return nil
+  is_written := tokens.is_kind(nil_at, 'nil') and tokens.is_word(nil_at - 1, 'default')
+  return nil if not is_written or not tokens.is_kind(nil_at - 2, '=')
+  change := Change(from: tokens.end(nil_at - 3), to: tokens.end(nil_at), text: '')
+  tokens.edit NIL_DEFAULTS, [change]
 
 # `xs: T[]` for `xs: T[] = []`, and `m: Map<K, V>` for `m: Map<K, V> = Map()` or `m := Map<K, V>()`,
 # of a const, and so for a Set (see Empty initial values).
