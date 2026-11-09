@@ -6,7 +6,7 @@ import target_name_of_host from '../../compiler/clang_flags'
 import
   at_import, cache_dir, exit_in_time, OUTPUT_LIMIT, root_dir, shown_text, suite_dir
 from './lerta'
-import is_file, list_dir, make_dir, read_file from 'std:io'
+import Buffer, is_file, list_dir, make_dir, read_file from 'std:io'
 import platform, run from 'std:process'
 
 export struct CliRun
@@ -28,18 +28,19 @@ export run_command := (
   environment: Map<String, String>
   environment['LERTA_CACHE_DIR'] = cache_dir unless 'LERTA_CACHE_DIR' in unset_env
   environment[key] = value for (key, value) in env.entries()
+  output := Buffer(limit: OUTPUT_LIMIT)
+  errors := Buffer(limit: OUTPUT_LIMIT)
   ran := run
     command
     args...
     cwd: cwd
     env: environment
     stdin: stdin
-    stdout: CAPTURE
-    stderr: CAPTURE
+    stdout: output
+    stderr: errors
     unset_env: unset_env
-    output_limit: OUTPUT_LIMIT
   result := await exit_in_time(command, ran)
-  CliRun status: result.code, stdout: result.stdout!, stderr: result.stderr!
+  CliRun status: result.code, stdout: output.binary, stderr: errors.binary
 
 clang_host_triple := ->
   ran := await run_command('clang', ['-print-target-triple'], '.')

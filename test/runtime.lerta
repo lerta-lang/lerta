@@ -7,6 +7,7 @@ import
   exit_in_time, host_build, OUTPUT_LIMIT, root_dir, SetupError, shown_text, suite_dir
 from './lib/lerta'
 import timeout from 'std:async'
+import Buffer from 'std:io'
 import encode_json from 'std:json'
 import platform, run from 'std:process'
 import runtime_c_names from '../compiler/platform_description'
@@ -35,17 +36,11 @@ execute := (
   stdin: Binary? = nil
   env: Map<String, String> = Map()
 ) ->
-  ran := run
-    program
-    args...
-    cwd: cwd
-    stdin: stdin
-    stdout: CAPTURE
-    stderr: CAPTURE
-    env: env
-    output_limit: OUTPUT_LIMIT
+  output := Buffer(limit: OUTPUT_LIMIT)
+  errors := Buffer(limit: OUTPUT_LIMIT)
+  ran := run(program, args..., cwd: cwd, stdin: stdin, stdout: output, stderr: errors, env: env)
   ended := await exit_in_time(program, ran)
-  Outcome status: ended.code, stdout: shown_text(ended.stdout!), stderr: shown_text(ended.stderr!)
+  Outcome status: ended.code, stdout: shown_text(output.binary), stderr: shown_text(errors.binary)
 
 clang := (args: String[], cwd: String = work_dir) ->
   outcome := await execute('clang', args, cwd)

@@ -1,14 +1,15 @@
 # A Pipe that run is given before anything has used it is a system pipe, which the programs share,
 # and which this program may read or write at an end that no program takes.
 import all from 'std:async'
-import Pipe from 'std:io'
+import Buffer, Pipe from 'std:io'
 import run from 'std:process'
 
 shared := Pipe()
 writing := run('repeat', '3', 'line', stdout: shared)
-reading := run('echo_input', stdin: shared, stdout: CAPTURE)
+reading_output := Buffer()
+reading := run('echo_input', stdin: shared, stdout: reading_output)
 await all([writing, reading])
-output := (await reading).stdout!
+output := reading_output.binary
 print output.text()!.trim().split("\n").join(' ')
 
 # This program reads what a program writes, and writes what one reads.
@@ -17,18 +18,21 @@ writes_there := run('repeat', '2', 'read here', stdout: read_here)
 print (await read_here.reader.read_all()).text()!.trim().split("\n").join(' ')
 await writes_there
 written_here := Pipe()
-reads_there := run('echo_input', stdin: written_here, stdout: CAPTURE)
+reads_there_output := Buffer()
+reads_there := run('echo_input', stdin: written_here, stdout: reads_there_output)
 await written_here.writer.write('written here')
 await written_here.writer.end()
-copied := (await reads_there).stdout!
+await reads_there
+copied := reads_there_output.binary
 print copied.text()!
 
 # A Pipe used already is copied through, as its Reader and Writer are.
 used := Pipe()
 _early := used.writer.write('copied through')
 await used.writer.end()
-through := await run('echo_input', stdin: used, stdout: CAPTURE)
-print through.stdout!.text()!
+through_output := Buffer()
+await run('echo_input', stdin: used, stdout: through_output)
+print through_output.text()!
 
 # An end that a program has taken is gone: the writes fail, as a run that writes to it does, and
 # the reads read nil.
@@ -60,9 +64,11 @@ try
 catch error: IOError
   print error.message
 ended := Pipe()
-ended_run := run('echo_input', stdin: ended, stdout: CAPTURE)
+ended_run_output := Buffer()
+ended_run := run('echo_input', stdin: ended, stdout: ended_run_output)
 await ended.writer.end()
-ended_output := (await ended_run).stdout!
+await ended_run
+ended_output := ended_run_output.binary
 print ended_output.length
 
 # A run that cannot start leaves the Pipe for the next.
@@ -77,12 +83,14 @@ await after_failure
 
 # An end lets the writes under way finish, and a second end, as a second close, does nothing.
 long := Pipe()
-long_run := run('echo_input', stdin: long, stdout: CAPTURE)
+long_run_output := Buffer()
+long_run := run('echo_input', stdin: long, stdout: long_run_output)
 long_write := long.writer.write('x'.repeat(1000000))
 await long.writer.end()
 await long.writer.end()
 await long_write
-long_output := (await long_run).stdout!
+await long_run
+long_output := long_run_output.binary
 print long_output.length
 try
   await long.writer.write('')
@@ -129,7 +137,8 @@ await silent_run
 
 # A write after the end fails while an earlier one is under way, which the end lets finish.
 late := Pipe()
-late_run := run('echo_input', stdin: late, stdout: CAPTURE)
+late_run_output := Buffer()
+late_run := run('echo_input', stdin: late, stdout: late_run_output)
 earlier := late.writer.write('y'.repeat(1000000))
 await late.writer.end()
 try
@@ -137,7 +146,8 @@ try
 catch error: IOError
   print error.message
 await earlier
-late_output := (await late_run).stdout!
+await late_run
+late_output := late_run_output.binary
 print late_output.length
 
 # A Pipe given as stderr alone.
@@ -154,11 +164,13 @@ print (await pending_read)!.text()!.trim()
 
 # A program that reads a system pipe whose writer fails reads its end.
 failing := Pipe()
-failing_run := run('echo_input', stdin: failing, stdout: CAPTURE)
+failing_run_output := Buffer()
+failing_run := run('echo_input', stdin: failing, stdout: failing_run_output)
 await failing.writer.write('cut short')
 failing.writer.fail IOError('the writer fails')
 failing.writer.fail IOError('a second failure')
-failing_output := (await failing_run).stdout!
+await failing_run
+failing_output := failing_run_output.binary
 print failing_output.text()!
 
 # A writer whose end a program has taken does not fail, as it has ended here.
@@ -170,10 +182,12 @@ await taken_run
 
 # A run given a Pipe that this program writes to already copies into it, and ends it.
 joined := Pipe()
-joined_run := run('echo_input', stdin: joined, stdout: CAPTURE)
+joined_run_output := Buffer()
+joined_run := run('echo_input', stdin: joined, stdout: joined_run_output)
 await joined.writer.write('from here, ')
 await run('repeat', '1', 'from a program', stdout: joined)
-joined_output := (await joined_run).stdout!
+await joined_run
+joined_output := joined_run_output.binary
 print joined_output.text()!.trim()
 
 # This program alone may use a system pipe that a run that could not start has made.

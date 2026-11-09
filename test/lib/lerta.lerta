@@ -1,7 +1,7 @@
 # Where the tests find the repository and the compiler they check, bin/lerta, which `make` builds,
 # how they run it, and what they need of it before they start. The tests run from the repository's
 # root, as the Makefile runs them.
-import is_file, make_dir, make_temp_dir, read_text, real_path, remove_tree from 'std:io'
+import Buffer, is_file, make_dir, make_temp_dir, read_text, real_path, remove_tree from 'std:io'
 import exit, Exit, platform, run from 'std:process'
 import timeout, TimeoutError from 'std:async'
 import described_build, description_path from '../../compiler/platform_description'
@@ -74,18 +74,19 @@ export struct FileRun
 
 export run_file := (file: String, args: String[], cwd: String) ->
   env := { 'LERTA_CACHE_DIR': cache_dir }
-  ran := run
+  errors := Buffer(limit: OUTPUT_LIMIT)
+  ran := run(
     file
     args...
     cwd: cwd
     env: env
     # Its standard output is dropped, as nothing that it would print there is checked.
     stdout: DISCARD
-    stderr: CAPTURE
-    output_limit: OUTPUT_LIMIT
+    stderr: errors
+  )
   exit := await exit_in_time(file, ran)
   failure := exit.signal then "signal #{exit.signal}" else "exit status #{exit.code}"
-  FileRun failure, status: exit.code, errors: shown_text(exit.stderr!)
+  FileRun failure, status: exit.code, errors: shown_text(errors.binary)
 
 # The error of a step that the tests need, such as a build, or of a program that did not end in
 # time: it fails the check that it is thrown in, or the whole run where no check holds it.

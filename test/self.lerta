@@ -7,7 +7,7 @@ import host_target_name from './lib/cli'
 import
   exit_in_time, OUTPUT_LIMIT, read_text_or_throw, root_dir, shown_text, suite_dir
 from './lib/lerta'
-import list_dir, write_file from 'std:io'
+import Buffer, list_dir, write_file from 'std:io'
 import platform, run from 'std:process'
 
 work_dir := suite_dir('self')
@@ -44,6 +44,8 @@ run_driver := (
   jobs: String[] = gives_jobs then [] else ['-j', '2']
   env := { 'LERTA_TEST_RUN_DIR': harness_dir, 'LERTA_TEST_FAILED_FILE': failed_file }
   env[name] = value for (name, value) in extra_env.entries()
+  output := Buffer(limit: OUTPUT_LIMIT)
+  errors := Buffer(limit: OUTPUT_LIMIT)
   ran := run
     driver
     jobs...
@@ -51,11 +53,10 @@ run_driver := (
     args...
     cwd: root_dir
     env: env
-    stdout: CAPTURE
-    stderr: CAPTURE
-    output_limit: OUTPUT_LIMIT
+    stdout: output
+    stderr: errors
   ended := await exit_in_time(driver, ran)
-  DriverRun status: ended.code, stdout: shown_text(ended.stdout!), stderr: shown_text(ended.stderr!)
+  DriverRun status: ended.code, stdout: shown_text(output.binary), stderr: shown_text(errors.binary)
 
 run_key := (name: String) -> "run tests\t#{name}"
 

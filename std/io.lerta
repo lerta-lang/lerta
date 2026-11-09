@@ -258,6 +258,28 @@ is_set := (name: String) ->
 export stdout := StandardOutput(fd: 1)
 export stderr := StandardOutput(fd: 2)
 
+# A Writer that keeps what is written, at most `limit` bytes, as run of std:process keeps a
+# program's output. A write past the limit or after the end throws, and adds nothing.
+export class Buffer
+  limit: Int?
+  var binary = b''
+  var ended = false
+
+  init := -> throw ValueError("a negative limit of a buffer: #{@limit!}") if @limit ? 0 < 0
+
+  write := (data: String | Binary): Promise ->
+    throw IOError('cannot write to a buffer that has ended') if @ended
+    bytes := bytes_of(data)
+    if bytes.length > (@limit ? INT_MAX) - @binary.length
+      throw IOError("more than #{@limit!} bytes written to a buffer")
+    @binary += bytes
+
+  end := (): Promise ->
+    @ended = true
+    return
+
+  text := -> @binary.text()
+
 # A Reader that reads what its Writer writes: a write is resolved once the reader has taken its
 # chunk, and the reader reads nil once the writer has ended and all has been taken, or throws the
 # error that the writer has failed with. Once the reader is closed, the writes fail, as those to a

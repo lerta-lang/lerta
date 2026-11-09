@@ -25,17 +25,16 @@ NOT_UTF8 := 'a command-line argument is not valid UTF-8'
 
 export argv := [argument.text() ? throw ValueError(NOT_UTF8) for argument in lerta_argv()]
 
-# Where a program's output or errors go, besides a Writer or a Pipe: kept for its Exit, dropped, or,
-# for its errors alone, where its output goes, as `2>&1` does.
+# Where a program's output or errors go, besides a Writer or a Pipe: dropped, or, for its errors
+# alone, where its output goes, as `2>&1` does.
 export enum Output
-  CAPTURE
   DISCARD
   STDOUT
 
 # How `run` runs a program: what it reads as its standard input, where its standard output and
 # error go, a Writer that they are copied to as they come or an Output, its directory, the
-# environment variables set and removed, the most bytes that it may write to each stream captured,
-# and how long a cancel waits for it to end before it is killed.
+# environment variables set and removed, and how long a cancel waits for it to end before it is
+# killed.
 export struct RunOptions
   stdin: Binary | Reader | Pipe?
   stdout: Output | Writer | Pipe?
@@ -43,7 +42,6 @@ export struct RunOptions
   cwd: String?
   env: Map<String, String> = default Map()
   unset_env: String[] = default []
-  output_limit: Int?
   kill_after := default 5.0
 
 # How a program ended: its exit code, which a signal makes 128 plus its number, as shells do, and
@@ -51,9 +49,6 @@ export struct RunOptions
 export struct Exit
   code: Int
   signal: Int?
-  # What the program wrote to each stream that was given as CAPTURE, else nil.
-  stdout: Binary?
-  stderr: Binary?
 
 # The system reads a text only up to a NUL byte, so none that it is given may hold one.
 holds_nul := (text: String) -> "\0" in text
@@ -65,7 +60,7 @@ export exit := (code: Int) ->
 
 export run := (command: String, args: String..., options: RunOptions) ->
   check_options options
-  { cwd, env, unset_env, output_limit, kill_after } := options
+  { cwd, env, unset_env, kill_after } := options
   # A program cannot start with a text that holds a NUL byte, as it cannot without its command; a
   # name that holds one is no name, which check_options refuses.
   texts := [command, args..., cwd ? '', env.values()...]
@@ -89,9 +84,8 @@ export run := (command: String, args: String..., options: RunOptions) ->
   give options.stderr, false
   copies := Copies(command)
   feeding := input.pipe then feed(input.pipe, input.source!, program, copies)
-  outputting :=
-    output.pipe then copy_output(output.pipe, output.sink!, output_limit, program, copies)
-  erroring := errors.pipe then copy_output(errors.pipe, errors.sink!, output_limit, program, copies)
+  outputting := output.pipe then copy_output(output.pipe, output.sink!, program, copies)
+  erroring := errors.pipe then copy_output(errors.pipe, errors.sink!, program, copies)
   status :=
     try
       await lerta_program_wait(program.pointer)
@@ -105,22 +99,21 @@ export run := (command: String, args: String..., options: RunOptions) ->
   # open, so it is not waited for; an output read once the program has ended may still fail, and
   # stop it, which gives up the other output then, settled or not.
   await give_up(copies, nil, outputting, erroring) if copies.stopped
-  # Only a CAPTURE's copy gives bytes, for the Exit.
-  stdout := outputting and not copies.stopped then await outputting
-  stderr := erroring and not copies.stopped then await erroring
+  await outputting if outputting and not copies.stopped
+  await erroring if erroring and not copies.stopped
   await give_up(copies, nil, outputting, erroring) if copies.stopped
   await end_writers(output.sink, errors.sink, copies)
   throw error if error := copies.error
-  return Exit(stdout, stderr, code: status) if status >= 0
-  Exit stdout, stderr, code: 128 - status, signal: -status
+  return Exit(code: status) if status >= 0
+  Exit code: 128 - status, signal: -status
 
 # A program that runs, which runs on, if it has not ended, once nothing holds it.
 class Program
   pointer: Int
   deinit := -> lerta_program_free(@pointer)
 
-# How the copies of a program's streams went: the error that fails the run, of an output past the
-# limit or that could not be read, or of a Reader or a Writer that a copy read or wrote.
+# How the copies of a program's streams went: the error that fails the run, of an output that could
+# not be read, or of a Reader or a Writer that a copy read or wrote.
 class Copies
   # The program's command, which errors name.
   command: String
@@ -156,14 +149,13 @@ input_of := (stdin: Binary | Reader | Pipe?, command: String) ->
 
 # As input_of, for an output: the `file` of a system pipe's end, or else a `pipe` that this program
 # reads into its `sink`, or neither, for this program's own output, which it shares.
-# Only a CAPTURE of the Outputs is read.
 output_of := (output: Output | Writer | Pipe?, stream: String, command: String) ->
   file := file_of(output, false)
   # Of the type written, so that a Pipe's writer counts as a Writer.
-  sink: Output | Writer? =
+  sink: Writer? =
     case output
       when Pipe then not file then output.writer
-      when Output then output == CAPTURE then output
+      when Output then nil
       else output
   { file, sink, pipe: sink != nil then pipe_of(stream, command) }
 
@@ -213,22 +205,12 @@ written := (pipe: Handle, bytes: Binary) ->
   catch _: IOError
     false
 
-# What the program writes to the stream, as it comes: all of it, for a CAPTURE, which the Exit takes
-# once the program has ended, or nil for a Writer, which run ends (see end_writers).
-copy_output := (
-  pipe: Handle, output: Output | Writer, limit: Int?, program: Program, copies: Copies
-) ->
+# What the program writes to the stream goes to the Writer as it comes, which run ends (see
+# end_writers).
+copy_output := (pipe: Handle, writer: Writer, program: Program, copies: Copies) ->
   reader := reader_of(pipe)
-  var bytes = b''
   try
-    while chunk := await next_chunk(reader, program, copies)
-      if output is Writer
-        await output.write(chunk)
-      else
-        bytes += chunk
-        if bytes.length > limit ? INT_MAX
-          return failed_copy(copies, IOError("the output is too long: #{copies.command}"), program)
-    output is Writer then nil else bytes
+    await writer.write(chunk) while chunk := await next_chunk(reader, program, copies)
   catch error: CancelledError
     throw error if copies.outputs_given_up
     failed_copy copies, error, program
@@ -237,18 +219,17 @@ copy_output := (
 
 # A copy that fails stops the program, which would otherwise go on with an input that seems whole
 # though it is cut short, or wait for ever once the pipe of an output that is read no more is full.
-failed_copy := (copies: Copies, error: Error, program: Program): Binary? ->
+failed_copy := (copies: Copies, error: Error, program: Program) ->
   copies.fail error
   copies.stopped = true
   lerta_program_stop program.pointer
-  nil
 
 # The Writers are ended once both copies have ended, as one Writer may take both outputs, as `2>&1`
 # does; it is then ended twice, which a Writer takes as once. A cancelled run waits for the ends
 # too, so that the output is all written when it settles.
-end_writers := (stdout: Output | Writer?, stderr: Output | Writer?, copies: Copies) ->
-  await end_writer(stdout, copies) if stdout is Writer
-  await end_writer(stderr, copies) if stderr is Writer
+end_writers := (stdout: Writer?, stderr: Writer?, copies: Copies) ->
+  await end_writer(stdout, copies) if stdout
+  await end_writer(stderr, copies) if stderr
 
 end_writer := (writer: Writer, copies: Copies) ->
   try
@@ -262,12 +243,11 @@ next_chunk := (reader: Reader, program: Program, copies: Copies) ->
     await reader.read_chunk()
   catch _: IOError
     failed_copy copies, IOError("cannot read the output of: #{copies.command}"), program
+    nil
 
 # The copies that are not wanted any more are cancelled, and awaited, so that a Writer is ended
 # before run settles: a cancelled copy stops reading, and ends at once with nothing to tell.
-give_up := (
-  copies: Copies, feeding: Promise?, outputting: Promise<Binary?>?, erroring: Promise<Binary?>?
-) ->
+give_up := (copies: Copies, feeding: Promise?, outputting: Promise?, erroring: Promise?) ->
   copies.input_given_up = copies.input_given_up or feeding != nil
   copies.outputs_given_up = copies.outputs_given_up or outputting != nil or erroring != nil
   feeding?.cancel()
@@ -304,8 +284,6 @@ env_name := (entry: Binary) ->
 check_options := (options: RunOptions) ->
   throw ValueError('stdout cannot be Output.STDOUT') if is_output(options.stdout, STDOUT)
   throw ValueError('kill a program after a negative time') if options.kill_after < 0
-  if options.output_limit ? 0 < 0
-    throw ValueError("a negative limit of output: #{options.output_limit!}")
   set_names := options.env.keys().to_array()
   for name in [set_names..., options.unset_env...]
     if name.is_empty() or '=' in name or holds_nul(name)

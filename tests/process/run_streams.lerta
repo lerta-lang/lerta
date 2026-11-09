@@ -1,7 +1,7 @@
 # A program reads a Reader and writes to Writers, which get what it writes as it comes, and are
 # ended after it, however the run ends; one that ends without reading its input fails no write; and
 # the error of a Writer or of a Reader fails the run, once the program has ended.
-import Reader from 'std:io'
+import Buffer, Reader from 'std:io'
 import Deferred from 'std:async'
 import run from 'std:process'
 import sleep from 'std:time'
@@ -63,16 +63,15 @@ try
 catch error: IOError
   print "#{error.message}, ended #{ends.length}"
 
-# A capture of stdout past its limit stops the program, and the Writer of stderr is ended.
+# A Buffer of stdout past its limit stops the program, and the Writer of stderr is ended.
 stderr_writer := Collected('stderr')
 try
   await run(
     'echo_input'
     'a'
     stdin: 'b'.repeat(100).binary
-    stdout: CAPTURE
+    stdout: Buffer(limit: 10)
     stderr: stderr_writer
-    output_limit: 10
   )
 catch error: IOError
   print error.message
@@ -103,15 +102,15 @@ print gapped.report()
 # A command that cannot start leaves no pipe behind, and its Writer as it was.
 unstarted := Collected('unstarted')
 try
-  await run('no-such-command', stdin: b'x', stdout: CAPTURE, stderr: unstarted)
+  await run('no-such-command', stdin: b'x', stdout: Buffer(), stderr: unstarted)
 catch error: IOError
   print "#{error.message}, ended: #{unstarted.ended}"
 
-# A capture and a Writer together.
+# A Buffer and another Writer together.
 mixed_errors := Collected('mixed')
-mixed :=
-  await run('echo_input', 'to stderr', stdin: b'to stdout', stdout: CAPTURE, stderr: mixed_errors)
-print mixed.stdout!.text()!
+mixed := Buffer()
+await run('echo_input', 'to stderr', stdin: b'to stdout', stdout: mixed, stderr: mixed_errors)
+print mixed.text()!
 print mixed_errors.report()
 
 # A program that ends while its Reader has yet to give a chunk ends the run all the same.

@@ -18,7 +18,7 @@
 #                          run for Windows
 #   tests/**/windows/      tests of what only Windows has, such as drives, which are run only for
 #                          Windows
-import is_dir, is_file, list_dir, make_dir, read_file from 'std:io'
+import Buffer, is_dir, is_file, list_dir, make_dir, read_file from 'std:io'
 import env, Exit, platform, run from 'std:process'
 import compare_output, compare_text, lines from './lib/expect'
 import
@@ -277,17 +277,18 @@ run_program := (path: String) ->
   (file, args) := target.wine then ('wine', [path]) else (path, no_args)
   prefix := wine_prefixes.take()
   try
+    output := Buffer(limit: OUTPUT_LIMIT)
+    errors := Buffer(limit: OUTPUT_LIMIT)
     ran := run
       file
       args...
       cwd: cwd
       env: command_env(prefix)
       stdin: b''
-      stdout: CAPTURE
-      stderr: CAPTURE
-      output_limit: OUTPUT_LIMIT
+      stdout: output
+      stderr: errors
     exit := await exit_in_time(path, ran, run_timeout_seconds())
-    ProgramRun exit, stdout: exit.stdout!, stderr: exit.stderr!
+    ProgramRun exit, stdout: output.binary, stderr: errors.binary
   finally
     wine_prefixes.give_back prefix if prefix
 

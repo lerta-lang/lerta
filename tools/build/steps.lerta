@@ -1,7 +1,7 @@
 # Runs the commands of the build: a step prints its command first, as make prints a recipe, and
 # ends the build if it fails.
 import all from 'std:async'
-import open, Pipe, remove_tree, rename, write_file, Writer from 'std:io'
+import Buffer, open, Pipe, remove_tree, rename, write_file, Writer from 'std:io'
 import Exit, run from 'std:process'
 
 # What ends the build: a step that failed, with code 1, or a usage error, with code 2, as make's.
@@ -92,6 +92,7 @@ check_exit := (command: String, exit: Exit) ->
 
 # What the command prints, given `input`; the build ends if it fails.
 export captured := (command: String, args: String[], input: Binary) ->
-  ran := await run(command, args..., stdin: input, stdout: CAPTURE)
+  output := Buffer()
+  ran := await run(command, args..., stdin: input, stdout: output)
   throw BuildError(message: "#{command} exited with #{ran.code}") if ran.code != 0
-  ran.stdout!
+  output.binary

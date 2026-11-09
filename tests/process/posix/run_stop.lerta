@@ -1,5 +1,6 @@
 # A cancel stops the program with SIGTERM, and kills one that ignores it once kill_after has
 # passed; the wait ends once the program has.
+import Buffer from 'std:io'
 import run from 'std:process'
 import monotonic, sleep from 'std:time'
 
@@ -26,7 +27,7 @@ print [exit.code, exit.signal ? 0]
 
 # A cancel with kill_after of 0 kills at once.
 script := 'echo out; echo err >&2; trap "" TERM; exec sleep 5'
-killed := run('sh', '-c', script, stdout: CAPTURE, stderr: CAPTURE, kill_after: 0.0)
+killed := run('sh', '-c', script, stdout: Buffer(), stderr: Buffer(), kill_after: 0.0)
 await sleep(0.3)
 killed.cancel()
 try
@@ -37,7 +38,7 @@ print monotonic() - started < 4
 
 # A cancel after the program has exited, while a program it started holds its output open, ends
 # the wait at once.
-exited := run('sh', '-c', 'sleep 5 2> /dev/null & exit 0', stdout: CAPTURE)
+exited := run('sh', '-c', 'sleep 5 2> /dev/null & exit 0', stdout: Buffer())
 await sleep(0.3)
 exited.cancel()
 try
@@ -64,8 +65,7 @@ try
     'sh'
     '-c'
     'trap "" TERM; yes 2> /dev/null'
-    stdout: CAPTURE
-    output_limit: 10
+    stdout: Buffer(limit: 10)
     kill_after: 0.5
   )
 catch error: IOError

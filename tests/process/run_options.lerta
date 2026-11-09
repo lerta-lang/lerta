@@ -1,17 +1,21 @@
 # A program run with input, its output and errors read apart, in a directory and with variables
 # of its own.
 import run from 'std:process'
-import make_dir from 'std:io'
+import Buffer, make_dir from 'std:io'
 
 input := b"input\nlines"
-exit := await run('echo_input', 'a', 'b', stdin: input, stdout: CAPTURE, stderr: CAPTURE)
+output := Buffer()
+errors := Buffer()
+exit := await run('echo_input', 'a', 'b', stdin: input, stdout: output, stderr: errors)
 print exit.code
 print exit.signal == nil
-print exit.stdout!.text()!
-print exit.stderr!.text()!
+print output.text()!
+print errors.text()!
 
 # Without input, the program reads this one's standard input, which is empty here.
-print (await run('echo_input', stdout: CAPTURE)).stdout!.length
+nothing := Buffer()
+await run('echo_input', stdout: nothing)
+print nothing.binary.length
 
 make_dir 'place'
 await run('print_place', cwd: 'place')
@@ -24,9 +28,13 @@ names := ['LERTA_TEST_KEPT', 'LERTA_TEST_REPLACED', 'LERTA_TEST_REMOVED', 'LERTA
 await run('with_env', outer..., 'with_env', inner..., 'print_place', names...)
 
 # Errors alone are read, and an input larger than a pipe holds, or an empty one, is read whole.
-print (await run('echo_input', 'e', stdin: b'', stderr: CAPTURE)).stderr!.text()!
+errors_alone := Buffer()
+await run('echo_input', 'e', stdin: b'', stderr: errors_alone)
+print errors_alone.text()!
 large := 'abcdefghij'.repeat(100000).binary
-print (await run('echo_input', stdin: large, stdout: CAPTURE)).stdout!.length
+large_output := Buffer()
+await run('echo_input', stdin: large, stdout: large_output)
+print large_output.binary.length
 
 # A program that ends with an exit code other than 0 has no signal.
 failed := await run('exit_with', '3')

@@ -1,0 +1,41 @@
+# A Buffer keeps what is written, as text or bytes, up to its limit and until its end.
+import Buffer from 'std:io'
+
+buffer := Buffer()
+print buffer.binary.length
+await buffer.write('text, ')
+await buffer.write(b'bytes')
+print buffer.text()!
+await buffer.end()
+await buffer.end()
+try
+  await buffer.write('after the end')
+catch error: IOError
+  print error.message
+print buffer.text()!
+
+# Bytes that are not UTF-8 have no text.
+print Buffer().text() == ''
+not_text := Buffer()
+await not_text.write(b"\xff")
+print not_text.text() == nil
+
+# A write that would pass the limit adds nothing; one up to it does.
+limited := Buffer(limit: 3)
+await limited.write('ab')
+try
+  await limited.write('cd')
+catch error: IOError
+  print error.message
+await limited.write('c')
+print limited.text()!
+await limited.write('')
+# A Buffer at its limit takes empty writes and refuses any other.
+try
+  await limited.write('d')
+catch error: IOError
+  print error.message
+print limited.text()!
+nothing := Buffer(limit: 0)
+await nothing.write(b'')
+print nothing.binary.length
