@@ -273,10 +273,10 @@ read_field := (g: Generator, object: String, type: Type, name: String, is_owned:
     value := emit_record_field(ir, object, type, name)
     emit_release ir, object if is_owned
     return value
-  object_type := type as ObjectType!
-  field := field_named(info_of(g.code.program, object_type), name)
+  assert type is ObjectType
+  field := field_named(info_of(g.code.program, type), name)
   field_type := field.type!
-  loaded := held_field(g, object, object_type, name)
+  loaded := held_field(g, object, type, name)
   # The object is held while its weak `T!` field is checked; a `T?` one gives nil once its object is
   # gone.
   read_weak := -> weak_object(g, loaded)
@@ -284,7 +284,7 @@ read_field := (g: Generator, object: String, type: Type, name: String, is_owned:
     case
       when not field.weak then loaded
       when field_type is OptionalType then emit_weak_object(ir, loaded)
-      when is_owned then holding(g, object, object_type, read_weak)
+      when is_owned then holding(g, object, type, read_weak)
       else read_weak()
   emit_retain_value ir, value, field_type
   emit_release ir, object if is_owned
