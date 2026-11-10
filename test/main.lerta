@@ -6,7 +6,9 @@
 # another directory (see run.lerta), LERTA_TEST_FAILED_FILE, which names another file than
 # FAILED_FILE, and LERTA_TEST_CACHE_DIR, the compiler's cache that they use (see lib/lerta).
 import remove_work_root, root_dir from './lib/lerta'
-import failed_keys, known_keys, Options, ran_keys, selected_keys, set_options from './lib/report'
+import
+  failed_keys, known_keys, Options, ran_keys, run_checks, selected_keys, set_options, SuiteChecks
+from './lib/report'
 import target_of from './lib/target'
 import is_file, read_text, write_file from 'std:io'
 import ArgsError, decode_args, usage, wants_help from 'std:args'
@@ -50,7 +52,7 @@ SPEC :=
     target: { value: 'target', help: "the run suite's programs built for it (see test/lib/target)" }
     list: { help: 'the names of the checks that would run, rather than running them' }
     failed: { help: 'only the checks that failed when they last ran for the host' }
-    jobs: { short: 'j', value: 'count', help: 'how many checks of a suite run at once' }
+    jobs: { short: 'j', value: 'count', help: 'how many checks run at once' }
     quiet: { short: 'q', help: 'only the failures, their run once more, and the summaries' }
     no_retry: { help: 'do not run a failed check once more' }
   }
@@ -113,28 +115,49 @@ write_failed_keys := (before: String[]) ->
   kept := [key for key in before when is_kept(key)]
   await write_file(FAILED_FILE, ["#{key}\n" for key in [kept..., failed_keys...]].join(''))
 
-# The number of suites that failed, each of which is reported. The checks that a suite selected but
-# could not run count as failed.
+# Waits for the promise, whatever it ends with.
+settled := (promise: Promise) ->
+  try
+    await promise
+  catch _
+    return
+
+# The number of failures of suites, each of which is reported. A suite whose checks could not be
+# gathered fails at once, and the checks that it selected count as failed; the others run their
+# checks as one list (see run_checks), and a suite that then could not stop fails once more.
 run_suites := (suites: Suite[], target: String?) ->
   var failed = 0
+  gathered: SuiteChecks[]
   for suite in suites
     first_selected := selected_keys.length
-    failed_checks :=
-      try
+    try
+      checks :=
         case suite
           when run then await run_suite(target_of(target))
           when cli then await cli_suite()
-          when format then await format_suite()
-          when runtime then await runtime_suite()
-          when leaks then await leaks_suite()
-          when self then await self_suite()
+          when format then format_suite()
+          when runtime then runtime_suite()
+          when leaks then leaks_suite()
+          when self then self_suite()
+      gathered.push checks if checks
+    catch error
+      print "#{suite}: the suite could not run its checks: #{error.message}"
+      print ''
+      failed_keys.push key for key in selected_keys[first_selected..]
+      failed += 1
+  try
+    failed += await run_checks(gathered)
+  finally
+    for checks in gathered
+      # Awaited here too, in case run_checks threw before its checks did, as a promise that throws
+      # and is never awaited ends the program.
+      await settled(ready) if ready := checks.ready
+      try
+        await stop() if stop := checks.stop
       catch error
-        print "#{suite}: the suite could not run its checks: #{error.message}"
+        print "#{checks.title}: the suite could not stop: #{error.message}"
         print ''
-        for key in selected_keys[first_selected..]
-          failed_keys.push key unless key in ran_keys
-        1
-    failed += 1 if failed_checks > 0
+        failed += 1
   failed
 
 main := ->

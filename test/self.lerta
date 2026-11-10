@@ -1,7 +1,7 @@
 # Self checks: the driver, bin/test, run as a program of its own, must report the tests of
 # tests/harness, most of which must fail, each as it should (see run.lerta), and must take its
 # arguments and keep the failed checks as main.lerta says.
-import at_once, Check, CheckFailed, posix_check, run_checks, run_one, select from './lib/report'
+import at_once, Check, CheckFailed, posix_check, run_one, select, SuiteChecks from './lib/report'
 import compare_text, expect_status, lines, reason_unless from './lib/expect'
 import host_target_name from './lib/cli'
 import
@@ -319,6 +319,32 @@ driver_checks :=
         compare_text('failed checks', '', await read_text_or_throw(failed_file))...
       ]
   )
+  Check(
+    name: 'bin/test runs the checks of two suites, and reports them in order with a summary each'
+    run: ->
+      name := 'tests/harness/wrong_stdout'
+      failed_file := await new_failed_file([])
+      ran := await run_driver(['run', 'leaks', '-k', name], failed_file)
+      reasons := ['stdout differs from line 1']
+      expected :=
+        result_line(name, reasons)
+        result_line("#{name} (-O)", reasons)
+        result_line("#{name}.lerta", [])
+      [
+        compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
+        reason_unless(
+          'run tests: 0 passed, 2 failed in ' in ran.stdout
+          'no summary of run tests'
+        )...
+        reason_unless('leak checks: 1 passed, 0 failed in ' in ran.stdout, 'no summary of leaks')...
+        expect_status(1, ran.status)...
+        compare_text(
+          'failed checks'
+          lines([run_key(name), run_key("#{name} (-O)")])
+          await read_text_or_throw(failed_file)
+        )...
+      ]
+  )
   Check(name: 'bin/test keeps a check that fails when run once more', run: ->
     name := 'tests/harness/wrong_stdout'
     failed_file := await new_failed_file([])
@@ -329,7 +355,7 @@ driver_checks :=
       compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
       reason_unless(ran.stdout.contains("FAIL? #{name} "), "no `FAIL? #{name}`")...
       reason_unless(
-        'run tests: running the 2 that failed once more, one at a time' in ran.stdout
+        'running the checks that failed once more, one at a time: 2' in ran.stdout
         'no retry of the 2 that failed'
       )...
       expect_status(1, ran.status)...
@@ -369,14 +395,13 @@ leak_checks :=
   leak_check('on another signal', 'kill -SEGV $$', true)
   leak_check("on a source's error", 'exit 1', false)
 
-# The number of the checks that failed.
+# The checks that the suite selected, if any.
 export suite := ->
   title := 'self checks'
   checks := select(
     title
     [harness_check, harness_listed_check, thrown_checks..., driver_checks..., leak_checks...]
-  ) ? return 0
+  ) ? return nil
   # The drivers that the checks run share the cache (see cache_dir), filled first, as each would
   # compile the runtimes otherwise.
-  await build_runtimes(work_dir, [[], ['-O']])
-  await run_checks(title, checks)
+  SuiteChecks title, checks, ready: build_runtimes(work_dir, [[], ['-O']])

@@ -5,7 +5,7 @@
 # compile or is not in the style, as some tests are on purpose. The sources for other systems are
 # compiled for the host, and the other commands, such as `build`, `fmt --fix` and `lsp`, are not
 # checked.
-import Check, run_checks, select from './lib/report'
+import Check, select, SuiteChecks from './lib/report'
 import FileRun, host_executable_suffix, root_dir, run_file, SetupError from './lib/lerta'
 import is_dir, is_file, list_dir from 'std:io'
 import env from 'std:process'
@@ -45,10 +45,10 @@ source_check := (path: String) ->
     formatted := await run_file(checked_compiler, ['fmt', path], root_dir)
     [reasons_of('dump-llvm', dumped)..., reasons_of('fmt', formatted)...]
 
-# The number of the checks that failed.
+# The checks that the suite selected, if any.
 export suite := ->
   title := 'leak checks'
-  checks := select(title, [source_check(path) for path in sources()]) ? return 0
+  checks := select(title, [source_check(path) for path in sources()]) ? return nil
   unless is_file(checked_compiler)
     throw SetupError("#{checked_compiler} is missing: make test builds it")
-  await run_checks(title, checks)
+  SuiteChecks title, checks

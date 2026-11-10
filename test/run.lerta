@@ -24,7 +24,7 @@ import compare_output, compare_text, lines from './lib/expect'
 import
   build_runtimes, compiler, exit_in_time, OUTPUT_LIMIT, root_dir, run_file, SetupError, suite_dir
 from './lib/lerta'
-import at_once, Check, jobs, run_checks, select from './lib/report'
+import at_once, Check, jobs, select, SuiteChecks from './lib/report'
 import host_target, Target from './lib/target'
 import no_wine_prefixes, start_wine_prefixes, WINE_DLL_OVERRIDES from './lib/wine'
 
@@ -359,7 +359,7 @@ optimized_check := (test: TestCase) ->
     await run_test(test, true)
   Check name: "#{test.label} (-O)", run: check, wait: wait
 
-# The number of the checks that failed, of the programs built for `given`.
+# The checks that the suite selected, if any, of the programs built for `given`.
 export suite := (given: Target) ->
   target = given
   title := 'run tests'
@@ -374,15 +374,13 @@ export suite := (given: Target) ->
     for test in await collect(group)
       all_checks.push { name: test.label, run: -> await run_test(test, false) }
       all_checks.push optimized_check(test)
-  checks := select(title, all_checks) ? return 0
-  # Not in work_dir itself, which is on the PATH of the tested programs.
-  runtime_dir := "#{work_dir}/runtime"
-  make_dir runtime_dir
-  await build_runtimes(runtime_dir, [target.args, ['-O', target.args...]])
-  await build_commands()
+  checks := select(title, all_checks) ? return nil
   print "not run for this target: #{dir}" for dir in skipped
-  wine_prefixes = await start_wine_prefixes(work_dir, jobs()) if target.wine
-  try
-    await run_checks(title, checks)
-  finally
-    await wine_prefixes.stop()
+  set_up := ->
+    # Not in work_dir itself, which is on the PATH of the tested programs.
+    runtime_dir := "#{work_dir}/runtime"
+    make_dir runtime_dir
+    await build_runtimes(runtime_dir, [target.args, ['-O', target.args...]])
+    await build_commands()
+    wine_prefixes = await start_wine_prefixes(work_dir, jobs()) if target.wine
+  SuiteChecks title, checks, ready: set_up(), stop: -> await wine_prefixes.stop()

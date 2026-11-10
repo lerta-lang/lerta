@@ -111,9 +111,12 @@ export exit_in_time := (
   catch _: TimeoutError
     throw SetupError("#{command} did not end in #{seconds.to_fixed(0)}s")
 
-# Builds a program in `dir` with each of the sets of flags, so that the compiler caches each kind of
-# runtime before the tests start. Otherwise the tests started together would each compile the same
-# runtime, and each such compile runs as many clang processes as there are CPUs.
+# Fills the compiler's cache with the runtime of each of the sets of flags before the tests start,
+# by building a program with each into `dir`. Otherwise the tests started together would each
+# compile the same runtime, and each such compile runs as many clang processes as there are CPUs. A
+# set that another suite has asked for is built once, into that suite's directory, as the suites get
+# ready at the same time and share one cache (see cache_dir); so a failure of that build is reported
+# by each of them.
 export build_runtimes := (dir: String, flag_sets: String[][]) ->
   build := (flags: String[], index: Int) ->
     args := ['build', 'tests/empty.lerta', '-o', "#{dir}/runtime#{index}", flags...]
@@ -121,4 +124,9 @@ export build_runtimes := (dir: String, flag_sets: String[][]) ->
     if built.status != 0
       what := "tests/empty with [#{flags.join(' ')}]"
       throw SetupError("the build of #{what} failed (#{built.failure}):\n#{built.errors}")
-  await promise for promise in [build(flags, i) for flags, i in flag_sets]
+  for flags, i in flag_sets
+    key := flags.join(' ')
+    runtime_builds[key] = build(flags, i) unless key in runtime_builds
+  await runtime_builds[flag_sets[i].join(' ')]! for _, i in flag_sets
+
+runtime_builds: Map<String, Promise>

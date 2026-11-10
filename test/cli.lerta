@@ -14,7 +14,7 @@
 # so no argument is empty or starts with `#`, and none in status.txt has a space. In the arguments
 # and the expected output, <root> stands for the repository, <tmp> for the work directory and
 # <host> for the host's triple.
-import at_once, Check, run_checks, select from './lib/report'
+import at_once, Check, select, SuiteChecks from './lib/report'
 import compare_output, expect_status from './lib/expect'
 import
   cli_work_dir, expect_left, host_triple, read_optional, runtime_flags, run_in_new_dir
@@ -120,8 +120,8 @@ stray_files := ->
       )
   ]
 
-# The number of the checks that failed. The runtimes are cached before the checks start, which a
-# check of its own reports a failure of.
+# The checks that the suite selected, if any. The runtimes are cached before the checks start,
+# which a check of its own reports a failure of.
 export suite := ->
   title := 'CLI checks'
   cases := [await file_case(name) for name in case_names when applies(name)]
@@ -143,10 +143,11 @@ export suite := ->
     cache_checks...
     extras...
   ]
-  checks := select(title, all_checks) ? return 0
-  try
-    make_dir "#{cli_work_dir}/runtimes"
-    await build_runtimes("#{cli_work_dir}/runtimes", runtime_flags)
-  catch error
-    runtime_setup_errors = ["building the CLI runtime cache failed: #{error.message}"]
-  await run_checks(title, checks)
+  checks := select(title, all_checks) ? return nil
+  set_up := ->
+    try
+      make_dir "#{cli_work_dir}/runtimes"
+      await build_runtimes("#{cli_work_dir}/runtimes", runtime_flags)
+    catch error
+      runtime_setup_errors = ["building the CLI runtime cache failed: #{error.message}"]
+  SuiteChecks title, checks, ready: set_up()
