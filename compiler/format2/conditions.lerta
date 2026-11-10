@@ -4,7 +4,8 @@
 import BinaryOperation, Expression, is_nil_test, IsTest, UnaryOperation from '../ast'
 import is_junction from '../format/negated_conditions'
 import
-  DOUBLE_NEGATIONS, NEGATED_CONDITIONS, NEGATED_IN_TESTS, NEGATED_IS_TESTS, NEGATED_JUNCTIONS
+  DOUBLE_NEGATIONS, NEGATED_CONDITIONS, NEGATED_IN_TESTS, NEGATED_IS_TESTS, NEGATED_JUNCTIONS,
+  VALUE_DOUBLE_NEGATIONS
 from '../format/rules'
 import Change from './edits'
 import Tokens from './tokens'
@@ -68,6 +69,14 @@ inverse_equality := (tokens: Tokens, test: Expression) ->
   operator := right - 1
   return nil if not inverse or tokens.spelling(operator) != equality.operator
   tokens.replaced operator, inverse
+
+# `x` for `not not x` in a value (see Negated conditions), and `x is T` for `not x is not T`; the
+# parentheses that held the inner negation are left to Parentheses.
+export double_negation := (tokens: Tokens, negation: UnaryOperation) ->
+  inner := negation.operand as UnaryOperation ? return nil
+  outer_not := not_of(tokens, negation) ? return nil
+  inner_not := not_of(tokens, inner) ? return nil
+  tokens.edit VALUE_DOUBLE_NEGATIONS, [tokens.removed(outer_not), not_removed(tokens, inner_not)]
 
 # `x is not T` for `not (x is T)`, and `x not in xs` for `not (x in xs)`, without the parentheses
 # around the test.

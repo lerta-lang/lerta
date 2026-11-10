@@ -9,6 +9,7 @@ import
 from '../ast'
 import TextPart from '../lexer/string_literal'
 import Lexed, Token from '../lexer/tokens'
+import bool_type from '../types'
 import Place, places_of from '../format/places'
 import fits_single_quotes from '../format/print_expression'
 import cast_of from '../format/print_operation'
@@ -19,7 +20,7 @@ import
   STRING_LITERALS, TWO_WAY_VALUES
 from '../format/rules'
 import with_ascii_escapes from '../format/escapes'
-import condition_edit, negated_test from './conditions'
+import condition_edit, double_negation, negated_test from './conditions'
 import Change, Edit from './edits'
 import is_inline from './forms'
 import KeptLines from './kept'
@@ -48,7 +49,7 @@ export rewrites_of := (
   }
   places_of program, {
     before: (value, _: Place) ->
-      add edit for edit in edits_within(tokens, value, claimed, parentheses.tight)
+      add edit for edit in edits_within(tokens, value, claimed, parentheses.tight, typed)
       if known := typed
         add edit for edit in typed_edits(tokens, value, known)
     statement: (statement, _) ->
@@ -73,25 +74,40 @@ kept_lines := (program: Statement[], text: SourceTokens, kept: KeptLines) ->
 # Those of the expression, and of its parts that are no places (see Visit), which places_of visits
 # the places inside of.
 edits_within := (
-  tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, tight: Set<Expression>
+  tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, tight: Set<Expression>,
+  typed: Typed?
 ): Edit?[] ->
-  found := expression_edits(tokens, value, claimed, tight)
+  found := expression_edits(tokens, value, claimed, tight, typed)
   for part in unvisited_parts(value)
-    found.push edit for edit in edits_within(tokens, part, claimed, tight)
+    found.push edit for edit in edits_within(tokens, part, claimed, tight, typed)
   found
 
 expression_edits := (
-  tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, tight: Set<Expression>
+  tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, tight: Set<Expression>,
+  typed: Typed?
 ): Edit?[] ->
   case value
     when Member then [binary_literal(tokens, value)]
     when Coalesce then [cast_fallback(tokens, value, tight)]
     when Conditional then [else_nil(tokens, value)]
     when FunctionLiteral then [without_parameters(tokens, value)]
-    when UnaryOperation then value in claimed then [] else [negated_test(tokens, value)]
+    when UnaryOperation
+      value in claimed then [] else [negation_edit(tokens, value, claimed, typed)]
     when RecordLiteral then [shorthand(tokens, field.name, field.value) for field in value.fields]
     when Comprehension then [counted_range(tokens, value.iterable)]
     else []
+
+# A double negation of a Bool taken out, whose inner negation it claims, so that a third goes with a
+# fourth; otherwise `x is not T` or `x not in xs` for `not` of the test. `not not x` of another
+# type, as an optional, is a Bool, which `x` is not; that of a program that does not check waits.
+negation_edit := (
+  tokens: Tokens, negation: UnaryOperation, claimed: Set<UnaryOperation>, typed: Typed?
+) ->
+  inner := negation.operand as UnaryOperation ? return negated_test(tokens, negation)
+  return negated_test(tokens, negation) if typed?.facts.types[inner.operand] != bool_type
+  edit := double_negation(tokens, negation) ? return negated_test(tokens, negation)
+  claimed.add inner
+  edit
 
 # A field keeps its value (see Empty initial values), as a member of a class or a struct is no
 # Declaration.

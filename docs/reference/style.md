@@ -221,6 +221,8 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 | `if x in xs` | `unless x not in xs` |
 | `if x is T` | `unless x is not T` |
 
+- So in a value: `flag`, not `not not flag`.
+
 ## Statements
 
 ### Implicit return
