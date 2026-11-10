@@ -1,0 +1,94 @@
+# The rewrites of ranges that need no types (see Ranges).
+import
+  BinaryOperation, Expression, Index, IntegerLiteral, Member, Range, UnaryOperation
+from '../ast'
+import counted_end, runs_no_code from '../format/rewrites'
+import RANGE_ENDS from '../format/rules'
+import Change, Edit from './edits'
+import Tokens from './tokens'
+
+# `a..=b` for `a..(b + 1)` (see Ranges): in a range that a loop counts or that indexes, whose ends
+# are integers; in one that a test takes, where the types tell (see typed.lerta), as it may hold
+# Floats, which `a..=b` would not count alike.
+export counted_range := (tokens: Tokens, iterable: Expression) ->
+  range := iterable as Range ? return nil
+  return nil if range.inclusive
+  end := range.end ? return nil
+  return nil unless counted_end(end)
+  end_at := tokens.at(end.position) ? return nil
+  dots := end_at - 1
+  return nil unless tokens.is_kind(dots, '..')
+  changes := [
+    tokens.replaced(dots, '..=')
+    counted_changes(tokens, end as BinaryOperation!, end_at)...
+  ]
+  changes.length == 1 then nil else tokens.edit(RANGE_ENDS, changes)
+
+# The end `b + 1` at `end_at` written `b`, in the parentheses that it is written in if `b` is an
+# operation (see Ranges).
+counted_changes := (tokens: Tokens, sum: BinaryOperation, end_at: Int): Change[] ->
+  one := tokens.at(sum.right.position) ? return []
+  plus := one - 1
+  return [] if not tokens.is_kind(plus, '+') or not tokens.is_kind(one, INTEGER)
+  in_parentheses := tokens.is_kind(end_at, '(') and tokens.matching(end_at) == one + 1
+  is_operation := sum.left is BinaryOperation or sum.left is UnaryOperation
+  if in_parentheses and not is_operation
+    return
+      tokens.removed(end_at)
+      { from: tokens.end(plus - 1), to: tokens.end(one + 1), text: '' }
+  [{ from: tokens.end(plus - 1), to: tokens.end(one), text: '' }]
+
+# The range of an index, of Ints, as only an array or a Binary takes one: written `a..=b` for
+# `a..(b + 1)`, without its start 0, and without its end where it is the length of what it indexes,
+# written alike and running no code, where it has a start; but `xs[0..]` keeps its start.
+export index_ranges := (tokens: Tokens, index: Index): Edit?[] ->
+  range := index.index as Range ? return []
+  # `xs[..]` is no range.
+  has_start := range.start != nil
+  ends_at_length := has_start and not range.inclusive and is_length_of(tokens, range, index.object)
+  edits := [counted_range(tokens, range)]
+  if ends_at_length
+    end := range.end as Member!
+    first := tokens.at(end.position) ? return edits
+    # With the parentheses that it is written in.
+    name := tokens.at(end.name.position) ? return edits
+    closing := tokens.is_kind(first, '(') then tokens.matching(first)
+    last := closing != nil and closing > name then closing else name
+    return edits unless tokens.is_kind(first - 1, '..')
+    edits.push
+      tokens.edit(RANGE_ENDS, [{ from: tokens.end(first - 1), to: tokens.end(last), text: '' }])
+  else if start := range.start
+    return edits if not is_zero(start) or range.end == nil
+    zero := tokens.at(start.position) ? return edits
+    if tokens.is_kind(zero + 1, '..') or tokens.is_kind(zero + 1, '..=')
+      edits.push
+        tokens.edit(
+          RANGE_ENDS
+          [{ from: tokens.start(zero), to: tokens.start(zero + 1), text: '' }]
+        )
+  edits
+
+# Whether the end of the range is `x.length` of the value indexed, written alike, which runs no
+# code: the tokens of x against those before the `[` that the range follows.
+is_length_of := (tokens: Tokens, range: Range, indexed: Expression) ->
+  length := range.end as Member ? return false
+  start := range.start ? return false
+  return false if length.name.name != 'length' or not runs_no_code(indexed)
+  end := tokens.at(length.position) ? return false
+  name := tokens.at(length.name.position) ? return false
+  first := tokens.at(start.position) ? return false
+  open := first - 1
+  object := tokens.at(indexed.position) ? return false
+  return false if not tokens.is_kind(open, '[') or not tokens.is_kind(name - 1, '.')
+  # Without parentheses, which change nothing around a value that runs no code.
+  written := (from: Int, to: Int) ->
+    [
+      tokens.spelling(i)
+      for i in from..=to
+      when not tokens.is_kind(i, '(') and not tokens.is_kind(i, ')')
+    ].join(
+      ''
+    )
+  written(end, name - 2) == written(object, open - 1)
+
+export is_zero := (value: Expression?) -> value is IntegerLiteral and value.value == 0

@@ -1,16 +1,16 @@
 # The rewrites that need the types of the checking, which reads the nodes that the formatter parsed,
 # so the facts that it records of them are found by those nodes.
 import
-  BinaryOperation, Call, Cast, Expression, Identifier, Import, ImportName, IntegerLiteral, Member,
-  NamedValue, Statement, StringLiteral, Index, This
+  BinaryOperation, Call, Cast, Expression, Identifier, Import, ImportName, Member, NamedValue,
+  Range, Statement, StringLiteral, Index, This
 from '../ast'
 import check_program from '../checker/modules'
 import ImportedName, ModuleAlias from '../checker/imports'
 import NodeFacts, ProgramWide from '../checker/shared'
 import CompileError from '../errors'
 import has_is_empty from '../format/annotations'
-import runs_no_code from '../format/rewrites'
-import bool_type from '../types'
+import counted_end, runs_no_code from '../format/rewrites'
+import bool_type, INTEGER_KINDS, is_one_of_kinds from '../types'
 import CLOSING_BRACKETS, OPENING_BRACKETS from '../lexer/tokens'
 import
   EMPTINESS_TESTS, EXPECTED_TYPES, MEMBERSHIP_TESTS, REDUNDANT_CASTS, SHORTHAND_ARGUMENTS,
@@ -18,6 +18,7 @@ import
 from '../format/rules'
 import load_modules from '../loader'
 import Change, Edit from './edits'
+import counted_range, is_zero from './ranges'
 import Tokens from './tokens'
 
 # What the checking records of the nodes of the source: the facts, and the names that its imports
@@ -47,7 +48,8 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
   case value
     when Cast then [redundant_cast(tokens, value, typed.facts)]
     when Member then [unqualified(tokens, value, typed.facts)]
-    when BinaryOperation then [emptiness_test(tokens, value, typed.facts)]
+    when BinaryOperation
+      [emptiness_test(tokens, value, typed.facts), tested_range(tokens, value, typed.facts)]
     when Call
       { facts } := typed
       [
@@ -239,8 +241,6 @@ is_postfix := (tokens: Tokens, value: Expression, first: Int, last: Int) ->
     when Identifier, Member, Call, Index, This then true
     else tokens.is_kind(first, '(') and tokens.matching(first) == last
 
-is_zero := (value: Expression) -> value is IntegerLiteral and value.value == 0
-
 is_empty_string := (value: Expression) -> value is StringLiteral and value.value.is_empty()
 
 # Whether the brackets that the tokens open they close, so that they are an expression whole.
@@ -274,6 +274,14 @@ membership_test := (tokens: Tokens, call: Call, facts: NodeFacts) ->
   tokens.edit_at MEMBERSHIP_TESTS, member.name.position, [
     { from: tokens.start(first), to: tokens.end(close), text }
   ]
+
+# `x in a..=b` for `x in a..(b + 1)` where b is an integer (see Ranges).
+tested_range := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
+  return nil if test.operator != 'in'
+  range := test.right as Range ? return nil
+  counted := counted_end(range.end) ? return nil
+  type := facts.types[counted] ? return nil
+  is_one_of_kinds(type, INTEGER_KINDS) then counted_range(tokens, range)
 
 # `x` for `x as T!` where x is a T already (see Redundant casts). The parentheses that held the cast
 # are left to Parentheses.

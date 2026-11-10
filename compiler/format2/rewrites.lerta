@@ -2,10 +2,10 @@
 # source by the rule that asks for it (see docs/reference/style.md); those that need the types of
 # the checking, where the program checks, by typed.lerta.
 import
-  ArrayLiteral, ArrayTypeName, Assignment, BinaryOperation, Binding, Call, Coalesce, Comprehension,
-  Condition, Conditional, Declaration, Expression, For, FunctionLiteral, Identifier, If,
-  Interpolation, Member, MemberDeclaration, NamedType, NilLiteral, Pass, Range, RecordLiteral,
-  Statement, StringLiteral, TypeDeclaration, UnaryOperation, UnionTypeName
+  ArrayLiteral, ArrayTypeName, Assignment, Binding, Call, Coalesce, Comprehension, Condition,
+  Conditional, Declaration, Expression, For, FunctionLiteral, Identifier, If, Index, Interpolation,
+  Member, MemberDeclaration, NamedType, NilLiteral, Pass, RecordLiteral, Statement, StringLiteral,
+  TypeDeclaration, UnaryOperation, UnionTypeName
 from '../ast'
 import TextPart from '../lexer/string_literal'
 import Lexed, Token from '../lexer/tokens'
@@ -13,10 +13,9 @@ import bool_type from '../types'
 import Place, places_of from '../format/places'
 import fits_single_quotes from '../format/print_expression'
 import cast_of from '../format/print_operation'
-import counted_end from '../format/rewrites'
 import
   BINARY_LITERALS, CAST_FALLBACKS, ELSE_NIL, EMPTY_INITIAL_VALUES, ESCAPES,
-  FUNCTIONS_WITHOUT_PARAMETERS, NIL_DEFAULTS, NIL_INITIAL_VALUES, RANGE_ENDS, SEMICOLONS, SHORTHAND,
+  FUNCTIONS_WITHOUT_PARAMETERS, NIL_DEFAULTS, NIL_INITIAL_VALUES, SEMICOLONS, SHORTHAND,
   STRING_LITERALS, TWO_WAY_VALUES
 from '../format/rules'
 import with_ascii_escapes from '../format/escapes'
@@ -27,6 +26,7 @@ import KeptLines from './kept'
 import WIDTH from './lines'
 import parentheses_of, unvisited_parts from './parentheses'
 import is_layout, SourceTokens from './text'
+import counted_range, index_ranges from './ranges'
 import Tokens from './tokens'
 import typed_edits, typed_statement_edits, Typed from './typed'
 
@@ -95,6 +95,7 @@ expression_edits := (
       value in claimed then [] else [negation_edit(tokens, value, claimed, typed)]
     when RecordLiteral then [shorthand(tokens, field.name, field.value) for field in value.fields]
     when Comprehension then [counted_range(tokens, value.iterable)]
+    when Index then index_ranges(tokens, value)
     else []
 
 # A double negation of a Bool taken out, whose inner negation it claims, so that a third goes with a
@@ -335,37 +336,6 @@ shorthand := (tokens: Tokens, name: Identifier, value: Expression) ->
   return nil if value_at == name_at or not tokens.is_kind(value_at, IDENTIFIER)
   change := Change(from: tokens.start(name_at), to: tokens.end(value_at), text: name.name)
   tokens.edit SHORTHAND, [change]
-
-# `a..=b` for `a..(b + 1)` in a range that a loop counts, whose ends are integers (see Ranges). One
-# that a test takes need not be of integers, which `a..=b` would not count alike, and one that
-# indexes may be the key of a map, which it would change: the typed rewrites are to take those.
-counted_range := (tokens: Tokens, iterable: Expression) ->
-  range := iterable as Range ? return nil
-  return nil if range.inclusive
-  end := range.end ? return nil
-  return nil unless counted_end(end)
-  end_at := tokens.at(end.position) ? return nil
-  dots := end_at - 1
-  return nil unless tokens.is_kind(dots, '..')
-  changes := [
-    tokens.replaced(dots, '..=')
-    counted_changes(tokens, end as BinaryOperation!, end_at)...
-  ]
-  changes.length == 1 then nil else tokens.edit(RANGE_ENDS, changes)
-
-# The end `b + 1` at `end_at` written `b`, in the parentheses that it is written in if `b` is an
-# operation (see Ranges).
-counted_changes := (tokens: Tokens, sum: BinaryOperation, end_at: Int): Change[] ->
-  one := tokens.at(sum.right.position) ? return []
-  plus := one - 1
-  return [] if not tokens.is_kind(plus, '+') or not tokens.is_kind(one, INTEGER)
-  in_parentheses := tokens.is_kind(end_at, '(') and tokens.matching(end_at) == one + 1
-  is_operation := sum.left is BinaryOperation or sum.left is UnaryOperation
-  if in_parentheses and not is_operation
-    return
-      tokens.removed(end_at)
-      { from: tokens.end(plus - 1), to: tokens.end(one + 1), text: '' }
-  [{ from: tokens.end(plus - 1), to: tokens.end(one), text: '' }]
 
 # A line of its own for the statement after a `;` (see Semicolons), as deep as the line that the
 # statement before it starts.
