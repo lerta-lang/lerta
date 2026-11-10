@@ -220,8 +220,14 @@ compile_modules := (request: ModulesRequest, dir: String, prefix: String) ->
   return nil unless await run_clang_jobs([job(i) for i in compiled])
   for i in compiled
     await keep_module_object(join(dir, "#{names[i]}.o"), path, dir) if path := cached[i]
-  # The link runs in `dir`, and the cache may be named relative to where the compiler runs.
-  [reused[i] then real_path_text(cached[i]!) else "#{name}.o" for name, i in names]
+  # A kept object is linked from the cache even by the build that compiled it, as the key of an
+  # entry of the linker's ThinLTO cache on Linux holds the paths of the objects, which the next
+  # build would not find otherwise. The link runs in `dir`, and the cache may be named relative to
+  # where the compiler runs.
+  [
+    path and is_file(path) then real_path_text(path) else "#{name}.o"
+    for (name, path) in names.zip(cached)
+  ]
 
 # The modules that compile_modules compiles: the IR of each of the program's modules, and the
 # runtime for the build's kind, with the flags of that kind.
