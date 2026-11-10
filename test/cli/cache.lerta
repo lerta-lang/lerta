@@ -126,11 +126,20 @@ debug_runtime_name := ->
   plain_runtime_name = find_plain_runtime_name() if plain_runtime_name == nil
   await plain_runtime_name!
 
+# A program of many standard modules, built and run with an empty cache and again with it filled,
+# as the other tests share a cache kept from run to run.
+build_and_run_args := (cache: String, flags: String[]) ->
+  source := "#{root_dir}/tests/args/args.lerta"
+  env := { 'LERTA_CACHE_DIR': cache }
+  built := await run_in_new_dir(compiler, ['build', source, '-o', 'args', flags...], b'', env)
+  succeed 'build', built.result
+  ran := await run_command("#{built.cwd}/args#{host_executable_suffix}", [], built.cwd)
+  succeed 'the built program', ran
+
 cached_runtime_check := (flags: String[], kind: String) ->
   Check name: "lerta build #{flags.join(' ')} caches and reuses the #{kind} runtime", run: ->
     cache := new_cli_dir("cache-#{kind}")
-    first := await build_in_cache(cache, flags)
-    succeed 'build', first.result
+    await build_and_run_args(cache, flags)
     entries := runtimes_in(cache)
     return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
     name := entries[0]
@@ -145,9 +154,8 @@ cached_runtime_check := (flags: String[], kind: String) ->
     written := stat(object) ? throw ValueError("no cached object: #{object}")
     modules := module_objects(cache, name)
     return ["the build kept no object of a standard module in #{name}"] if modules.is_empty()
-    second := await build_in_cache(cache, flags)
+    await build_and_run_args(cache, flags)
     [
-      expect_success('second build', second.result)...
       reason_unless(
         stat(object)!.modified_time == written.modified_time
         'the second build recompiled the runtime'
