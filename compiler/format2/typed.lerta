@@ -1,21 +1,24 @@
 # The rewrites that need the types of the checking, which reads the nodes that the formatter parsed,
 # so the facts that it records of them are found by those nodes.
 import
-  BinaryOperation, Call, Cast, Expression, Identifier, Import, ImportName, Member, NamedValue,
-  Range, Statement, StringLiteral, Index, This
+  BinaryOperation, Call, Case, CaseArm, Cast, Expression, Identifier, Import, ImportName, Member,
+  NamedValue, Range, Statement, StringLiteral, Index, This
 from '../ast'
 import check_program from '../checker/modules'
 import ImportedName, ModuleAlias from '../checker/imports'
 import NodeFacts, ProgramWide from '../checker/shared'
 import CompileError from '../errors'
 import has_is_empty from '../format/annotations'
-import counted_end, runs_no_code from '../format/rewrites'
-import bool_type, INTEGER_KINDS, is_one_of_kinds from '../types'
+import
+  copied_source, counted_end, range_test as comparisons_of_range, runs_no_code, runs_of_alike_arms
+from '../format/rewrites'
+import bool_type, INTEGER_KINDS, is_one_of_kinds, NUMBER_KINDS from '../types'
 import CLOSING_BRACKETS, OPENING_BRACKETS from '../lexer/tokens'
 import
-  EMPTINESS_TESTS, EXPECTED_TYPES, MEMBERSHIP_TESTS, REDUNDANT_CASTS, SHORTHAND_ARGUMENTS,
-  UNUSED_IMPORTS
+  EMPTINESS_TESTS, EXPECTED_TYPES, MEMBERSHIP_TESTS, RANGE_TESTS, REDUNDANT_CASTS,
+  SHARED_ARM_BODIES, SPREADS, SHORTHAND_ARGUMENTS, UNUSED_IMPORTS
 from '../format/rules'
+import dump_ast_without_positions from '../ast_dump'
 import load_modules from '../loader'
 import Change, Edit from './edits'
 import counted_range, is_zero from './ranges'
@@ -49,13 +52,20 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
     when Cast then [redundant_cast(tokens, value, typed.facts)]
     when Member then [unqualified(tokens, value, typed.facts)]
     when BinaryOperation
-      [emptiness_test(tokens, value, typed.facts), tested_range(tokens, value, typed.facts)]
+      { facts } := typed
+      [
+        emptiness_test(tokens, value, facts)
+        tested_range(tokens, value, facts)
+        range_test(tokens, value, facts)
+      ]
+    when Case then shared_arm_bodies(tokens, value, typed.facts)
     when Call
       { facts } := typed
       [
         recorded(tokens, value, facts)
         membership_test(tokens, value, facts)
         shorthand_arguments(tokens, value, facts)...
+        spread(tokens, value, facts)
       ]
     else []
 
@@ -282,6 +292,62 @@ tested_range := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
   counted := counted_end(range.end) ? return nil
   type := facts.types[counted] ? return nil
   is_one_of_kinds(type, INTEGER_KINDS) then counted_range(tokens, range)
+
+# `x in a..=b` for `x >= a and x <= b` of a number or a Char (see Range tests), only reported.
+range_test := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
+  comparison := comparisons_of_range(test) ? return nil
+  type := facts.types[comparison.value] ? return nil
+  return nil unless is_one_of_kinds(type, [NUMBER_KINDS..., 'Char'])
+  tokens.report RANGE_TESTS, comparison.value.position
+
+# One arm for arms next to each other with one body (see Shared arm bodies), only reported: but not
+# where a comment is among them, which would have no place in one, nor where a body may read the
+# subject, which each arm narrows to the types of its patterns, and one arm of them all to their
+# union, which may not check the same.
+shared_arm_bodies := (tokens: Tokens, value: Case, facts: NodeFacts): Edit?[] ->
+  runs := [run for run in runs_of_alike_arms(value) when facts.types.contains(run[0].patterns[0])]
+  is_reported := (run: CaseArm[]) ->
+    not holds_comment(tokens, run) and not may_read(run[0].body, value.subject)
+  [
+    tokens.report(SHARED_ARM_BODIES, run[0].patterns[0].position)
+    for run in runs
+    when is_reported(run)
+  ]
+
+# Whether the body may read the subject narrowed: the name at the root of a subject that is a path
+# of fields, `@` at its root, which a method may read through, or any subject but a call, which no
+# arm narrows. The name is found in the dump of the body, which interpolations hold too; a field of
+# that name counts too, which only leaves a run unreported.
+may_read := (body: Statement[], subject: Expression?) ->
+  var root = subject ? return false
+  root = root.object while root is Member
+  case root
+    when Identifier then "name: \"#{root.name}\"" in dump_ast_without_positions(body)
+    when Call then false
+    else true
+
+# Whether a comment is on the lines of the arms, from the `when` of the first up to the line before
+# the next code that is no deeper than it, as the next arm or `else`: one above that next arm too,
+# which only leaves the run unreported.
+holds_comment := (tokens: Tokens, run: CaseArm[]) ->
+  first_pattern := tokens.at(run[0].patterns[0].position) ? return true
+  { line, column } := tokens.code[first_pattern - 1]
+  var next = tokens.at(run.last()!.patterns[0].position) ? return true
+  continues := (at: Int) ->
+    at < tokens.code.length and
+      (tokens.code[at].line == tokens.code[at - 1].line or tokens.code[at].column > column)
+  next += 1 while continues(next)
+  last :=
+    next < tokens.code.length then tokens.code[next].line - 1 else tokens.code.last()!.end_line
+  tokens.comments.any (comment) -> comment.line in line..=last
+
+# A spread of the value whose fields a construction copies, where it gives every argument, of the
+# type constructed (see Spreads), only reported.
+spread := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  source := copied_source(call) ? return nil
+  return nil unless call in facts.full_constructions
+  source_type := facts.types[source] ? return nil
+  source_type == facts.types[call] then tokens.report(SPREADS, call.position)
 
 # `x` for `x as T!` where x is a T already (see Redundant casts). The parentheses that held the cast
 # are left to Parentheses.
