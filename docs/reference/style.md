@@ -302,7 +302,7 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
   - the return type of a function;
   - the type of a parameter of a function literal whose type is expected (`xs.map((x) -> x * 2)`) or that has a default;
   - the type of a variable or of a field with a value.
-- The type of a `var` whose value is `Map()` or `Set()` goes to its type arguments: `var seen = Set<String>()`.
+- The type of a variable or a field whose value is `Map(...)` or `Set(...)` goes to its type arguments: `var seen = Set<String>()`, `names := Set<String>(['a'])`; but a `const` variable's empty one goes as a whole (see [Empty initial values](#empty-initial-values)).
 - Write it:
   - where the language requires it (recursion, `nil` alone, an empty array);
   - where it changes the type (`var x: Int? = 1`);

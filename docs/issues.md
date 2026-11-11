@@ -41,3 +41,7 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 ## fmt2 drops the parentheses of a function returned before a postfix if
 
 `lerta fmt2` on `mk := (n: Int): ((Int) -> Int) ->`, then `  return ((m) -> m) if n > 0` and `  (m) -> n + m`, fails with "its rewrites would change the program, which is a fault of the formatter": a rewrite of `compiler/format2/` takes out the parentheses around the function literal, whose body would then take the `if`. Fix: keep the parentheses of a function literal that a postfix form follows.
+
+## fmt2 does not space the type arguments of a call
+
+`lerta fmt2` spaces a type written in an annotation, as `Map<String,Int>` to `Map<String, Int>`, but not the type arguments of a call, as `Map<String,Int>()`, which stay as written; a type that a declaration moves to its `Map()` or `Set()` (see Type annotations) keeps the spacing it was written with. Fix: lay out the type arguments of a call as those of an annotation.

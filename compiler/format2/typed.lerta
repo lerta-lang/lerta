@@ -2,8 +2,8 @@
 # so the facts that it records of them are found by those nodes.
 import
   BinaryOperation, Call, Case, CaseArm, Cast, Declaration, Expression, Extend, FunctionLiteral,
-  Identifier, Import, ImportName, Index, Member, MemberDeclaration, NamedValue, Node, Parameter,
-  Range, Statement, StringLiteral, This, TypeDeclaration
+  Identifier, Import, ImportName, Index, Member, MemberDeclaration, NamedType, NamedValue, Node,
+  Parameter, Range, Statement, StringLiteral, This, TypeDeclaration, TypeName
 from '../ast'
 import check_program from '../checker/modules'
 import ImportedName, ModuleAlias from '../checker/imports'
@@ -132,20 +132,29 @@ export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Ty
     when Import then [unused_imports(tokens, statement, typed.unused_imports)]
     when Declaration
       return [] if statement.type == nil or statement.omits_value or statement.weak
-      [left_out_type(tokens, statement.name, statement.value, statement.mutable, typed)]
+      { name, value, mutable } := statement
+      # A `const`'s empty value goes as a whole (see empty_initial_value).
+      collection := collection_call(statement.type, value, keeps_empty: mutable)
+      [left_out_type(tokens, name, value, mutable, typed, collection)]
     when TypeDeclaration
       [left_out_field_type(tokens, member, typed) for member in statement.members]
     else []
 
 # `x := v` for `x: T = v`, and `var x = v` for `var x: T = v`, where v has the type T of its own
 # (see Type annotations); but not where T names an import, which may use it alone and would then be
-# left unused.
+# left unused. The type of a `Map()` or a `Set()` goes to its type arguments: `var s = Set<T>()`.
 left_out_type := (
-  tokens: Tokens, name: Identifier, value: Expression, mutable: Bool, typed: Typed
+  tokens: Tokens
+  name: Identifier
+  value: Expression
+  mutable: Bool
+  typed: Typed
+  collection: Collection? = nil
 ) ->
   { facts, program } := typed
   return nil if has_expected_parts(value, facts)
-  return nil unless declared_inferable({ name, value }, facts, program)
+  moves_to_type_arguments := collection != nil
+  return nil unless declared_inferable({ name, value, moves_to_type_arguments }, facts, program)
   name_at := tokens.at(name.position) ? return nil
   value_at := tokens.at(value.position) ? return nil
   # A field's value may follow `default`.
@@ -155,7 +164,32 @@ left_out_type := (
   # The `=` stays after a `var`, and goes with `:` into `:=` otherwise.
   to := mutable then tokens.start(assign) else tokens.end(assign)
   change := Change(to, from: tokens.end(name_at), text: mutable then ' ' else ' :=')
-  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(name_at + 1), [change]
+  changes := [change]
+  if moved := collection
+    { call, type } := moved
+    callee := tokens.at(call.callee.position) ? return nil
+    type_at := tokens.at(type.position) ? return nil
+    arguments := tokens.slice(tokens.start(type_at + 1), tokens.end(assign - 1))
+    changes.push { from: tokens.end(callee), to: tokens.end(callee), text: arguments }
+  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(name_at + 1), changes
+
+# A `Map(...)` or a `Set(...)` without type arguments, with the type written for it.
+struct Collection
+  call: Call
+  type: NamedType
+
+# The value of a declaration of a type `Map<...>` or `Set<...>` where it is a call of the same name
+# without type arguments, which takes those of the type then; an empty one only if the declaration
+# `keeps_empty` values.
+collection_call := (written: TypeName?, value: Expression, flags: { keeps_empty: Bool }) ->
+  type := written as NamedType ? return nil
+  call := value as Call ? return nil
+  callee := call.callee as Identifier ? return nil
+  return nil if type.optional or type.args.is_empty() or not call.type_args.is_empty()
+  return nil if callee.name != type.name or (callee.name != 'Map' and callee.name != 'Set')
+  is_empty := call.args.is_empty() and call.named_args.is_empty()
+  return nil if is_empty and not flags.keeps_empty
+  Collection call, type
 
 # `(x) -> x` for `(x: Int): Int -> x`, and `-> 1` for `(): Int -> 1`, where the checking shows the
 # types inferable (see Type annotations), but those of a function that stays as written (see
@@ -254,7 +288,9 @@ left_out_field_type := (tokens: Tokens, member: MemberDeclaration, typed: Typed)
   given := value ? return nil
   return nil if type == nil or given is FunctionLiteral
   return nil if modifier == 'weak' or modifier == 'weak var'
-  left_out_type tokens, member.name, given, modifier == 'var', typed
+  # A field keeps its empty value (see Empty initial values).
+  collection := collection_call(type, given, keeps_empty: true)
+  left_out_type tokens, member.name, given, modifier == 'var', typed, collection
 
 # The import without the names that are never used (see Unused names); only reported where it gives
 # none that is, as an import runs the module's top-level code and brings its extends, which leaving
