@@ -12,7 +12,9 @@ import bootstrap_for from '../../tools/build/stages'
 import SETTINGS_USAGE from '../../tools/build/targets'
 import CompileError from '../../compiler/errors'
 import described_build, runtime_c_names from '../../compiler/platform_description'
-import BuildError, command_line_batches, piped_to_file from '../../tools/build/steps'
+import
+  BuildError, command_line_batches, piped_to_file, shared_batches
+from '../../tools/build/steps'
 
 BUILD_TOOL := "#{root_dir}/build/build#{host_executable_suffix}"
 
@@ -65,6 +67,11 @@ batches_check := (name: String, args: String[], limit: Int, expected: String) ->
   Check
     name: "command_line_batches #{name}"
     run: -> compare_text('batches', expected, "#{command_line_batches(args, limit)}")
+
+shared_batches_check := (name: String, args: String[], shares: Int, limit: Int, expected: String) ->
+  Check
+    name: "shared_batches #{name}"
+    run: -> compare_text('batches', expected, "#{shared_batches(args, shares, limit)}")
 
 missing_input_check := Check(name: 'is_stale ends the build on an input that is missing', run: ->
   dir := new_cli_dir('build-tool-missing-input')
@@ -425,6 +432,35 @@ export checks :=
     "[['a'], ['toolong'], ['b']]"
   )
   batches_check('gives no batch of no argument', [], 8, '[]')
+  shared_batches_check('gives no batch of no argument', [], 4, 8, '[]')
+  shared_batches_check(
+    'gives fewer shares than asked of fewer arguments'
+    ['a', 'b']
+    4
+    8
+    "[['a'], ['b']]"
+  )
+  shared_batches_check(
+    'keeps the order across uneven shares'
+    ['a', 'b', 'c', 'd', 'e']
+    2
+    8
+    "[['a', 'b', 'c'], ['d', 'e']]"
+  )
+  shared_batches_check(
+    'gives fewer shares than asked when they round up'
+    ['a', 'b', 'c', 'd']
+    3
+    8
+    "[['a', 'b'], ['c', 'd']]"
+  )
+  shared_batches_check(
+    'splits a share at the limit'
+    ['aaa', 'bbb', 'c', 'd']
+    2
+    4
+    "[['aaa'], ['bbb'], ['c', 'd']]"
+  )
   Check(
     name: 'is_stale makes an output that is missing'
     run: -> compare_text('stale', 'true', "#{is_stale("#{root_dir}/build/no-such-output", [])}")

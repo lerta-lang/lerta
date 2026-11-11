@@ -6,14 +6,15 @@
 # here (see build/targets). `build embed <output> <path>...` writes the module that embeds the
 # files, as the build writes build/embedded.lerta, for the tests of it.
 import parse_args, parse_command from 'std:args'
+import all as all_of from 'std:async'
 import is_dir, remove_tree, stat from 'std:io'
-import argv, exit from 'std:process'
+import argv, cpu_count, exit from 'std:process'
 import
   bootstrap_for, BUILD_TOOL, HARNESS_PROGRAM, HOST_COMPILER, make_compiler, make_harness,
   make_host_compiler, make_seed, make_stage2, test_bootstrap
 from './build/stages'
 import write_embedded from './build/embed'
-import BuildError, call, captured, command_line_batches, step from './build/steps'
+import BuildError, call, captured, shared_batches, step from './build/steps'
 import test_target, test_targets from './build/targets'
 
 # The goals, as the Makefile names them, and the commands of the other targets' tests and of the
@@ -83,17 +84,19 @@ test := ->
 
 # The .lerta files that git lists, those not added yet included, but those deleted and not yet
 # from git, are in the style, tests/ too, where `# fmt: skip` and `# fmt: off` keep the code that
-# breaks it on purpose. They go to as few runs of lerta fmt as a command line holds, as it checks a
-# program once for the files it holds.
+# breaks it on purpose. They go to runs of lerta fmt at once, a share for each core, as each run
+# uses one (see shared_batches).
 check := ->
   await make_host_compiler()
   git_args := ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', '*.lerta']
   listed := (await captured('git', git_args, b'')).text()!.split("\0")
   files := [file for file in listed when not file.is_empty() and stat(file) != nil]
-  var code = 0
-  for batch in command_line_batches(files, COMMAND_LINE_LIMIT)
-    code = 1 if await call('nice', HOST_COMPILER, 'fmt', batch...) != 0
-  exit code
+  runs := [
+    call('nice', HOST_COMPILER, 'fmt', batch...)
+    for batch in shared_batches(files, cpu_count, COMMAND_LINE_LIMIT)
+  ]
+  codes := await all_of(runs)
+  exit codes.all((code) -> code == 0) then 0 else 1
 
 # What a command line of Windows, the shortest, holds, with room for the command.
 COMMAND_LINE_LIMIT := 30000
