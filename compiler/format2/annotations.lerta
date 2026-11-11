@@ -1,0 +1,246 @@
+# The types left out where they can be inferred (see Type annotations), with the checking of the
+# program (see typed.lerta), and the types that the program rewritten must keep.
+import
+  Call, Cast, Declaration, Expression, Extend, FunctionLiteral, Identifier, Member,
+  MemberDeclaration, NamedType, Node, Parameter, Statement, TypeDeclaration, TypeName
+from '../ast'
+import NodeFacts from '../checker/shared'
+import field_types from '../format/check_result'
+import declared_inferable, return_inferable from '../format/inferable'
+import places_of from '../format/places'
+import TYPE_ANNOTATIONS from '../format/rules'
+import format_type from '../types'
+import OPENING_BRACKETS from '../lexer/tokens'
+import Change, Edit from './edits'
+import Tokens from './tokens'
+import Typed from './typed'
+
+# The checking of a program, with its functions that keep their types.
+export struct Annotating
+  typed: Typed
+  functions: Functions
+
+# Nil for a program that does not check.
+export annotating_of := (program: Statement[], typed: Typed?): Annotating? ->
+  known := typed ? return nil
+  { typed: known, functions: functions_of(program) }
+
+export annotation_edits := (tokens: Tokens, value: Expression, annotating: Annotating): Edit?[] ->
+  { typed, functions } := annotating
+  value is FunctionLiteral then function_types(tokens, value, typed, functions) else []
+
+export annotation_statement_edits := (
+  tokens: Tokens, statement: Statement, annotating: Annotating
+): Edit?[] ->
+  { typed } := annotating
+  case statement
+    when Declaration
+      return [] if statement.type == nil or statement.omits_value or statement.weak
+      { name, value, mutable } := statement
+      # A `const`'s empty value goes as a whole (see empty_initial_value).
+      collection := collection_call(statement.type, value, keeps_empty: mutable)
+      [left_out_type(tokens, name, value, mutable, typed, collection)]
+    when TypeDeclaration
+      [left_out_field_type(tokens, member, typed) for member in statement.members]
+    else []
+
+# The function literals whose types stay as written: those that no function type is expected
+# for, the values of variables and members without types, whose parameters keep theirs but those
+# with a default; and those in generic functions and types, whose code the checker checks only
+# for each instance, which tells nothing of the code that no instance uses.
+struct Functions
+  unexpected: Set<FunctionLiteral>
+  generic: Set<FunctionLiteral>
+
+functions_of := (statements: Statement[]) ->
+  functions := Functions(unexpected: Set(), generic: Set())
+  { unexpected, generic } := functions
+  add_generic := (body: Statement[]) ->
+    places_of body, { before: (value, _) ->
+      generic.add value if value is FunctionLiteral
+    }
+  add_members := (members: MemberDeclaration[], is_generic: Bool) ->
+    values: Statement[] = [member.value for member in members when member.value != nil]
+    for member in members
+      unexpected.add member.value if member.type == nil and member.value is FunctionLiteral
+    add_generic values if is_generic
+  places_of statements, {
+    before: (value, _) ->
+      add_generic value.body if value is FunctionLiteral and not value.type_params.is_empty()
+    statement: (statement, _) ->
+      case statement
+        when Declaration
+          value := statement.value
+          unexpected.add value if statement.type == nil and value is FunctionLiteral
+        when TypeDeclaration, Extend
+          add_members statement.members, not statement.type_params.is_empty()
+        else pass
+  }
+  functions
+
+# The types of the variables, the functions and the fields of the program, in their order, which
+# the types left out must keep (see rewritten_text); nil for a program that does not check.
+export declared_types := (statements: Statement[], typed: Typed?) ->
+  { program, facts } := typed ? return nil
+  found: String[]
+  add := (node: Node) -> found.push(facts.types[node] then format_type(facts.types[node]!) else '-')
+  places_of statements, {
+    statement: (statement, _) ->
+      add statement.name if statement is Declaration
+    before: (value, _) ->
+      add value if value is FunctionLiteral
+  }
+  [found..., field_types(program)...]
+
+# `x := v` for `x: T = v`, and `var x = v` for `var x: T = v`, where v has the type T of its own
+# (see Type annotations); but not where T names an import, which may use it alone and would then be
+# left unused. The type of a `Map()` or a `Set()` goes to its type arguments: `var s = Set<T>()`.
+left_out_type := (
+  tokens: Tokens
+  name: Identifier
+  value: Expression
+  mutable: Bool
+  typed: Typed
+  collection: Collection? = nil
+) ->
+  { facts, program } := typed
+  return nil if has_expected_parts(value, facts)
+  moves_to_type_arguments := collection != nil
+  return nil unless declared_inferable({ name, value, moves_to_type_arguments }, facts, program)
+  name_at := tokens.at(name.position) ? return nil
+  value_at := tokens.at(value.position) ? return nil
+  # A field's value may follow `default`.
+  assign := tokens.spelling(value_at - 1) == 'default' then value_at - 2 else value_at - 1
+  return nil if not tokens.is_kind(name_at + 1, ':') or not tokens.is_kind(assign, '=')
+  return nil if names_import(tokens, name_at + 2, assign, typed)
+  # The `=` stays after a `var`, and goes with `:` into `:=` otherwise.
+  to := mutable then tokens.start(assign) else tokens.end(assign)
+  change := Change(to, from: tokens.end(name_at), text: mutable then ' ' else ' :=')
+  changes := [change]
+  if moved := collection
+    { call, type } := moved
+    callee := tokens.at(call.callee.position) ? return nil
+    type_at := tokens.at(type.position) ? return nil
+    arguments := tokens.slice(tokens.start(type_at + 1), tokens.end(assign - 1))
+    changes.push { from: tokens.end(callee), to: tokens.end(callee), text: arguments }
+  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(name_at + 1), changes
+
+# A `Map(...)` or a `Set(...)` without type arguments, with the type written for it.
+struct Collection
+  call: Call
+  type: NamedType
+
+# The value of a declaration of a type `Map<...>` or `Set<...>` where it is a call of the same name
+# without type arguments, which takes those of the type then; an empty one only if the declaration
+# `keeps_empty` values.
+collection_call := (written: TypeName?, value: Expression, flags: { keeps_empty: Bool }) ->
+  type := written as NamedType ? return nil
+  call := value as Call ? return nil
+  callee := call.callee as Identifier ? return nil
+  return nil if type.optional or type.args.is_empty() or not call.type_args.is_empty()
+  return nil if callee.name != type.name or (callee.name != 'Map' and callee.name != 'Set')
+  is_empty := call.args.is_empty() and call.named_args.is_empty()
+  return nil if is_empty and not flags.keeps_empty
+  Collection call, type
+
+# `(x) -> x` for `(x: Int): Int -> x`, and `-> 1` for `(): Int -> 1`, where the checking shows the
+# types inferable (see Type annotations), but those of a function that stays as written (see
+# Functions).
+function_types := (
+  tokens: Tokens, function: FunctionLiteral, typed: Typed, functions: Functions
+): Edit?[] ->
+  return [] if not function.type_params.is_empty() or function in functions.generic
+  open := tokens.at(function.position) ? return []
+  return [] unless tokens.is_kind(open, '(')
+  close := tokens.matching(open) ? return []
+  returned := left_out_return(tokens, function, open, close, typed)
+  # `(x): T ->` does not parse: a parameter without its type takes the return type with it.
+  return [returned] if function.return_type != nil and returned?.change == nil
+  is_expected := function not in functions.unexpected
+  parameters := [
+    left_out_parameter(tokens, function, i, close, typed)
+    for param, i in function.params
+    when param.type != nil and (is_expected or param.default != nil)
+  ]
+  [parameters..., returned]
+
+left_out_parameter := (
+  tokens: Tokens, function: FunctionLiteral, i: Int, close: Int, typed: Typed
+) ->
+  { name, default, variadic } := function.params[i]
+  return nil if variadic or not typed.program.inferable_parameters[name] ? false
+  return nil if default != nil and has_expected_parts(default, typed.facts)
+  name_at := tokens.at(name.position) ? return nil
+  return nil unless tokens.is_kind(name_at + 1, ':')
+  bound := parameter_bound(tokens, function.params, i, close) ? return nil
+  last := tokens.is_kind(bound - 1, ',') then bound - 2 else bound - 1
+  return nil if names_import(tokens, name_at + 2, last + 1, typed)
+  change := Change(from: tokens.end(name_at), to: tokens.end(last), text: '')
+  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(name_at + 1), [change]
+
+# The token that ends the type of the parameter: the `=` of its default, the name of the next or the
+# `)` of the list.
+parameter_bound := (tokens: Tokens, params: Parameter[], i: Int, close: Int) ->
+  if value := params[i].default
+    value_at := tokens.at(value.position) ? return nil
+    return tokens.is_kind(value_at - 1, '=') then value_at - 1
+  i + 1 < params.length then tokens.at(params[i + 1].name.position) else close
+
+left_out_return := (
+  tokens: Tokens, function: FunctionLiteral, open: Int, close: Int, typed: Typed
+) ->
+  return nil if function.return_type == nil
+  { facts, program } := typed
+  last := function.body.last() as Expression?
+  results := [(facts.results[function] ? [])..., (last then [last] else [])...]
+  return nil if results.any((value) -> has_expected_parts(value, facts))
+  return nil unless return_inferable(function, last, facts, program)
+  return nil unless tokens.is_kind(close + 1, ':')
+  arrow := arrow_after(tokens, close + 2) ? return nil
+  return nil if names_import(tokens, close + 2, arrow, typed)
+  # Without its parameters, the function is written without the `()`.
+  bare := function.params.is_empty()
+  from := bare then tokens.start(open) else tokens.end(close)
+  change := Change(from, to: tokens.start(arrow), text: bare then '' else ' ')
+  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(close + 1), [change]
+
+# The `->` after a type that holds none outside its brackets, from `from`.
+arrow_after := (tokens: Tokens, from: Int) ->
+  var i = from
+  while i < tokens.code.length
+    return i if tokens.is_kind(i, '->')
+    closing := tokens.code[i].kind in OPENING_BRACKETS then (tokens.matching(i) ? return nil) else i
+    i = closing + 1
+  nil
+
+# Whether the tokens from `from` up to `to` name an import, which may use it alone and would then be
+# left unused.
+names_import := (tokens: Tokens, from: Int, to: Int, typed: Typed) ->
+  tokens.code[from..to].any((token) -> token.kind == IDENTIFIER and token.text in typed.imported)
+
+# Whether the value holds a part that a rewrite writes without what the type expected of it shows,
+# as `{ x: 1 }` for `Point(x: 1)`: the type that it is declared with is left out after it, if the
+# value then still gives it.
+has_expected_parts := (value: Expression, facts: NodeFacts) ->
+  var found = false
+  is_expected := (part: Expression) ->
+    case part
+      when Call then part in facts.recordable
+      when Member then part in facts.unqualifiable
+      when Cast then part in facts.redundant_casts
+      else false
+  places_of [value], { before: (part, _) ->
+    found = true if is_expected(part)
+  }
+  found
+
+# That of a field, but not of one whose value is a function, which would make it a method without
+# its type, nor of a weak one.
+left_out_field_type := (tokens: Tokens, member: MemberDeclaration, typed: Typed) ->
+  { type, value, modifier } := member
+  given := value ? return nil
+  return nil if type == nil or given is FunctionLiteral
+  return nil if modifier == 'weak' or modifier == 'weak var'
+  # A field keeps its empty value (see Empty initial values).
+  collection := collection_call(type, given, keeps_empty: true)
+  left_out_type tokens, member.name, given, modifier == 'var', typed, collection

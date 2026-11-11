@@ -28,6 +28,7 @@ import parentheses_of, unvisited_parts from './parentheses'
 import is_layout, SourceTokens from './text'
 import counted_range, index_ranges from './ranges'
 import Tokens from './tokens'
+import annotating_of, annotation_edits, annotation_statement_edits from './annotations'
 import typed_edits, typed_statement_edits, Typed from './typed'
 
 export rewrites_of := (
@@ -47,15 +48,20 @@ export rewrites_of := (
     condition: (condition, _) ->
       add condition_edit(tokens, condition, condition not in with_else, claimed)
   }
+  annotated := annotating_of(program, typed)
   places_of program, {
     before: (value, _: Place) ->
       add edit for edit in edits_within(tokens, value, claimed, parentheses.tight, typed)
       if known := typed
         add edit for edit in typed_edits(tokens, value, known)
+      if annotating := annotated
+        add edit for edit in annotation_edits(tokens, value, annotating)
     statement: (statement, _) ->
       add edit for edit in statement_edits(tokens, statement)
       if known := typed
         add edit for edit in typed_statement_edits(tokens, statement, known)
+      if annotating := annotated
+        add edit for edit in annotation_statement_edits(tokens, statement, annotating)
   }
   add edit for edit in parentheses.edits
   add literal_edit(tokens, index) for index in 0..text.code.length
