@@ -7,8 +7,8 @@
 # lines_edits.lerta), and the statement laid out once it is applied.
 import Token from '../lexer/tokens'
 import
-  BRANCHES, COMMENTS, LAYOUT, LINE_LENGTH, LONG_LISTS, LONG_OPERATIONS, MULTI_LINE_LITERALS,
-  SPACING, StyleRule, TWO_WAY_VALUES
+  BRANCHES, COMMENTS, LAYOUT, LONG_LISTS, LONG_OPERATIONS, MULTI_LINE_LITERALS, SPACING, StyleRule,
+  TWO_WAY_VALUES, VALUE_LINES
 from '../format/rules'
 import Edit from './edits'
 import
@@ -330,9 +330,9 @@ export class Breaker
           return
       when OPERATION
         if on_line() or (not on_next_line() and @starts_on_line(value))
-          @flatten first, LONG_OPERATIONS
+          @flatten first, VALUE_LINES
         else
-          below LONG_OPERATIONS
+          below VALUE_LINES
       when BLOCK_CALL
         args := value.shapes.last() as ListShape!
         # Arguments without parentheses take them, a `(` for the space after the callee and a `)`
@@ -340,10 +340,10 @@ export class Breaker
         { bracketed } := args
         extra := bracketed then 0 else 1
         if @fits(first, last, @column_of(first) + extra, not bracketed)
-          @flatten first, LINE_LENGTH
+          @flatten first, VALUE_LINES
           @parenthesize args
         else if @fits(first, last, 2 * depth + 1 + extra, not bracketed)
-          below LINE_LENGTH
+          below VALUE_LINES
           @parenthesize args
         else if not bracketed
           # Which a value cannot take on its line.
@@ -353,18 +353,18 @@ export class Breaker
           @unparenthesize args, "\n" + ' '.repeat(@source_indentation(args.open) + 2)
       when TWO_WAY
         if on_line()
-          @flatten first, LINE_LENGTH
+          @flatten first, VALUE_LINES
         else if on_next_line()
-          below LINE_LENGTH
+          below VALUE_LINES
         else
           # Which an `if` writes, a rewrite left to be done by hand.
           @report_only TWO_WAY_VALUES, first
           return
       else
         if on_line() or not on_next_line()
-          @flatten first, LINE_LENGTH
+          @flatten first, VALUE_LINES
         else
-          below LINE_LENGTH
+          below VALUE_LINES
     @decide value.shapes
 
   # A literal on its line, in its brackets, if it fits there and spans no lines, and otherwise in a
@@ -381,7 +381,7 @@ export class Breaker
     if bracketed
       rewritten := not fits(0, false) and @unbracket(literal, members)
       # Laid out in its brackets until its items are where a block can take them.
-      @flatten first, LINE_LENGTH unless rewritten
+      @flatten first, VALUE_LINES unless rewritten
       return rewritten
     opening := literal.braced then '{ ' else '['
     closing := literal.braced then ' }' else ']'
