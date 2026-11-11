@@ -1,19 +1,19 @@
 # The walk of statements and blocks (see walk.lerta).
 import
   Assignment, Binding, Call, Case, CaseArm, Condition, Declaration, EnumDeclaration, Extend, Extern,
-  For, If, Import, InterfaceDeclaration, Intrinsic, Pass, Statement, TypeAlias, TypeDeclaration,
-  UnaryOperation, While
+  For, If, Import, ImportName, InterfaceDeclaration, Intrinsic, Pass, Statement, TypeAlias,
+  TypeDeclaration, UnaryOperation, While
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import BRANCHES, StyleRule from '../format/rules'
 import is_block_call, is_inline, is_written_postfix, takes_postfix from './forms'
 import
-  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, CodeGap, LineStart, PostfixShape,
-  StatementShape
+  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, CodeGap, ImportShape, LineStart, ListShape,
+  PostfixShape, StatementShape
 from './shapes'
 import NONE, ONE, unhandled, Unhandled, Walker from './walk'
 import './walk_expressions'
-import './walk_lists'
+import ListItems from './walk_lists'
 
 extend Walker
   block := (statements: Statement[], depth: Int, head: Int?) ->
@@ -78,9 +78,9 @@ extend Walker
       when Declaration then @declaration(statement, before)
       when Assignment then @assignment(statement, before)
       when Pass then @take_spelled('pass', before)
+      when Import then @import_statement(statement, before)
       when
-        Import, TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern,
-        Intrinsic, Extend
+        TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern, Intrinsic, Extend
       then unhandled()
       when Call then @call_statement(statement, before)
       else @expression(statement, before)
@@ -244,6 +244,32 @@ extend Walker
     return if node.omits_value
     assign := @take(node.mutable or node.type then '=' else ':=', ONE)
     @value assign, node.value, true
+
+  # `import 'module'`, with `as` and a name or not, or `import` or `export` and names, on its line
+  # or in a block below it, from the module (see ImportShape).
+  import_statement := (node: Import, before: CodeGap) ->
+    @take node.exported then 'export' else 'import', before
+    if node.names.is_empty()
+      @take STRING, ONE
+      if node.alias != nil
+        @take_spelled 'as', ONE
+        @take IDENTIFIER, ONE
+      return
+    { names } := node
+    items := ListItems
+      count: names.length
+      walk: (i, gap) -> @import_name(names[i], gap)
+      simple: (_) -> true
+    @unbracketed items
+    list := @shapes.pop() as ListShape!
+    from_at := @take_spelled('from', ONE)
+    @shapes.push ImportShape(from_at, names: list, last: @take(STRING, ONE))
+
+  import_name := (name: ImportName, before: CodeGap) ->
+    @take IDENTIFIER, before
+    return if name.alias == nil
+    @take_spelled 'as', ONE
+    @take IDENTIFIER, ONE
 
   assignment := (node: Assignment, before: CodeGap) ->
     @operand node.target, before

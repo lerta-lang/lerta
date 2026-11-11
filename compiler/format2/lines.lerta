@@ -10,10 +10,10 @@ import
   BRANCHES, COMMENTS, LAYOUT, LONG_LISTS, LONG_OPERATIONS, MULTI_LINE_LITERALS, SPACING, StyleRule,
   TWO_WAY_VALUES, VALUE_LINES
 from '../format/rules'
-import Edit from './edits'
+import Change, Edit from './edits'
 import
-  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, Closer, CodeGap, LineStart, ListShape,
-  OperationShape, PostfixShape, Shape, Spaces, StatementShape, ValueShape
+  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, Closer, CodeGap, ImportShape, LineStart,
+  ListShape, OperationShape, PostfixShape, Shape, Spaces, StatementShape, ValueShape
 from './shapes'
 import literal_lines, SourceTokens from './text'
 import Tokens from './tokens'
@@ -151,6 +151,7 @@ export class Breaker
     for shape in shapes
       case shape
         when ListShape, OperationShape, ValueShape, CallShape then add_shapes(shape.shapes)
+        when ImportShape then add_shapes([shape.names])
         when PostfixShape then add_shapes([shape.body.shapes..., shape.shapes...]) if shape.postfix
         when BodyShape then add_body(shape)
         when BlockShape then add_block(shape)
@@ -177,6 +178,7 @@ export class Breaker
             else @undecided.add(shape.first)
           @prepare shape.shapes
         when CallShape then @prepare(shape.shapes)
+        when ImportShape then @undecided.add(shape.names.items[0])
         when PostfixShape then @prepare([shape.body.shapes..., shape.shapes...]) if shape.postfix
         when BodyShape then @prepare_body(shape)
         when ArmsShape
@@ -222,6 +224,7 @@ export class Breaker
         when BlockShape then @nested_block(shape)
         when ArmsShape then @arms(shape)
         when PostfixShape then @postfix(shape)
+        when ImportShape then @import_names(shape)
         else pass
 
   list := (list: ListShape) ->
@@ -300,6 +303,26 @@ export class Breaker
     { items, close } := list
     next := i < items.length - 1 then items[i + 1] else close
     next - 1 > items[i] and @code[next - 1].kind == ',' then next - 2 else next - 1
+
+  # See ImportShape.
+  import_names := (shape: ImportShape) ->
+    { names, from_at, last } := shape
+    { open, items } := names
+    @undecided.remove items[0]
+    commented := [items..., from_at].any((at) -> @follows_comment(at))
+    if @fits(open, last, @column_of(open), true) and not commented
+      # Names in a block, which line ends may separate, join with commas, a rewrite.
+      if items[0] in @line_starts or names.commas == false
+        joined_from := Change(from: @tokens.end(from_at - 1), to: @tokens.start(from_at), text: ' ')
+        @rewrite LONG_LISTS, [@on_one_line(items, ' ')..., joined_from]
+        return
+      @flatten_items names, LONG_LISTS
+      @flatten from_at, LONG_LISTS
+      return
+    depth := @line_depth(open)
+    item_last := (i: Int) -> @item_last(names, i)
+    @lay_out_items items, item_last, depth + 1, true, names.commas, from_at
+    @gaps[from_at] = LineStart(depth, rule: LONG_LISTS)
 
   operation := (operation: OperationShape) ->
     { first, operands, last } := operation
