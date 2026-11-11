@@ -1,7 +1,7 @@
-# What clang is given for each kind of build, which the program and the runtime share. The runtime
-# checks (test/runtime.lerta), which minilerta builds, import it too, so that they compile the
-# runtime's sources as `build` does.
-import platform from 'std:process'
+# How clang is run, and what it is given for each kind of build, which the program and the runtime
+# share. The runtime checks (test/runtime.lerta), which minilerta builds, import the flags too, so
+# that they compile the runtime's sources as `build` does.
+import cpu_count, platform, run from 'std:process'
 
 # A kind of build: with `-O` or not, with the memory checks or not, and for `target` (a triple such
 # as i686-linux-gnu) or else for the host.
@@ -97,3 +97,26 @@ is_32_bit_x86 := (target: String) -> target.split('-')[0] in ['i386', 'i486', 'i
 # is nothing, which is enough on Windows too: the linker and libuv's spawn add `.exe` to a name
 # without an extension.
 export executable_suffix := (target: String?) -> target and is_mingw(target) then '.exe' else ''
+
+# Runs clang once for each list of arguments in `jobs`, as many at once as there are CPUs; false if
+# it fails for any, after which no more are started.
+export run_clang_jobs := (jobs: String[][]) ->
+  var next = 0
+  var failed = false
+  # Each runs the next job until none is left, or one has failed.
+  worker := ->
+    while not failed and next < jobs.length
+      args := jobs[next]
+      next += 1
+      failed = true if (await run('clang', args...)).code != 0
+  workers := [worker() for _ in 0..cpu_count]
+  # Each is waited for, even after one has thrown, so that none still writes into a
+  # directory that the caller removes afterwards.
+  var error: Error?
+  for each in workers
+    try
+      await each
+    catch thrown
+      error = thrown
+  throw thrown if thrown := error
+  not failed

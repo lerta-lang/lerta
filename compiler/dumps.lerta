@@ -1,4 +1,6 @@
-# A program's syntax tree as text, for `dump-ast` (see docs/reference/compiler.md#dumps).
+# What the compiler makes of a program, as text, for the dump commands (see
+# docs/reference/compiler.md#dumps): its tokens, its syntax tree, and that tree with the checker's
+# types.
 import
   ArrayLiteral, ArrayTypeName, Assignment, Await, BinaryOperation, Binding, BooleanLiteral, Call,
   Case, CaseArm, Cast, Catch, Coalesce, Comprehension, Conditional, Declaration, EnumDeclaration,
@@ -10,8 +12,11 @@ import
   TupleLiteral, TupleTypeName, TypeAlias, TypeDeclaration, TypeName, TypeParameter, UnaryOperation,
   UnionTypeName, Unwrap, While, Yield
 from './ast'
-import TextPart from './lexer/string_literal'
-import quote, quote_bytes from './token_dump'
+import CodePart, TemplatePart, TextPart from './lexer/string_literal'
+import Token from './lexer/tokens'
+import is_standard_module from './loader'
+import ProgramWide, Shared from './checker/shared'
+import format_type from './types'
 
 INDENT := '  '
 
@@ -587,3 +592,54 @@ dump_array_type := (type: ArrayTypeName): Group ->
 
 dump_record_type_field := (type_field: RecordTypeField): Group ->
   group [field('name', dump_node(type_field.name)), field('type', dump_node(type_field.type))]
+
+# The tokens, one per line, for `dump-tokens`.
+
+export dump_tokens := (tokens: Token[]) -> [dump_token(token) for token in tokens].join('')
+
+dump_token := (token: Token) ->
+  spacing := token.spaced then 'spaced' else 'joined'
+  line := "#{token.line}:#{token.column} #{spacing} #{token.kind} #{quote(token.text)}\n"
+  parts := token.parts ? return line
+  line + [dump_part(part) for part in parts].join('')
+
+dump_part := (part: TemplatePart) ->
+  case part
+    when TextPart then "  text #{quote_bytes(part.bytes)}\n"
+    when CodePart then "  code #{part.column} #{quote(part.source)}\n"
+
+# The bytes below 0x20, 0x7F, `\` and `"` are written as `\xHH`, so that each token stays on its
+# line.
+quote := (text: String) ->
+  var quoted = '"'
+  for c in text
+    code := c.to_int()
+    escaped := code < 0x20 or code == 0x7F or c == '\' or c == '"'
+    quoted += escaped then "\\x#{code.to_hex(2).to_upper()}" else c.to_string()
+  quoted + '"'
+
+# As quote, with the bytes that are not valid UTF-8, of a Binary literal, written as `\xHH` too.
+quote_bytes := (bytes: Binary) ->
+  return quote(text) if text := bytes.text()
+  var quoted = '"'
+  for byte in bytes
+    escaped := byte < 0x20 or byte >= 0x7F or byte == b'\' or byte == b'"'
+    quoted +=
+      escaped then "\\x#{byte.to_int().to_hex(2).to_upper()}" else byte.to_char().to_string()
+  quoted + '"'
+
+# The syntax trees of a program's modules, as dump_ast writes them, with the types that the checker
+# gave their nodes, for `dump-checked`.
+export dump_checked := (program: ProgramWide) ->
+  dump_module := (shared: Shared) ->
+    module := program.modules[shared.index]
+    header := "module #{module.display_path ? program.entry_path}\n"
+    header + dump_annotated(module.program, (node) -> type_annotation(shared, node))
+  is_shown := (shared: Shared) -> not is_standard_module(program.modules[shared.index])
+  [dump_module(shared) for shared in program.shared when is_shown(shared)].join('')
+
+type_annotation := (shared: Shared, node: Node) ->
+  type := shared.facts.types[node] ? return ''
+  converted := shared.facts.conversions[node]
+  conversion := converted then " => #{format_type(converted)}" else ''
+  " : #{format_type(type)}#{conversion}"
