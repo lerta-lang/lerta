@@ -1,0 +1,206 @@
+# Each type that can be left out is, and each that cannot is kept.
+import stdout, Writer from 'std:io'
+import sleep from 'std:time'
+
+double := (x: Int): Int -> x * 2
+factorial := (n: Int): Int -> n <= 1 then 1 else n * factorial(n - 1)
+nothing := (): Int? -> nil
+widened := (x: Int): Int? -> x
+greet := (name: String = 'you'): String -> "hi #{name}"
+first := <T>(xs: T[]): T? -> xs.first()
+one := (): Int -> 1
+
+# Functions that call each other keep their return types, though either could leave it out.
+even := (n: Int): Bool -> n == 0 or odd(n - 1)
+odd := (n: Int): Bool -> n != 0 and even(n - 1)
+
+struct Point
+  x: Int
+  y := default 0
+  z := 1.5
+  scale: Float? = 2.0
+  # The type of a field is kept where it is wider than the value, for code that may assign to it.
+  failure: Error = ValueError(message: 'none')
+  sum := (): Int -> @x + @y
+
+xs := [1, 2]
+var empty: Int[] = []
+var maybe: Int? = 1
+maybe = nil
+doubled := xs.map((x: Int): Int -> x * 2)
+add := (a: Int, b: Int) -> a + b
+nested := ->
+  total := add(1, 2)
+  total
+print double(factorial(3)) + one() + Point(x: 1).sum() + nested() + empty.length
+print greet()
+print (nothing() ? 0) + (widened(1) ? 0) + (first(xs) ? 0) + (maybe ? 0)
+print even(2)
+print [x for x in doubled].length
+
+# A type that alone uses an import is kept.
+out: Writer = stdout
+await out.write("done\n")
+
+# An exported type wider than the value is kept for the modules that import it.
+export make_error := (): Error -> ValueError(message: 'made')
+
+class Counter
+  var count = 0
+  # A method keeps the types of its parameters, which no function type is expected for.
+  add := (n: Int): void ->
+    @count += n
+
+struct Box<T>
+  value: T
+  label: String = 'box'
+
+extend<T> Box<T>
+  name := (): String -> @label
+
+join_all := (
+  first_part: String  # The first.
+  second_part: String = 'b'
+): String -> first_part + second_part
+print join_all('a') + Box(value: 1).name() + make_error().message
+counter := Counter()
+counter.add 1
+print counter.count
+
+# Values converted only in their parts still give the type without it.
+flag := xs.length > 1
+either := flag then 1
+found := (n: Int): Int? ->
+  return nil if n < 0
+  n
+counts := { 'a': 1 }
+say := (): void -> print('said')
+print (either ? 0) + (found(1) ? 0) + counts.length
+say()
+
+# Each kind of value that has its type only by being given one keeps it, and so does one with such a
+# part, though another part may give it.
+enum Color
+  'red'
+  'blue'
+shade := (): Color -> 'blue'
+red: Color = 'red'
+colors: Color[] = ['red', shade()]
+var lengths: Map<String, Int> = Map()
+rows: Int[][] = [[1], []]
+struct Item
+  n: Int
+struct Other
+  n: Int
+type Statement = Item | Other
+statements: Statement[] = [Item(n: 1)]
+other := (): Statement -> Other(n: 2)
+# A member of a union is converted to it where the branches give the type, not where it is
+# written, so the type stays (fmt checks without it before it leaves it out, whatever it picks).
+chosen: Statement = flag then Item(n: 1) else other()
+both: Statement = flag then Item(n: 1) else Other(n: 2)
+picked := (): Statement -> flag then Item(n: 1) else other()
+stack := [1, 2]
+drop := (): void -> stack.pop()
+print red
+print colors.length + lengths.length + rows.length + statements.length
+print "#{chosen is Item} #{both is Item} #{picked() is Item}"
+drop()
+
+# A function that comes back to itself through one whose return type is inferred keeps its own.
+countdown := (n: Int): Int -> n <= 0 then 0 else step(n)
+step := (n: Int) -> countdown(n - 1)
+# Results of their own types give the return type together, but not those of an empty array.
+pick := (n: Int): Int? ->
+  return nil if n < 0
+  n
+none := (n: Int): Int[] ->
+  return [] if n < 0
+  [n]
+# A parameter of a function literal leaves out the type that the function type expected gives it.
+apply := (f: (Int) -> Int) -> f(1)
+print countdown(2) + (pick(1) ? 0) + none(1).length + apply((n: Int) -> n)
+
+# The nodes that the checking makes of its own, such as for a `for` over an object, change nothing.
+class Numbers
+  iter := (): Iter<Int> -> [1, 2].iter()
+two := (): Int -> 2
+print n + two() for n in Numbers()
+
+# A Binary literal of one byte takes the type Byte from where it is, and keeps it.
+mark: Byte = flag then b'a' else b'b'
+# A default gives its own type, but not another.
+scaled := (x: Float = 1, y: Int? = nil, z: Int = 2): Float -> x * (y ? z).to_float()
+# A method that calls itself keeps its return type.
+class Steps
+  down := (k: Int): Int -> k <= 0 then 0 else @down(k - 1)
+# The branches of a case, an if and a try give their type together, as a throw gives none.
+sign := (n: Int): Int ->
+  case
+    when n < 0 then -1
+    else 1
+parity := (n: Int): String ->
+  if n % 2 == 0
+    'even'
+  else
+    'odd'
+stop := (message: String): never -> throw ValueError(message)
+print mark
+print scaled()
+print Steps().down(2) + sign(1)
+print parity(1)
+
+# A function that awaits gives its results in a Promise.
+later := (): Promise<Int> ->
+  await sleep(0)
+  1
+print await later()
+
+# A parameter of a function literal passed to a generic function takes the type that its instance
+# expects.
+apply_to := <T>(x: T, f: (T) -> T) -> f(x)
+print apply_to(1, (n: Int) -> n + 1)
+
+# Values of other kinds that give their own types, but not a map of members of an enum.
+pair := (1, 'a')
+second := xs[1]
+fallback := maybe ? 0
+tried := (): Int ->
+  try
+    xs[0]
+  catch _
+    0
+by_name: Map<String, Color> = { 'first': 'red' }
+(first_of_pair, _) := pair
+print first_of_pair + second + fallback + tried() + by_name.length
+
+# A method and a function that call each other keep their return types.
+class Ping
+  ping := (n: Int): Int -> n <= 0 then 0 else pong(n - 1)
+pong := (n: Int): Int -> Ping().ping(n)
+print pong(2)
+# A Float literal gives its type too.
+shrink := (x: Float = 0.5) -> x / 2.0
+# The type of Map() or Set() goes to its type arguments, but for an optional one.
+var sizes: Map<String, Int> = Map()
+widths: Map<String, Int>? = Map()
+names: Set<String> = Set(['a'])
+# A literal that keeps its return type, which settles its Promise, keeps its parameters' types.
+settled := xs.map((x: Int): Promise<Int> -> x * 2)
+
+# A value whose checking checks a function on demand is judged alike before and after it.
+k := g()
+g := ->
+  e: Int? = 1
+  (e ? 0) + 1
+m := g()
+print k + m
+
+# A value whose parts take their types from the calls that they are given to gives its own type.
+twice := (x: Float) -> x * 2.0
+count := (xs: Int[]) -> xs.length
+a := twice(1)
+b := count([])
+c := [1, 2].filter((x) -> x > 1).to_array().length
+print a
+print b + c

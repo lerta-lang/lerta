@@ -28,7 +28,7 @@ export inferable := (
     when ParameterType then program.inferable_parameters[target.name] ? false
     when DeclaredType then declared_inferable(target, facts, program)
 
-declared_inferable := (target: DeclaredType, facts: NodeFacts, program: ProgramWide) ->
+export declared_inferable := (target: DeclaredType, facts: NodeFacts, program: ProgramWide) ->
   { name, value } := target
   declared := facts.types[name] ? field_type(program, name) ? return false
   type := facts.types[value] ? return false
@@ -112,9 +112,11 @@ has_own_type := (value: Expression, facts: NodeFacts): Bool ->
     when StringLiteral then is_type(type, 'String')
     when Identifier, Member then enum_value_of(facts, value) == nil
     when IntegerLiteral then is_type(type, 'Int')
+    # `b'a'` may be a Byte, as `'a'` may be a Char.
+    when Interpolation then not value.binary or is_type(type, 'Binary')
     when
-      Throw, Return, Jump, Interpolation, FloatLiteral, BooleanLiteral, NilLiteral, This, IsTest,
-      Cast, TupleItem, Index, Range, Await, Unwrap, Coalesce
+      Throw, Return, Jump, FloatLiteral, BooleanLiteral, NilLiteral, This, IsTest, Cast, TupleItem,
+      Index, Range, Await, Unwrap, Coalesce
     then true
     when Call
       own_type := facts.instances[value] == nil and not has_type_arguments(facts.types[value])

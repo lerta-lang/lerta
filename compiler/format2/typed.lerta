@@ -1,22 +1,26 @@
 # The rewrites that need the types of the checking, which reads the nodes that the formatter parsed,
 # so the facts that it records of them are found by those nodes.
 import
-  BinaryOperation, Call, Case, CaseArm, Cast, Expression, Identifier, Import, ImportName, Member,
-  NamedValue, Range, Statement, StringLiteral, Index, This
+  BinaryOperation, Call, Case, CaseArm, Cast, Declaration, Expression, FunctionLiteral, Identifier,
+  Import, ImportName, Index, Member, MemberDeclaration, NamedValue, Node, Range, Statement,
+  StringLiteral, This, TypeDeclaration
 from '../ast'
 import check_program from '../checker/modules'
 import ImportedName, ModuleAlias from '../checker/imports'
 import NodeFacts, ProgramWide from '../checker/shared'
 import CompileError from '../errors'
 import has_is_empty from '../format/annotations'
+import field_types from '../format/check_result'
+import declared_inferable from '../format/inferable'
+import places_of from '../format/places'
 import
   copied_source, counted_end, range_test as comparisons_of_range, runs_no_code, runs_of_alike_arms
 from '../format/rewrites'
-import bool_type, INTEGER_KINDS, is_one_of_kinds, NUMBER_KINDS from '../types'
+import bool_type, format_type, INTEGER_KINDS, is_one_of_kinds, NUMBER_KINDS from '../types'
 import CLOSING_BRACKETS, OPENING_BRACKETS from '../lexer/tokens'
 import
   EMPTINESS_TESTS, EXPECTED_TYPES, MEMBERSHIP_TESTS, RANGE_TESTS, REDUNDANT_CASTS,
-  SHARED_ARM_BODIES, SPREADS, SHORTHAND_ARGUMENTS, UNUSED_IMPORTS
+  SHARED_ARM_BODIES, SPREADS, SHORTHAND_ARGUMENTS, TYPE_ANNOTATIONS, UNUSED_IMPORTS
 from '../format/rules'
 import dump_ast_without_positions from '../ast_dump'
 import load_modules from '../loader'
@@ -27,8 +31,11 @@ import Tokens from './tokens'
 # What the checking records of the nodes of the source: the facts, and the names that its imports
 # give that are never used.
 export struct Typed
+  program: ProgramWide
   facts: NodeFacts
   unused_imports: Set<Identifier>
+  # The names that the module imports, or that alias its imported modules.
+  imported: Set<String>
 
 # Nil where the program does not check, whose types are not known: its typed rewrites wait.
 export typed_program := (path: String, source: String, statements: Statement[]): Promise<Typed?> ->
@@ -38,14 +45,29 @@ export typed_program := (path: String, source: String, statements: Statement[]):
     check_program program
     shared := program.shared[modules.last()!.index]
     { imports } := shared
-    imported: (ImportedName | ModuleAlias)[] = [
+    all_imported: (ImportedName | ModuleAlias)[] = [
       imports.names.values()...
       imports.modules.values()...
     ]
-    unused_imports := Set([each.name for each in imported when not each.used])
-    { facts: shared.facts, unused_imports }
+    unused_imports := Set([each.name for each in all_imported when not each.used])
+    imported := Set([each.name.name for each in all_imported])
+    { program, imported, facts: shared.facts, unused_imports }
   catch _: CompileError
     nil
+
+# The types of the variables, the functions and the fields of the program, in their order, which
+# the types left out must keep (see rewritten_text); nil for a program that does not check.
+export declared_types := (statements: Statement[], typed: Typed?) ->
+  { program, facts } := typed ? return nil
+  found: String[]
+  add := (node: Node) -> found.push(facts.types[node] then format_type(facts.types[node]!) else '-')
+  places_of statements, {
+    statement: (statement, _) ->
+      add statement.name if statement is Declaration
+    before: (value, _) ->
+      add value if value is FunctionLiteral
+  }
+  [found..., field_types(program)...]
 
 export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[] ->
   case value
@@ -72,7 +94,59 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
 export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Typed): Edit?[] ->
   case statement
     when Import then [unused_imports(tokens, statement, typed.unused_imports)]
+    when Declaration
+      return [] if statement.type == nil or statement.omits_value or statement.weak
+      [left_out_type(tokens, statement.name, statement.value, statement.mutable, typed)]
+    when TypeDeclaration
+      [left_out_field_type(tokens, member, typed) for member in statement.members]
     else []
+
+# `x := v` for `x: T = v`, and `var x = v` for `var x: T = v`, where v has the type T of its own
+# (see Type annotations); but not where T names an import, which may use it alone and would then be
+# left unused.
+left_out_type := (
+  tokens: Tokens, name: Identifier, value: Expression, mutable: Bool, typed: Typed
+) ->
+  { facts, program } := typed
+  return nil if has_expected_parts(value, facts)
+  return nil unless declared_inferable({ name, value }, facts, program)
+  name_at := tokens.at(name.position) ? return nil
+  value_at := tokens.at(value.position) ? return nil
+  # A field's value may follow `default`.
+  assign := tokens.spelling(value_at - 1) == 'default' then value_at - 2 else value_at - 1
+  return nil if not tokens.is_kind(name_at + 1, ':') or not tokens.is_kind(assign, '=')
+  type_tokens := tokens.code[(name_at + 2)..assign]
+  if type_tokens.any((token) -> token.kind == IDENTIFIER and token.text in typed.imported)
+    return nil
+  # The `=` stays after a `var`, and goes with `:` into `:=` otherwise.
+  to := mutable then tokens.start(assign) else tokens.end(assign)
+  change := Change(to, from: tokens.end(name_at), text: mutable then ' ' else ' :=')
+  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(name_at + 1), [change]
+
+# Whether the value holds a part that a rewrite writes without what the type expected of it shows,
+# as `{ x: 1 }` for `Point(x: 1)`: the type that it is declared with is left out after it, if the
+# value then still gives it.
+has_expected_parts := (value: Expression, facts: NodeFacts) ->
+  var found = false
+  is_expected := (part: Expression) ->
+    case part
+      when Call then part in facts.recordable
+      when Member then part in facts.unqualifiable
+      when Cast then part in facts.redundant_casts
+      else false
+  places_of [value], { before: (part, _) ->
+    found = true if is_expected(part)
+  }
+  found
+
+# That of a field, but not of one whose value is a function, which would make it a method without
+# its type, nor of a weak one.
+left_out_field_type := (tokens: Tokens, member: MemberDeclaration, typed: Typed) ->
+  { type, value, modifier } := member
+  given := value ? return nil
+  return nil if type == nil or given is FunctionLiteral
+  return nil if modifier == 'weak' or modifier == 'weak var'
+  left_out_type tokens, member.name, given, modifier == 'var', typed
 
 # The import without the names that are never used (see Unused names); only reported where it gives
 # none that is, as an import runs the module's top-level code and brings its extends, which leaving

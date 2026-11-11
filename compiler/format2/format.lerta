@@ -11,7 +11,7 @@ import parse from '../parser/statement'
 import
   BINARY_LITERALS, BLANK_LINES, EMPTINESS_TESTS, MEMBERSHIP_TESTS, COMMENTS, DOUBLE_NEGATIONS,
   ELSE_NIL, EMPTY_INITIAL_VALUES, EXPECTED_TYPES, LAYOUT, NIL_DEFAULTS, RANGE_ENDS, REDUNDANT_CASTS,
-  SEMICOLONS, SHORTHAND_ARGUMENTS, STRANDED_COMMENTS, StyleRule, UNUSED_IMPORTS,
+  SEMICOLONS, SHORTHAND_ARGUMENTS, STRANDED_COMMENTS, StyleRule, TYPE_ANNOTATIONS, UNUSED_IMPORTS,
   VALUE_DOUBLE_NEGATIONS
 from '../format/rules'
 import is_off_throughout from '../format/format'
@@ -23,7 +23,7 @@ import rewrites_of from './rewrites'
 import CodeGap, LineStart, Spaces, StatementShape from './shapes'
 import Gap, literal_lines, source_tokens, SourceTokens, TextToken from './text'
 import Tokens from './tokens'
-import typed_program from './typed'
+import declared_types, typed_program, Typed from './typed'
 import walk, Walked from './walk'
 
 # A place where the source differs from the style, at its position in the source.
@@ -67,7 +67,13 @@ export format_source := (source: String, path: String) ->
   return Formatted(text: source, findings: []) if is_off_throughout(source)
   parsed := parsed_source(source, path)
   laid := laid_out(parsed)
-  first_rewrites := await rewrites(parsed, path)
+  first := await rewrites(parsed, path)
+  # The types left out must keep the types of the program, or they all stay (see rewritten_text).
+  with_types := await rewritten_text(parsed, laid, first, path, true)
+  text := with_types ? (await rewritten_text(parsed, laid, first, path, false))!
+  kept_types := text.annotations_kept
+  first_rewrites :=
+    [edit for edit in first.edits when not kept_types or edit.rule != TYPE_ANNOTATIONS]
   edits := [first_rewrites..., laid.edits...]
   held := held_statements(parsed.text, laid, edits)
   is_held := (at: Position) -> held.any((head) -> head.holds(at))
@@ -76,7 +82,7 @@ export format_source := (source: String, path: String) ->
   # A `;` that a rewrite takes out is a gap that the layout decides too.
   found := distinct([rewritten..., layout..., laid.stranded...])
   sorted := found.sorted((a, b) -> a.at.compare(b.at))
-  Formatted text: await rewritten_text(parsed, laid, first_rewrites, path), findings: sorted
+  Formatted text: text.text, findings: sorted
 
 distinct := (findings: Finding[]) ->
   seen: Set<String>
@@ -93,12 +99,18 @@ parsed_source := (source: String, path: String) ->
   lexed := lex(source, path)
   Parsed source, lexed, statements: parse(lexed.tokens, path), text: source_tokens(source, lexed)
 
-# Checks the program of `parsed`, which each round parses anew: the facts that the checking
-# records of a tree are found by its nodes.
+# The edits of the rewrites of a tree, and its checked program, whose facts are found by its nodes:
+# each round parses anew.
+struct Rewrites
+  edits: Edit[]
+  typed: Typed?
+
 rewrites := (parsed: Parsed, path: String) ->
   { source, lexed, statements, text } := parsed
   typed := await typed_program(path, source, statements)
-  rewrites_of statements, source, text, lexed, kept_lines(source, lexed), typed
+  Rewrites
+    typed
+    edits: rewrites_of(statements, source, text, lexed, kept_lines(source, lexed), typed)
 
 laid_out := (parsed: Parsed) ->
   { source, lexed, statements, text } := parsed
@@ -153,7 +165,7 @@ spans := (text: SourceTokens, statement: StatementShape, at: Position) ->
 TREE_CHANGES :=
   BINARY_LITERALS, DOUBLE_NEGATIONS, ELSE_NIL, EMPTINESS_TESTS, EMPTY_INITIAL_VALUES,
   EXPECTED_TYPES, MEMBERSHIP_TESTS, NIL_DEFAULTS, RANGE_ENDS, REDUNDANT_CASTS, SHORTHAND_ARGUMENTS,
-  UNUSED_IMPORTS, VALUE_DOUBLE_NEGATIONS
+  TYPE_ANNOTATIONS, UNUSED_IMPORTS, VALUE_DOUBLE_NEGATIONS
 
 # Only the rewrites of the source itself are reported: one that a round enables, as `b'...'` for the
 # `b"..."` that `"...".binary` is written as, shows once the text written is formatted again.
@@ -163,16 +175,25 @@ TREE_CHANGES :=
 # the source rewritten. A `;` goes last, once the layout has kept no statement on a line that holds
 # one (see Code kept as written): the layout puts the statement after it on a line of its own where
 # it decides where the statement starts, and its rewrite elsewhere.
-rewritten_text := (parsed: Parsed, first_laid: LaidOut, first_rewrites: Edit[], path: String) ->
+# Where `types` leaves out the types whose values have them of their own, and the program rewritten
+# does not check or gives a declaration another type, nil: a value took its type from one left out
+# after all, and none is left out then (`types` false).
+rewritten_text := (
+  parsed: Parsed, first_laid: LaidOut, first: Rewrites, path: String, types: Bool
+): Promise<RewrittenText?> ->
   var current = parsed
-  var last_rewrites = first_rewrites
+  var last_rewrites = first
+  var left_out_types = false
   # Whether the last round changed nothing, so that `last_rewrites` are those of `current`.
   var settled = false
   for round in 0..MAX_ROUNDS
     laid := round == 0 then first_laid else laid_out(current)
     last_rewrites = await rewrites(current, path) if round > 0
-    edits := [last_rewrites..., laid.edits...]
-    chosen := applicable([edit for edit in edits when edit.rule != SEMICOLONS])
+    edits := [last_rewrites.edits..., laid.edits...]
+    is_chosen := (edit: Edit) ->
+      edit.rule != SEMICOLONS and (types or edit.rule != TYPE_ANNOTATIONS)
+    chosen := applicable([edit for edit in edits when is_chosen(edit)])
+    left_out_types = true if chosen.any((edit) -> edit.rule == TYPE_ANNOTATIONS)
     if not chosen.is_empty()
       changing := [edit for edit in chosen when edit.rule in TREE_CHANGES]
       expected := written_program(applied(current.source, changing), path, 'its rewrites')
@@ -184,11 +205,22 @@ rewritten_text := (parsed: Parsed, first_laid: LaidOut, first_rewrites: Edit[], 
       settled = true
       break
   found := settled then last_rewrites else await rewrites(current, path)
-  separators := applicable([edit for edit in found when edit.rule == SEMICOLONS])
-  return current.source if separators.is_empty()
+  if left_out_types
+    before := declared_types(parsed.statements, first.typed)
+    after := declared_types(current.statements, found.typed) ? return nil
+    return nil if before != after
+  annotations_kept := not types
+  separators := applicable([edit for edit in found.edits when edit.rule == SEMICOLONS])
+  return { annotations_kept, text: current.source } if separators.is_empty()
   separated := written_program(applied(current.source, separators), path, 'its rewrites')
   check_same separated, current, path, 'its rewrites'
-  separated.source
+  { annotations_kept, text: separated.source }
+
+struct RewrittenText
+  text: String
+  # Whether the types whose values have them of their own are kept, as the program would not check
+  # the same without them.
+  annotations_kept: Bool
 
 # The rounds that the rewrites and the layouts between them take at most: one for each that another
 # enables, as `"..."` of `"...".binary` is written `'...'` once it is `b"..."`, or that a layout
