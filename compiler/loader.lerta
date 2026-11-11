@@ -51,7 +51,8 @@ class LoadingModule
 
 class Loader
   entry_path: String
-  entry: EntryModule?
+  # The modules that the caller has parsed already, by their keys (see EntryModule).
+  given: Map<String, EntryModule>
   # The directory that relative paths start from.
   cwd: String
   # Where a module whose top-level statements do not all parse keeps their errors, as it is loaded
@@ -63,27 +64,29 @@ class Loader
   # The modules in the order of their indexes.
   order: Int[] = []
 
-# The entry module as its caller has it already, for `lerta fmt2`, whose edits find the facts that
-# the checking records by the nodes that it parsed; the checking leaves the nodes as they are.
+# A module as its caller has it already, for `lerta fmt2`, whose edits find the facts that the
+# checking records by the nodes that it parsed; the checking leaves the nodes as they are.
 export struct EntryModule
   source: String
   program: Statement[]
 
 # The modules, each after those it imports unless they import it back, so the entry module comes
-# last: `entry` if given, else read from `entry_path`. The standard modules are those embedded in
-# the compiler.
-export load_modules := (entry_path: String, entry: EntryModule? = nil) ->
-  await load_all(Loader(entry_path, entry, cwd: real_path_text('.'), parse_errors: nil))
+# last: each file as `given` by its key (see module_key), if it is, else read. The standard modules
+# are those embedded in the compiler.
+export load_modules := (entry_path: String, given: Map<String, EntryModule> = Map()) ->
+  await load_all(Loader(entry_path, given, cwd: real_path_text('.'), parse_errors: nil))
 
 # The modules as load_modules gives them, but each with the statements that parse, for an
 # editor, which checks the code that is being written; the errors of those that do not go into
 # `parse_errors`, those found before an error that ends the loading too.
 export load_modules_partially := (entry_path: String, parse_errors: Located[]) ->
-  await load_all(Loader(entry_path, parse_errors, entry: nil, cwd: real_path_text('.')))
+  await load_all(Loader(entry_path, parse_errors, given: Map(), cwd: real_path_text('.')))
 
 load_all := (loader: Loader) ->
-  { entry_path, entry } := loader
-  # Reading the source first reports a missing file as such, not as a path that does not resolve.
+  { entry_path, given } := loader
+  # A key resolves the path, which a missing file does not: one that is not given is read first,
+  # which reports it as missing.
+  entry := given.is_empty() then nil else given[module_key(entry_path)]
   source := entry?.source ? await read_entry_source(entry_path)
   await load(loader, module_key(entry_path), source, nil, entry?.program)
   [finished_module(loader, id) for id in loader.order]
@@ -136,7 +139,10 @@ visit := (loader: Loader, statement: Import, from: String, location: String): Pr
   path := imported_file(statement, dirname(from), location)
   real := real_path_text(path)
   display_path := relative(loader.cwd, dirname(loader.entry_path), path)
-  loaded(loader, real) ? await load(loader, real, await read_source(path), display_path)
+  return id if id := loaded(loader, real)
+  if given := loader.given[real]
+    return await load(loader, real, given.source, display_path, given.program)
+  await load(loader, real, await read_source(path), display_path)
 
 # A file of std that a standard module imports by a relative path.
 visit_standard_file := (

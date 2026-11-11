@@ -295,6 +295,43 @@ fmt2_checks: Check[] =
       paths := ['src/a.lerta', 'src/b.lerta', 'src/inner/c.lerta']
       expect_run result, ["#{path}:1:3: #{spacing_report}\n" for path in paths].join(), 1
   }
+  # Checking a program once for all of its files only saves time: the reports are those of each file
+  # checked alone.
+  {
+    name: 'lerta fmt2 checks files that import each other as one program, and fixes them together'
+    run: ->
+      dir := await tree(
+        'fmt2_cycles'
+        {
+          'a.lerta': "import b from './b'\nexport a := (): Int -> 1\nprint b()\n"
+          'b.lerta': "import a from './a'\nexport b := (): Int -> a()\n"
+        }
+      )
+      [
+        expect_run(
+          await fmt2(dir, ['a.lerta', 'b.lerta'])
+          type_report('a.lerta:2:15') + type_report('b.lerta:2:15')
+          1
+        )...
+        expect_run(await fmt2(dir, ['--fix', 'a.lerta', 'b.lerta']), '', 0)...
+        await expect_files(
+          dir
+          {
+            'a.lerta': "import b from './b'\nexport a := -> 1\nprint b()\n"
+            'b.lerta': "import a from './a'\nexport b := -> a()\n"
+          }
+        )...
+      ]
+  }
+  {
+    name: 'lerta fmt2 checks a file alone where the program of one that imports it does not'
+    run: ->
+      files :=
+        'a.lerta': "import b from './b'\nx: Int = 'a'\nprint b()\n"
+        'b.lerta': "export b := (): Int -> 1\n"
+      dir := await tree('fmt2_alone', files)
+      expect_run await fmt2(dir, ['a.lerta', 'b.lerta']), type_report('b.lerta:1:15'), 1
+  }
   { name: 'lerta fmt2 reports a file that does not parse, and leaves it', run: ->
     dir := await tree('fmt2_parse', { 'bad.lerta': "(\n" })
     result := await fmt2(dir, ['--fix', 'bad.lerta'])

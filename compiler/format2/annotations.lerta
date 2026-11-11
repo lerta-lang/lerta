@@ -2,14 +2,13 @@
 # program (see typed.lerta), and the types that the program rewritten must keep.
 import
   Call, Cast, Declaration, Expression, Extend, FunctionLiteral, Identifier, Member,
-  MemberDeclaration, NamedType, Node, Parameter, Statement, TypeDeclaration, TypeName
+  MemberDeclaration, NamedType, Parameter, Statement, TypeDeclaration, TypeName
 from '../ast'
 import NodeFacts from '../checker/shared'
-import field_types from '../format/check_result'
 import declared_inferable, return_inferable from '../format/inferable'
 import places_of from '../format/places'
 import TYPE_ANNOTATIONS from '../format/rules'
-import format_type from '../types'
+import format_type, Type from '../types'
 import OPENING_BRACKETS from '../lexer/tokens'
 import Change, Edit from './edits'
 import Tokens from './tokens'
@@ -82,15 +81,22 @@ functions_of := (statements: Statement[]) ->
 # the types left out must keep (see rewritten_text); nil for a program that does not check.
 export declared_types := (statements: Statement[], typed: Typed?) ->
   { program, facts } := typed ? return nil
+  fields: Map<Identifier, Type>
+  for info in program.infos.values()
+    for field in info.fields
+      fields[field.name] = type if type := field.type
   found: String[]
-  add := (node: Node) -> found.push(facts.types[node] then format_type(facts.types[node]!) else '-')
+  add := (type: Type?) -> found.push(type then format_type(type) else '-')
   places_of statements, {
     statement: (statement, _) ->
-      add statement.name if statement is Declaration
+      case statement
+        when Declaration then add(facts.types[statement.name])
+        when TypeDeclaration then add(fields[member.name]) for member in statement.members
+        else pass
     before: (value, _) ->
-      add value if value is FunctionLiteral
+      add facts.types[value] if value is FunctionLiteral
   }
-  [found..., field_types(program)...]
+  found
 
 # `x := v` for `x: T = v`, and `var x = v` for `var x: T = v`, where v has the type T of its own
 # (see Type annotations); but not where T names an import, which may use it alone and would then be

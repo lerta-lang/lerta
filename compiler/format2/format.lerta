@@ -47,7 +47,7 @@ struct Decision
   rule: StyleRule
 
 # The source lexed and parsed, and its text tokens.
-struct Parsed
+export struct Parsed
   source: String
   lexed: Lexed
   statements: Statement[]
@@ -70,8 +70,13 @@ struct LaidOut
 export format_source := (source: String, path: String) ->
   return Formatted(text: source, findings: []) if is_off_throughout(source)
   parsed := parsed_source(source, path)
+  await format_parsed(parsed, path, await typed_program(path, source, parsed.statements))
+
+# That of the source parsed, not off throughout, with its program checked (see typed_programs).
+export format_parsed := (parsed: Parsed, path: String, typed: Typed?) ->
+  { source } := parsed
   laid := laid_out(parsed)
-  first := await rewrites(parsed, path)
+  first := rewrites_with(parsed, typed)
   # The types left out must keep the types of the program, or they all stay (see rewritten_text).
   with_types := await rewritten_text(parsed, laid, first, path, true)
   text := with_types ? (await rewritten_text(parsed, laid, first, path, false))!
@@ -121,7 +126,7 @@ distinct := (findings: Finding[]) ->
     found.push finding
   found
 
-parsed_source := (source: String, path: String) ->
+export parsed_source := (source: String, path: String) ->
   lexed := lex(source, path)
   Parsed source, lexed, statements: parse(lexed.tokens, path), text: source_tokens(source, lexed)
 
@@ -132,8 +137,10 @@ struct Rewrites
   typed: Typed?
 
 rewrites := (parsed: Parsed, path: String) ->
+  rewrites_with parsed, await typed_program(path, parsed.source, parsed.statements)
+
+rewrites_with := (parsed: Parsed, typed: Typed?) ->
   { source, lexed, statements, text } := parsed
-  typed := await typed_program(path, source, statements)
   Rewrites
     typed
     edits: rewrites_of(statements, source, text, lexed, kept_lines(source, lexed), typed)

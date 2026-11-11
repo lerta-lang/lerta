@@ -20,7 +20,7 @@ import
   SHARED_ARM_BODIES, SPREADS, SHORTHAND_ARGUMENTS, UNUSED_IMPORTS
 from '../format/rules'
 import dump_ast_without_positions from '../dumps'
-import load_modules from '../loader'
+import EntryModule, load_modules, module_key from '../loader'
 import Change, Edit from './edits'
 import counted_range, is_zero from './ranges'
 import Tokens from './tokens'
@@ -35,22 +35,41 @@ export struct Typed
   imported: Set<String>
 
 # Nil where the program does not check, whose types are not known: its typed rewrites wait.
-export typed_program := (path: String, source: String, statements: Statement[]): Promise<Typed?> ->
-  try
-    modules := await load_modules(path, { source, program: statements })
-    program := ProgramWide(modules, entry_path: path, finds_all_errors: false)
-    check_program program
-    shared := program.shared[modules.last()!.index]
-    { imports } := shared
-    all_imported: (ImportedName | ModuleAlias)[] = [
-      imports.names.values()...
-      imports.modules.values()...
-    ]
-    unused_imports := Set([each.name for each in all_imported when not each.used])
-    imported := Set([each.name.name for each in all_imported])
-    { program, imported, facts: shared.facts, unused_imports }
-  catch _: CompileError
-    nil
+export typed_program := (path: String, source: String, statements: Statement[]) ->
+  key := module_key(path)
+  typed := await typed_programs([path], Map([(key, { source, program: statements })]))
+  typed[key]
+
+# Those of the files of `paths`, by their keys, which `given` holds as parsed: each program that
+# holds some is checked once for all of them (see load_modules). None for one whose program does not
+# check, though it may check with another entry.
+export typed_programs := (paths: String[], given: Map<String, EntryModule>) ->
+  found: Map<String, Typed>
+  tried: Set<String>
+  for path in paths
+    continue unless tried.add(module_key(path))
+    try
+      modules := await load_modules(path, given)
+      program := ProgramWide(modules, entry_path: path, finds_all_errors: false)
+      check_program program
+      for module in modules
+        continue unless module.key in given
+        found[module.key] = typed_of(program, module.index)
+        tried.add module.key
+    catch _: CompileError
+      continue
+  found
+
+typed_of := (program: ProgramWide, index: Int): Typed ->
+  shared := program.shared[index]
+  { imports } := shared
+  all_imported: (ImportedName | ModuleAlias)[] = [
+    imports.names.values()...
+    imports.modules.values()...
+  ]
+  unused_imports := Set([each.name for each in all_imported when not each.used])
+  imported := Set([each.name.name for each in all_imported])
+  { program, imported, facts: shared.facts, unused_imports }
 
 export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[] ->
   case value
