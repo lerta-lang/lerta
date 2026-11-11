@@ -1,10 +1,11 @@
 # The walk of expressions (see walk.lerta).
 import
   ArrayLiteral, ArrayTypeName, Await, BinaryOperation, BooleanLiteral, Call, Case, Coalesce,
-  Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, Identifier, Index,
-  IntegerLiteral, Interpolation, Jump, MapLiteral, Member, NamedType, NamedValue, NilLiteral,
-  Parameter, Range, RecordLiteral, Return, StringLiteral, This, Throw, TupleLiteral, TypeName,
-  UnaryOperation, Unwrap, Yield
+  Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, FunctionTypeName,
+  Identifier, Index, IntegerLiteral, Interpolation, Jump, MapLiteral, Member, NamedType, NamedValue,
+  NilLiteral, Parameter, Range, RecordLiteral, RecordTypeField, RecordTypeName, Return,
+  StringLiteral, This, Throw, TupleLiteral, TupleTypeName, TypeName, UnaryOperation, UnionTypeName,
+  Unwrap, Yield
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import FUNCTION_BODIES from '../format/rules'
@@ -53,7 +54,36 @@ extend Walker
           return LITERAL_BLOCK if is_block_literal(literal)
         is_block_call(node) and @on_own_line then BLOCK_CALL else OTHER
 
+  # A type, on one line, in the parentheses that group it: those that the tree does not keep, as
+  # around a union or a function type that `?` or `[]` follows. One whose items line ends separate,
+  # which a line would need commas between, is left as written.
   type := (type: TypeName, before: CodeGap): void ->
+    if type is ArrayTypeName
+      @type type.element, before
+      @take '[', NONE
+      @take ']', NONE
+      @take '?', NONE if type.optional
+      return
+    var groups = 0
+    var gap = before
+    while @at_kind('(') and not @opens_type(type, @at)
+      @take '(', gap
+      gap = NONE
+      groups += 1
+    @ungrouped_type type, gap
+    @take ')', NONE for _ in 0..groups
+    @take '?', NONE if type.optional
+
+  # Whether the `(` at `open` is the type's own: that of the parameters of a function type, which
+  # `->` follows, or of a tuple type, which holds a comma.
+  opens_type := (type: TypeName, open: Int) ->
+    close := @closing_bracket(open)
+    case type
+      when FunctionTypeName then @kind_at(close + 1) == '->'
+      when TupleTypeName then @has_comma(open + 1, close)
+      else false
+
+  ungrouped_type := (type: TypeName, before: CodeGap): void ->
     case type
       when NamedType
         @take IDENTIFIER, before
@@ -61,13 +91,32 @@ extend Walker
           @take '<', NONE
           @list type.args.length, NONE, (i, gap) -> @type(type.args[i], gap), false
           @take '>', NONE
-        @take '?', NONE if type.optional
-      when ArrayTypeName
-        @type type.element, before
-        @take '[', NONE
-        @take ']', NONE
-        @take '?', NONE if type.optional
+      when UnionTypeName
+        for member, i in type.members
+          @take '|', ONE if i > 0
+          @type member, i == 0 then before else ONE
+      when FunctionTypeName
+        @types '(', before, type.params, ')'
+        @take '->', ONE
+        @type type.result, ONE
+      when TupleTypeName then @types('(', before, type.items, ')')
+      when RecordTypeName
+        { fields } := type
+        @take '{', before
+        @list fields.length, INSIDE, (i, gap) -> @record_type_field(fields[i], gap), false
+        @take '}', fields.is_empty() then NONE else INSIDE
       else unhandled()
+
+  # Types in brackets, on one line.
+  types := (open: TokenKind, before: CodeGap, types: TypeName[], close: TokenKind) ->
+    @take open, before
+    @list types.length, NONE, (i, gap) -> @type(types[i], gap), false
+    @take close, NONE
+
+  record_type_field := (field: RecordTypeField, before: CodeGap) ->
+    @take IDENTIFIER, before
+    @take ':', NONE
+    @type field.type, ONE
 
   # A whole value, as an item or a value after `=`, whose operations may break.
   whole := (node: Expression, before: CodeGap) ->
