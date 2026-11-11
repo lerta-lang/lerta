@@ -1,9 +1,9 @@
 # The rewrites that need the types of the checking, which reads the nodes that the formatter parsed,
 # so the facts that it records of them are found by those nodes.
 import
-  BinaryOperation, Call, Case, CaseArm, Cast, Declaration, Expression, FunctionLiteral, Identifier,
-  Import, ImportName, Index, Member, MemberDeclaration, NamedValue, Node, Range, Statement,
-  StringLiteral, This, TypeDeclaration
+  BinaryOperation, Call, Case, CaseArm, Cast, Declaration, Expression, Extend, FunctionLiteral,
+  Identifier, Import, ImportName, Index, Member, MemberDeclaration, NamedValue, Node, Parameter,
+  Range, Statement, StringLiteral, This, TypeDeclaration
 from '../ast'
 import check_program from '../checker/modules'
 import ImportedName, ModuleAlias from '../checker/imports'
@@ -11,7 +11,7 @@ import NodeFacts, ProgramWide from '../checker/shared'
 import CompileError from '../errors'
 import has_is_empty from '../format/annotations'
 import field_types from '../format/check_result'
-import declared_inferable from '../format/inferable'
+import declared_inferable, return_inferable from '../format/inferable'
 import places_of from '../format/places'
 import
   copied_source, counted_end, range_test as comparisons_of_range, runs_no_code, runs_of_alike_arms
@@ -36,6 +36,15 @@ export struct Typed
   unused_imports: Set<Identifier>
   # The names that the module imports, or that alias its imported modules.
   imported: Set<String>
+  functions: Functions
+
+# The function literals whose types stay as written: those that no function type is expected
+# for, the values of variables and members without types, whose parameters keep theirs but those
+# with a default; and those in generic functions and types, whose code the checker checks only
+# for each instance, which tells nothing of the code that no instance uses.
+struct Functions
+  unexpected: Set<FunctionLiteral>
+  generic: Set<FunctionLiteral>
 
 # Nil where the program does not check, whose types are not known: its typed rewrites wait.
 export typed_program := (path: String, source: String, statements: Statement[]): Promise<Typed?> ->
@@ -51,9 +60,35 @@ export typed_program := (path: String, source: String, statements: Statement[]):
     ]
     unused_imports := Set([each.name for each in all_imported when not each.used])
     imported := Set([each.name.name for each in all_imported])
-    { program, imported, facts: shared.facts, unused_imports }
+    { program, imported, facts: shared.facts, unused_imports, functions: functions_of(statements) }
   catch _: CompileError
     nil
+
+functions_of := (statements: Statement[]) ->
+  functions := Functions(unexpected: Set(), generic: Set())
+  { unexpected, generic } := functions
+  add_generic := (body: Statement[]) ->
+    places_of body, { before: (value, _) ->
+      generic.add value if value is FunctionLiteral
+    }
+  add_members := (members: MemberDeclaration[], is_generic: Bool) ->
+    values: Statement[] = [member.value for member in members when member.value != nil]
+    for member in members
+      unexpected.add member.value if member.type == nil and member.value is FunctionLiteral
+    add_generic values if is_generic
+  places_of statements, {
+    before: (value, _) ->
+      add_generic value.body if value is FunctionLiteral and not value.type_params.is_empty()
+    statement: (statement, _) ->
+      case statement
+        when Declaration
+          value := statement.value
+          unexpected.add value if statement.type == nil and value is FunctionLiteral
+        when TypeDeclaration, Extend
+          add_members statement.members, not statement.type_params.is_empty()
+        else pass
+  }
+  functions
 
 # The types of the variables, the functions and the fields of the program, in their order, which
 # the types left out must keep (see rewritten_text); nil for a program that does not check.
@@ -81,6 +116,7 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
         range_test(tokens, value, facts)
       ]
     when Case then shared_arm_bodies(tokens, value, typed.facts)
+    when FunctionLiteral then function_types(tokens, value, typed)
     when Call
       { facts } := typed
       [
@@ -115,13 +151,85 @@ left_out_type := (
   # A field's value may follow `default`.
   assign := tokens.spelling(value_at - 1) == 'default' then value_at - 2 else value_at - 1
   return nil if not tokens.is_kind(name_at + 1, ':') or not tokens.is_kind(assign, '=')
-  type_tokens := tokens.code[(name_at + 2)..assign]
-  if type_tokens.any((token) -> token.kind == IDENTIFIER and token.text in typed.imported)
-    return nil
+  return nil if names_import(tokens, name_at + 2, assign, typed)
   # The `=` stays after a `var`, and goes with `:` into `:=` otherwise.
   to := mutable then tokens.start(assign) else tokens.end(assign)
   change := Change(to, from: tokens.end(name_at), text: mutable then ' ' else ' :=')
   tokens.edit_at TYPE_ANNOTATIONS, tokens.start(name_at + 1), [change]
+
+# `(x) -> x` for `(x: Int): Int -> x`, and `-> 1` for `(): Int -> 1`, where the checking shows the
+# types inferable (see Type annotations), but those of a function that stays as written (see
+# Functions).
+function_types := (tokens: Tokens, function: FunctionLiteral, typed: Typed): Edit?[] ->
+  { functions } := typed
+  return [] if not function.type_params.is_empty() or function in functions.generic
+  open := tokens.at(function.position) ? return []
+  return [] unless tokens.is_kind(open, '(')
+  close := tokens.matching(open) ? return []
+  returned := left_out_return(tokens, function, open, close, typed)
+  # `(x): T ->` does not parse: a parameter without its type takes the return type with it.
+  return [returned] if function.return_type != nil and returned?.change == nil
+  is_expected := function not in functions.unexpected
+  parameters := [
+    left_out_parameter(tokens, function, i, close, typed)
+    for param, i in function.params
+    when param.type != nil and (is_expected or param.default != nil)
+  ]
+  [parameters..., returned]
+
+left_out_parameter := (
+  tokens: Tokens, function: FunctionLiteral, i: Int, close: Int, typed: Typed
+) ->
+  { name, default, variadic } := function.params[i]
+  return nil if variadic or not typed.program.inferable_parameters[name] ? false
+  return nil if default != nil and has_expected_parts(default, typed.facts)
+  name_at := tokens.at(name.position) ? return nil
+  return nil unless tokens.is_kind(name_at + 1, ':')
+  bound := parameter_bound(tokens, function.params, i, close) ? return nil
+  last := tokens.is_kind(bound - 1, ',') then bound - 2 else bound - 1
+  return nil if names_import(tokens, name_at + 2, last + 1, typed)
+  change := Change(from: tokens.end(name_at), to: tokens.end(last), text: '')
+  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(name_at + 1), [change]
+
+# The token that ends the type of the parameter: the `=` of its default, the name of the next or the
+# `)` of the list.
+parameter_bound := (tokens: Tokens, params: Parameter[], i: Int, close: Int) ->
+  if value := params[i].default
+    value_at := tokens.at(value.position) ? return nil
+    return tokens.is_kind(value_at - 1, '=') then value_at - 1
+  i + 1 < params.length then tokens.at(params[i + 1].name.position) else close
+
+left_out_return := (
+  tokens: Tokens, function: FunctionLiteral, open: Int, close: Int, typed: Typed
+) ->
+  return nil if function.return_type == nil
+  { facts, program } := typed
+  last := function.body.last() as Expression?
+  results := [(facts.results[function] ? [])..., (last then [last] else [])...]
+  return nil if results.any((value) -> has_expected_parts(value, facts))
+  return nil unless return_inferable(function, last, facts, program)
+  return nil unless tokens.is_kind(close + 1, ':')
+  arrow := arrow_after(tokens, close + 2) ? return nil
+  return nil if names_import(tokens, close + 2, arrow, typed)
+  # Without its parameters, the function is written without the `()`.
+  bare := function.params.is_empty()
+  from := bare then tokens.start(open) else tokens.end(close)
+  change := Change(from, to: tokens.start(arrow), text: bare then '' else ' ')
+  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(close + 1), [change]
+
+# The `->` after a type that holds none outside its brackets, from `from`.
+arrow_after := (tokens: Tokens, from: Int) ->
+  var i = from
+  while i < tokens.code.length
+    return i if tokens.is_kind(i, '->')
+    closing := tokens.code[i].kind in OPENING_BRACKETS then (tokens.matching(i) ? return nil) else i
+    i = closing + 1
+  nil
+
+# Whether the tokens from `from` up to `to` name an import, which may use it alone and would then be
+# left unused.
+names_import := (tokens: Tokens, from: Int, to: Int, typed: Typed) ->
+  tokens.code[from..to].any((token) -> token.kind == IDENTIFIER and token.text in typed.imported)
 
 # Whether the value holds a part that a rewrite writes without what the type expected of it shows,
 # as `{ x: 1 }` for `Point(x: 1)`: the type that it is declared with is left out after it, if the

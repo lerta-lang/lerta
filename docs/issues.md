@@ -37,3 +37,7 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 ## lerta_platform is left in the runtime for the seed
 
 `lerta_platform` (`runtime/process.c`) gives the system's name, which std read as `platform` before the intrinsic value took its place; no source calls it now, but the seed, compiled from a std that did, still does. Fix: once the seed is refreshed, remove it from the runtime and `runtime/lerta.h`.
+
+## fmt2 drops the parentheses of a function returned before a postfix if
+
+`lerta fmt2` on `mk := (n: Int): ((Int) -> Int) ->`, then `  return ((m) -> m) if n > 0` and `  (m) -> n + m`, fails with "its rewrites would change the program, which is a fault of the formatter": a rewrite of `compiler/format2/` takes out the parentheses around the function literal, whose body would then take the `if`. Fix: keep the parentheses of a function literal that a postfix form follows.
