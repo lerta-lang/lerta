@@ -11,14 +11,15 @@ import parse from '../parser/statement'
 import
   BINARY_LITERALS, BLANK_LINES, EMPTINESS_TESTS, MEMBERSHIP_TESTS, COMMENTS, DOUBLE_NEGATIONS,
   ELSE_NIL, EMPTY_INITIAL_VALUES, EXPECTED_TYPES, LAYOUT, NIL_DEFAULTS, RANGE_ENDS, REDUNDANT_CASTS,
-  SEMICOLONS, SHORTHAND_ARGUMENTS, STRANDED_COMMENTS, StyleRule, TYPE_ANNOTATIONS, UNUSED_IMPORTS,
-  VALUE_DOUBLE_NEGATIONS
+  SEMICOLONS, SHORTHAND_ARGUMENTS, STRANDED_COMMENTS, StyleRule, TYPE_ANNOTATIONS,
+  UNBREAKABLE_LINES, UNUSED_IMPORTS, VALUE_DOUBLE_NEGATIONS
 from '../format/rules'
 import is_off_throughout from '../format/format'
+import columns from '../format/source'
 import common_indentation, is_blank from '../lexer/string_literal'
 import applicable, applied, Edit from './edits'
 import kept_lines from './kept'
-import break_lines from './lines'
+import break_lines, WIDTH from './lines'
 import rewrites_of from './rewrites'
 import CodeGap, LineStart, Spaces, StatementShape from './shapes'
 import Gap, literal_lines, source_tokens, SourceTokens, TextToken from './text'
@@ -61,6 +62,8 @@ struct LaidOut
   edits: Edit[]
   statements: StatementShape[]
   skipped: Set<Int>
+  # The lines kept as they are written, or marked so (see KeptLines).
+  kept: Set<Int>
 
 # Throws a CompileError if the source does not parse. The layout of a statement that holds a
 # rewrite is reported once the rewrite is applied, as the rewrite may change it.
@@ -81,9 +84,31 @@ export format_source := (source: String, path: String) ->
   layout := [finding for finding in laid.findings when not is_held(finding.at)]
   rewritten := [Finding(at: edit.at, rule: edit.rule) for edit in edits]
   # A `;` that a rewrite takes out is a gap that the layout decides too.
-  found := distinct([rewritten..., layout..., laid.stranded...])
+  # A line that a rewrite left to be done by hand may shorten is reported for that alone.
+  by_hand := Set([edit.at.line for edit in edits when edit.change == nil])
+  long := long_lines(source, text.text, Set([laid.kept..., by_hand...]))
+  found := distinct([rewritten..., layout..., laid.stranded..., long...])
   sorted := found.sorted((a, b) -> a.at.compare(b.at))
   Formatted text: text.text, findings: sorted
+
+# The lines of the source that the formatted text holds, but for their indentation and the spaces
+# that end them, over WIDTH columns there: of a comment, a string or a name that the formatter
+# cannot break, to be shortened by hand, reported where the formatted line passes WIDTH. Not those
+# `left`, as kept as written.
+long_lines := (source: String, formatted: String, left: Set<Int>) ->
+  formatted_lines: Map<String, String>
+  formatted_lines[line.trim()] = line for line in formatted.split("\n")
+  found: Finding[]
+  for line, i in source.split("\n")
+    continue if i + 1 in left
+    written := formatted_lines[line.trim()] ? continue
+    continue if columns(written) <= WIDTH
+    # The source column of the formatted line's first past WIDTH, as its indentation changes.
+    shift := leading_spaces(written) - leading_spaces(line)
+    found.push { rule: UNBREAKABLE_LINES, at: { line: i + 1, column: max(WIDTH + 1 - shift, 1) } }
+  found
+
+leading_spaces := (line: String) -> columns(line) - columns(line.trim_start())
 
 distinct := (findings: Finding[]) ->
   seen: Set<String>
@@ -115,7 +140,8 @@ rewrites := (parsed: Parsed, path: String) ->
 
 laid_out := (parsed: Parsed) ->
   { source, lexed, statements, text } := parsed
-  walked := walk(statements, text, kept_lines(source, lexed))
+  kept := kept_lines(source, lexed)
+  walked := walk(statements, text, kept)
   # The walk skips the statements kept as they are written, which the lines leave alone.
   tokens := Tokens(source, text, comments: lexed.comments, kept: Set())
   edits := break_lines(walked, text, tokens)
@@ -130,6 +156,7 @@ laid_out := (parsed: Parsed) ->
     findings: found
     statements: walked.statements
     skipped: walked.skipped
+    kept: Set([kept.kept..., kept.marked...])
 
 # The part of the innermost statement that holds an edit, from its start up to the end of the line
 # `last`, where the edit ends, which leaves out the blocks below its head.
