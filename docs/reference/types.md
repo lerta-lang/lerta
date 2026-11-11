@@ -36,7 +36,8 @@
 ### Methods
 
 - `x.wrapping_add(y)`, `wrapping_sub`, `wrapping_mul`: the same operations without the check, wrapping around modulo 2 to the 64, for hashes and checksums.
-- `n.to_hex(width = 0)`: lower-case hexadecimal, with zeros before it to make `width` digits. `255.to_hex()` is `'ff'`, `10.to_hex(4)` is `'000a'`; `.to_upper()` gives upper case. A negative `n` throws a `ValueError`, as it has no one such text.
+- `n.to_hex(width = 0)`: lower-case hexadecimal, with zeros before it to make `width` digits. `255.to_hex()` is `'ff'`, `10.to_hex(4)` is `'000a'`; `.to_upper()` gives upper case. A negative `n` throws a `ValueError`, as it has no one such text; `n.to_bits().to_hex()` gives its bits, as a `UInt64` has `to_hex` too.
+- `n.to_bits()`: the same 64 bits as a `UInt64`, `n` itself if not negative: `-1.to_bits()` is the greatest `UInt64`.
 - Conversions: see [sized integers](#integer-conversions) and [Float](#float).
 
 ### Why
@@ -479,6 +480,7 @@ print xs[0] + xs.length
 | `xs.pop()` | Removes and returns the last item; throws `pop from an empty array` if empty. |
 | `xs.append(ys)` | Pushes the items that `ys` has when it is called, in order, so `xs.append(xs)` doubles `xs`. |
 | `xs.truncate(n)` | Removes the items after the first `n`; a negative `n` throws a `ValueError`. |
+| `xs.split_off(n)` | Removes the items from `n` on and returns them, in order; throws `slice out of range` unless `0 <= n <= xs.length`. |
 | `xs.contains(x)` | Whether an item is `==` to `x`. |
 | `xs.index_of(x)` | The place of the first item `==` to `x`, or nil. |
 | `xs.remove(x)` | Removes the first item `==` to `x`, moving those after it down; tells whether there was one. |
@@ -486,6 +488,7 @@ print xs[0] + xs.length
 | `xs.first()`, `xs.last()` | The first or the last item, or nil if empty. |
 | `xs.get(i)` | The item at `i`, or nil out of range, where `xs[i]` throws. |
 | `xs.reversed()` | The items in the reverse order. |
+| `xs.all_but_last()` | The items but the last, in a new array; none if empty, where `xs[..(xs.length - 1)]` throws. |
 | `xs.sorted(compare)` | A new array ordered by `compare`, an [`Ordering`](builtins.md#equatable-comparable-and-hashable) that is `LESS` when its first argument goes first, equal items keeping their order; without it, by the `compare` of [Comparable](builtins.md#equatable-comparable-and-hashable) items: `names.sorted()`. |
 | `xs.sorted_by(key)` | Ordered as by `sorted`, by the Comparable key that `key` gives each item: `names.sorted_by((name) -> name.binary.length)`. |
 | `xs.sort(compare)`, `xs.sort_by(key)` | Order the array itself as `sorted` and `sorted_by` order a copy, making no array but one copy of its items to merge into: `names.sort()`. A `compare` that throws leaves the items in some order, each once. |

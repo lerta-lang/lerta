@@ -1,7 +1,6 @@
 # Calls of the methods of std:builtins that go through `@` once, over a receiver that a loop goes
 # through in place, which generate the method's body in place, so that its loop goes through the
 # receiver in place too and no Iter is made (see docs/internals/iteration.md#inlined-methods).
-import take_from from '../arrays'
 import
   Assignment, Binding, BooleanLiteral, Call, Case, Condition, Declaration, Expression, For,
   FunctionLiteral, Identifier, If, IntegerLiteral, Member, operands_of, Parameter, Position, Range,
@@ -12,7 +11,6 @@ import ExtensionSource, MethodSource from '../checker/methods'
 import Property from '../checker/member_targets'
 import ScopedLocal, TopLevelValue from '../checker/references'
 import arguments_of from '../checker/shared'
-import all_but_last from '../arrays'
 import function_type_of from './closure'
 import generate_iteration from './control_flow'
 import emit_traced_unwind, TRACE_PUSH from './exceptions'
@@ -183,7 +181,7 @@ export generate_inlined_method := (
       scope[name] = ValueLocal(operand: operands[i], type: param_type)
     else
       scope[name] = store_in_slot(inner, generate(inner, param.default!), param_type)
-  generate_statements inner, all_but_last(literal.body)
+  generate_statements inner, literal.body.all_but_last()
   generate_last_statement inner, literal.body, type.result
   inner.locals.pop()
   ir.start_block exit_label
@@ -236,8 +234,8 @@ call_state := (g: Generator, position: Position?) ->
   temporary_depth := g.temporaries.length
   (emit: () -> void) ->
     scopes := g.locals.set_aside(scope_depth)
-    handlers := take_from(g.handlers, handler_depth)
-    temporaries := take_from(g.temporaries, temporary_depth)
+    handlers := g.handlers.split_off(handler_depth)
+    temporaries := g.temporaries.split_off(temporary_depth)
     traceless := g.traceless
     g.traceless = false
     located g, position, emit

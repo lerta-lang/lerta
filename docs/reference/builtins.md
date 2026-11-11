@@ -177,7 +177,8 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `to_float(): Float`
 - `to_int()`, `to_byte()`, `to_int8()`, `to_int16()`, `to_int32()`, `to_uint16()`, `to_uint32()`, `to_uint64()`: of that type, optional unless every value fits
 - `to_char(): Char?`; `Char` for a `Byte`
-- `Int` only: `to_hex(width: Int = 0): String`
+- `Int` and `UInt64`: `to_hex(width: Int = 0): String`
+- `Int` only: `to_bits(): UInt64`
 - `Byte` only: `is_digit(): Bool`, `is_letter(): Bool`, `is_space(): Bool`, `is_utf8_continuation(): Bool`, `hex_value(): Int?`
 
 ### Char
@@ -255,7 +256,8 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `sort_by<K: Comparable>(key: (T) -> K)`
 - `append(items: T[])`
 - `reversed(): T[]`
-- `truncate(length: Int)`
+- `truncate(length: Int)`, `split_off(at: Int): T[]`
+- `all_but_last(): T[]`
 - Of [Equatable](#equatable-comparable-and-hashable) items: `contains(item: T): Bool`, `index_of(item: T): Int?`, `remove(item: T): Bool`
 - Of [Literal](#literal) items: `to_string(): String`, `to_literal(): String` (see [Stringable](#stringable))
 - Of a `String[]`: `join(separator: String): String`
