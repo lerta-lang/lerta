@@ -126,20 +126,23 @@ debug_runtime_name := ->
   plain_runtime_name = find_plain_runtime_name() if plain_runtime_name == nil
   await plain_runtime_name!
 
-# A program of many standard modules, built and run with an empty cache and again with it filled,
-# as the other tests share a cache kept from run to run.
-build_and_run_args := (cache: String, flags: String[]) ->
-  source := "#{root_dir}/tests/args/args.lerta"
+# A program of many standard modules, which the debug and release checks build and run with an
+# empty cache and again with it filled, as the other tests share a cache kept from run to run. The
+# release-checked check shares their code paths, so it builds hello, which costs much less on a
+# machine of few cores.
+many_modules := "#{root_dir}/tests/args/args.lerta"
+
+build_and_run := (cache: String, flags: String[], source: String) ->
   env := { 'LERTA_CACHE_DIR': cache }
-  built := await run_in_new_dir(compiler, ['build', source, '-o', 'args', flags...], b'', env)
+  built := await run_in_new_dir(compiler, ['build', source, '-o', 'program', flags...], b'', env)
   succeed 'build', built.result
-  ran := await run_command("#{built.cwd}/args#{host_executable_suffix}", [], built.cwd)
+  ran := await run_command("#{built.cwd}/program#{host_executable_suffix}", [], built.cwd)
   succeed 'the built program', ran
 
-cached_runtime_check := (flags: String[], kind: String) ->
+cached_runtime_check := (flags: String[], kind: String, source: String) ->
   Check name: "lerta build #{flags.join(' ')} caches and reuses the #{kind} runtime", run: ->
     cache := new_cli_dir("cache-#{kind}")
-    await build_and_run_args(cache, flags)
+    await build_and_run(cache, flags, source)
     entries := runtimes_in(cache)
     return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
     name := entries[0]
@@ -154,7 +157,7 @@ cached_runtime_check := (flags: String[], kind: String) ->
     written := stat(object) ? throw ValueError("no cached object: #{object}")
     modules := module_objects(cache, name)
     return ["the build kept no object of a standard module in #{name}"] if modules.is_empty()
-    await build_and_run_args(cache, flags)
+    await build_and_run(cache, flags, source)
     [
       reason_unless(
         stat(object)!.modified_time == written.modified_time
@@ -528,9 +531,9 @@ export checks :=
   texts_hash_check()
   clean_check()
   own_modules_check()
-  cached_runtime_check([], 'debug')
-  cached_runtime_check(['-O'], 'release')
-  cached_runtime_check(['-O', '--memory-checks'], 'release-checked')
+  cached_runtime_check([], 'debug', many_modules)
+  cached_runtime_check(['-O'], 'release', many_modules)
+  cached_runtime_check(['-O', '--memory-checks'], 'release-checked', hello)
   incomplete_runtime_check([], 'debug')
   incomplete_runtime_check(['-O'], 'release')
   invalid_target_check()
