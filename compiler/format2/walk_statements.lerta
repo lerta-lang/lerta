@@ -1,8 +1,8 @@
 # The walk of statements and blocks (see walk.lerta).
 import
   Assignment, Binding, Call, Case, CaseArm, Condition, Declaration, EnumDeclaration, Extend, Extern,
-  For, If, Import, ImportName, InterfaceDeclaration, Intrinsic, Pass, Statement, TypeAlias,
-  TypeDeclaration, UnaryOperation, While
+  For, If, Import, ImportName, InterfaceDeclaration, Intrinsic, MemberDeclaration, Pass, Position,
+  Statement, StringLiteral, TypeAlias, TypeDeclaration, TypeParameter, UnaryOperation, While
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import BRANCHES, StyleRule from '../format/rules'
@@ -11,19 +11,24 @@ import
   ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, CodeGap, ImportShape, LineStart, ListShape,
   PostfixShape, StatementShape
 from './shapes'
-import NONE, ONE, unhandled, Unhandled, Walker from './walk'
+import NONE, ONE, spelling_of, unhandled, Unhandled, Walker from './walk'
 import './walk_expressions'
 import ListItems from './walk_lists'
 
 extend Walker
   block := (statements: Statement[], depth: Int, head: Int?) ->
+    @lines_block depth, head, statements.length, (i) ->
+      @statement_on_line statements[i], { depth }, statements.get(i + 1)
+
+  # The block at `depth` of `count` things on lines of their own, as `line` walks each.
+  lines_block := (depth: Int, head: Int?, count: Int, line: (Int) -> void) ->
     outer_depth := @depth
     outer_starts := @block_starts
     outer_statements := @block_statements
     @block_starts = []
     @block_statements = []
     @depth = depth
-    @statement_on_line statement, { depth }, statements.get(i + 1) for statement at i in statements
+    line i for i in 0..count
     block := BlockShape(head, starts: @block_starts, statements: @block_statements)
     @depth = outer_depth
     @block_starts = outer_starts
@@ -32,7 +37,14 @@ extend Walker
 
   # The statement, before `next`, the one after it in its block.
   statement_on_line := (statement: Statement, line: LineStart, next: Statement?) ->
-    first := @text.statement_start(statement)
+    start := @text.statement_start(statement)
+    next_at := next then @text.first_position(next)
+    @on_line start, next_at, -> @statement(statement, line)
+
+  # What starts a line at `first`, if it does, up to `next`, where what follows it in its block
+  # starts, as `walk` walks it: a statement, or a member of a type.
+  on_line := (first: Int?, next: Position?, walk: () -> void) ->
+    line := LineStart(@depth)
     @resume_at first if first
     start := @at
     return @skip(start) if first != start or @skipped_from != nil
@@ -51,12 +63,12 @@ extend Walker
     outer_stranded := @stranded.length
     walked :=
       try
-        @statement statement, line
+        walk()
         true
       catch _: Unhandled
         false
     # Asked after the walk, as the statements inside claim their marked lines first.
-    kept := @kept.keeps(@code[start].position(), next then @text.first_position(next))
+    kept := @kept.keeps(@code[start].position(), next)
     if kept
       # A kept statement reports nothing.
       @stranded = @stranded[..outer_stranded]
@@ -79,9 +91,13 @@ extend Walker
       when Assignment then @assignment(statement, before)
       when Pass then @take_spelled('pass', before)
       when Import then @import_statement(statement, before)
-      when
-        TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern, Intrinsic, Extend
-      then unhandled()
+      when TypeDeclaration then @type_declaration(statement, before)
+      when InterfaceDeclaration then @interface_declaration(statement, before)
+      when EnumDeclaration then @enum_declaration(statement, before)
+      when Extend then @extend_declaration(statement, before)
+      when TypeAlias then @type_alias(statement, before)
+      when Extern then @extern_declaration(statement, before)
+      when Intrinsic then @intrinsic_declaration(statement, before)
       when Call then @call_statement(statement, before)
       else @expression(statement, before)
 
@@ -244,6 +260,116 @@ extend Walker
     return if node.omits_value
     assign := @take(node.mutable or node.type then '=' else ':=', ONE)
     @value assign, node.value, true
+
+  # `struct` or `class`, its name, its type parameters and the interface it satisfies, and its
+  # members in the block below.
+  type_declaration := (node: TypeDeclaration, before: CodeGap) ->
+    head := @declaration_head(node.exported, node.is_struct then 'struct' else 'class', before)
+    @take IDENTIFIER, ONE
+    @type_parameters node.type_params
+    if satisfies := node.satisfies
+      @take ':', NONE
+      @type satisfies, ONE
+    @members node.members, head
+
+  interface_declaration := (node: InterfaceDeclaration, before: CodeGap) ->
+    head := @declaration_head(node.exported, 'interface', before)
+    @take IDENTIFIER, ONE
+    @type_parameters node.type_params
+    @members node.members, head
+
+  # `enum`, its name, and its members in the block below, one on each line.
+  enum_declaration := (node: EnumDeclaration, before: CodeGap) ->
+    head := @declaration_head(node.exported, 'enum', before)
+    @take IDENTIFIER, ONE
+    { members } := node
+    @in_block head, members.length, (i) -> members[i].position, (i, gap) ->
+      @take members[i] is StringLiteral then STRING else IDENTIFIER, gap
+
+  extend_declaration := (node: Extend, before: CodeGap) ->
+    head := @take('extend', before)
+    @type_parameters node.type_params
+    @type node.type, ONE
+    @members node.members, head
+
+  type_alias := (node: TypeAlias, before: CodeGap) ->
+    @declaration_head node.exported, IDENTIFIER, before
+    @take IDENTIFIER, ONE
+    @take '=', ONE
+    @type node.type, ONE
+
+  # `extern`, its symbol, `as` and its name if it has one, and its type.
+  extern_declaration := (node: Extern, before: CodeGap) ->
+    @declaration_head node.exported, 'extern', before
+    @take IDENTIFIER, ONE
+    # Its name may be written as its symbol, after `as` or not.
+    if spelling_of(@code[@at]) == 'as'
+      @take_spelled 'as', ONE
+      @take IDENTIFIER, ONE
+    @take ':', NONE
+    @type node.type, ONE
+
+  intrinsic_declaration := (node: Intrinsic, before: CodeGap) ->
+    @declaration_head node.exported, 'intrinsic', before
+    @take IDENTIFIER, ONE
+    if type := node.type
+      @take ':', NONE
+      @type type, ONE
+
+  # The keyword of a declaration, after `export` where it is exported: the head of its block.
+  declaration_head := (exported: Bool, keyword: TokenKind, before: CodeGap) ->
+    return @take(keyword, before) unless exported
+    @take 'export', before
+    @take keyword, ONE
+
+  # `<T, U: Bound>`, where there are type parameters.
+  type_parameters := (params: TypeParameter[]) ->
+    return if params.is_empty()
+    @take '<', NONE
+    @list params.length, NONE, (i, gap) -> @type_parameter(params[i], gap), false
+    @take '>', NONE
+
+  type_parameter := (param: TypeParameter, before: CodeGap) ->
+    @take IDENTIFIER, before
+    if bound := param.bound
+      @take ':', NONE
+      @type bound, ONE
+
+  # The members of a type, in the block below its head.
+  members := (members: MemberDeclaration[], head: Int) ->
+    @in_block head, members.length, (i) -> members[i].position, (i, gap) ->
+      @member_declaration members[i], gap
+
+  # `count` things in the block below `head`, each on a line of its own, which starts at its
+  # position, as `walk` walks it.
+  in_block := (head: Int, count: Int, position: (Int) -> Position, walk: (Int, CodeGap) -> void) ->
+    line := (i: Int) ->
+      start := @starts[position(i)]
+      first := start != nil and start in @line_starts then start
+      next := i + 1 < count then position(i + 1)
+      @on_line first, next, -> walk(i, LineStart(@depth))
+    @shapes.push @lines_block(@depth + 1, head, count, line)
+    @close head, true
+
+  # `[var | weak | weak var] name[: Type[!]][ = [default] value]`, or `name := [default] value`.
+  member_declaration := (member: MemberDeclaration, before: CodeGap) ->
+    var gap = before
+    { modifier } := member
+    if modifier == 'weak' or modifier == 'weak var'
+      @take_spelled 'weak', gap
+      gap = ONE
+    if modifier == 'var' or modifier == 'weak var'
+      @take 'var', gap
+      gap = ONE
+    @take IDENTIFIER, gap
+    if type := member.type
+      @take ':', NONE
+      @type type, ONE
+      @take '!', NONE if member.throws
+    value := member.value ? return
+    var assign = @take(modifier == nil and member.type == nil then ':=' else '=', ONE)
+    assign = @take_spelled('default', ONE) if member.has_default
+    @value assign, value, true
 
   # `import 'module'`, with `as` and a name or not, or `import` or `export` and names, on its line
   # or in a block below it, from the module (see ImportShape).
