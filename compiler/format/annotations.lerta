@@ -1,251 +1,252 @@
-# The types written in modules that their checking shows the checker can infer (see Type
-# annotations in docs/reference/style.md), the enums of members and the names of the constructions
-# of structs that it shows are expected (see Expected types there), and the imports of the enums and
-# the structs that these leave unused, which `lerta fmt` leaves out.
-import FunctionLiteral, Identifier, Node, Statement from '../ast'
-import ProgramWide, Shared from '../checker/shared'
-import CompileError from '../errors'
-import imported_files, load_modules, Module, module_key from '../loader'
+# The types left out where they can be inferred (see Type annotations), with the checking of the
+# program (see typed.lerta), and the types that the program rewritten must keep.
 import
-  ArrayType, bool_type, INTEGER_KINDS, is_one_of_kinds, MapType, NUMBER_KINDS, SimpleType, Type,
-  TypeKind
-from '../types'
-import
-  Annotation, AnnotationKey, annotations_of, DeclaredType, EmptinessTest, ImportedName,
-  MembershipCall, ParameterType, Placed, QualifiedMember, RangeEnds, RangeTest, RecordConstruction,
-  RedundantCast, ReturnType, SharedArms, ShorthandArgument, SpreadCopy
-from './annotated'
-import
-  CheckResult, checks, imports_type, quiet_program, result_of, same_result
-from './check_result'
-import inferable from './inferable'
-import import_names_of from './left_out_imports'
-import rewrites_of from './rewrites'
-import in_body, in_shared_body, shares_types from './shared_arms'
+  Call, Cast, Declaration, Expression, Extend, FunctionLiteral, Identifier, Member,
+  MemberDeclaration, NamedType, Parameter, Statement, TypeDeclaration, TypeName
+from '../ast'
+import NodeFacts from '../checker/shared'
+import declared_inferable, return_inferable from './inferable'
+import places_of from './places'
+import TYPE_ANNOTATIONS from './rules'
+import format_type, Type from '../types'
+import OPENING_BRACKETS from '../lexer/tokens'
+import Change, Edit from './edits'
+import Tokens from './tokens'
+import Typed from './typed'
 
-# The keys (see AnnotationKey) of the annotations that can be left out of each of the files at
-# `paths`, by the key of its module (see module_key); none for a file whose program does not check.
-export removable_annotations := (paths: String[]) ->
-  wanted: Set<String>
-  wanted.add module_key(path) for path in paths
-  removable: Map<String, AnnotationKey[]>
-  for entry in [await not_imported(paths)..., paths...]
-    await add_removable(removable, entry, wanted) unless removable.contains(module_key(entry))
-  removable
+# The checking of a program, with its functions that keep their types.
+export struct Annotating
+  typed: Typed
+  functions: Functions
 
-# Those of the files that none of them imports; all of them that do not parse.
-not_imported := (paths: String[]) ->
-  imported: Set<String>
-  for path in paths
-    keys :=
-      try
-        await imported_files(path)
-      catch _: CompileError
-        continue
-    imported.add key for key in keys
-  [path for path in paths when not imported.contains(module_key(path))]
+# Nil for a program that does not check.
+export annotating_of := (program: Statement[], typed: Typed?): Annotating? ->
+  known := typed ? return nil
+  { typed: known, functions: functions_of(program) }
 
-# The written types, the enums of members and the names of constructions that may be left out, in
-# the order of the source.
-export left_out_candidates := (program: Statement[]) ->
-  [annotations_of(program)..., rewrites_of(program)..., import_names_of(program)...]
+export annotation_edits := (tokens: Tokens, value: Expression, annotating: Annotating): Edit?[] ->
+  { typed, functions } := annotating
+  value is FunctionLiteral then function_types(tokens, value, typed, functions) else []
 
-# The imports are left out after the others, once these leave them unused (see unused_type_imports).
-can_leave_out := (annotation: Annotation, shared: Shared, program: ProgramWide) ->
-  { facts } := shared
-  target := annotation.target
-  case target
-    when ImportedName then false
-    when QualifiedMember then target.member in facts.unqualifiable
-    when RecordConstruction then target.call in facts.recordable
-    when ShorthandArgument
-      return false unless target.call in facts.object_constructions
-      left_out_cast := target.cast ? return true
-      left_out_cast in facts.redundant_casts
-    when RedundantCast then target.cast in facts.redundant_casts
-    when SpreadCopy
-      return false unless target.call in facts.full_constructions
-      source_type := facts.types[target.source] ? return false
-      constructed := facts.types[target.call] ? return false
-      source_type == constructed
-    when EmptinessTest then has_is_empty(facts.types[target.value])
-    # These two, not in the body of a generic function, whose types are those of its instances.
-    when MembershipCall then facts.types[target.call] == bool_type
-    when RangeTest then is_of_kinds(facts.types[target.value], [NUMBER_KINDS..., 'Char'])
-    when RangeEnds
-      counted := target.counted ? return true
-      is_of_kinds facts.types[counted], INTEGER_KINDS
-    when SharedArms then facts.types.contains(target.arms[0].patterns[0])
-    when ReturnType, ParameterType, DeclaredType then inferable(target, shared, program)
+export annotation_statement_edits := (
+  tokens: Tokens, statement: Statement, annotating: Annotating
+): Edit?[] ->
+  { typed } := annotating
+  case statement
+    when Declaration
+      return [] if statement.type == nil or statement.omits_value or statement.weak
+      { name, value, mutable } := statement
+      # A `const`'s empty value goes as a whole (see empty_initial_value).
+      collection := collection_call(statement.type, value, keeps_empty: mutable)
+      [left_out_type(tokens, name, value, mutable, typed, collection)]
+    when TypeDeclaration
+      [left_out_field_type(tokens, member, typed) for member in statement.members]
+    else []
 
-is_of_kinds := (type: Type?, kinds: TypeKind[]) -> type != nil and is_one_of_kinds(type, kinds)
+# The function literals whose types stay as written: those that no function type is expected
+# for, the values of variables and members without types, whose parameters keep theirs but those
+# with a default; and those in generic functions and types, whose code the checker checks only
+# for each instance, which tells nothing of the code that no instance uses.
+struct Functions
+  unexpected: Set<FunctionLiteral>
+  generic: Set<FunctionLiteral>
 
-# Whether std gives the type `is_empty` (see EMPTINESS_TESTS). One test serves the tests of a length
-# and the comparisons with '': a `String` has no `length`, and nothing else compares with ''.
-export has_is_empty := (type: Type?) ->
-  case type
-    when ArrayType, MapType then true
-    when SimpleType then type.kind == 'String' or type.kind == 'Binary'
-    else false
+functions_of := (statements: Statement[]) ->
+  functions := Functions(unexpected: Set(), generic: Set())
+  { unexpected, generic } := functions
+  add_generic := (body: Statement[]) ->
+    places_of body, { before: (value, _) ->
+      generic.add value if value is FunctionLiteral
+    }
+  add_members := (members: MemberDeclaration[], is_generic: Bool) ->
+    values: Statement[] = [member.value for member in members when member.value != nil]
+    for member in members
+      unexpected.add member.value if member.type == nil and member.value is FunctionLiteral
+    add_generic values if is_generic
+  places_of statements, {
+    before: (value, _) ->
+      add_generic value.body if value is FunctionLiteral and not value.type_params.is_empty()
+    statement: (statement, _) ->
+      case statement
+        when Declaration
+          value := statement.value
+          unexpected.add value if statement.type == nil and value is FunctionLiteral
+        when TypeDeclaration, Extend
+          add_members statement.members, not statement.type_params.is_empty()
+        else pass
+  }
+  functions
 
-# Adds the removable annotations of the modules `wanted` that the program of `entry` holds and that
-# have none yet, or none for `entry` if the program does not check.
-add_removable := (removable: Map<String, AnnotationKey[]>, entry: String, wanted: Set<String>) ->
-  modules :=
-    try
-      await load_modules(entry)
-    catch _: CompileError
-      removable[module_key(entry)] = []
-      return
-  checked := quiet_program(entry, modules)
-  unless checks(checked)
-    removable[module_key(entry)] = []
-    return
-  held := [module for module in modules when module.key in wanted and module.key not in removable]
-  removable[module.key] = [] for module in held
-  candidates := candidates_of(held, checked)
-  return if candidates.is_empty()
-  program := -> quiet_program(entry, modules)
-  accepted := writable(accepted_among(candidates, checked, program))
-  imports := unused_type_imports(accepted, held, checked, program)
-  for placed in [accepted..., imports...]
-    keys := removable[placed.key]!
-    keys.push placed.annotation.key
-
-# The annotations of the modules that the checking shows can be left out.
-candidates_of := (held: Module[], checked: ProgramWide) ->
-  found: Placed[]
-  for module in held
-    shared := checked.shared[module.index]
-    for annotation in left_out_candidates(module.program)
-      found.push { annotation, key: module.key } if can_leave_out(annotation, shared, checked)
+# The types of the variables, the functions and the fields of the program, in their order, which
+# the types left out must keep (see rewritten_text); nil for a program that does not check.
+export declared_types := (statements: Statement[], typed: Typed?) ->
+  { program, facts } := typed ? return nil
+  fields: Map<Identifier, Type>
+  for info in program.infos.values()
+    for field in info.fields
+      fields[field.name] = type if type := field.type
+  found: String[]
+  add := (type: Type?) -> found.push(type then format_type(type) else '-')
+  places_of statements, {
+    statement: (statement, _) ->
+      case statement
+        when Declaration then add(facts.types[statement.name])
+        when TypeDeclaration then add(fields[member.name]) for member in statement.members
+        else pass
+    before: (value, _) ->
+      add facts.types[value] if value is FunctionLiteral
+  }
   found
 
-# The candidates that `program`, checked anew, checks the same without, to be sure: a type that
-# alone uses an import, for one, still uses it (the import would be warned about without it). The
-# names of constructions are left out first, so that a type that gives the type expected of them is
-# kept, as they would no longer show it; an import of a struct that only they use does not count
-# then.
-accepted_among := (candidates: Placed[], checked: ProgramWide, program: () -> ProgramWide) ->
-  constructions :=
-    [placed for placed in candidates when placed.annotation.target is RecordConstruction]
-  arms := [placed for placed in candidates when placed.annotation.target is SharedArms]
-  is_other := (placed: Placed) ->
-    target := placed.annotation.target
-    target is not RecordConstruction and target is not SharedArms
-  others := [placed for placed in candidates when is_other(placed)]
-  original := result_of(checked, structs: true)
-  recorded := removable_among
-    []
-    constructions
-    checks_the_same(program, original, structs: true, merging: false)
-  with_records := result_without(program, recorded)
-  # Before the others, which are then checked against the program with the arms made one, as a cast
-  # that only the first arm's narrowing makes redundant.
-  merged := removable_among
-    recorded
-    arms
-    checks_the_same(program, with_records, structs: false, merging: true)
-  with_arms := result_without(program, merged)
-  # Nor are those in the body of arms made one, which the checking decided with the narrowing of the
-  # first arm alone, as a cast that only that narrowing makes redundant.
-  is_outside := (placed: Placed) ->
-    at := placed.annotation.key.at
-    not merged.any((arms) -> arms.key == placed.key and in_body(arms, at))
-  outside := [placed for placed in others when is_outside(placed)]
-  removable_among
-    merged
-    outside
-    checks_the_same(program, with_arms, structs: false, merging: false)
-
-type SameCheck = (Placed[]) -> Bool
-
-# Whether `program` checks the same as `original` without the annotations, its unused imports of
-# structs counted unless `structs` (see result_of). Where `merging`, the types in the bodies of the
-# arms made one are compared apart (see in_shared_body and shares_types).
-checks_the_same := (
-  program: () -> ProgramWide, original: CheckResult, flags: { structs: Bool, merging: Bool }
-): SameCheck ->
-  { structs, merging } := flags
-  (left_out) ->
-    subjects: Set<String>
-    for placed in left_out
-      arms := placed.annotation.target as SharedArms ? continue
-      subjects.add subject.name if subject := arms.subject
-    shares := (result: CheckResult) ->
-      not merging or
-        left_out.all((placed) -> shares_types(placed.annotation, subjects, original, result))
-    { result, is_alike } := tried_without(program, left_out, { structs }, shares)
-    found := result ? return false
-    excused := (node: Node) -> merging and in_shared_body(left_out, found, node)
-    is_alike and same_result(found, original, excused)
-
-# The result of the program without the annotations, which checks once accepted, its unused imports
-# of structs counted.
-result_without := (program: () -> ProgramWide, left_out: Placed[]) ->
-  tried_without(program, left_out, { structs: false }, (_) -> true).result!
-
-# The result of the program without the annotations, if it checks (see is_unused_type), and
-# whether it is `alike` while they are left out of the tree.
-tried_without := (
-  program: () -> ProgramWide, left_out: Placed[], flags: { structs: Bool },
-  alike: (CheckResult) -> Bool
+# `x := v` for `x: T = v`, and `var x = v` for `var x: T = v`, where v has the type T of its own
+# (see Type annotations); but not where T names an import, which may use it alone and would then be
+# left unused. The type of a `Map()` or a `Set()` goes to its type arguments: `var s = Set<T>()`.
+left_out_type := (
+  tokens: Tokens
+  name: Identifier
+  value: Expression
+  mutable: Bool
+  typed: Typed
+  collection: Collection? = nil
 ) ->
-  placed.annotation.remove() for placed in left_out
-  tried := program()
-  result := checks(tried) then result_of(tried, flags)
-  is_alike := result then alike(result) else false
-  placed.annotation.restore() for placed in left_out
-  { result, is_alike }
+  { facts, program } := typed
+  return nil if has_expected_parts(value, facts)
+  moves_to_type_arguments := collection != nil
+  return nil unless declared_inferable({ name, value, moves_to_type_arguments }, facts, program)
+  name_at := tokens.at(name.position) ? return nil
+  value_at := tokens.at(value.position) ? return nil
+  # A field's value may follow `default`.
+  assign := tokens.spelling(value_at - 1) == 'default' then value_at - 2 else value_at - 1
+  return nil if not tokens.is_kind(name_at + 1, ':') or not tokens.is_kind(assign, '=')
+  return nil if names_import(tokens, name_at + 2, assign, typed)
+  # The `=` stays after a `var`, and goes with `:` into `:=` otherwise.
+  to := mutable then tokens.start(assign) else tokens.end(assign)
+  change := Change(to, from: tokens.end(name_at), text: mutable then ' ' else ' :=')
+  changes := [change]
+  if moved := collection
+    { call, type } := moved
+    callee := tokens.at(call.callee.position) ? return nil
+    type_at := tokens.at(type.position) ? return nil
+    arguments := tokens.slice(tokens.start(type_at + 1), tokens.end(assign - 1))
+    changes.push { from: tokens.end(callee), to: tokens.end(callee), text: arguments }
+  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(name_at + 1), changes
 
-# The annotations accepted but the types of the parameters of a literal that keeps its return type,
-# as `(x): T -> x` does not parse. Keeping a type that could be left out changes no checking.
-writable := (accepted: Placed[]) ->
-  returns_left_out: Set<FunctionLiteral>
-  for placed in accepted
-    returns_left_out.add target.function if target := placed.annotation.target as ReturnType?
-  is_writable := (placed: Placed) ->
-    parameter := placed.annotation.target as ParameterType ? return true
-    literal := parameter.function
-    literal.return_type == nil or literal in returns_left_out
-  [placed for placed in accepted when is_writable(placed)]
+# A `Map(...)` or a `Set(...)` without type arguments, with the type written for it.
+struct Collection
+  call: Call
+  type: NamedType
 
-# The imports of enums and structs that the program used, but that it does not once the annotations
-# accepted are left out, as the members of enums written alone, the constructions written as records
-# or the types: the checking that accepts them does not tell their warnings (see result_of).
-unused_type_imports := (
-  accepted: Placed[], held: Module[], checked: ProgramWide, program: () -> ProgramWide
-): Placed[] ->
-  return [] if accepted.is_empty()
-  placed.annotation.remove() for placed in accepted
-  tried := program()
-  checks tried
-  found: Placed[]
-  for module in held
-    before := checked.shared[module.index].imports.names
-    after := tried.shared[module.index].imports.names
-    left_unused := (imported: Identifier) ->
-      name := imported.name
-      not after[name]!.used and
-        before[name]!.used and
-        imports_type(tried, after[name]!, structs: true)
-    for annotation in import_names_of(module.program)
-      imported := annotation.target as ImportedName ? continue
-      found.push { annotation, key: module.key } if left_unused(imported.name)
-  placed.annotation.restore() for placed in accepted
+# The value of a declaration of a type `Map<...>` or `Set<...>` where it is a call of the same name
+# without type arguments, which takes those of the type then; an empty one only if the declaration
+# `keeps_empty` values.
+collection_call := (written: TypeName?, value: Expression, flags: { keeps_empty: Bool }) ->
+  type := written as NamedType ? return nil
+  call := value as Call ? return nil
+  callee := call.callee as Identifier ? return nil
+  return nil if type.optional or type.args.is_empty() or not call.type_args.is_empty()
+  return nil if callee.name != type.name or (callee.name != 'Map' and callee.name != 'Set')
+  is_empty := call.args.is_empty() and call.named_args.is_empty()
+  return nil if is_empty and not flags.keeps_empty
+  Collection call, type
+
+# `(x) -> x` for `(x: Int): Int -> x`, and `-> 1` for `(): Int -> 1`, where the checking shows the
+# types inferable (see Type annotations), but those of a function that stays as written (see
+# Functions).
+function_types := (
+  tokens: Tokens, function: FunctionLiteral, typed: Typed, functions: Functions
+): Edit?[] ->
+  return [] if not function.type_params.is_empty() or function in functions.generic
+  open := tokens.at(function.position) ? return []
+  return [] unless tokens.is_kind(open, '(')
+  close := tokens.matching(open) ? return []
+  returned := left_out_return(tokens, function, open, close, typed)
+  # `(x): T ->` does not parse: a parameter without its type takes the return type with it.
+  return [returned] if function.return_type != nil and returned?.change == nil
+  is_expected := function not in functions.unexpected
+  parameters := [
+    left_out_parameter(tokens, function, i, close, typed)
+    for param at i in function.params
+    when param.type != nil and (is_expected or param.default != nil)
+  ]
+  [parameters..., returned]
+
+left_out_parameter := (
+  tokens: Tokens, function: FunctionLiteral, i: Int, close: Int, typed: Typed
+) ->
+  { name, default, variadic } := function.params[i]
+  return nil if variadic or not typed.program.inferable_parameters[name] ? false
+  return nil if default != nil and has_expected_parts(default, typed.facts)
+  name_at := tokens.at(name.position) ? return nil
+  return nil unless tokens.is_kind(name_at + 1, ':')
+  bound := parameter_bound(tokens, function.params, i, close) ? return nil
+  last := tokens.is_kind(bound - 1, ',') then bound - 2 else bound - 1
+  return nil if names_import(tokens, name_at + 2, last + 1, typed)
+  change := Change(from: tokens.end(name_at), to: tokens.end(last), text: '')
+  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(name_at + 1), [change]
+
+# The token that ends the type of the parameter: the `=` of its default, the name of the next or the
+# `)` of the list.
+parameter_bound := (tokens: Tokens, params: Parameter[], i: Int, close: Int) ->
+  if value := params[i].default
+    value_at := tokens.at(value.position) ? return nil
+    return tokens.is_kind(value_at - 1, '=') then value_at - 1
+  i + 1 < params.length then tokens.at(params[i + 1].name.position) else close
+
+left_out_return := (
+  tokens: Tokens, function: FunctionLiteral, open: Int, close: Int, typed: Typed
+) ->
+  return nil if function.return_type == nil
+  { facts, program } := typed
+  last := function.body.last() as Expression?
+  results := [(facts.results[function] ? [])..., (last then [last] else [])...]
+  return nil if results.any((value) -> has_expected_parts(value, facts))
+  return nil unless return_inferable(function, last, facts, program)
+  return nil unless tokens.is_kind(close + 1, ':')
+  arrow := arrow_after(tokens, close + 2) ? return nil
+  return nil if names_import(tokens, close + 2, arrow, typed)
+  # Without its parameters, the function is written without the `()`.
+  bare := function.params.is_empty()
+  from := bare then tokens.start(open) else tokens.end(close)
+  change := Change(from, to: tokens.start(arrow), text: bare then '' else ' ')
+  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(close + 1), [change]
+
+# The `->` after a type that holds none outside its brackets, from `from`.
+arrow_after := (tokens: Tokens, from: Int) ->
+  var i = from
+  while i < tokens.code.length
+    return i if tokens.is_kind(i, '->')
+    closing := tokens.code[i].kind in OPENING_BRACKETS then (tokens.matching(i) ? return nil) else i
+    i = closing + 1
+  nil
+
+# Whether the tokens from `from` up to `to` name an import, which may use it alone and would then be
+# left unused.
+names_import := (tokens: Tokens, from: Int, to: Int, typed: Typed) ->
+  tokens.code[from..to].any((token) -> token.kind == IDENTIFIER and token.text in typed.imported)
+
+# Whether the value holds a part that a rewrite writes without what the type expected of it shows,
+# as `{ x: 1 }` for `Point(x: 1)`: the type that it is declared with is left out after it, if the
+# value then still gives it.
+has_expected_parts := (value: Expression, facts: NodeFacts) ->
+  var found = false
+  is_expected := (part: Expression) ->
+    case part
+      when Call then part in facts.recordable
+      when Member then part in facts.unqualifiable
+      when Cast then part in facts.redundant_casts
+      else false
+  places_of [value], { before: (part, _) ->
+    found = true if is_expected(part)
+  }
   found
 
-# `accepted` and those of `trying` that can be left out with them: all at once, or else found by
-# halving `trying` until the parts that cannot be left out are single annotations, so that a module
-# checks once, and few times more for the few that cannot. Which of those that can be left out
-# alone but not together are left out depends on their order; those found are checked together, so
-# a second run finds no more.
-removable_among := (accepted: Placed[], trying: Placed[], checks_the_same: SameCheck): Placed[] ->
-  return accepted if trying.is_empty()
-  all := [accepted..., trying...]
-  return all if checks_the_same(all)
-  return accepted if trying.length == 1
-  half := trying.length / 2
-  first := trying[..half]
-  second := trying[half..]
-  removable_among removable_among(accepted, first, checks_the_same), second, checks_the_same
+# That of a field, but not of one whose value is a function, which would make it a method without
+# its type, nor of a weak one.
+left_out_field_type := (tokens: Tokens, member: MemberDeclaration, typed: Typed) ->
+  { type, value, modifier } := member
+  given := value ? return nil
+  return nil if type == nil or given is FunctionLiteral
+  return nil if modifier == 'weak' or modifier == 'weak var'
+  # A field keeps its empty value (see Empty initial values).
+  collection := collection_call(type, given, keeps_empty: true)
+  left_out_type tokens, member.name, given, modifier == 'var', typed, collection

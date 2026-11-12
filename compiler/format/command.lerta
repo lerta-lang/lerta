@@ -2,10 +2,10 @@
 # writes.
 import is_dir, is_file, list_dir, read_text, write_file from 'std:io'
 import CompileError from '../errors'
-import module_key from '../loader'
-import AnnotationKey from './annotated'
-import removable_annotations from './annotations'
-import format_source from './format'
+import is_off_throughout from './kept'
+import EntryModule, module_key from '../loader'
+import ChangedProgram, format_parsed, format_source, Parsed, parsed_source from './format'
+import Typed, typed_programs from './typed'
 
 export format_command := (paths: String[], fix: Bool) ->
   var status = 0
@@ -13,13 +13,70 @@ export format_command := (paths: String[], fix: Bool) ->
     if not is_file(path) and not is_dir(path)
       print_error "'#{path}' is not a file or a directory"
       status = 1
-  files := source_files(paths)
-  removable := await removable_annotations(files)
-  for file in files
-    status = 1 unless await format_file(file, fix, removable[module_key(file)] ? [])
+  # A file given twice, by any paths, is taken once.
+  keys: Set<String>
+  files := [file for file in source_files(paths) when keys.add(module_key(file))]
+  sources := [await source_of(file) for file in files]
+  # Each program that holds some of the files is checked once for all of them, for their first
+  # rewrites; a file that they rewrite is checked anew on its own (see rewritten_text).
+  given: Map<String, EntryModule>
+  for source in sources
+    if parsed := source.parsed
+      given[module_key(source.path)] = { source: parsed.source, program: parsed.statements }
+  checked := [source.path for source in sources when source.parsed != nil]
+  typed := await typed_programs(checked, given)
+  for source in sources
+    status = 1 unless await format_file(source, typed[module_key(source.path)], fix)
   status
 
-export source_files := (paths: String[]) ->
+# A file read, and parsed unless it is off throughout, which is left as it is; or why it cannot be:
+# it is not UTF-8 or does not parse.
+struct Source
+  path: String
+  text: String
+  parsed: Parsed?
+  failure: String?
+
+source_of := (path: String): Promise<Source> ->
+  text := await read_text(path) ? return { path, text: '', parsed: nil, failure: not_utf8(path) }
+  return { path, text, parsed: nil, failure: nil } if is_off_throughout(text)
+  try
+    { path, text, parsed: parsed_source(text, path), failure: nil }
+  catch error: CompileError
+    { path, text, parsed: nil, failure: error.message }
+
+not_utf8 := (path: String) -> "#{path}: the file is not valid UTF-8"
+
+# Whether the file is in the style, or is written so with `fix`.
+format_file := (source: Source, typed: Typed?, fix: Bool) ->
+  { path } := source
+  return failed(failure) if failure := source.failure
+  parsed := source.parsed ? return true
+  formatted :=
+    try
+      await format_parsed(parsed, path, typed)
+    catch error: CompileError
+      return failed(error.message)
+    catch error: ChangedProgram
+      return failed(error.message)
+  findings :=
+    if fix and formatted.text != source.text
+      await write_file(path, formatted.text)
+      (await format_source(formatted.text, path)).findings
+    else
+      formatted.findings
+  for finding in findings
+    { at, rule } := finding
+    print_error "#{path}:#{at.line}:#{at.column}: #{rule.message} (#{rule.label})"
+  findings.is_empty()
+
+failed := (message: String) ->
+  print_error message
+  false
+
+# The files of the paths: each that is a file, and the .lerta files of each directory and of those
+# inside it, in order, but those whose names start with `.`.
+source_files := (paths: String[]) ->
   files: String[]
   for path in paths
     if is_file(path)
@@ -35,27 +92,3 @@ add_sources := (files: String[], dir: String): void ->
       add_sources files, path unless name.starts_with('.')
     else if name.ends_with('.lerta')
       files.push path
-
-# Whether the file is in the style, without the annotations of `removable`, or is written so with
-# `fix`, but for what the formatter cannot fix, as a line too long that it cannot break.
-format_file := (path: String, fix: Bool, removable: AnnotationKey[]) ->
-  source := await read_text(path) ? return failed("#{path}: the file is not valid UTF-8")
-  formatted :=
-    try
-      format_source source, path, removable
-    catch error: CompileError
-      return failed(error.message)
-  findings :=
-    if fix and formatted.text != source
-      await write_file(path, formatted.text)
-      format_source(formatted.text, path, []).findings
-    else
-      formatted.findings
-  for finding in findings
-    { at, rule } := finding
-    print_error "#{path}:#{at.line}:#{at.column}: #{rule.message} (#{rule.label})"
-  findings.is_empty()
-
-failed := (message: String) ->
-  print_error message
-  false

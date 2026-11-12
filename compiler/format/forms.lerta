@@ -1,13 +1,12 @@
-# What the walk asks about the syntax: predicates, and the precedence of operators (see walk.lerta).
+# What the walk asks about the syntax (see walk.lerta).
 import
-  ArrayLiteral, Assignment, Await, BinaryOperation, BooleanLiteral, Call, Case, Coalesce,
-  Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern, FloatLiteral, For,
-  FunctionLiteral, Identifier, If, Import, Index, IntegerLiteral, InterfaceDeclaration, Intrinsic,
-  is_spread, MapLiteral, Member, NamedValue, NilLiteral, Pass, Position, Range, RecordLiteral,
-  Return, Statement, StringLiteral, Throw, Try, TupleItem, TypeAlias, TypeDeclaration,
-  UnaryOperation, While, Yield
+  ArrayLiteral, Assignment, Await, BinaryOperation, Binding, BooleanLiteral, Call, Case, Cast,
+  Coalesce, Comprehension, Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern,
+  FloatLiteral, For, FunctionLiteral, Identifier, If, Import, Index, IntegerLiteral,
+  InterfaceDeclaration, Interpolation, Intrinsic, is_spread, IsTest, MapLiteral, Member, NamedValue,
+  NilLiteral, Pass, Position, Range, RecordLiteral, Return, Statement, StringLiteral, This, Throw,
+  Try, TupleItem, TupleLiteral, TypeAlias, TypeDeclaration, UnaryOperation, Unwrap, While, Yield
 from '../ast'
-import is_command_callee from '../format/print_statement'
 
 # A declaration of those that a destructuring stands for, whose position need not be where its line
 # starts: the one of the value, whose name cannot be written, or one of a name from it.
@@ -38,16 +37,72 @@ export is_written_as_type := (declaration: Declaration) ->
 # The name of what holds a value that a destructuring takes apart, which cannot be written.
 is_holder := (expression: Expression) -> expression is Identifier and '.' in expression.name
 
-# The precedence of a binary operator, as those of operators in docs/reference/syntax.md.
-export COMPARISON := 0
+# The expression whose token comes first in the source.
+export leftmost := (expression: Expression) ->
+  var current = expression
+  current = next while next := left_part(current)
+  current
 
-export level_of := (operator: String) ->
-  case operator
-    when 'or' then 1
-    when 'and' then 2
-    when '+', '-', '|', '^' then 3
-    when '*', '/', '%', '&', '<<', '>>' then 4
-    else COMPARISON
+# The part of the expression that it starts with, if any.
+left_part := (expression: Expression) ->
+  case expression
+    when BinaryOperation then expression.left
+    when Range then expression.start
+    when IsTest, Cast, Coalesce then expression.value
+    when Conditional then expression.condition
+    when Member then expression.object
+    when Call then expression.callee
+    when Index then expression.object
+    when Unwrap then expression.operand
+    when If then expression.nil_safe then (expression.condition as Binding!).value
+    else nil
+
+# The expressions whose own first token is a `(`.
+export starts_with_parenthesis := (expression: Expression) ->
+  expression is TupleLiteral or expression is FunctionLiteral or is_lazy(expression)
+
+is_lazy := (expression: Expression) -> expression is Comprehension and expression.lazy != nil
+
+# Whether what follows it on its line would be taken into it.
+export runs_to_end := (expression: Expression): Bool ->
+  case expression
+    when Return then expression.value != nil
+    when Throw, Yield, FunctionLiteral, Case, Try then true
+    when If then not expression.nil_safe
+    when Coalesce then runs_to_end(expression.fallback)
+    else false
+
+# A callee that may take its arguments without parentheses: a name, or a field of `@` or of one.
+is_command_callee := (callee: Expression): Bool ->
+  case callee
+    when Identifier then not callee.name.starts_with('?')
+    when Member then callee.object is This or is_command_callee(callee.object)
+    else false
+
+# Whether the call has arguments and the first starts as an argument of a call without
+# parentheses can, rather than continuing an expression with the callee.
+export starts_command := (call: Call) ->
+  return true if call.args.is_empty() and not call.named_args.is_empty()
+  return false if call.args.is_empty()
+  starts_argument leftmost(call.args[0])
+
+CONTINUING_WORDS := ['is', 'as', 'in']
+
+# A name `is`, `as` or `in` would continue the expression with the callee instead, as `x in xs`
+# does, and so would `not in`.
+starts_argument := (expression: Expression) ->
+  case expression
+    when Identifier then expression.name not in CONTINUING_WORDS
+    when UnaryOperation
+      first := leftmost(expression.operand)
+      expression.operator != 'not' or not (first is Identifier and first.name == 'in')
+    when
+      StringLiteral, Interpolation, IntegerLiteral, FloatLiteral, BooleanLiteral, NilLiteral, This,
+      ArrayLiteral, MapLiteral, RecordLiteral, TupleLiteral, Case, Throw, Await
+    then true
+    when Comprehension then not expression.spread
+    when FunctionLiteral then expression.type_params.is_empty()
+    else false
 
 # A string longer than this may stand for a line of text, which a list puts on a line of its own.
 SHORT_STRING := 12
@@ -166,7 +221,7 @@ first_item_position := (literal: Expression) ->
       spread.position
     else nil
 
-# The literal that the members of the value follow, as `[...].join()`.
+# The literal that the members of the value follow, as `[...].join('')`.
 export literal_under_members := (value: Expression): Expression? ->
   object :=
     case value

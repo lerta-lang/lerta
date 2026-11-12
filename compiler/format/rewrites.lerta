@@ -1,400 +1,371 @@
-# The expressions that `lerta fmt` may write otherwise, which the checking decides (see
-# can_leave_out): the members of enums written with their enums, `E.MEMBER`, written alone, and the
-# constructions of structs, `S(x: 1)`, written as records, `{ x: 1 }` (see Expected types in
-# docs/reference/style.md); the named arguments of constructions written as names alone (see
-# Shorthand there); the casts left out (see Redundant casts); and the tests of emptiness written
-# with `is_empty()` (see Emptiness tests); the calls of `contains` written with `in` (see Membership
-# tests); two comparisons written as a test of a range (see Range tests) and ranges written with
-# fewer parts (see Ranges); and how to write them so in the syntax tree.
+# The rewrites that change the tokens of the source, not its layout, each found as an edit of the
+# source by the rule that asks for it (see docs/reference/style.md); those that need the types of
+# the checking, where the program checks, by typed.lerta.
 import
-  binary_literal_bytes, BinaryOperation, BooleanLiteral, Call, Case, CaseArm, Cast,
-  construction_arguments, construction_spread, Expression, FloatLiteral, Identifier, Index,
-  IntegerLiteral, is_spread, Member, NamedValue, NilLiteral, Position, Range, RecordLiteral,
-  spread_of_value, Statement, StringLiteral, This, UnaryOperation
+  ArrayLiteral, ArrayTypeName, Assignment, Binding, Call, Coalesce, Comprehension, Condition,
+  Conditional, Declaration, Expression, For, FunctionLiteral, Identifier, If, Index, Interpolation,
+  Member, MemberDeclaration, NamedType, NilLiteral, Pass, RecordLiteral, Statement, StringLiteral,
+  TypeDeclaration, UnaryOperation, UnionTypeName
 from '../ast'
-import dump_ast_without_positions from '../dumps'
-import
-  Annotation, EmptinessTest, MembershipCall, QualifiedMember, RangeEnds, RangeTest,
-  RecordConstruction, RedundantCast, SharedArms, ShorthandArgument, SpreadCopy
-from './annotated'
-import
-  EMPTINESS_TESTS, MEMBERSHIP_TESTS, RANGE_ENDS, RANGE_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES,
-  SPREADS
-from './rules'
+import TextPart from '../lexer/string_literal'
+import Lexed, Token from '../lexer/tokens'
+import bool_type from '../types'
 import Place, places_of from './places'
+import cast_of from './precedence'
+import
+  BINARY_LITERALS, CAST_FALLBACKS, ELSE_NIL, EMPTY_INITIAL_VALUES, ESCAPES,
+  FUNCTIONS_WITHOUT_PARAMETERS, NIL_DEFAULTS, NIL_INITIAL_VALUES, SEMICOLONS, SHORTHAND,
+  STRING_LITERALS, TWO_WAY_VALUES
+from './rules'
+import with_ascii_escapes from './escapes'
+import condition_edit, double_negation, negated_test from './conditions'
+import Change, Edit from './edits'
+import is_inline from './forms'
+import KeptLines from './kept'
+import WIDTH from './lines'
+import parentheses_of, unvisited_parts from './parentheses'
+import is_layout, SourceTokens from './text'
+import counted_range, index_ranges from './ranges'
+import Tokens from './tokens'
+import annotating_of, annotation_edits, annotation_statement_edits from './annotations'
+import typed_edits, typed_statement_edits, Typed from './typed'
 
-# In the order of the source, but for a cast and a construction after those inside them, and the
-# named arguments of a construction before it: a record takes the arguments of its construction as
-# the rewrites inside them leave them (see recorded).
-export rewrites_of := (program: Statement[]) ->
-  found: Annotation[]
-  # The ranges that index, by what they index.
-  indexed: Map<Range, Expression>
-  before := (value: Expression, place: Place) ->
-    found.push unqualified(value, place) if value is Member
-    if value is Index
-      range := value.index
-      indexed[range] = value.object if range is Range
-  after := (value: Expression, place: Place) ->
-    found.push uncast(value, place) if value is Cast and value.throws
-    found.push emptied(value, test, place) if test := emptiness_test(value)
-    found.push between(value, test, place) if test := range_test(value)
-    if value is Range
-      found.push ends if ends := range_ends(value, indexed[value], place)
-    if value is Case
-      found.push shared_arms(value, run) for run in runs_of_alike_arms(value)
-    if value is Call
-      found.push spread_copy(value, source) if source := copied_source(value)
-      found.push membership(value, place) if is_membership_call(value)
-      for named at i in value.named_args
-        found.push shorthand(value, named) if is_shorthand(value, i)
-      found.push recorded(value, place)
-  places_of program, { before, after }
+export rewrites_of := (
+  program: Statement[], source: String, text: SourceTokens, lexed: Lexed, kept: KeptLines,
+  typed: Typed?
+) ->
+  tokens := Tokens(source, text, comments: lexed.comments, kept: kept_lines(program, text, kept))
+  parentheses := parentheses_of(program, tokens)
+  found: Edit[]
+  add := (edit: Edit?) -> found.push(edit) if edit
+  # The negations that the rewrite of a condition takes, which no other rewrites.
+  claimed: Set<UnaryOperation>
+  with_else: Set<Condition>
+  places_of program, {
+    before: (value, _) ->
+      with_else.add value.condition if value is If and not value.else_body.is_empty()
+    condition: (condition, _) ->
+      add condition_edit(tokens, condition, condition not in with_else, claimed)
+  }
+  annotated := annotating_of(program, typed)
+  places_of program, {
+    before: (value, _: Place) ->
+      add edit for edit in edits_within(tokens, value, claimed, parentheses.tight, typed)
+      if known := typed
+        add edit for edit in typed_edits(tokens, value, known)
+      if annotating := annotated
+        add edit for edit in annotation_edits(tokens, value, annotating)
+    statement: (statement, _) ->
+      add edit for edit in statement_edits(tokens, statement)
+      if known := typed
+        add edit for edit in typed_statement_edits(tokens, statement, known)
+      if annotating := annotated
+        add edit for edit in annotation_statement_edits(tokens, statement, annotating)
+  }
+  add edit for edit in parentheses.edits
+  add literal_edit(tokens, index) for index in 0..text.code.length
+  add semicolon_edit(tokens, lexed, index) for index in 0..lexed.tokens.length
   found
 
-# The member written alone, as a name at its place.
-unqualified := (member: Member, place: Place) ->
-  alone := Identifier(name: member.name.name, position: member.position)
-  Annotation
-    target: QualifiedMember(member)
-    key: { kind: MEMBER, at: member.position }
-    remove: -> place(alone)
-    restore: -> place(member)
+# The lines of the statements on lines of their own that the comments mark to keep as they are
+# written, each asked about after those inside it (see KeptLines).
+kept_lines := (program: Statement[], text: SourceTokens, kept: KeptLines) ->
+  places_of program, { statement: (statement, next) ->
+    start := text.statement_start(statement) ? return
+    kept.keeps text.code[start].position(), next then text.first_position(next)
+  }
+  kept.kept
 
-# The cast left out, as its value at its place.
-uncast := (cast: Cast, place: Place) ->
-  Annotation
-    target: RedundantCast(cast)
-    reported: { written: cast.value, rule: REDUNDANT_CASTS }
-    key: { kind: CAST, at: cast.type.position }
-    remove: -> place(cast.value)
-    restore: -> place(cast)
+# Those of the expression, and of its parts that are no places (see Visit), which places_of visits
+# the places inside of.
+edits_within := (
+  tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, tight: Set<Expression>,
+  typed: Typed?
+): Edit?[] ->
+  found := expression_edits(tokens, value, claimed, tight, typed)
+  for part in unvisited_parts(value)
+    found.push edit for edit in edits_within(tokens, part, claimed, tight, typed)
+  found
 
-# A test that a value is empty, or that it is not, by its length or by comparing it with '': at the
-# `length` or the '', which the `is_empty()` written for it takes, as the position of the test may
-# be that of a `(` before the value, which would make it look written in parentheses.
-struct EmptinessComparison
-  value: Expression
-  negated: Bool
-  at: Position
-
-# `x.length == 0` and `0 == x.length`, `x.length != 0` and `x.length > 0`, and `s == ''`, `'' == s`
-# and `s != ''`.
-emptiness_test := (expression: Expression): EmptinessComparison? ->
-  if expression is UnaryOperation and expression.operator == 'not'
-    # `not (xs.length != 0)` is `xs.is_empty()`, not `not not xs.is_empty()`.
-    inner := emptiness_test(expression.operand) ? return nil
-    return { value: inner.value, negated: not inner.negated, at: inner.at }
-  test := expression as BinaryOperation ? return nil
-  { operator, left, right } := test
-  return measured(left, right, true) if operator == '>'
-  return nil if operator != '==' and operator != '!='
-  negated := operator == '!='
-  either_way := (test: (Expression, Expression, Bool) -> EmptinessComparison?) ->
-    return found if found := test(left, right, negated)
-    test right, left, negated
-  return found if found := either_way(measured)
-  either_way compared
-
-measured := (length: Expression, zero: Expression, negated: Bool) ->
-  return nil if zero is not IntegerLiteral or zero.value != 0
-  member := length as Member ? return nil
-  member.name.name == 'length' then EmptinessComparison(
-    negated
-    value: member.object
-    at: member.name.position
-  )
-
-compared := (value: Expression, empty: Expression, negated: Bool) ->
-  empty is StringLiteral and empty.value.is_empty() then EmptinessComparison(
-    value
-    negated
-    at: empty.position
-  )
-
-# The test written as `is_empty()`, `not` before it if it is negated, at its place.
-emptied := (expression: Expression, test: EmptinessComparison, place: Place) ->
-  { value, negated } := test
-  position := test.at
-  name := Identifier(position, name: 'is_empty')
-  call := Call
-    position
-    callee: Member(name, position, object: value)
-    args: []
-    named_args: []
-    type_args: []
-  written: Expression =
-    negated then UnaryOperation(position, operator: 'not', operand: call) else call
-  Annotation
-    target: EmptinessTest(value)
-    reported: { written, rule: EMPTINESS_TESTS }
-    key: { kind: EMPTY, at: expression.position }
-    remove: -> place(written)
-    restore: -> place(expression)
-
-# `xs.contains(x)`, of operands that run no code, as `x in xs` evaluates `x` first: names, `@`,
-# fields of them and literals.
-is_membership_call := (call: Call) ->
-  member := call.callee as Member ? return false
-  is_one_argument := call.args.length == 1 and call.named_args.is_empty()
-  return false if member.name.name != 'contains' or not is_one_argument
-  return false unless call.type_args.is_empty()
-  runs_no_code(member.object) and runs_no_code(call.args[0])
-
-export runs_no_code := (expression: Expression): Bool ->
-  case expression
-    # Not the name that `x?.contains(y)` gives the value of `x`, which is no name written.
-    when Identifier then not expression.name.starts_with('?')
-    when This, StringLiteral, IntegerLiteral, FloatLiteral, BooleanLiteral then true
-    when Member then runs_no_code(expression.object)
-    else binary_literal_bytes(expression) != nil
-
-# The call written as `x in xs`, at its place.
-membership := (call: Call, place: Place) ->
-  member := call.callee as Member!
-  written := BinaryOperation
-    operator: 'in'
-    left: call.args[0]
-    right: member.object
-    position: call.args[0].position
-  Annotation
-    target: MembershipCall(call)
-    reported: { written, rule: MEMBERSHIP_TESTS }
-    key: { kind: IN, at: member.name.position }
-    remove: -> place(written)
-    restore: -> place(call)
-
-# Two comparisons of one value joined by `and`, `x >= a and x <= b` or `a <= x and x < b`, which may
-# end a chain of `and`s, as the tree of `p and x >= a and x <= b` is `(p and x >= a) and x <= b`.
-export struct RangeComparison
-  # The `and` of the `and`s before the comparisons and the first, if any, which keeps the `and`s
-  # where a rewrite inside them places theirs.
-  chain: BinaryOperation?
-  lower: BinaryOperation
-  value: Expression
-  start: Expression
-  end: Expression
-  inclusive: Bool
-  # The second comparison, whose position the annotation is found by.
-  at: Position
-
-# Of a value that runs no code, written the same in both comparisons, and an end that runs none,
-# which `and` evaluates only after the first comparison holds, as `in` does not.
-export range_test := (expression: Expression): RangeComparison? ->
-  test := expression as BinaryOperation ? return nil
-  return nil if test.operator != 'and'
-  upper := test.right as BinaryOperation ? return nil
-  chain := test.left as BinaryOperation ? return nil
-  is_chain := chain.operator == 'and'
-  lower := (is_chain then chain.right else chain) as BinaryOperation ? return nil
-  value := lower_value(lower) ? return nil
-  return nil unless runs_no_code(value)
-  (inclusive, written_value, end) :=
-    case upper.operator
-      when '<=', '<' then (upper.operator == '<=', upper.left, upper.right)
-      when '>=', '>' then (upper.operator == '>=', upper.right, upper.left)
-      else return nil
-  return nil if not runs_no_code(end) or not same(value, written_value)
-  start := lower.operator == '>=' then lower.right else lower.left
-  { chain: is_chain then chain, lower, value, start, end, inclusive, at: upper.position }
-
-# The value that `x >= a` or `a <= x` compares with its start.
-lower_value := (comparison: BinaryOperation) ->
-  case comparison.operator
-    when '>=' then comparison.left
-    when '<=' then comparison.right
-    else nil
-
-same := (a: Expression, b: Expression) ->
-  dump_ast_without_positions([a]) == dump_ast_without_positions([b])
-
-# The comparisons written as `x in a..=b` at their place, or, after `and`s, in place of the first,
-# the `and` of the `and`s and the first taking the place of the whole.
-between := (expression: Expression, test: RangeComparison, place: Place) ->
-  { chain, lower, value, start, end, inclusive } := test
-  range := Range(start, end, inclusive, position: start.position)
-  written := BinaryOperation(operator: 'in', left: value, right: range, position: value.position)
-  remove := ->
-    return place(written) unless chain
-    chain.right = written
-    place chain
-  restore := ->
-    chain.right = lower if chain
-    place expression
-  Annotation
-    remove
-    restore
-    target: RangeTest(value)
-    reported: { written, rule: RANGE_TESTS }
-    key: { kind: BETWEEN, at: test.at }
-
-# The range written `a..=b` for `a..(b + 1)`, and, where it indexes `xs`, without a start 0 or an
-# end `xs.length`, `xs` being written the same and running no code; nil for one written so. An
-# index keeps its start 0 where it has no end, as `xs[..]` is no range.
-range_ends := (range: Range, indexed: Expression?, place: Place) ->
-  var end = range.end
-  var inclusive = range.inclusive
-  counted := not inclusive then counted_end(end)
-  if counted
-    end = counted
-    inclusive = true
-  var start = range.start
-  if indexed
-    end = nil if not inclusive and is_length_of(end, indexed)
-    start = nil if is_zero(start) and end != nil
-  return nil if start == range.start and end == range.end
-  written := Range(range..., start, end, inclusive)
-  Annotation
-    # The ends of an index are Ints, but those of a range after `in` may not be.
-    target: RangeEnds(counted: indexed then nil else counted)
-    reported: { written, rule: RANGE_ENDS }
-    key: { kind: RANGE, at: range.position }
-    remove: -> place(written)
-    restore: -> place(range)
-
-# The `b` of an end `b + 1`.
-export counted_end := (end: Expression?) ->
-  sum := end as BinaryOperation ? return nil
-  sum.operator == '+' and is_one(sum.right) then sum.left
-
-is_one := (expression: Expression) -> expression is IntegerLiteral and expression.value == 1
-
-is_zero := (expression: Expression?) -> expression is IntegerLiteral and expression.value == 0
-
-is_length_of := (end: Expression?, indexed: Expression) ->
-  length := end as Member ? return false
-  length.name.name == 'length' and runs_no_code(indexed) and same(length.object, indexed)
-
-# The runs of two or more arms next to each other whose bodies are written alike, which may be one
-# arm of all their patterns (see Shared arm bodies); an arm of nil is in none, as nil must be the
-# only pattern of its arm, and so is an arm of a case without a subject, whose arms have one
-# condition each.
-export runs_of_alike_arms := (case_value: Case) ->
-  runs: CaseArm[][]
-  return runs if case_value.subject == nil
-  arms := case_value.arms
-  bodies := [is_nil_arm(arm) then '' else dump_ast_without_positions(arm.body) for arm in arms]
-  var start = 0
-  while start < arms.length
-    var end = start + 1
-    while end < arms.length and not bodies[start].is_empty() and bodies[end] == bodies[start]
-      end += 1
-    runs.push arms[start..end] if end - start > 1
-    start = end
-  runs
-
-is_nil_arm := (arm: CaseArm) -> arm.patterns.any((pattern) -> pattern is NilLiteral)
-
-# The run of arms written as its first arm with the patterns of all of them, in their order,
-# reported at the first pattern that the others give it. The arms are replaced by their identity,
-# so that the runs of one case are written so apart.
-shared_arms := (case_value: Case, run: CaseArm[]) ->
-  first := run[0]
-  patterns: Expression[]
-  patterns.append arm.patterns for arm in run
-  arm := CaseArm(first..., patterns)
-  others := [each for each in run when each != first]
-  Annotation
-    target: SharedArms(arms: run, subject: case_value.subject as Identifier?)
-    reported: { written: patterns[first.patterns.length], rule: SHARED_ARM_BODIES }
-    key: { kind: ARMS, at: first.patterns[0].position }
-    remove: ->
-      case_value.arms =
-        [each == first then arm else each for each in case_value.arms when each not in others]
-    restore: ->
-      restored: CaseArm[]
-      restored.append each == arm then run else [each] for each in case_value.arms
-      case_value.arms = restored
-
-# Whether the named argument is a variable of its name that may be written alone, which comes before
-# the named arguments (see Construction in docs/reference/objects.md): those it then goes before
-# give values that it cannot change.
-is_shorthand := (call: Call, i: Int) ->
-  named := call.named_args[i]
-  variable := variable_of(named.value) ? return false
-  names_itself := variable.name == named.name.name
-  names_itself and call.named_args.take(i).all((other) -> has_no_effects(other.value))
-
-# The variable that the value is, or that a cast which throws casts, which the shorthand leaves out
-# with it if the checking shows that it may be (see Redundant casts), so that one run of `lerta fmt`
-# writes both.
-variable_of := (value: Expression) ->
+expression_edits := (
+  tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, tight: Set<Expression>,
+  typed: Typed?
+): Edit?[] ->
   case value
-    when Identifier then value
-    when Cast then value.throws then value.value as Identifier?
+    when Member then [binary_literal(tokens, value)]
+    when Coalesce then [cast_fallback(tokens, value, tight)]
+    when Conditional then [else_nil(tokens, value)]
+    when FunctionLiteral then [without_parameters(tokens, value)]
+    when UnaryOperation
+      value in claimed then [] else [negation_edit(tokens, value, claimed, typed)]
+    when RecordLiteral then [shorthand(tokens, field.name, field.value) for field in value.fields]
+    when Comprehension then [counted_range(tokens, value.iterable)]
+    when Index then index_ranges(tokens, value)
+    else []
+
+# A double negation of a Bool taken out, whose inner negation it claims, so that a third goes with a
+# fourth; otherwise `x is not T` or `x not in xs` for `not` of the test. `not not x` of another
+# type, as an optional, is a Bool, which `x` is not; that of a program that does not check waits.
+negation_edit := (
+  tokens: Tokens, negation: UnaryOperation, claimed: Set<UnaryOperation>, typed: Typed?
+) ->
+  inner := negation.operand as UnaryOperation ? return negated_test(tokens, negation)
+  return negated_test(tokens, negation) if typed?.facts.types[inner.operand] != bool_type
+  edit := double_negation(tokens, negation) ? return negated_test(tokens, negation)
+  claimed.add inner
+  edit
+
+# A field keeps its value (see Empty initial values), as a member of a class or a struct is no
+# Declaration.
+statement_edits := (tokens: Tokens, statement: Statement): Edit?[] ->
+  case statement
+    when Declaration
+      [
+        nil_initial_value(tokens, statement)
+        empty_initial_value(tokens, statement)
+        two_way_value(tokens, statement.value)
+      ]
+    when Assignment then [two_way_value(tokens, statement.value)]
+    when TypeDeclaration then [nil_default(tokens, member) for member in statement.members]
+    when For then [counted_range(tokens, statement.iterable)]
+    else []
+
+# A report of an `if` that gives a value, of two branches of one expression each, that would fit on
+# its line as `c then a else b`, with its head (see Branches), where each part is on a line of its
+# own without a comment.
+two_way_value := (tokens: Tokens, value: Expression) ->
+  branch := value as If ? return nil
+  { then_body, else_body } := branch
+  # A condition that binds a name is no operand.
+  return nil if branch.nil_safe or branch.condition is Binding
+  return nil if then_body.length != 1 or else_body.length != 1
+  return nil if not then_body.all(is_value) or not else_body.all(is_value)
+  if_at := tokens.at(branch.position) ? return nil
+  then_at := tokens.at(then_body[0].position) ? return nil
+  else_at := tokens.at(else_body[0].position) ? return nil
+  return nil unless tokens.is_kind(else_at - 1, 'else')
+  first_line := tokens.code[if_at].line
+  last_line := tokens.code[else_at].end_line
+  return nil if tokens.comments.any((comment) -> comment.line in first_line..=last_line)
+  # Each part ends its line, as the next part, `else`, or a line no deeper than `else` follows.
+  condition_end := tokens.line_end(if_at + 1) ? return nil
+  then_end := tokens.line_end(then_at) ? return nil
+  else_end := tokens.line_end(else_at) ? return nil
+  after := else_end + 1
+  ends_block :=
+    after == tokens.code.length or tokens.code[after].column <= tokens.code[else_at - 1].column
+  return nil if condition_end + 1 != then_at or then_end + 2 != else_at or not ends_block
+  part := (first: Int, last: Int) -> tokens.slice(tokens.start(first), tokens.end(last))
+  condition := part(if_at + 1, condition_end)
+  written := "#{condition} then #{part(then_at, then_end)} else #{part(else_at, else_end)}"
+  parentheses := added_parentheses(tokens, then_body[0]) + added_parentheses(tokens, else_body[0])
+  # After the head, `x :=` and a space.
+  return nil if tokens.end(if_at - 1).column + written.count() + parentheses > WIDTH
+  tokens.report TWO_WAY_VALUES, tokens.start(if_at)
+
+# The column that a call without parentheses takes for them as a part of an operation: one, as its
+# `(` takes the place of the space after its callee.
+added_parentheses := (tokens: Tokens, statement: Statement) ->
+  call := statement as Call ? return 0
+  first := call.args.first()?.position ? call.named_args.first()?.name.position ? return 0
+  at := tokens.at(first) ? return 0
+  tokens.is_kind(at - 1, '(') then 0 else 1
+
+# A statement that is one expression, which a two-way value can hold.
+is_value := (statement: Statement) ->
+  is_inline(statement) and statement is not Assignment and statement is not Pass
+
+# `'...'` for `"..."`, and `b'...'` for `b"..."`, where they write the same (see String literals);
+# otherwise the escapes of ASCII characters as Escapes writes them.
+literal_edit := (tokens: Tokens, index: Int) ->
+  token := tokens.code[index]
+  written := tokens.spelling(index)
+  if value := single_quoted_text(token, written)
+    if fits_single_quotes(written, value)
+      quoted := token.kind == BINARY then "b'#{value}'" else "'#{value}'"
+      return tokens.edit(STRING_LITERALS, [tokens.replaced(index, quoted)])
+  return nil if not written.starts_with('"') and not written.starts_with('b"')
+  escaped := with_ascii_escapes(written)
+  escaped != written then tokens.edit(ESCAPES, [tokens.replaced(index, escaped)])
+
+# The text of a literal written `"..."` or `b"..."` on one line, which interpolates nothing.
+single_quoted_text := (token: Token, written: String) ->
+  return nil if token.end_line > token.line
+  case token.kind
+    when STRING then written.starts_with('"') then token.text
+    when BINARY
+      return nil unless written.starts_with('b"')
+      parts := token.parts ? return nil
+      return '' if parts.is_empty()
+      part := parts[0] as TextPart ? return nil
+      parts.length == 1 then part.bytes.text()
     else nil
 
-# A name, a literal or a member of one, whose evaluation changes nothing that a value evaluated
-# after it reads. A member of an enum written with its enum is one, as it is once written alone.
-has_no_effects := (value: Expression): Bool ->
-  value is Member then has_no_effects(value.object) else value is Inert
+# `b'...'` for the bytes of a string literal, `'...'.binary` (see Binary literals), on one line.
+binary_literal := (tokens: Tokens, member: Member) ->
+  return nil if member.name.name != 'binary'
+  { object } := member
+  is_string := object is StringLiteral or (object is Interpolation and not object.binary)
+  return nil unless is_string
+  start := tokens.at(object.position) ? return nil
+  var literal = start
+  literal += 1 while tokens.is_kind(literal, '(')
+  return nil if tokens.code[literal].end_line > tokens.code[literal].line
+  name := tokens.at(member.name.position) ? return nil
+  change :=
+    Change(from: tokens.start(start), to: tokens.end(name), text: 'b' + tokens.spelling(literal))
+  tokens.edit BINARY_LITERALS, [change]
 
-type Inert =
-  Identifier | This | NilLiteral | BooleanLiteral | StringLiteral | IntegerLiteral | FloatLiteral
+# `x as T ? y` for `(x as T?) ? y` (see Cast fallbacks): the parentheses and the `?` inside them
+# left out; but not where the place of the fallback, written without parentheses, binds more tightly
+# than a comparison, as `x as T ? y` binds as one: `(x as T?) ? y as U` is `((x as T?) ? y) as U`.
+cast_fallback := (tokens: Tokens, coalesce: Coalesce, tight: Set<Expression>) ->
+  cast := cast_of(coalesce) ? return nil
+  return nil if coalesce in tight and coalesce.position == cast.position
+  open := tokens.at(cast.position) ? return nil
+  return nil unless tokens.is_kind(open, '(')
+  close := tokens.matching(open) ? return nil
+  type := tokens.at(cast.type.position) ? return nil
+  # Parentheses around the cast alone, not around what it casts, on one line.
+  around := close > type and tokens.is_kind(close - 1, '?')
+  return nil if not around or tokens.code[open].line != tokens.code[close].line
+  question := Change(from: tokens.start(close - 1), to: tokens.end(close), text: '')
+  tokens.edit CAST_FALLBACKS, [tokens.removed(open), question]
 
-# The value whose fields of the same names the named arguments of a construction copy, `y: p.y`,
-# which a spread of it may give (see Spreads): a name, `@` or a path of fields from one, which
-# the spread reads before the arguments written, so those before a copy must have no effects.
-export copied_source := (call: Call) ->
-  return nil if call.args.any(is_spread)
-  copies := [named for named in call.named_args when copied_field(named) != nil]
-  first := copies.first() ? return nil
-  source := copied_field(first)!.object
-  is_path := source is Identifier or source is This or source is Member
-  return nil if not is_path or not has_no_effects(source)
-  key := dump_ast_without_positions([source])
-  unless copies.all((named) -> dump_ast_without_positions([copied_field(named)!.object]) == key)
-    return nil
-  last_copy := call.named_args.index_of(copies.last()!)!
-  before := [named for named at i in call.named_args when i < last_copy and named not in copies]
-  before.all((named) -> has_no_effects(named.value)) then source
+# `c then x` for `c then x else nil` (see Else nil).
+else_nil := (tokens: Tokens, conditional: Conditional) ->
+  return nil if conditional.without_else or conditional.else_value is not NilLiteral
+  value := tokens.at(conditional.else_value.position) ? return nil
+  word := value - 1
+  return nil unless tokens.is_kind(word, 'else')
+  last := tokens.is_kind(value, '(') then (tokens.matching(value) ? return nil) else value
+  tokens.edit ELSE_NIL, [{ from: tokens.end(word - 1), to: tokens.end(last), text: '' }]
 
-# The field that the named argument copies: of its own name.
-copied_field := (named: NamedValue) ->
-  member := named.value as Member ? return nil
-  member.name.name == named.name.name then member
+# `var x: T?` for `var x: T? = nil` (see Nil initial values), where `?` makes the type optional:
+# one that an alias or a union makes optional keeps its value.
+nil_initial_value := (tokens: Tokens, declaration: Declaration) ->
+  { mutable, type, value } := declaration
+  written := type ? return nil
+  optional := written is not UnionTypeName and written.optional
+  return nil if not mutable or not optional or value is not NilLiteral or declaration.omits_value
+  nil_at := tokens.at(value.position) ? return nil
+  return nil if not tokens.is_kind(nil_at, 'nil') or not tokens.is_kind(nil_at - 1, '=')
+  change := Change(from: tokens.end(nil_at - 2), to: tokens.end(nil_at), text: '')
+  tokens.edit NIL_INITIAL_VALUES, [change]
 
-# The construction with a spread of the value whose fields it copies, first, and the arguments
-# that it does not copy, reported at the spread.
-spread_copy := (call: Call, source: Expression) ->
-  { args, named_args } := call
-  spread := spread_of_value(source)
-  kept := [named for named in named_args when copied_field(named) == nil]
-  Annotation
-    target: SpreadCopy(call, source)
-    reported: { written: spread, rule: SPREADS }
-    key: { kind: SPREAD, at: call.position }
-    remove: ->
-      call.args = [spread, call.args...]
-      call.named_args = kept
-    restore: ->
-      call.args = args
-      call.named_args = named_args
+# `x: T?` for `x: T? = default nil` of a field (see Nil initial values), which takes nil where
+# its argument is left out; but not where the `?` is not written on the type itself, as `A | B?`
+# or an alias of an optional type: the formatter cannot tell it optional.
+nil_default := (tokens: Tokens, member: MemberDeclaration) ->
+  { type, value, has_default } := member
+  written := type ? return nil
+  return nil if not written.optional or not has_default or value is not NilLiteral
+  nil_at := tokens.at(value.position) ? return nil
+  is_written := tokens.is_kind(nil_at, 'nil') and tokens.is_word(nil_at - 1, 'default')
+  return nil if not is_written or not tokens.is_kind(nil_at - 2, '=')
+  change := Change(from: tokens.end(nil_at - 3), to: tokens.end(nil_at), text: '')
+  tokens.edit NIL_DEFAULTS, [change]
 
-# The named argument written as the name alone, after the arguments written so. The arguments of
-# the call are replaced rather than changed, and put back as they were: the places of the others
-# in them (see visit_named_at in ./places) change those that are put back.
-shorthand := (call: Call, named: NamedValue) ->
-  { args, named_args } := call
-  alone := Identifier(named.name...)
-  Annotation
-    target: ShorthandArgument(call, cast: named.value as Cast?)
-    key: { kind: SHORTHAND, at: named.name.position }
-    # By its name, as leaving out its cast puts another argument in its place.
-    remove: ->
-      call.named_args = [each for each in call.named_args when each.name.name != alone.name]
-      call.args = [call.args..., alone]
-    restore: ->
-      call.args = args
-      call.named_args = named_args
+# `xs: T[]` for `xs: T[] = []`, and `m: Map<K, V>` for `m: Map<K, V> = Map()` or `m := Map<K, V>()`,
+# of a const, and so for a Set (see Empty initial values).
+empty_initial_value := (tokens: Tokens, declaration: Declaration) ->
+  return nil if declaration.mutable or declaration.weak
+  { type, value } := declaration
+  start := tokens.at(value.position) ? return nil
+  name := tokens.at(declaration.name.position) ? return nil
+  case value
+    when ArrayLiteral
+      array := type as ArrayTypeName ? return nil
+      return nil if array.optional or not value.elements.is_empty()
+      return nil if not tokens.is_kind(start, '[') or not tokens.is_kind(start + 1, ']')
+      left_out tokens, start - 1, start + 1
+    when Call
+      return nil unless is_empty_collection(value)
+      close := empty_arguments_end(tokens, start) ? return nil
+      if written := type
+        named := written as NamedType ? return nil
+        assign := start - 1
+        type_at := tokens.at(named.position) ? return nil
+        # A value of another type would not be the same.
+        value_type := tokens.joined(start, close - 2)
+        same_type := value.type_args.is_empty() or value_type == tokens.joined(type_at, assign - 1)
+        same_kind := named.name == (value.callee as Identifier!).name and not named.optional
+        return nil if not same_kind or not same_type or not tokens.is_kind(assign, '=')
+        left_out tokens, assign, close
+      else
+        return nil if value.type_args.is_empty() or not tokens.is_kind(start - 1, ':=')
+        typed := ': ' + tokens.slice(tokens.start(start), tokens.end(close - 2))
+        change := Change(from: tokens.end(name), to: tokens.end(close), text: typed)
+        tokens.edit EMPTY_INITIAL_VALUES, [change]
+    else nil
 
-# The construction written as a record of its arguments as they are then: those inside it, which
-# come before it (see rewrites_of), are written so by then, in their places among them.
-recorded := (call: Call, place: Place) ->
-  Annotation
-    target: RecordConstruction(call)
-    key: { kind: RECORD, at: call.position }
-    remove: ->
-      fields := construction_arguments(call)
-      place RecordLiteral(fields, position: call.position, spread: construction_spread(call))
-    restore: -> place(call)
+# The value of a declaration left out, from its `=` at `assign` up to `last`.
+left_out := (tokens: Tokens, assign: Int, last: Int) ->
+  change := Change(from: tokens.end(assign - 1), to: tokens.end(last), text: '')
+  tokens.edit EMPTY_INITIAL_VALUES, [change]
+
+is_empty_collection := (call: Call) ->
+  callee := call.callee as Identifier ? return false
+  is_collection := callee.name == 'Map' or callee.name == 'Set'
+  is_collection and call.args.is_empty() and call.named_args.is_empty()
+
+# The `)` of `Map<K, V>()` or `Map()` from its callee at `callee`: of the first `()` after the
+# callee or a `>`.
+empty_arguments_end := (tokens: Tokens, callee: Int) ->
+  var at = callee + 1
+  while at + 1 < tokens.code.length
+    after_type := at == callee + 1 or tokens.is_kind(at - 1, '>')
+    return at + 1 if after_type and tokens.is_kind(at, '(') and tokens.is_kind(at + 1, ')')
+    return nil if tokens.is_kind(at, '(')
+    at += 1
+  nil
+
+# `-> body` for `() -> body` (see Functions without parameters).
+without_parameters := (tokens: Tokens, function: FunctionLiteral) ->
+  has_signature := not function.params.is_empty() or function.return_type != nil
+  return nil if has_signature or not function.type_params.is_empty()
+  var at = tokens.at(function.position) ? return nil
+  # The parentheses that the literal is written in come before its `weak` and its own.
+  at += 1 while tokens.is_kind(at, '(') and not tokens.is_kind(at + 1, ')')
+  at += 1 if tokens.is_word(at, 'weak')
+  is_empty := tokens.is_kind(at, '(') and tokens.is_kind(at + 1, ')')
+  return nil if not is_empty or not tokens.is_kind(at + 2, '->')
+  change := Change(from: tokens.start(at), to: tokens.start(at + 2), text: '')
+  tokens.edit FUNCTIONS_WITHOUT_PARAMETERS, [change]
+
+# `{ x }` for `{ x: x }` (see Shorthand).
+shorthand := (tokens: Tokens, name: Identifier, value: Expression) ->
+  return nil if value is not Identifier or value.name != name.name
+  name_at := tokens.at(name.position) ? return nil
+  value_at := tokens.at(value.position) ? return nil
+  return nil if value_at == name_at or not tokens.is_kind(value_at, IDENTIFIER)
+  change := Change(from: tokens.start(name_at), to: tokens.end(value_at), text: name.name)
+  tokens.edit SHORTHAND, [change]
+
+# A line of its own for the statement after a `;` (see Semicolons), as deep as the line that the
+# statement before it starts.
+semicolon_edit := (tokens: Tokens, lexed: Lexed, index: Int) ->
+  all := lexed.tokens
+  separator := all[index]
+  return nil if separator.kind != NEWLINE or separator.text != ';'
+  var start = index - 1
+  start -= 1 while start > 0 and not ends_line(all[start - 1])
+  indentation := ' '.repeat(all[start].column - 1)
+  before := all[index - 1]
+  after := all[index + 1]
+  change := Change
+    from: { line: before.end_line, column: before.end_column }
+    to: after.position()
+    text: "\n" + indentation
+  tokens.edit SEMICOLONS, [change]
+
+ends_line := (token: Token) -> is_layout(token) and token.text != ';'
+
+# Whether the literal with escapes, as written, can be written with `'...'` instead: where its text
+# holds no `'` and no control character, and no `\u{...}` or `\xHH` escape writes a character that
+# would not be seen, or told apart, as it is, once Escapes writes the others as the characters.
+fits_single_quotes := (written: String, value: String) ->
+  escaped := with_ascii_escapes(written)
+  keeps_escapes := '\u{' in escaped or '\x' in escaped
+  plain := value.binary.all((byte) -> byte != b"'" and byte >= 0x20 and byte != 0x7F)
+  plain and not keeps_escapes

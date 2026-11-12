@@ -1,10 +1,7 @@
 # The walk of lists in brackets, and of the parentheses that group an expression (see walk.lerta).
-import
-  BinaryOperation, Call, Coalesce, Comprehension, Conditional, Expression, FunctionLiteral, Index,
-  Member, Range, TupleLiteral, Unwrap
-from '../ast'
+import Comprehension, Expression, FunctionLiteral, TupleLiteral from '../ast'
 import CLOSING_BRACKETS, OPENING_BRACKETS, TokenKind from '../lexer/tokens'
-import is_simple from './forms'
+import is_simple, leftmost from './forms'
 import CodeGap, ListShape from './shapes'
 import NONE, ONE, unhandled, Walker from './walk'
 import './walk_expressions'
@@ -114,17 +111,3 @@ extend Walker
     separated = true if commas == max(count - 1, 0)
     separated = false if commas == 0 and count > 1
     WalkedList starts, commas: separated
-
-# The expression at the left end of the node, whose parentheses are where the node's start.
-leftmost := (node: Expression): Expression ->
-  case node
-    when Call then leftmost(node.callee)
-    when BinaryOperation then leftmost(node.left)
-    when Member, Index then leftmost(node.object)
-    when Unwrap then leftmost(node.operand)
-    when Coalesce then leftmost(node.value)
-    when Conditional then leftmost(node.condition)
-    when Range
-      start := node.start ? return node
-      leftmost start
-    else node

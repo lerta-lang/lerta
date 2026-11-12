@@ -1,0 +1,59 @@
+# The precedence of operations, which decides where they need parentheses: the unary and binary
+# operators, ranges, `then`/`else`, `?`, tests and casts.
+import
+  Await, BinaryOperation, Call, Cast, Coalesce, Conditional, Expression, If, Index, IsTest, Member,
+  Range, UnaryOperation, Unwrap
+from '../ast'
+
+# Precedence levels, weakest first (see Operators in docs/reference/syntax.md).
+export CONDITIONAL := 1
+export OR := 2
+AND := 3
+export NOT := 4
+export COMPARISON := 5
+export COALESCE := 6
+export RANGE := 7
+export ADDITIVE := 8
+MULTIPLICATIVE := 9
+export PREFIX := 10
+export POSTFIX := 11
+PRIMARY := 12
+
+export precedence := (expression: Expression) ->
+  case expression
+    when Conditional then CONDITIONAL
+    when Coalesce then cast_of(expression) then COMPARISON else COALESCE
+    when BinaryOperation then binary_precedence(expression.operator)
+    when UnaryOperation then expression.operator == 'not' then NOT else PREFIX
+    when IsTest, Cast then COMPARISON
+    when Range then RANGE
+    when Await then PREFIX
+    when Unwrap, Call, Member, Index then POSTFIX
+    when If then expression.nil_safe then POSTFIX else PRIMARY
+    else PRIMARY
+
+export binary_precedence := (operator: String) ->
+  case operator
+    when 'or' then OR
+    when 'and' then AND
+    when '+', '-', '|', '^' then ADDITIVE
+    when '*', '/', '%', '&', '<<', '>>' then MULTIPLICATIVE
+    else COMPARISON
+
+# `not (x is T)` or `not (x in xs)`.
+export is_negated_test := (expression: Expression) ->
+  unary := expression as UnaryOperation ? return false
+  unary.operator == 'not' and (unary.operand is IsTest or is_in_test(unary.operand))
+
+is_in_test := (expression: Expression) ->
+  expression is BinaryOperation and expression.operator == 'in'
+
+# `(x as T?) ? y`, written `x as T ? y` (see Cast fallbacks).
+export cast_of := (coalesce: Coalesce) ->
+  cast := coalesce.value as Cast ? return nil
+  cast.throws then nil else cast
+
+# A cast, or a cast with a fallback, which the fallback of a cast may be without parentheses (see
+# parse_cast_fallback); that of `?` cannot.
+export is_cast := (expression: Expression) ->
+  expression is Cast or (expression is Coalesce and cast_of(expression) != nil)

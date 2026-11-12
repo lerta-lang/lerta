@@ -1,24 +1,30 @@
-# `lerta fmt`: prints each file again in the style (docs/reference/style.md), and reports where the
-# file differs from that, by the rule that decides it there, or writes it with `--fix`.
-import Expression, Import, Position, Statement from '../ast'
+# `lerta fmt`, the formatter: rewrites the tokens of the source that the style writes otherwise
+# (see rewrites.lerta), decides each gap between the text tokens of the source (see text.lerta),
+# reports where the source differs from that by the rule of the rewrite or the decision, and writes
+# the tokens with the gaps decided.
+import scan from 'std:scanner'
+import Position, Statement from '../ast'
 import dump_ast_without_positions from '../dumps'
 import CompileError from '../errors'
 import lex, Lexed from '../lexer/tokens'
 import parse from '../parser/statement'
-import Annotation, AnnotationKey, SharedArms from './annotated'
-import left_out_candidates from './annotations'
-import Hunk, hunks, kept_lines from './diff'
-import join, lay_out, Layout, line_feed, RulePlace, text, WIDTH from './doc'
-import StatementLines from './kept'
-import rewrite_negated_conditions from './negated_conditions'
-import write_binary_literals from './binary_literals'
-import block_doc, is_left_out_import, left_out_import_mark from './print_statement'
-import Context from './printing'
 import
-  BLANK_LINES, COMMENTS, LAYOUT, LINE_LENGTH, SEMICOLONS, SPACING, STRANDED_COMMENTS, StyleRule,
-  UNBREAKABLE_LINES
+  BINARY_LITERALS, BLANK_LINES, EMPTINESS_TESTS, MEMBERSHIP_TESTS, COMMENTS, DOUBLE_NEGATIONS,
+  ELSE_NIL, EMPTY_INITIAL_VALUES, EXPECTED_TYPES, LAYOUT, NIL_DEFAULTS, RANGE_ENDS, REDUNDANT_CASTS,
+  SEMICOLONS, SHORTHAND_ARGUMENTS, STRANDED_COMMENTS, StyleRule, TYPE_ANNOTATIONS,
+  UNBREAKABLE_LINES, UNUSED_IMPORTS, VALUE_DOUBLE_NEGATIONS
 from './rules'
-import columns, source_text, SourceText from './source'
+import common_indentation, is_blank from '../lexer/string_literal'
+import applicable, applied, Edit from './edits'
+import is_off_throughout, kept_lines from './kept'
+import break_lines, WIDTH from './lines'
+import rewrites_of from './rewrites'
+import CodeGap, LineStart, Spaces, StatementShape from './shapes'
+import Gap, literal_lines, source_tokens, SourceTokens, TextToken from './text'
+import Tokens from './tokens'
+import declared_types from './annotations'
+import typed_program, Typed from './typed'
+import walk, Walked from './walk'
 
 # A place where the source differs from the style, at its position in the source.
 export struct Finding
@@ -29,270 +35,418 @@ export struct Formatted
   text: String
   findings: Finding[]
 
-# The source in the style, without the annotations of `left_out` (see AnnotationKey), and
-# where it differs from it. Throws a CompileError if the source does not parse, or if the text in
-# the style would not parse to the same program, which would be a bug.
-export format_source := (source: String, path: String, left_out: AnnotationKey[]) ->
-  return Formatted(text: source, findings: []) if is_off_throughout(source)
-  lexed := lex(source, path)
-  text_source := source_text(source, lexed)
-  first := printed(lexed, text_source, path, left_out, Set())
-  # Which statements are kept as written shows once they are printed, and their annotations stay.
-  kept_lines := first.lines.kept
-  result :=
-    if kept_lines.is_empty()
-      first
-    else
-      printed lexed, text_source, path, outside(left_out, kept_lines, text_source), kept_lines
-  check_same_program result.statements, result.layout.text, path
-  found := findings(text_source, result.layout, kept_lines)
-  in_order := found.sorted((a, b) -> a.at.compare(b.at))
-  Formatted text: result.layout.text, findings: in_order
+# A program that the formatter would change, which is a fault of the formatter.
+export struct ChangedProgram: Error
+  message: String
 
-# Whether `# fmt: off` comes before the code, and no `# fmt: on` after it: the file is kept as it is
-# written without being parsed, as one that does not parse may be. The lines are read as text, as
-# such a file may not even lex: a line that ends with `# fmt: on` counts as one, which a comment or
-# a string that merely ends so takes for it too, and the file is then parsed.
-export is_off_throughout := (source: String) ->
-  lines := [line.trim() for line in source.split("\n")]
-  is_code := (line: String) -> not line.is_empty() and not line.starts_with('#')
-  code_start := lines.find_index(is_code) ? lines.length
-  off := lines.index_of('# fmt: off') ? return false
-  after := lines[(off + 1)..]
-  off < code_start and not after.any((line) -> line.ends_with('# fmt: on'))
+# The text of a gap, and the rule that decides it.
+struct Decision
+  text: String
+  rule: StyleRule
 
-# The statements printed, those of them that are not left out, and the lines of those printed on
-# lines of their own.
-struct Printed
+# The source lexed and parsed, and its text tokens.
+export struct Parsed
+  source: String
+  lexed: Lexed
   statements: Statement[]
-  layout: Layout
-  lines: StatementLines
+  text: SourceTokens
 
-# The conditions on `kept_lines` keep their double negations, as the lines are written.
-printed := (
-  lexed: Lexed, source: SourceText, path: String, left_out: AnnotationKey[], kept_lines: Set<Int>
-) ->
-  statements := parse(lexed.tokens, path)
-  reported: Map<Expression, StyleRule>
-  rewrite_negated_conditions statements, reported, kept_lines
-  write_binary_literals statements, reported, source, kept_lines
-  for annotation in left_out_candidates(statements)
-    continue if annotation.key not in left_out or holds_comments(annotation, source)
-    annotation.remove()
-    reported[found.written] = found.rule if found := annotation.reported
-  lines := StatementLines()
-  context := Context(left_out, source, lines, reported)
-  body := block_doc(statements, context)
-  ending := left_out_ending(statements, context)
-  doc := statements.is_empty() then text('') else join([body, line_feed(), ending])
-  kept := [statement for statement in statements when not is_left_out_import(statement, context)]
-  Printed lines, statements: kept, layout: lay_out(doc, source)
+# The source laid out, what differs from it, but the stranded comments, the edits of the rewrites
+# that its lines ask for, and the statements walked.
+struct LaidOut
+  text: String
+  findings: Finding[]
+  stranded: Finding[]
+  edits: Edit[]
+  statements: StatementShape[]
+  skipped: Set<Int>
+  # The lines kept as they are written, or marked so (see KeptLines).
+  kept: Set<Int>
 
-# Whether a comment is among the arms that would be one, from the line of the `when` of the first
-# up to what follows the last: one in the arms left out, after its last statement too, has no place
-# in the arm kept, and one in the first, as one that ends its line, would be printed before the
-# patterns that the others give it, which come after it in the source (see Shared arm bodies).
-holds_comments := (annotation: Annotation, source: SourceText) ->
-  shared := annotation.target as SharedArms ? return false
-  run := shared.arms
-  first_line := source.line_before(run[0].patterns[0].position)
-  body_end := source.statement_last_line(run.last()!.body.last()!.position, nil)
-  source.has_comment first_line, source.line_before_next(body_end)
+# Throws a CompileError if the source does not parse. The layout of a statement that holds a
+# rewrite is reported once the rewrite is applied, as the rewrite may change it.
+export format_source := (source: String, path: String) ->
+  return Formatted(text: source, findings: []) if is_off_throughout(source)
+  parsed := parsed_source(source, path)
+  await format_parsed(parsed, path, await typed_program(path, source, parsed.statements))
 
-# The annotations of `left_out` that are not on the lines kept as written, but for the names of
-# imports that those lines use.
-outside := (left_out: AnnotationKey[], kept_lines: Set<Int>, source: SourceText) ->
-  used: Set<String>
-  for token in source.tokens
-    used.add source.spelling(token) if token.kind == IDENTIFIER and token.line in kept_lines
-  leaves_out := (key: AnnotationKey) ->
-    name := key.name
-    key.at.line not in kept_lines and not (name != nil and name in used)
-  [key for key in left_out when leaves_out(key)]
+# That of the source parsed, not off throughout, with its program checked (see typed_programs).
+export format_parsed := (parsed: Parsed, path: String, typed: Typed?) ->
+  { source } := parsed
+  laid := laid_out(parsed)
+  first := rewrites_with(parsed, typed)
+  # The types left out must keep the types of the program, or they all stay (see rewritten_text).
+  with_types := await rewritten_text(parsed, laid, first, path, true)
+  text := with_types ? (await rewritten_text(parsed, laid, first, path, false))!
+  kept_types := text.annotations_kept
+  first_rewrites :=
+    [edit for edit in first.edits when not kept_types or edit.rule != TYPE_ANNOTATIONS]
+  edits := [first_rewrites..., laid.edits...]
+  held := held_statements(parsed.text, laid, edits)
+  is_held := (at: Position) -> held.any((head) -> head.holds(at))
+  layout := [finding for finding in laid.findings when not is_held(finding.at)]
+  rewritten := [Finding(at: edit.at, rule: edit.rule) for edit in edits]
+  # A `;` that a rewrite takes out is a gap that the layout decides too.
+  # A line that a rewrite left to be done by hand may shorten is reported for that alone.
+  by_hand := Set([edit.at.line for edit in edits when edit.change == nil])
+  long := long_lines(source, text.text, Set([laid.kept..., by_hand...]))
+  found := distinct([rewritten..., layout..., laid.stranded..., long...])
+  sorted := found.sorted((a, b) -> a.at.compare(b.at))
+  Formatted text: text.text, findings: sorted
 
-# The imports left out last are reported where they were (see left_out_import_mark).
-left_out_ending := (statements: Statement[], context: Context) ->
-  var first = statements.length
-  first -= 1 while first > 0 and is_left_out_import(statements[first - 1], context)
-  join [left_out_import_mark(statements[i] as Import!) for i in first..statements.length]
-
-# Text that does not parse is the formatter's bug too, whose places in it would mislead about the
-# source.
-check_same_program := (statements: Statement[], formatted: String, path: String) ->
-  reparsed :=
-    try
-      parse lex(formatted, path).tokens, path
-    catch _: CompileError
-      throw CompileError(
-        "#{path}: the formatter would write a program that does not parse, which is a bug"
-      )
-  if dump_ast_without_positions(reparsed) != dump_ast_without_positions(statements)
-    throw CompileError("#{path}: the formatter would change the program, which is a bug")
-
-# Where the formatted text differs from the source: at the first difference of each run of lines
-# that differ (see difference_finding), at the ends of lines that are not LF (see
-# line_end_findings), at the lines that it keeps but that are too long (see
-# long_line_findings), and at the comments that strand an operand.
-findings := (source: SourceText, layout: Layout, kept_lines: Set<Int>) ->
-  # A copy, as a last line without LF gets an empty one after it, and the lines are compared
-  # without it.
-  old := [source.lines...]
-  new := layout.text.split("\n")
-  result := line_end_findings(source)
-  old.push '' unless old.last()!.is_empty()
-  differing: Set<Int>
-  for hunk in hunks(old, new)
-    old_end := hunk.old_start + hunk.old_count
-    differing.add line for line in hunk.old_start..old_end
-    # A `;` that the lines hold is what they differ by first, as it breaks them up.
-    held: Finding[]
-    for line in hunk.old_start..old_end
-      held.push { rule: SEMICOLONS, at } if at := source.separators[line + 1]
-    if held.is_empty()
-      for place in places_of(old, new, hunk)
-        result.push difference_finding(old, new, place, layout, source)
-    else
-      result.append held
-  stranded: Finding[] = [
-    { rule: STRANDED_COMMENTS, at: { line: comment.line, column: comment.column } }
-    for comment in source.stranded
-  ]
-  [result..., long_line_findings(old, differing, kept_lines)..., stranded...]
-
-# Lines end with LF, and so does a file (see Layout): the first that ends with CRLF, and a last
-# line without LF, are places of their own.
-line_end_findings := (source: SourceText) ->
-  lines := source.lines
+# The lines of the source that the formatted text holds, but for their indentation and the spaces
+# that end them, over WIDTH columns there: of a comment, a string or a name that the formatter
+# cannot break, to be shortened by hand, reported where the formatted line passes WIDTH. Not those
+# `left`, as kept as written.
+long_lines := (source: String, formatted: String, left: Set<Int>) ->
+  formatted_lines: Map<String, String>
+  formatted_lines[line.trim()] = line for line in formatted.split("\n")
   found: Finding[]
-  if crlf := source.raw_lines.find_index((line) -> line.ends_with("\r"))
-    found.push { rule: LAYOUT, at: { line: crlf + 1, column: columns(lines[crlf]) + 1 } }
-  last := lines.last()!
-  unless last.is_empty()
-    found.push { rule: LAYOUT, at: { line: lines.length, column: columns(last) + 1 } }
+  for line at i in source.split("\n")
+    continue if i + 1 in left
+    written := formatted_lines[line.trim()] ? continue
+    continue if written.count() <= WIDTH
+    # The source column of the formatted line's first past WIDTH, as its indentation changes.
+    shift := leading_spaces(written) - leading_spaces(line)
+    found.push { rule: UNBREAKABLE_LINES, at: { line: i + 1, column: max(WIDTH + 1 - shift, 1) } }
   found
 
-# The places of the hunk: where as many lines differ in each, and none has moved, each pair of
-# lines is a place of its own.
-places_of := (old: String[], new: String[], hunk: Hunk) ->
-  paired := hunk.old_count == hunk.new_count and not moves(old, new, hunk)
-  return [hunk] unless paired
-  [
-    Hunk(old_start: hunk.old_start + i, old_count: 1, new_start: hunk.new_start + i, new_count: 1)
-    for i in 0..hunk.old_count
-  ]
+leading_spaces := (line: String) -> line.count() - line.trim_start().count()
 
-# The first difference of the place, with the innermost rule whose part holds that place in the
-# formatted text, or else the rule that the kind of difference points to.
-difference_finding := (
-  old: String[], new: String[], place: Hunk, layout: Layout, source: SourceText
-): Finding ->
-  old_lines := old[place.old_start..(place.old_start + place.old_count)]
-  new_lines := new[place.new_start..(place.new_start + place.new_count)]
-  new_line := new_lines.first() ? ''
-  column := first_difference(old_lines.first() ? '', new_line)
-  at := Position(column, line: place.old_start + 1)
-  in_new := Position(column, line: place.new_start + 1)
-  marks_from := Position(column: column - spaces_before(new_line, column), line: in_new.line)
+distinct := (findings: Finding[]) ->
+  seen: Set<String>
+  found: Finding[]
+  for finding in findings
+    { at, rule } := finding
+    key := "#{at.line}:#{at.column} #{rule.label} #{rule.message}"
+    continue if key in seen
+    seen.add key
+    found.push finding
+  found
+
+export parsed_source := (source: String, path: String) ->
+  lexed := lex(source, path)
+  Parsed source, lexed, statements: parse(lexed.tokens, path), text: source_tokens(source, lexed)
+
+# The edits of the rewrites of a tree, and its checked program, whose facts are found by its nodes:
+# each round parses anew.
+struct Rewrites
+  edits: Edit[]
+  typed: Typed?
+
+rewrites := (parsed: Parsed, path: String) ->
+  rewrites_with parsed, await typed_program(path, parsed.source, parsed.statements)
+
+rewrites_with := (parsed: Parsed, typed: Typed?) ->
+  { source, lexed, statements, text } := parsed
+  Rewrites
+    typed
+    edits: rewrites_of(statements, source, text, lexed, kept_lines(source, lexed), typed)
+
+laid_out := (parsed: Parsed) ->
+  { source, lexed, statements, text } := parsed
+  kept := kept_lines(source, lexed)
+  walked := walk(statements, text, kept)
+  # The walk skips the statements kept as they are written, which the lines leave alone.
+  tokens := Tokens(source, text, comments: lexed.comments, kept: Set())
+  edits := break_lines(walked, text, tokens)
+  layout := lay_out(text, walked)
+  { decisions, texts } := layout
+  stranded := [stranded_finding(text, index) for index in walked.stranded]
+  found := [findings(text.gaps, decisions)..., token_findings(text.tokens, texts)...]
+  LaidOut
+    stranded
+    edits
+    text: render(texts, decisions)
+    findings: found
+    statements: walked.statements
+    skipped: walked.skipped
+    kept: Set([kept.kept..., kept.marked...])
+
+# The part of the innermost statement that holds an edit, from its start up to the end of the line
+# `last`, where the edit ends, which leaves out the blocks below its head.
+struct Held
+  from: Position
+  last: Int
+
+  holds := (at: Position) -> @from.compare(at) != GREATER and at.line <= @last
+
+# A statement that the walk skips keeps its gaps, which report nothing.
+held_statements := (text: SourceTokens, laid: LaidOut, edits: Edit[]) ->
+  held: Held[]
+  for edit in edits
+    # That of a `;` is the layout's (see rewritten_text).
+    continue if edit.rule == SEMICOLONS
+    change := edit.change ? continue
+    continue if text.starts[edit.at] ? -1 in laid.skipped
+    var innermost: StatementShape?
+    for statement in laid.statements
+      continue unless spans(text, statement, change.from)
+      innermost = statement if innermost == nil or statement.start > innermost.start
+    held.push { from: text.code[innermost.start].position(), last: change.to.line } if innermost
+  held
+
+spans := (text: SourceTokens, statement: StatementShape, at: Position) ->
+  first := text.code[statement.start]
+  last := text.code[statement.end - 1]
+  ends_after := at.compare({ line: last.end_line, column: last.end_column }) == LESS
+  first.position().compare(at) != GREATER and ends_after
+
+# The rules whose rewrites change the syntax tree; the others give the same tree, which the
+# formatter checks. A comparison of trees cannot check these, which change it by design;
+# tests/format/rewritten_forms.lerta checks that each form means what its rewrite does.
+TREE_CHANGES :=
+  BINARY_LITERALS, DOUBLE_NEGATIONS, ELSE_NIL, EMPTINESS_TESTS, EMPTY_INITIAL_VALUES,
+  EXPECTED_TYPES, MEMBERSHIP_TESTS, NIL_DEFAULTS, RANGE_ENDS, REDUNDANT_CASTS, SHORTHAND_ARGUMENTS,
+  TYPE_ANNOTATIONS, UNUSED_IMPORTS, VALUE_DOUBLE_NEGATIONS
+
+# Only the rewrites of the source itself are reported: one that a round enables, as `b'...'` for the
+# `b"..."` that `"...".binary` is written as, shows once the text written is formatted again.
+# The source with the rewrites applied, round after round, as one may find another in what an
+# earlier one wrote, or in the lines that the layout between them decides, and laid out. Each round
+# checks that the rewrites that keep the syntax tree do, and the layout that it keeps the tree of
+# the source rewritten. A `;` goes last, once the layout has kept no statement on a line that holds
+# one (see Code kept as written): the layout puts the statement after it on a line of its own where
+# it decides where the statement starts, and its rewrite elsewhere.
+# Where `types` leaves out the types whose values have them of their own, and the program rewritten
+# does not check or gives a declaration another type, nil: a value took its type from one left out
+# after all, and none is left out then (`types` false).
+rewritten_text := (
+  parsed: Parsed, first_laid: LaidOut, first: Rewrites, path: String, types: Bool
+): Promise<RewrittenText?> ->
+  var current = parsed
+  var last_rewrites = first
+  var left_out_types = false
+  # Whether the last round changed nothing, so that `last_rewrites` are those of `current`.
+  var settled = false
+  for round in 0..MAX_ROUNDS
+    laid := round == 0 then first_laid else laid_out(current)
+    last_rewrites = await rewrites(current, path) if round > 0
+    edits := [last_rewrites.edits..., laid.edits...]
+    is_chosen := (edit: Edit) ->
+      edit.rule != SEMICOLONS and (types or edit.rule != TYPE_ANNOTATIONS)
+    chosen := applicable([edit for edit in edits when is_chosen(edit)])
+    left_out_types = true if chosen.any((edit) -> edit.rule == TYPE_ANNOTATIONS)
+    if not chosen.is_empty()
+      changing := [edit for edit in chosen when edit.rule in TREE_CHANGES]
+      expected := written_program(applied(current.source, changing), path, 'its rewrites')
+      current = written_program(applied(current.source, chosen), path, 'its rewrites')
+      check_same current, expected, path, 'its rewrites'
+    else if laid.text != current.source
+      current = checked_layout(laid.text, current, path)
+    else
+      settled = true
+      break
+  found := settled then last_rewrites else await rewrites(current, path)
+  if left_out_types
+    before := declared_types(parsed.statements, first.typed)
+    after := declared_types(current.statements, found.typed) ? return nil
+    return nil if before != after
+  annotations_kept := not types
+  separators := applicable([edit for edit in found.edits when edit.rule == SEMICOLONS])
+  return { annotations_kept, text: current.source } if separators.is_empty()
+  separated := written_program(applied(current.source, separators), path, 'its rewrites')
+  check_same separated, current, path, 'its rewrites'
+  { annotations_kept, text: separated.source }
+
+struct RewrittenText
+  text: String
+  # Whether the types whose values have them of their own are kept, as the program would not check
+  # the same without them.
+  annotations_kept: Bool
+
+# The rounds that the rewrites and the layouts between them take at most: one for each that another
+# enables, as `"..."` of `"...".binary` is written `'...'` once it is `b"..."`, or that a layout
+# does, as the arguments of a call that its parentheses no longer hold go in a block below it. What
+# is left after the last is reported once the text written is formatted again.
+MAX_ROUNDS := 32
+
+# The program laid out, which must be that of the source.
+checked_layout := (text: String, source: Parsed, path: String) ->
+  laid := written_program(text, path, 'its layout')
+  check_same laid, source, path, 'its layout'
+  laid
+
+written_program := (text: String, path: String, what: String) ->
+  try
+    parsed_source text, path
+  catch error: CompileError
+    throw changed(path, "#{what} would not parse: #{error.message}")
+
+check_same := (written: Parsed, expected: Parsed, path: String, what: String) ->
+  same := dump_ast_without_positions(written.statements) ==
+    dump_ast_without_positions(expected.statements)
+  throw changed(path, "#{what} would change the program") unless same
+
+changed := (path: String, message: String) ->
+  ChangedProgram "#{path}: #{message}, which is a fault of the formatter"
+
+stranded_finding := (text: SourceTokens, index: Int) ->
+  Finding at: text.ending_comments[index]!.start, rule: STRANDED_COMMENTS
+
+lay_out := (text: SourceTokens, walked: Walked) ->
+  layout := Layout(text, code_gaps: walked.gaps, skipped: walked.skipped)
+  for gap at index in text.gaps
+    layout.decide gap, index
+    layout.decide_text text.tokens[index] if index < text.tokens.length
+  layout
+
+# The second pass: decides each gap between text tokens, in order, from the gaps between code
+# tokens that the walk decides, and the lines laid out before it; and the text of each token.
+class Layout
+  text: SourceTokens
+  code_gaps: Map<Int, CodeGap>
+  skipped: Set<Int>
+  decisions: Decision[] = []
+  texts: String[] = []
+  # The depth of the last line start.
+  var depth = 0
+  # The columns that the last line start moves the indentation of its source line by, which the
+  # lines after it that keep their source text move by too, so that their blocks stay as deep as
+  # they are under it. A block that the source indents by other than two spaces thus keeps its
+  # width there, unreported, until the walk handles the statement that holds it.
+  var shift = 0
+
+  decide := (gap: Gap, index: Int) ->
+    { tokens } := @text
+    decision :=
+      case
+        when index == 0 then Decision(text: '', rule: LAYOUT)
+        when index == tokens.length then Decision(text: "\n", rule: ending_rule(gap))
+        else @decide_before(tokens[index], gap)
+    @decisions.push decision
+
+  decide_before := (token: TextToken, gap: Gap) ->
+    { code } := @text
+    has_code := token.next_code < code.length
+    code_gap := has_code then @code_gaps[token.next_code] else END
+    return @kept(gap) unless code_gap
+    comment := token.comment
+    if comment and not comment.own_line
+      # That of a statement that the walk skips keeps its place as written.
+      return @kept(gap) if token.next_code - 1 in @skipped
+      return Decision(text: '  ', rule: COMMENTS)
+    case code_gap
+      when Spaces
+        rule := "\n" in gap.text then code_gap.joined else code_gap.rule
+        Decision rule, text: ' '.repeat(code_gap.count)
+      when LineStart
+        next_column := has_code then code[token.next_code].column else 1
+        # A comment before a dedent indented deeper than the line after it, as at the end of a
+        # block, is indented as the line before it.
+        dedent := code_gap.depth < @depth
+        deeper_comment := comment and dedent and comment.column > next_column
+        @depth = code_gap.depth unless deeper_comment
+        @shift = 2 * @depth - token.line_indentation
+        line_feed gap, 2 * @depth, code_gap.rule
+
+  # A gap that the walk does not decide keeps its source text, spaces at the ends of lines too,
+  # unreported, as the walk vouches only for the statements that it handles; but the indentation
+  # after it moves with the line start before it.
+  kept := (gap: Gap) ->
+    { text } := gap
+    return Decision(text, rule: LAYOUT) unless "\n" in text
+    head := text.binary[..(text.binary.length - indentation(text))].text()!
+    Decision text: head + ' '.repeat(max(0, indentation(text) + @shift)), rule: LAYOUT
+
+  # The lines of a `"""` or `'''` literal after its first are one level deeper than the line that
+  # it starts on (see Multi-line literals), or move with it in a statement that the walk skips.
+  decide_text := (token: TextToken) ->
+    text :=
+      if token.comment != nil or "\n" not in token.text
+        token.text
+      else if token.next_code in @code_gaps
+        indented token.text, 2 * (@depth + 1)
+      else
+        shifted_lines token.text, @shift
+    @texts.push text
+
+# The end of the source starts a line at depth 0, which a comment before it is indented by.
+END := LineStart(depth: 0)
+
+ending_rule := (gap: Gap) -> line_feeds(gap.text) > 1 then BLANK_LINES else LAYOUT
+
+# A line feed, after a blank line where the source has one, and an indentation of `columns`; `rule`
+# decides it where the source has none.
+line_feed := (gap: Gap, columns: Int, break_rule: StyleRule) ->
+  feeds := line_feeds(gap.text)
+  blank := feeds > 1
+  text := (blank then "\n\n" else "\n") + ' '.repeat(columns)
   rule :=
-    if only_blank_lines_differ(old_lines, new_lines)
-      BLANK_LINES
-    else if only_indentation_differs(old_lines, new_lines)
-      LAYOUT
-    else
-      # A line whose spaces alone differ, those within it among them, holds that difference, which
-      # a part on a later line is apart from; one whose other text differs may be joined or split
-      # by such a part, and one whose indentation alone differs may be of a block that it holds.
-      old_line := old_lines.first() ? ''
-      spaced_within := old_line.trim_start() != new_line.trim_start()
-      spaced_only := spaced_within and without_spaces(old_line) == without_spaces(new_line)
-      last_line := in_new.line + (spaced_only then 1 else place.new_count)
-      # A rule that decides the output there itself, or else the innermost rule whose part holds it.
-      decided := gap_rule(layout.gaps, in_new)
-      inner := decided then decided else innermost_rule(layout.rules, in_new, marks_from)
-      found := inner then inner else first_rule_from(layout.rules, in_new, last_line)
-      differing := (lines: String[]) -> spaced_only then lines[..1] else lines
-      found ? kind_of_difference(differing(old_lines), differing(new_lines), source, at.line)
-  # Lines that the formatter joins into one still too long are to be shortened by hand.
-  joined := place.old_count > place.new_count
-  still_long := rule == LINE_LENGTH and joined and columns(new_line) > WIDTH
-  { at, rule: still_long then UNBREAKABLE_LINES else rule }
+    case
+      when ';' in gap.text then SEMICOLONS
+      when feeds == 0 then break_rule
+      # Spaces before the first line feed come before any extra line feed.
+      when not gap.text.starts_with("\n") then LAYOUT
+      when feeds > 2 then BLANK_LINES
+      else LAYOUT
+  Decision text, rule
 
-# The lines that the formatter keeps but that are too long, such as of a comment or a string, which
-# it cannot break, but those kept as written.
-long_line_findings := (old: String[], differing: Set<Int>, kept_lines: Set<Int>) ->
+line_feeds := (text: String) -> text.split("\n").length - 1
+
+# The spaces after the last line feed of the text of a gap.
+indentation := (text: String) -> text.split("\n").last()!.count()
+
+# A `"""` or `'''` literal with its lines after the first indented by `columns`.
+indented := (text: String, columns: Int) ->
+  indentation := ' '.repeat(columns)
+  lines := [line.is_empty() then '' else indentation + line for line in literal_lines(text)]
+  [text.split("\n")[0], lines...].join("\n")
+
+# The text with its lines after the first moved by `shift` columns, those that are not blank.
+shifted_lines := (text: String, shift: Int) ->
+  lines := text.split("\n")
+  # One shift for every line, no more to the left than the lines share, keeps the literal's value.
+  moved := max(shift, -common_indentation(lines[1..]))
+  [lines[0], [shifted(line, moved) for line in lines[1..]]...].join("\n")
+
+# The line with `shift` spaces more at its start, or fewer; a blank line stays as it is.
+shifted := (line: String, shift: Int) ->
+  return line if is_blank(line)
+  return ' '.repeat(shift) + line if shift >= 0
+  line.binary[(-shift)..].text()!
+
+render := (texts: String[], decisions: Decision[]) ->
+  var text = decisions[0].text
+  text += token_text + decisions[index + 1].text for token_text at index in texts
+  text
+
+# A finding for each gap whose decision differs from the source, at the first character that
+# differs, once on each line for each rule.
+findings := (gaps: Gap[], decisions: Decision[]) ->
   found: Finding[]
-  for line at i in old
-    too_long := columns(line) > WIDTH and i not in differing and i + 1 not in kept_lines
-    found.push { rule: UNBREAKABLE_LINES, at: { line: i + 1, column: WIDTH + 1 } } if too_long
+  reported: Set<String>
+  for gap at index in gaps
+    decision := decisions[index]
+    at := first_difference(gap, decision.text) ? continue
+    { rule } := decision
+    key := "#{at.line} #{rule.label} #{rule.message}"
+    continue if key in reported
+    reported.add key
+    found.push { at, rule }
   found
 
-# Whether a line of the hunk, but for its indentation, is at another line of it in the other text,
-# as the lines below a line that a body joins are, which shift up by one.
-moves := (old: String[], new: String[], hunk: Hunk) ->
-  old_lines := unindented(old[hunk.old_start..(hunk.old_start + hunk.old_count)])
-  new_lines := unindented(new[hunk.new_start..(hunk.new_start + hunk.new_count)])
-  kept := kept_lines(old_lines, new_lines)
-  moved := [old_index for (old_index, new_index) in kept when old_index != new_index]
-  not moved.is_empty()
+# A finding for each token whose text differs from the source, as the lines of a literal moved.
+token_findings := (tokens: TextToken[], texts: String[]) ->
+  found: Finding[]
+  for token at index in tokens
+    source := Gap(text: token.text, start: token.start)
+    found.push { at, rule: LAYOUT } if at := first_difference(source, texts[index])
+  found
 
-# The column where the lines first differ, counted in code points from 1.
-first_difference := (old: String, new: String) ->
-  old_points := [point for point in old]
-  new_points := [point for point in new]
-  var i = 0
-  i += 1 while i < old_points.length and i < new_points.length and old_points[i] == new_points[i]
-  i + 1
-
-# A part that holds no text, which marks where text was left out, holds its place, and the
-# place after the spaces that the formatted line puts after it, such as those before a comment:
-# the source has spaces there too, so the lines first differ after them.
-innermost_rule := (rules: RulePlace[], at: Position, marks_from: Position) ->
-  holds := (place: RulePlace) ->
-    marks := place.start == place.end and marks_from <= place.start and place.start <= at
-    marks or (place.start <= at and at < place.end)
-  [place for place in rules when holds(place)].max_by((place) -> place.start)?.rule
-
-# The rule of the gap or the text that holds the position, the last of them if several do (see
-# Layout.gaps).
-gap_rule := (gaps: RulePlace[], at: Position) ->
-  [gap for gap in gaps when gap.start <= at and at < gap.end].last()?.rule
-
-# The rule of the first part that starts from the position up to the line, as one that the
-# difference begins just before.
-first_rule_from := (rules: RulePlace[], at: Position, last_line: Int) ->
-  within := [place for place in rules when at <= place.start and place.start.line < last_line]
-  within.min_by((place) -> place.start)?.rule
-
-# The spaces just before the column, counted in code points from 1.
-spaces_before := (line: String, column: Int) ->
-  points := [point for point in line]
-  var count = 0
-  count += 1 while count < column - 1 and points[column - 2 - count] == ' '
-  count
-
-only_blank_lines_differ := (old: String[], new: String[]) ->
-  not_blank := (lines: String[]) -> [line for line in lines when without_spaces(line) != '']
-  not_blank(old) == not_blank(new)
-
-only_indentation_differs := (old: String[], new: String[]) -> unindented(old) == unindented(new)
-
-unindented := (lines: String[]) -> [line.trim_start() for line in lines]
-
-# The spaces before a comment, spaces within the lines, or else the layout of the lines.
-# `old` starts at the line `line` of the source.
-kind_of_difference := (old: String[], new: String[], source: SourceText, line: Int) ->
-  squeezed := (lines: String[]) -> without_spaces(lines.join())
-  return LAYOUT if squeezed(old) != squeezed(new) or old.length != new.length
-  # The place is at the first difference, which lies in the indentation.
-  return LAYOUT if indentation(old[0]) != indentation(new[0])
-  return SPACING if old.length != 1
-  ending := source.comments.find((c) -> c.line == line and not c.own_line)
-  comment := ending ? return SPACING
-  # Where only the spaces before a comment that ends the line differ.
-  text := source.comment_text(comment)
-  code := (written: String) -> (written.without_suffix(text) ? written).trim_end()
-  code(old[0]) == code(new[0]) then COMMENTS else SPACING
-
-without_spaces := (text: String) -> text.replace(' ', '')
-
-indentation := (line: String) -> columns(line) - columns(line.trim_start())
+first_difference := (gap: Gap, decided: String) ->
+  source := scan(gap.text)
+  expected := scan(decided)
+  var line = gap.start.line
+  var column = gap.start.column
+  while true
+    c := source.next()
+    return Position(line, column) if c != expected.next()
+    if c == "\n"
+      line += 1
+      column = 1
+    else if c
+      column += 1
+    else
+      return nil
+  nil
