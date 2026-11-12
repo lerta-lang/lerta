@@ -11,23 +11,16 @@ static LertaString *string_of_bytes(uint8_t *bytes, int64_t length) {
   return string;
 }
 
-// The status of what the path names, as lerta_os_stat gives it.
-static int stat_of(const LertaString *path, LertaFileStatus *status) {
-  char *name = lerta_c_string(path);
-  int found = lerta_os_stat(name, status);
-  free(name);
-  return found;
-}
-
 // Appends the kind, the size and the time to `fields`, if the path names something.
-bool lerta_status_fields(const LertaString *path, LertaArray *fields) {
+void lerta_status_fields(const LertaString *path, LertaArray *fields) {
+  char *name = lerta_c_string(path);
   LertaFileStatus status;
-  int found = stat_of(path, &status);
-  if (found == 1) {
+  bool found = lerta_os_stat(name, &status) == 1;
+  free(name);
+  if (found) {
     int64_t values[] = {status.kind, status.size, status.modified_time};
     for (int i = 0; i < 3; i++) lerta_array_append(fields, &values[i]);
   }
-  return found >= 0;
 }
 
 bool lerta_symlink(const LertaString *target, const LertaString *path) {

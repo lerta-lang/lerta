@@ -300,11 +300,6 @@ int64_t lerta_process_id(void) { return lerta_os_process_id(); }
 
 bool lerta_is_running(int64_t id) { return lerta_os_is_running((int)id); }
 
-LertaString *lerta_platform(void) {
-  const char *name = lerta_os_platform();
-  return lerta_string_from_c(name);
-}
-
 int64_t lerta_platform_member(const LertaString *const *texts, int64_t count) {
   const char *name = lerta_os_platform();
   int64_t length = (int64_t)strlen(name);

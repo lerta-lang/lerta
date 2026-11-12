@@ -10,10 +10,6 @@ A member line after a statement that is a call without parentheses applies to th
 
 `check_item_type` (`compiler/checker/collection.lerta`) rejects arrays of optional interface values, as the generated code would hold them as optional values that are not references (`is_optional_value` in `compiler/codegen/array.lerta`), whose `{ i1, T }` an interface value's two pointers are not. `xs: Named?[] = [nil]`, with `interface Named` of a field `name: String`, fails with `an array cannot hold values of type Named?`. Fix: hold them as interface items, a null data pointer for nil, and drop the limitation in [optional values](reference/types.md#optional-values).
 
-## lerta_status_fields gives a result that nothing needs
-
-`lerta_status_fields` (`runtime/file.c`) gives `false` where the status cannot be read, but its extern in `std/io.lerta` is declared `void`, and `stat` gives nil from an empty `fields` either way. It cannot become `void` in the runtime before a seed refresh, as the seed is compiled from a std that declared it to give `Bool`, which reads a result that the runtime would then not give: `is_file` of the seed's minilerta gives false. Fix: once the seed is refreshed, make it `void` in `runtime/file.c` and `runtime/lerta.h`.
-
 ## lerta_program_path is apart from lerta_argv
 
 `lerta_argv` (`runtime/process.c`) gives the arguments without the program's path, and `lerta_program_path` gives the path, which std:process's `program` reads. One function could give both, the path first, but `lerta_argv` cannot change before a seed refresh, as the seed is compiled from a std that takes its result for the arguments alone: the seed's minilerta would take its own path for its first argument. Fix: once the seed is refreshed, have `lerta_argv` give the path first, have std:process take `argv` and `program` from it, and remove `lerta_program_path` from `runtime/process.c` and `runtime/lerta.h`.
@@ -29,10 +25,6 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 ## The main run loop stays off for CoreFoundation loaded after the first wait
 
 `uses_run_loop` (`runtime/loop.c`) looks for CoreFoundation once, at the program's first wait (see [the main run loop](internals/iteration.md#the-main-run-loop)). A program that waits, then loads a framework with `dlopen` and has it post a block to the main dispatch queue, never runs the block. Fix: look again at later waits while it is not found, if that costs a waiting program little.
-
-## lerta_platform is left in the runtime for the seed
-
-`lerta_platform` (`runtime/process.c`) gives the system's name, which std read as `platform` before the intrinsic value took its place; no source calls it now, but the seed, compiled from a std that did, still does. Fix: once the seed is refreshed, remove it from the runtime and `runtime/lerta.h`.
 
 ## fmt does not break a long line of union members below =
 

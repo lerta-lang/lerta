@@ -323,8 +323,6 @@ void lerta_system_pipe(LertaArray *files);
 void lerta_file_close(int64_t file);
 // Whether two names of environment variables name the same variable.
 bool lerta_same_env_name(const LertaString *a, const LertaString *b);
-// The system's name: linux, macos or windows.
-LertaString *lerta_platform(void);
 // The place of the system's name among the `count` texts of an enum's members, which the code of
 // a build for no target reads as std's `platform` (see compiler/codegen/enum.lerta).
 int64_t lerta_platform_member(const LertaString *const *texts, int64_t count);
@@ -357,11 +355,10 @@ bool lerta_open_file_failed(int64_t pointer);
 LertaPromise *lerta_open_file_append(int64_t pointer, const LertaString *data);
 void lerta_open_file_end(int64_t pointer, const LertaString *rest);
 void lerta_open_file_free(int64_t pointer, const LertaString *rest);
-// Whether the status of what the path names, through symbolic links, could be read; if the path
-// names something, its kind (0 a file, 1 a directory, 2 another), its size and the time it was
-// last modified, in nanoseconds since the Unix epoch, are appended to the array of Ints, which
-// std:io makes a FileStatus of.
-bool lerta_status_fields(const LertaString *path, LertaArray *fields);
+// If the path names something, through symbolic links, its kind (0 a file, 1 a directory, 2
+// another), its size and the time it was last modified, in nanoseconds since the Unix epoch, are
+// appended to the array of Ints, which std:io makes a FileStatus of.
+void lerta_status_fields(const LertaString *path, LertaArray *fields);
 bool lerta_symlink(const LertaString *target, const LertaString *path);
 // The names of the entries, unchecked and in no order (std:io checks and sorts them).
 LertaArray *lerta_dir_names(const LertaString *path);
