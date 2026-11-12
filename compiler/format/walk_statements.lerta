@@ -8,7 +8,7 @@ from '../ast'
 import TokenKind from '../lexer/tokens'
 import BRANCHES, StyleRule from './rules'
 import
-  is_block_call, is_destructuring_holder, is_inline, is_taken_apart,
+  is_block_call, is_destructuring_holder, is_inline, is_pass_body, is_taken_apart,
   is_written_as_type, is_written_postfix, takes_postfix
 from './forms'
 import
@@ -369,8 +369,13 @@ extend Walker
       @take ':', NONE
       @type bound, ONE
 
-  # The members of a type, in the block below its head.
+  # The members of a type, in the block below its head; or `pass` alone there, which the body of
+  # a type without members may be.
   members := (members: MemberDeclaration[], head: Int) ->
+    if members.is_empty() and is_pass_body(@code, head, @at)
+      at := @code[@at].position()
+      @in_block head, 1, (_) -> at, (_, gap) -> @take_spelled('pass', gap)
+      return
     @in_block head, members.length, (i) -> members[i].position, (i, gap) ->
       @member_declaration members[i], gap
 
