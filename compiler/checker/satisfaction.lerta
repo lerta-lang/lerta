@@ -19,7 +19,7 @@ import find_method from './methods'
 import Body from './shared'
 import infer, substitute, type_parameter_names from './type_patterns'
 import
-  binary_type, format_type, InterfaceType, is_kind, string_type, Type, UnionType
+  binary_type, format_type, InterfaceType, is_kind, OptionalType, string_type, Type, UnionType
 from '../types'
 
 # Rejects a type that does not satisfy the interface type.
@@ -66,7 +66,16 @@ unsatisfied_reason := (
       "its #{member.name} has type parameters of its own"
     when type is UnionType
       union_method_problem(body, type, name) ? common_field_problem(body, type, name)!
+    when type is OptionalType and name.name == 'to_string' and holds_member(
+      body, type, member, name
+    )
+      written := 'give it a default with `x ? default`, or write it with `dbg(x)`'
+      "it has no #{member.name} of type #{expected}: #{written}"
     else "it has no #{member.name} of type #{expected}"
+
+# Whether what the optional type holds has the member, which a default given to a value would.
+holds_member := (body: Body, type: OptionalType, member: InterfaceMember, name: Identifier) ->
+  find_member(body, type.inner, name, nil)?.type == member.type
 
 # Binds the type parameters in the type arguments of `pattern`, an interface type, to the types
 # that the type's members give them, as Int[], whose iter gives an Iter<Int>, binds T of

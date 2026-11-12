@@ -89,6 +89,9 @@ What `std:builtins`, in the files of `std/builtins/`, cannot write in Lerta (see
 - **Comparisons.** The builtin `equals` and `hash` of the types that `==` compares, and `compare` of the numbers, are the code of `==`, of the comparisons and of map keys (`compiler/codegen/equality.lerta`).
   - That code calls a class's or struct's own `equals`, `compare` and `hash` (`compiler/codegen/comparison_methods.lerta`).
   - It may run inside the runtime's map functions, so `lerta_check_comparison` makes a panic of an exception that one throws rather than passing it on.
+- **Literals by parts.** The `to_literal` and `to_string` that an optional, a struct, a tuple or an anonymous struct gets by its parts are the builtin member `LITERAL_BY_PARTS` (`compiler/checker/literal_parts.lerta`), found after the type's own methods and the extends, so that those go first.
+  - The checker makes a plan of the type: the `to_literal` of each part, as a call there would find it, which depends on the extends in effect. Codegen defines a function of each plan that joins the parts' literals with the text around them (`compiler/codegen/literal.lerta`).
+  - The plans are kept in `ProgramWide`, and the method and the extends refer to them by their ids: a plan of a type that holds itself reaches the method again through a part, which would hold it in a cycle.
 - **Operators.** An operator on a value of a type that it does not apply to otherwise is a call of the type's method, `a + b` of `a.add(b)`.
   - The checker makes the call, types it as any other, and records it by the operation, or by the assignment for `+=` and the like (`operator_calls` in `compiler/checker/shared.lerta`); codegen generates the call instead.
   - The numbers' own `add` and the like are the builtin member `OPERATOR`, which codegen applies by the operator of the method's name.

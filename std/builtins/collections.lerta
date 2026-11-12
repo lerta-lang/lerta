@@ -11,8 +11,8 @@ export interface Contains<T>
 
 # `[1, 2]`, with each item as the literal that gives it, `['a']`.
 extend<T: Literal> T[]
-  to_string := -> "[#{[item.to_literal() for item in @].join(', ')}]"
-  to_literal := -> @to_string()
+  to_string := (): String -> "[#{[item.to_literal() for item in @].join(', ')}]"
+  to_literal := (): String -> @to_string()
 
 extend<T> T[]
   # The items, read as the Iter is.
@@ -168,6 +168,20 @@ extend<T> Iterable<T>
       more
     next := (): (T, U) -> (left.next(), right.next())
     { has_next, next }
+
+# `{ 'a': 1 }`, with each key and value as the literal that gives it; `{}` when empty, as a map
+# literal cannot write an empty map.
+extend<K: Literal, V: Literal> Map<K, V>
+  to_string := (): String ->
+    entries := ["#{key.to_literal()}: #{value.to_literal()}" for (key, value) in @entries()]
+    @is_empty() then '{}' else "{ #{entries.join(', ')} }"
+  to_literal := (): String -> @to_string()
+
+# `Set([1, 2])`, with each item as the literal that gives it.
+extend<T: Literal> Set<T>
+  to_string := (): String ->
+    @is_empty() then 'Set()' else "Set([#{[item.to_literal() for item in @].join(', ')}])"
+  to_literal := (): String -> @to_string()
 
 extend<K, V> Map<K, V>
   contains := (key: K): Bool -> @[key] != nil

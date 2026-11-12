@@ -1,0 +1,139 @@
+# The to_literal, and the to_string, that the compiler gives a type by its parts, if all of them
+# are Literal (see docs/reference/builtins.md#literal): an optional's to_literal, and a struct's, a
+# tuple's or an anonymous struct's to_literal and to_string. Each part's literal comes from the
+# method that a call of it here would call, which the plan records for codegen (see
+# codegen/literal).
+import Identifier, Position from '../ast'
+import BuiltinMethod from './builtins'
+import ExtensionMethod from './extensions'
+import field_type_by_name from './fields'
+import receiver_instance from './generic_call'
+import std_interface from './interfaces'
+import find_member, generic_method from './member'
+import Method, MemberTarget from './member_targets'
+import ExtensionSource, find_method from './methods'
+import field_type, info_of from './object_types'
+import find_interface_extension, satisfies from './satisfaction'
+import Body, InstanceLink, ProgramWide from './shared'
+import
+  ArrayType, FunctionType, is_set, MapType, ObjectType, OptionalType, RecordType, string_type,
+  TupleType, Type, type_key, UnionType
+from '../types'
+
+# How the literal of a value of the type is made: of its parts, in order, each by its call. A type
+# that holds itself reaches its own plan again through a part, so the calls are filled in after
+# the plan is kept (see literal_parts).
+export class LiteralParts
+  type: Type
+  # Tells the plans apart, so that codegen defines a function for each.
+  id: Int
+  var calls: PartCall[] = []
+
+# The to_literal of a part, as find_member finds it, with the instance of a generic method, linked
+# as a call links it, as the instance may make the plan.
+export struct PartCall
+  target: MemberTarget
+  instance: InstanceLink?
+
+# The method of the name that the type gets by its parts, if it gets one: a to_string only where it
+# has no to_literal of its own, so that the two do not disagree; neither where it has a field of
+# the name, which a call reads, or gets the method from an extend of an interface it satisfies.
+export parts_method := (body: Body, type: Type, name: String, at: Position): BuiltinMethod? ->
+  return nil unless gets_by_parts(body, type, name, at)
+  plan := literal_parts(body, type, at) ? return nil
+  to_string := FunctionType(params: [], result: string_type)
+  { member: LITERAL_BY_PARTS, type: to_string, parts: plan.id }
+
+gets_by_parts := (body: Body, type: Type, name: String, at: Position) ->
+  return name == 'to_literal' if type is OptionalType
+  return false unless is_composite(type)
+  return false if has_member(body, type, name, at)
+  name == 'to_literal' or (name == 'to_string' and not has_own_literal(body, type, at))
+
+# A struct, a tuple or an anonymous struct, whose parts are its fields or items.
+is_composite := (type: Type) ->
+  (type is ObjectType and type.is_struct) or type is TupleType or type is RecordType
+
+# Whether the type has a field of the name, or gets a method of it from an extend of an interface.
+has_member := (body: Body, type: Type, name: String, at: Position) ->
+  identifier := Identifier(name, position: at)
+  is_field := field_type_by_name(body, type, identifier) != nil
+  is_field or find_interface_extension(body, type, identifier) != nil
+
+has_own_literal := (body: Body, type: Type, at: Position) ->
+  found := find_method(body.program, type, 'to_literal', body.extensions)
+  found != nil or has_member(body, type, 'to_literal', at)
+
+# The plan of the type, if its parts are Literal; one for the extends in effect, which decide the
+# parts' methods.
+literal_parts := (body: Body, type: Type, at: Position): LiteralParts? ->
+  program := body.program
+  key := type_key(type)
+  ids := body.extensions.literal_parts
+  return program.literal_parts[id] if id := ids[key]
+  parts := part_types(body, type, at)
+  visiting := Set([key])
+  return nil unless parts.all((part) -> is_literal_part(body, part, at, visiting))
+  plan := LiteralParts(type, id: program.literal_parts.length)
+  program.literal_parts.push plan
+  ids[key] = plan.id
+  plan.calls = [part_call(body, part, at) for part in parts]
+  plan
+
+export part_types := (body: Body, type: Type, at: Position): Type[] ->
+  case type
+    when OptionalType then [type.inner]
+    when TupleType then type.items
+    when RecordType then [field.type for field in type.fields]
+    when ObjectType
+      info := info_of(body.program, type)
+      [field_type(body.program, info, field, at) for field in info.fields]
+    else []
+
+part_call := (body: Body, part: Type, at: Position) ->
+  name := Identifier(name: 'to_literal', position: at)
+  # The part is Literal (see literal_parts), so it has the member.
+  target := find_member(body, part, name)!.target
+  generic := target is Method then generic_method(target.source)
+  instance := generic then receiver_instance(body, generic, part, at, nil)
+  PartCall target, instance: instance then InstanceLink(instance)
+
+# Whether the type satisfies Literal, as `<T: Literal>` asks: an array, a map or a set by its
+# extend of std, which only Literal items give it, so that looking its to_literal up for others
+# is no error.
+export is_literal := (body: Body, type: Type, at: Position) ->
+  is_literal_part body, type, at, Set()
+
+# As is_literal, with the types whose parts are being looked through, which a part of them that is
+# of their own type takes for Literal, as a value that holds itself writes its literal by a
+# recursive call.
+is_literal_part := (body: Body, type: Type, at: Position, visiting: Set<String>): Bool ->
+  part := (each: Type) -> is_literal_part(body, each, at, visiting)
+  case
+    when type is ArrayType then part(type.element)
+    when is_set(type) then part((type as MapType!).key)
+    when type is MapType then part(type.key) and part(type.value)
+    when type is OptionalType then part(type.inner)
+    when type is UnionType then type.members.all(part)
+    when is_composite(type) and not has_own_literal(body, type, at)
+      key := type_key(type)
+      return true if key in body.extensions.literal_parts or not visiting.add(key)
+      part_types(body, type, at).all(part)
+    else satisfies(body, type, std_interface(body.shared, 'Literal', at).type, at)
+
+# The methods of extends that the plan calls, through its parts' plans too, which an instance of a
+# generic function sees as witnesses (see add_witnesses).
+export extension_methods := (program: ProgramWide, plan: LiteralParts) ->
+  methods: ExtensionMethod[]
+  visited := Set([plan.id])
+  pending := [plan]
+  until pending.is_empty()
+    each := pending.pop()
+    for call in each.calls
+      target := call.target
+      continue unless target is Method
+      source := target.source
+      methods.push source.method if source is ExtensionSource
+      id := source is BuiltinMethod then source.parts
+      pending.push program.literal_parts[id] if id != nil and visited.add(id)
+  methods

@@ -53,7 +53,6 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
   | `chunks(n)`, `windows(n)` | Arrays of `n` items in a row: each item in one chunk, or in every window that holds it |
 
   - `flatten` needs an extend whose type parameter appears only in the bound of another, as `T` in `extend<T, I: Iterable<T>> Iterable<I>`, which the language does not allow yet ([extend](../reference/objects.md#extend)).
-- **`to_string`** of arrays of other items, as of a class with a `to_string`, and of maps, sets, tuples and anonymous structs. Now an array is `Stringable` only when the compiler can write its items ([the reference](../reference/builtins.md#stringable)).
 - **Nested comprehensions.** A comprehension may have several `for`s, the later nested in the earlier: `[f(x, y) for x in xs for y in ys]`.
 - **`contains` and `all` through `@any`.** `contains` of an array and `all` of an Iterable are to be written through `@any`, rather than as loops of their own, once that costs nothing. A literal given to a method generated in place is generated in place where the method calls it ([internals](../internals/iteration.md#inlined-methods)), yet, over an array of 64 `Int`s:
   - `contains` as `@any((each) -> each == item)` ran 14% more instructions: LLVM works out the result after the loop, from the index, at an extra move per item.

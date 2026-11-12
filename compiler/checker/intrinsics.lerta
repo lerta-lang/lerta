@@ -17,7 +17,7 @@ import add_intrinsic, builtins_declarer from './imports'
 import record_reference from './name'
 import is_contextual from './literals'
 import std_interface from './interfaces'
-import has_method from './member'
+import is_literal from './literal_parts'
 import Body, Shared from './shared'
 import Local from './scopes'
 import module_resolver, resolve from './type_names'
@@ -26,8 +26,7 @@ import check_block, check_if_condition, define_local, nothing from './statement'
 import CLOSING_BRACKETS, lex, OPENING_BRACKETS, Token, TokenKind from '../lexer/tokens'
 import is_standard_name, module_location from '../source'
 import
-  ArrayType, bool_type, EnumType, format_type, FunctionType, is_one_of_kinds, OptionalType, Type,
-  void_type
+  bool_type, EnumType, format_type, FunctionType, is_one_of_kinds, OptionalType, Type, void_type
 from '../types'
 
 INTRINSICS := ['assert', 'dbg', 'print_trace', 'encode_value', 'decode_value', 'parse', 'members']
@@ -271,15 +270,10 @@ label_text := (label: String, at: Position) -> text("\n  #{label}: ", at)
 # literal of what it holds.
 literal_text := (body: Body, value: Expression): Expression? ->
   type := type_of(body, value)
-  return member_call(value, 'to_literal') if has_literal(body, type, value.position)
-  return nil if type is not OptionalType or not has_literal(body, type.inner, value.position)
+  return nil unless is_literal(body, type, value.position)
+  return member_call(value, 'to_literal') unless type is OptionalType
+  # A call of an optional's to_literal would read as one on what it holds.
   present_or value, 'nil', (inner) -> member_call(inner, 'to_literal')
-
-# An array has a to_literal only where its items have one, which looking it up for other items
-# would report as an error.
-has_literal := (body: Body, type: Type, at: Position): Bool ->
-  return has_literal(body, type.element, at) if type is ArrayType
-  has_method body, type, Identifier(name: 'to_literal', position: at)
 
 # `if v := value then present(v) else absent`, of a name that no source can write.
 present_or := (value: Expression, absent: String, present: (Expression) -> Expression) ->

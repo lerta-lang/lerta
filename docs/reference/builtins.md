@@ -45,7 +45,7 @@ catch error
 n := dbg(xs.length) + 1
 ```
 
-- It writes a line to stderr, `scores.lerta:4:6: dbg(xs.length) = 3`: where the call is, its code as written, through its `)`, and the [literal](#literal) of `x`, as [`assert`](errors.md#assert) gives an operand's; `<T>` for a value of a type `T` that has no `to_literal`, as `<Point[]>` for an array of items that have none, or a map or set of them.
+- It writes a line to stderr, `scores.lerta:4:6: dbg(xs.length) = 3`: where the call is, its code as written, through its `)`, and the [literal](#literal) of `x`, as [`assert`](errors.md#assert) gives an operand's; `<T>` for a value of a type `T` that has no `to_literal`, as `<Counter[]>` for an array of objects of a class, or a map or set of them; `nil` or the literal of what it holds for an optional value.
 - It gives `x`, which it evaluates once, typed as it is where the call's value is expected: `small: Int8 = dbg(3)`. A value of type `nil`, `void` or `never` is an error.
 - It writes as `print_error` does, which a name of the program's own does not hide.
 - It can only be called, not used as a value.
@@ -66,17 +66,19 @@ The least and the greatest [Int](types.md#int): `-9223372036854775808` and `9223
 - `String`, `Int`, the sized integers, `Float`, `Float32`, `Byte`, `Char`, `Bool` and enums satisfy it.
 - So does any type that declares `to_string`, as a method or a field that holds a function, or gets it from an extend in effect. A `to_string` with parameters or another result does not.
 - A `Bool` gives `true` or `false`, and a `Byte` a number.
+- An array, a map, a set, a tuple, an anonymous struct or a struct of [Literal](#literal) parts satisfies it too, giving its literal: `[1, 2]`, `{ 'a': Point(x: 1) }`.
+- An optional value does not, so that a `nil` never reaches a text unseen: `print x` and `"#{x}"` of an `Int?` are errors, which suggest `x ? default` or [`dbg(x)`](#dbg).
+- Nor does a class without a `to_string`: its objects are no values that a literal writes.
 
-### Arrays
+### Collections
 
-- An array is `Stringable` when its items are [Literal](#literal). Each item is written as the literal that gives it: `[1, 2]`, `[[1], []]`, `['a', "it's"]`.
-- Its `to_string` comes from an extend of std, which no other extend can declare again. A type whose arrays should read otherwise gives its items a `to_literal` of their own.
-- `Int?` and the arrays of other items are not `Stringable`.
+- The `to_string` and `to_literal` of an array, a map and a set come from extends of std, which no other extend can declare again. A type whose collections should read otherwise gives its items a `to_literal` of their own, as a class must for its objects to be written in them.
 
 ## Literal
 
 - An interface with one member, `to_literal: () -> String`: the text of the literal that gives the value, as the text of an array writes its items.
 - Any type that declares `to_literal` satisfies it, as for `Stringable`, with a text that writes its value as the program would.
+- An optional, a struct, a tuple and an anonymous struct satisfy it by their parts, when all of them are `Literal`, unless the type declares a `to_literal` of its own, or gets one from an extend. A struct, a tuple or an anonymous struct that gets it so gets a `to_string` too, giving the same text, unless it has its own; an optional does not (see [Stringable](#stringable)), and its `to_literal` is called only through a bound or an interface value, as `x.to_literal()` of an optional `x` reads as a call on what it holds.
 
 | Value | Literal |
 |---|---|
@@ -85,7 +87,13 @@ The least and the greatest [Int](types.md#int): `-9223372036854775808` and `9223
 | enum value | Its member as declared: its name, or the literal of its text. |
 | numbers, `Bool` | Their `to_string()`, but an infinity (below). |
 | infinity | `INFINITY` or `-INFINITY`; `INFINITY.to_float32()` for a `Float32`. It names std:math's `INFINITY`, so that a program reads it back where it imports it. |
-| array of `Literal` items | `[1, 2]`. |
+| array | `[1, 2]`. |
+| map | `{ 'a': 1, 'b': 2 }`, in the order of its entries; `{}` when empty, which a program reads as an empty anonymous struct, as no literal writes an empty map. |
+| set | `Set([1, 2])`, in the order of its items; `Set()` when empty. |
+| optional value | `nil`, or the literal of what it holds. |
+| tuple | `(1, 'a')`. |
+| anonymous struct | `{ name: 'b', x: 1 }`, its fields in the order of their names, which its type has; `{}` when it has none. |
+| struct | `Point(x: 1, y: 2)`: its name, without type arguments, and every field in order, computed ones too, so that a program does not read it back where it has one. |
 
 ## Iterable
 
@@ -272,6 +280,7 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `contains(key: K): Bool`
 - `remove(key: K): Bool`
 - `keys(): Iter<K>`, `values(): Iter<V>`, `entries(): Iter<(K, V)>`
+- Of [Literal](#literal) keys and values: `to_string(): String`, `to_literal(): String` (see [Stringable](#stringable))
 
 ### Set
 
@@ -282,6 +291,7 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `iter(): Iter<T>`
 - `bit_or`, `bit_and`, `sub`, `bit_xor`: `(other: Set<T>): Set<T>`
 - `is_subset(other: Set<T>): Bool`
+- Of [Literal](#literal) items: `to_string(): String`, `to_literal(): String` (see [Stringable](#stringable))
 
 ### Iter
 

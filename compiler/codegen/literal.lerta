@@ -1,0 +1,109 @@
+# The to_literal, and to_string, that a type gets by its parts (see checker literal_parts): a
+# function for each plan, defined at its first use, that joins the literals of the parts with the
+# text around them. An exception that a part's to_literal throws is passed on at once, releasing
+# the literals made so far.
+import LiteralParts, PartCall from '../checker/literal_parts'
+import Method, Property from '../checker/member_targets'
+import info_of from '../checker/object_types'
+import emit_method_call, MethodCall from './call'
+import emit_closure_call from './closure'
+import emit_check_with, emit_return_thrown from './exceptions'
+import read_any_field from './expression'
+import finish from './function'
+import function_generator, Generator from './generator'
+import emit_borrowed_field, emit_borrowed_value from './heap_object'
+import emit_branch, IrModule from './ir_builder'
+import emit_release, ir_type, string_constant from './lerta_ir'
+import emit_is_present, emit_unwrap from './optional'
+import emit_concat from './string'
+import
+  FunctionType, ObjectType, OptionalType, RecordType, string_type, TupleType, Type
+from '../types'
+
+# The literal of the object, of the plan's type, as an owned String; the caller checks for an
+# exception.
+export emit_literal_by_parts := (g: Generator, id: Int, object: String) ->
+  parts := g.code.program.literal_parts[id]
+  type := ir_type(parts.type)
+  symbol := literal_function(g, parts)
+  g.ir.assign "call ptr #{symbol}(#{type} #{object})"
+
+literal_function := (g: Generator, parts: LiteralParts) ->
+  define := (name: String, _module: IrModule) ->
+    writer := function_generator(g.code, g.extensions, g.facts, '')
+    writer.result_type = string_type
+    literal := write_literal(writer, parts, '%value')
+    writer.ir.emit "ret ptr #{literal}"
+    finish writer, "private ptr #{name}(#{ir_type(parts.type)} %value)"
+  g.ir.module.named "literal #{parts.id}", '@lerta.literal', define
+
+write_literal := (w: Generator, parts: LiteralParts, value: String) ->
+  type := parts.type
+  case type
+    when OptionalType
+      present := emit_is_present(w.ir, value, type)
+      inner := -> part_literal(w, parts.calls[0], emit_unwrap(w.ir, value, type), type.inner, [])
+      emit_branch w.ir, 'ptr', present, inner, string_constant(w.ir, 'nil')
+    when ObjectType
+      info := info_of(w.code.program, type)
+      names := [field.name.name for field in info.fields]
+      read := (index: Int) -> emit_borrowed_field(w.ir, value, info, info.fields[index])
+      types := [field.type! for field in info.fields]
+      join_parts w, parts, read, types, named_texts("#{type.name}(", names, ')')
+    when RecordType
+      names := [field.name for field in type.fields]
+      read := (index: Int) -> emit_borrowed_value(w.ir, value, type, index)
+      types := [field.type for field in type.fields]
+      texts := names.is_empty() then ['{}'] else named_texts('{ ', names, ' }')
+      join_parts w, parts, read, types, texts
+    when TupleType
+      read := (index: Int) -> emit_borrowed_value(w.ir, value, type, index)
+      texts := ['(', [', ' for _ in 1..type.items.length]..., ')']
+      join_parts w, parts, read, type.items, texts
+    else panic('only an optional, a struct, a tuple or an anonymous struct gets a literal by parts')
+
+# The texts around the parts, each named: `Point(x: `, `, y: `, `)`.
+named_texts := (open: String, names: String[], close: String) ->
+  return ["#{open}#{close}"] if names.is_empty()
+  separators := ["#{i == 0 then open else ', '}#{name}: " for name, i in names]
+  [separators..., close]
+
+# The texts, one more than the parts, with the literal of each part between two.
+join_parts := (
+  w: Generator, parts: LiteralParts, read: (Int) -> String, types: Type[], texts: String[]
+) ->
+  pieces := [string_constant(w.ir, texts[0])]
+  for call, i in parts.calls
+    pieces.push part_literal(w, call, read(i), types[i], pieces)
+    pieces.push string_constant(w.ir, texts[i + 1])
+  emit_concat w.ir, pieces
+
+# The literal of the part, borrowed, by its to_literal; `held`, the literals made before it, are
+# released if it throws.
+part_literal := (w: Generator, call: PartCall, value: String, type: Type, held: String[]) ->
+  ir := w.ir
+  to_literal := FunctionType(params: [], result: string_type)
+  unwind := ->
+    emit_release ir, each for each in held
+    emit_return_thrown ir, string_type
+  check := -> emit_check_with(ir, unwind)
+  target := call.target
+  literal :=
+    case target
+      when Method
+        method_call := MethodCall
+          name: 'to_literal'
+          type: to_literal
+          operands: []
+          args: []
+          instance: call.instance?.instance
+          check: check
+        emit_method_call w, target.source, value, type, method_call
+      when Property
+        closure := read_any_field(w, value, type, 'to_literal', to_literal, false)
+        result := emit_closure_call(ir, closure, to_literal, [])
+        emit_release ir, closure
+        result
+      else panic("a part's to_literal is a method or a field")
+  check()
+  literal

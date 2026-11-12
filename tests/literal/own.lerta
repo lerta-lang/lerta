@@ -1,0 +1,60 @@
+# A struct's own to_literal or to_string, or one of an extend, goes before the one by its fields;
+# a part's to_literal is its own, and what it throws passes on.
+struct Failed: Error
+
+struct Named
+  name: String
+  to_string := -> "named #{@name}"
+
+struct Quoted
+  text: String
+  to_literal := -> "<#{@text}>"
+
+struct Point
+  x: Int
+
+extend Point
+  to_string := -> "point #{@x}"
+
+struct Broken
+  to_literal := (): String -> throw Failed(message: 'broken')
+
+# A field that holds a function is called as the struct's own method.
+struct Shown
+  value: Int
+  to_string: () -> String
+
+# A part whose to_literal is a field that holds a function.
+struct Raw
+  to_literal: () -> String
+
+struct Wrapped
+  raw: Raw
+  count: Int
+
+struct Holder
+  label: String
+  broken: Broken
+
+print Named(name: 'a')
+print [Named(name: 'b')]
+print [Quoted(text: 'c')]
+print Point(x: 1)
+print [Point(x: 2)]
+try
+  print Holder(label: 'd', broken: Broken())
+catch e: Failed
+  print "caught #{e.message}"
+print Shown(value: 1, to_string: -> 'shown')
+# Through an interface value too.
+holders: Stringable[] = [Holder(label: 'e', broken: Broken())]
+try
+  print holders[0]
+catch e: Failed
+  print "caught #{e.message} again"
+print Wrapped(raw: { to_literal: -> 'raw' }, count: 1)
+print [(Raw(to_literal: -> 'item'), 2)]
+try
+  print Wrapped(raw: { to_literal: -> throw Failed(message: 'raw failed') }, count: 3)
+catch e: Failed
+  print "caught #{e.message}"

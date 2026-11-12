@@ -19,6 +19,7 @@ import interface_member from './interfaces'
 import
   builtin_property, FoundMember, InterfaceProperty, MemberTarget, Method, Property
 from './member_targets'
+import parts_method from './literal_parts'
 import lookup from './name'
 import narrowed_field_type from './narrowable'
 import
@@ -96,7 +97,9 @@ find := (body: Body, receiver: Type, name: Identifier): MethodSource? ->
     return builtin_method(body.program, receiver, name.name)
   return bound_method(body, receiver, name.name) if receiver is TypeParameterType
   return nil if name.name == 'equals' and not compares_by_bounds(body, receiver, name.position)
-  find_method body.program, receiver, name.name, body.extensions
+  found := find_method(body.program, receiver, name.name, body.extensions)
+  return found if found
+  parts_method body, receiver, name.name, name.position
 
 # Whether `==` compares values of the type, which may hold type parameters standing for
 # themselves, as their bounds tell.
@@ -167,13 +170,32 @@ generic_problem := (source: MethodSource, name: String, of_member: String) ->
 # that an extend of an interface it satisfies gives it, which codegen reads from the facts. A
 # member of the type of the same name would make the call ambiguous.
 find_callable := (body: Body, receiver: Type, name: Identifier): MethodSource? ->
-  own := find(body, receiver, name)
+  own := callable(body, receiver, name)
   extended := find_interface_extension(body, receiver, name) ? return own
   if own != nil or field_type_by_name(body, receiver, name) != nil
     from := "from an extend of #{format_type(extended.bound!)} in #{extended.module_name}"
     gets := "has a member '#{name.name}', and gets a method of that name #{from}"
     fail body.program, name.position, "#{format_type(receiver)} #{gets}"
   ExtensionSource extended
+
+# The source, which is no optional's to_literal unless a bound calls it, as where an instance of a
+# generic function has an optional type argument: written, `x.to_literal()` of an optional `x`
+# would read as a call on what it holds.
+callable := (body: Body, receiver: Type, name: Identifier): MethodSource? ->
+  source := find(body, receiver, name)
+  is_optional_literal :=
+    receiver is OptionalType and source is BuiltinMethod and source.parts != nil
+  return source if not is_optional_literal or is_instance_body(body)
+  instead := "write `dbg(x)`, or `x?.to_literal() ? 'nil'`"
+  fail
+    body.program
+    name.position
+    "an optional's to_literal is called only through a bound: #{instead}"
+
+# Whether the body is that of an instance, whose type parameters stand for its type arguments.
+is_instance_body := (body: Body) ->
+  is_argument := (type: Type) -> not (type is TypeParameterType and type.standing)
+  body.resolver.type_parameters.values().any(is_argument)
 
 # The type of the method, checking its body first if needed. A generic one's comes from its
 # instance for the receiver, if the receiver gives all its type arguments; `call`, if given, calls
@@ -266,7 +288,8 @@ export type_of_property := (body: Body, member: Member, expected: Type?): Type -
     record_member body, member, property.target
     return property.type
   extended := find_interface_extension(body, object_type, member.name)
-  if find(body, object_type, member.name) != nil or extended != nil
+  method := callable(body, object_type, member.name)
+  if method != nil or extended != nil
     bound := type_of_bound_method(body, member, expected)
     return bound if bound
     fail body.program, position, "a method must be called: write `#{name}()`"
