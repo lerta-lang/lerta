@@ -7,8 +7,8 @@ from '../ast'
 import TokenKind from '../lexer/tokens'
 import BRANCHES, StyleRule from '../format/rules'
 import
-  is_block_call, is_destructuring_holder, is_inline, is_taken_apart, is_written_postfix,
-  takes_postfix
+  is_block_call, is_destructuring_holder, is_inline, is_taken_apart, is_written_as_type,
+  is_written_postfix, takes_postfix
 from './forms'
 import
   ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, CodeGap, ImportShape, LineStart, ListShape,
@@ -260,7 +260,14 @@ extend Walker
     if type := node.type
       @take ':', NONE
       @type type, ONE
-    return if node.omits_value
+    else if @at_kind(':')
+      # `name: Map<K, V>` or `name: Set<T>`, whose value, written as its type, is the call
+      # `Map<K, V>()` or `Set<T>()`.
+      @take ':', NONE
+      @take IDENTIFIER, ONE
+      @type_arguments (node.value as Call!).type_args
+      return
+    return if node.omits_value or is_written_as_type(node)
     assign := @take(node.mutable or node.type then '=' else ':=', ONE)
     @value assign, node.value, true
 

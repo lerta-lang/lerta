@@ -72,8 +72,11 @@ extend Walker
       gap = NONE
       groups += 1
     @ungrouped_type type, gap
+    # The `?` of a named type follows its name, as in `(Int?)[]`, and that of another its brackets.
+    named := type is NamedType
+    @take '?', NONE if optional and named
     @take ')', NONE for _ in 0..groups
-    @take '?', NONE if optional
+    @take '?', NONE if optional and not named
 
   # Whether the `(` at `open` is the type's own: that of the parameters of a function type, which
   # `->` follows, or of a tuple type, which holds a comma.
@@ -324,16 +327,19 @@ extend Walker
       @take '.', NONE
     @take IDENTIFIER, NONE
 
+  # `<T, U>`, where there are type arguments, on one line, as the grammar takes no line end between
+  # them.
+  type_arguments := (args: TypeName[]) ->
+    return if args.is_empty()
+    @take '<', NONE
+    @list args.length, NONE, (i, gap) -> @type(args[i], gap), false
+    @take '>', NONE
+
   # A call with parentheses, or without them, whose arguments follow a space on its line or are in a
   # block below it.
   call := (node: Call, before: CodeGap) ->
     @chain node.callee, before
-    { type_args } := node
-    # On one line, as the grammar takes no line end between type arguments.
-    unless type_args.is_empty()
-      @take '<', NONE
-      @list type_args.length, NONE, (i, gap) -> @type(type_args[i], gap), false
-      @take '>', NONE
+    @type_arguments node.type_args
     { args, named_args } := node
     values := [args..., [named.value for named in named_args]...]
     items := ListItems
