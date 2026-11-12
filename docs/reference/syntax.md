@@ -325,6 +325,16 @@ From weakest to strongest:
 - Each `else if` of a chain counts as one level too, for the conditions and blocks after it as well.
 - Indented blocks are not counted, as their indentation makes the source grow with the square of their depth.
 
+## Forms of other languages
+
+What another language writes and Lerta spells otherwise is an error that says what to write:
+
+- `&&`, `||` and a prefix `!` for `and`, `or` and `not`;
+- `x ?? d` for `x ? d`, and `c ? a : b` for `c then a else b`;
+- `let x = v` for `x := v`, and an assignment to a name declared nowhere for `x := v` or `var x = v`;
+- `null`, `None` and `undefined` for `nil`;
+- a `String`'s `length`, as a property or a method, for `count()` or `byte_count()`.
+
 ## Keywords
 
 `true` `false` `nil` `and` `or` `not` `var` `if` `else` `while` `unless` `until` `for` `break` `continue` `return` `case` `then` `class` `struct` `throw` `import` `export` `extern` `intrinsic` `extend` `enum` `interface` `try` `catch` `finally` `yield` `await` are keywords and cannot be used as names.

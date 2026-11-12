@@ -8,6 +8,7 @@ import warn_if_cycle from './cycles'
 import fail from './diagnostics'
 import require_type, type_of from './expression'
 import field_target from './fields'
+import builtin_export from './imports'
 import local_reference, lookup, qualified_name, record_reference from './name'
 import
   appends_unit, describe_kinds, is_numeric_operator, operand_kinds, OPERATOR_METHODS,
@@ -107,12 +108,25 @@ check_item_target := (body: Body, target: Index, operator: String) ->
   record_taken_items body.program, object_type if object_type is ArrayType
   type
 
+# How to declare a variable of the name, which an assignment to it, as in another language, may
+# have meant to; nothing for a name that is declared already, as a function, a type, an import or a
+# builtin.
+declaration_hint := (body: Body, name: String) ->
+  shared := body.shared
+  { imports, functions } := shared
+  is_function := name in functions.entries or name in functions.generics
+  is_type := name in shared.objects or name in shared.enums or name in shared.interfaces
+  is_imported := name in imports.names or name in imports.modules
+  is_declared := is_function or is_type or name in shared.aliases or is_imported
+  return '' if is_declared or builtin_export(shared, name) != nil
+  ": declare it with `#{name} := value`, or `var #{name} = value`"
+
 check_variable_target := (body: Body, target: Identifier) ->
   reject := (reason: String) -> fail(body.program, target.position, "'#{target.name}' #{reason}")
   not_a_variable := ->
     abort_if_failed body.shared.top_level, target.name
     reject_pending body.program, body.shared.top_level, target if body.sees_top_level
-    reject 'is not a variable'
+    reject "is not a variable#{declaration_hint(body, target.name)}"
   variable := lookup(body, target.name) ? not_a_variable()
   reject 'is not a var' unless variable.mutable
   body.facts.local_declarations[target] = variable.original().identifier

@@ -179,7 +179,41 @@ export class TokenStream
       @fail
         at
         'a spread `xs...` can only be an item of an array or an argument of a variadic parameter'
-    @fail at, "expected #{expected}, found #{describe_token(token)}"
+    # The token is the next one, or the one just read, as by parse_primary.
+    index := [@index_at(0), @index - 1].find((i) -> i >= 0 and @tokens[i] == token)
+    hint := index != nil then @foreign_hint(index)
+    instead := hint then ": #{hint}" else ''
+    @fail at, "expected #{expected}, found #{describe_token(token)}#{instead}"
+
+  # What to write for the token at the index where it starts a form of another language, which Lerta
+  # spells otherwise, as `&&` for `and`.
+  foreign_hint := (index: Int) ->
+    previous := index > 0 then @tokens[index - 1].kind
+    case @tokens[index].kind
+      when '&' then previous == '&' then 'write `and` for `&&`'
+      when '|' then previous == '|' then 'write `or` for `||`'
+      # Not that of a value, `x !` or `?!`, which no name follows at once.
+      when '!' then not @tokens[index + 1].spaced then 'write `not x` for `!x`'
+      when '?' then previous == '?' then 'write `x ? default` for `x ?? default`'
+      when ':' then @line_has_coalesce(index) then 'write `c then a else b` for `c ? a : b`'
+      when '='
+        is_let := @tokens[@line_start(index)].is_word('let')
+        is_let then 'write `x := value` for `let x = value`, or `var x = value` to assign it again'
+      else nil
+
+  # The index of the first token of the line of the token at the index.
+  line_start := (index: Int) ->
+    var start = index
+    start -= 1 while start > 0 and @tokens[start - 1].kind not in [NEWLINE, INDENT, DEDENT]
+    start
+
+  # Whether a `?` of a value, `x ? d`, comes before the index on its line: spaced, unlike that of
+  # an optional type, `Int?`.
+  line_has_coalesce := (index: Int) ->
+    for i in @line_start(index)..index
+      token := @tokens[i]
+      return true if token.kind == '?' and token.spaced
+    false
 
   at_file_end := ->
     var index = @index_at(0)

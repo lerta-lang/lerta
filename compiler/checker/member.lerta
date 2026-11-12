@@ -31,8 +31,8 @@ import find_interface_extension from './satisfaction'
 import Body from './shared'
 import record_taken_items from './taken_items'
 import
-  ArrayType, bool_type, format_member, format_type, FunctionType, InterfaceType, OptionalType, Type,
-  TypeParameterType, UnionType
+  ArrayType, bool_type, format_member, format_type, FunctionType, InterfaceType, is_kind,
+  OptionalType, Type, TypeParameterType, UnionType
 from '../types'
 
 # An array's `pop` takes out an item (see are_items_taken).
@@ -78,7 +78,8 @@ type_of_method := (body: Body, member: Member, receiver: Type, source: MethodSou
   reject_deinit body, receiver, member
   from_source := source then method_type(body, receiver, source, member.name, nil)
   no_method := ->
-    fail_missing body, member, receiver, "type #{format_type(receiver)} has no method '#{name}'"
+    missing := "type #{format_type(receiver)} has no method '#{name}'#{member_hint(receiver, name)}"
+    fail_missing body, member, receiver, missing
   field := ->
     if receiver is UnionType
       if problem := union_method_problem(body, receiver, member.name)
@@ -297,7 +298,13 @@ export type_of_property := (body: Body, member: Member, expected: Type?): Type -
     body
     member
     object_type
-    "type #{format_type(object_type)} has no property '#{name}'"
+    "type #{format_type(object_type)} has no property '#{name}'#{member_hint(object_type, name)}"
+
+# What a String gives for the `length` of other languages, as a property or a method: the number of
+# its code points or of its bytes, as counting the code points takes a pass.
+member_hint := (type: Type, name: String) ->
+  is_length := name == 'length' and is_kind(type, 'String')
+  is_length then ': write `count()` for its code points, or `byte_count()` for its bytes' else ''
 
 # Fails with the message of a member that the object, of the type, has not, saying why when the
 # object is a weak local that would have it if it were not nil, as a test of it does not narrow it.
