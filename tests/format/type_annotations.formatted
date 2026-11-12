@@ -186,3 +186,61 @@ widths: Map<String, Int>? = Map()
 names := Set<String>(['a'])
 # A literal that keeps its return type, which settles its Promise, keeps its parameters' types.
 settled := xs.map((x: Int): Promise<Int> -> x * 2)
+
+# A value whose checking checks a function on demand is judged alike before and after it.
+k := g()
+g := ->
+  e: Int? = 1
+  (e ? 0) + 1
+m := g()
+print k + m
+
+# A value whose parts take their types from the calls that they are given to gives its own type.
+twice := (x: Float) -> x * 2.0
+count := (xs: Int[]) -> xs.length
+a := twice(1)
+b := count([])
+c := [1, 2].filter((x) -> x > 1).to_array().length
+print a
+print b + c
+
+# A function returned keeps the function type that it is returned as, which its parameters take.
+adder := (n: Int): ((Int) -> Int) -> (m) -> n + m
+print adder(1)(2)
+
+# A function in a generic function keeps its types, and so do a type that alone uses an import, a
+# local function's parameters, and a method's, though an interface gives them; parameters on one
+# line each leave theirs.
+identity := <T>(ys: T[]) -> ys.map((y: T): T -> y).to_array()
+written := (f: (Writer) -> Int) -> f(stdout)
+print written((w: Writer) -> 1)
+outer := ->
+  local := (n: Int) -> n + 1
+  local 1
+interface Sized
+  size: (Int) -> Int
+class Sizer: Sized
+  size := (n: Int) -> n
+three := (f: (Int, Int, Int) -> Int) -> f(1, 2, 3)
+print three((a, b, c) -> a + b + c)
+# A field's function keeps its parameters' types, which the checker does not record as inferable.
+struct Mapper
+  f: (Int) -> Int = (x: Int) -> x
+widen := (f: (Int) -> Int?) -> f(1) ? 0
+# A return type that stays keeps the parameters' types, as `(x): Int? ->` does not parse.
+print widen((x: Int): Int? -> x)
+print identity([1]).length + outer() + Sizer().size(1) + Mapper().f(1)
+
+# Type arguments nested go to the call too, and so do those of a var with arguments and of a
+# field's, though a field keeps its value; a const's empty value goes, and type arguments written
+# stay.
+var deep = Map<String, Set<Int>>()
+var filled = Set<Int>([3])
+fours := Set<Int>([4])
+class Registry
+  var entries = Map<String, Int>()
+  ids := Set<Int>()
+bare: Set<Int>
+given := Set<Int>([5])
+print bare.length + given.length
+print deep.length + filled.length + fours.length + Registry().entries.length + Registry().ids.length

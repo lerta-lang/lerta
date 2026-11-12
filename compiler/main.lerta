@@ -7,8 +7,7 @@ import executable_suffix, target_triple from './clang'
 import check_program, generate_ir, write_ir from './compile'
 import dump_ast, dump_checked, dump_tokens from './dumps'
 import CompileError from './errors'
-import format_command from './format/command'
-import format2_command from './format2/command'
+import format_command from './format2/command'
 import tokenize from './lexer/tokens'
 import lsp_command from './lsp/server'
 import parse from './parser/statement'
@@ -176,11 +175,6 @@ fmt_command := (args: String[]) ->
   { paths, fix } := parse_args<Fmt>(args, FMT_SPEC, 'fmt')
   exit await format_command(paths, fix)
 
-# Not in the usage: it runs the formatter that is to replace that of `fmt`, for its tests.
-fmt2_command := (args: String[]) ->
-  { paths, fix } := parse_args<Fmt>(args, FMT_SPEC, 'fmt2')
-  exit await format2_command(paths, fix)
-
 cflags_command := -> print("-I#{await cached_include_dir()}")
 
 clean_command := -> print("removed #{path}") for path in await clean_cache()
@@ -195,31 +189,28 @@ dump_program_checked := (path: String) -> dump_checked(await check_program(path,
 
 # A compile error is the user's, so it is reported without the compiler's trace.
 try
-  if argv.first() == 'fmt2'
-    await fmt2_command(argv[1..])
-  else
-    (command, args) := parse_command<Command>(argv, COMMAND_SPEC)
-    name := command.to_string().replace('_', '-')
-    # Rejects any argument, for the commands that take none.
-    no_arguments := -> parse_args<{}>(args, {}, name)
-    source := -> parse_args<Dump>(args, DUMP_SPEC, name).source
-    case command
-      when Command.build then await build_command(args)
-      when run then await run_command(args)
-      when fmt then await fmt_command(args)
-      when lsp
-        no_arguments()
-        await lsp_command()
-      when cflags
-        no_arguments()
-        await cflags_command()
-      when clean
-        no_arguments()
-        await clean_command()
-      when Command.dump_tokens then await run_dump(source(), dump_file_tokens)
-      when Command.dump_ast then await run_dump(source(), dump_file_ast)
-      when Command.dump_checked then await run_dump(source(), dump_program_checked)
-      when dump_llvm then await run_dump_ir(source())
+  (command, args) := parse_command<Command>(argv, COMMAND_SPEC)
+  name := command.to_string().replace('_', '-')
+  # Rejects any argument, for the commands that take none.
+  no_arguments := -> parse_args<{}>(args, {}, name)
+  source := -> parse_args<Dump>(args, DUMP_SPEC, name).source
+  case command
+    when Command.build then await build_command(args)
+    when run then await run_command(args)
+    when fmt then await fmt_command(args)
+    when lsp
+      no_arguments()
+      await lsp_command()
+    when cflags
+      no_arguments()
+      await cflags_command()
+    when clean
+      no_arguments()
+      await clean_command()
+    when Command.dump_tokens then await run_dump(source(), dump_file_tokens)
+    when Command.dump_ast then await run_dump(source(), dump_file_ast)
+    when Command.dump_checked then await run_dump(source(), dump_program_checked)
+    when dump_llvm then await run_dump_ir(source())
 catch error: CompileError
   print_error error.message
   exit 1

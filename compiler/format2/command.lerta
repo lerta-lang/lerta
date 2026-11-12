@@ -1,5 +1,5 @@
-# The command line of `lerta fmt2 [--fix] <path>...`, which runs format2 as `lerta fmt` runs the
-# formatter, for its tests until it replaces it.
+# The command line of `lerta fmt [--fix] <path>...`: the files it takes, what it reports and what it
+# writes.
 import is_dir, is_file, read_text, write_file from 'std:io'
 import CompileError from '../errors'
 import source_files from '../format/command'
@@ -8,48 +8,50 @@ import EntryModule, module_key from '../loader'
 import ChangedProgram, format_parsed, format_source, Parsed, parsed_source from './format'
 import Typed, typed_programs from './typed'
 
-export format2_command := (paths: String[], fix: Bool) ->
+export format_command := (paths: String[], fix: Bool) ->
   var status = 0
   for path in paths
     if not is_file(path) and not is_dir(path)
       print_error "'#{path}' is not a file or a directory"
       status = 1
-  files := source_files(paths)
-  sources: Map<String, Source>
-  for file in files
-    if source := await source_of(file)
-      sources[file] = source
-    else
-      status = 1
+  # A file given twice, by any paths, is taken once.
+  keys: Set<String>
+  files := [file for file in source_files(paths) when keys.add(module_key(file))]
+  sources := [await source_of(file) for file in files]
   # Each program that holds some of the files is checked once for all of them, for their first
   # rewrites; a file that they rewrite is checked anew on its own (see rewritten_text).
   given: Map<String, EntryModule>
-  for file in files
-    if parsed := sources[file]?.parsed
-      given[module_key(file)] = { source: parsed.source, program: parsed.statements }
-  typed :=
-    await typed_programs([file for file in files when given.contains(module_key(file))], given)
-  for file in files
-    source := sources[file] ? continue
-    status = 1 unless await format_file(file, source, typed[module_key(file)], fix)
+  for source in sources
+    if parsed := source.parsed
+      given[module_key(source.path)] = { source: parsed.source, program: parsed.statements }
+  checked := [source.path for source in sources when source.parsed != nil]
+  typed := await typed_programs(checked, given)
+  for source in sources
+    status = 1 unless await format_file(source, typed[module_key(source.path)], fix)
   status
 
-# A file read, and parsed unless it is off throughout, which is left as it is.
+# A file read, and parsed unless it is off throughout, which is left as it is; or why it cannot be:
+# it is not UTF-8 or does not parse.
 struct Source
+  path: String
   text: String
   parsed: Parsed?
+  failure: String?
 
-# Nil, reported, for a file that is not UTF-8 or does not parse.
-source_of := (path: String): Promise<Source?> ->
-  text := await read_text(path) ? return failed_source("#{path}: the file is not valid UTF-8")
-  return { text, parsed: nil } if is_off_throughout(text)
+source_of := (path: String): Promise<Source> ->
+  text := await read_text(path) ? return { path, text: '', parsed: nil, failure: not_utf8(path) }
+  return { path, text, parsed: nil, failure: nil } if is_off_throughout(text)
   try
-    { text, parsed: parsed_source(text, path) }
+    { path, text, parsed: parsed_source(text, path), failure: nil }
   catch error: CompileError
-    failed_source error.message
+    { path, text, parsed: nil, failure: error.message }
+
+not_utf8 := (path: String) -> "#{path}: the file is not valid UTF-8"
 
 # Whether the file is in the style, or is written so with `fix`.
-format_file := (path: String, source: Source, typed: Typed?, fix: Bool) ->
+format_file := (source: Source, typed: Typed?, fix: Bool) ->
+  { path } := source
+  return failed(failure) if failure := source.failure
   parsed := source.parsed ? return true
   formatted :=
     try
@@ -68,10 +70,6 @@ format_file := (path: String, source: Source, typed: Typed?, fix: Bool) ->
     { at, rule } := finding
     print_error "#{path}:#{at.line}:#{at.column}: #{rule.message} (#{rule.label})"
   findings.is_empty()
-
-failed_source := (message: String): Source? ->
-  print_error message
-  nil
 
 failed := (message: String) ->
   print_error message
