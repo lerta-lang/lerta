@@ -2,10 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## lerta fmt stops at a member line after a call without parentheses
-
-A member line after a statement that is a call without parentheses applies to the call's value (see [member lines](reference/syntax.md#member-lines)), as `print items` and `.length` below it, but `lerta fmt` joins the line, `print items.length`, which applies it to the argument, and then stops: `its layout would change the program, which is a fault of the formatter`. Fix: keep the member line where the chain takes arguments without parentheses (see `takes_unbracketed` in `link`, `compiler/format/walk_expressions.lerta`), or put the call in parentheses.
-
 ## An array cannot hold optional interface values
 
 `check_item_type` (`compiler/checker/collection.lerta`) rejects arrays of optional interface values, as the generated code would hold them as optional values that are not references (`is_optional_value` in `compiler/codegen/array.lerta`), whose `{ i1, T }` an interface value's two pointers are not. `xs: Named?[] = [nil]`, with `interface Named` of a field `name: String`, fails with `an array cannot hold values of type Named?`. Fix: hold them as interface items, a null data pointer for nil, and drop the limitation in [optional values](reference/types.md#optional-values).

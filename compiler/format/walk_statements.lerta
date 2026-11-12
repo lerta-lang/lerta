@@ -12,8 +12,8 @@ import
   is_written_as_type, is_written_postfix, takes_postfix
 from './forms'
 import
-  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, CodeGap, ImportShape, LineStart, ListShape,
-  PostfixShape, StatementShape, ValueKind, ValueShape
+  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, ChainShape, CodeGap, ImportShape,
+  LineStart, ListShape, PostfixShape, Shape, StatementShape, ValueKind, ValueShape
 from './shapes'
 import NONE, ONE, spelling_of, unhandled, Unhandled, Walker from './walk'
 import './walk_expressions'
@@ -493,8 +493,14 @@ extend Walker
       # A postfix form inside brackets would not end its line, which it must.
       first := statements[0]
       postfix := (first is If or first is While or first is For) and is_written_postfix(first)
-      joinable :=
-        one and is_inline(first) and not (postfix and @in_brackets) and not @has_comments(head, @at)
+      # A member line that stays one keeps the body below its head, whose line it would seem to
+      # apply to.
+      keeps_lines := block.statements.any((each) -> each.shapes.any(is_kept_chain))
+      joinable := one and
+        is_inline(first) and
+        not (postfix and @in_brackets) and
+        not @has_comments(head, @at) and
+        not keeps_lines
       @close head, true
       return BodyShape(head, block, joinable, rule)
     unhandled() if statements.length != 1
@@ -581,3 +587,5 @@ written_body := (node: For) -> written_statements(node.body)
 # loop as `for (a, b) in xs`, holds, which have no tokens.
 written_statements := (statements: Statement[]) ->
   [statement for statement in statements when not is_taken_apart(statement)]
+
+is_kept_chain := (shape: Shape) -> shape is ChainShape and shape.kept

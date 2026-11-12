@@ -23,6 +23,11 @@ import './lines_edits'
 
 export WIDTH := 100
 
+# Kept member lines, from the first token of their value up to their first `.`.
+struct KeptLines
+  first: Int
+  dot: Int
+
 # Decides the gaps of `walked` that line breaks change, and adds the statements that keep theirs
 # as written to those that it skips; the edits of the rewrites that the lines ask for.
 export break_lines := (walked: Walked, text: SourceTokens, tokens: Tokens) ->
@@ -76,6 +81,9 @@ export class Breaker
   # The lists without brackets that must go in a block below the token before them, by that token:
   # the arguments of a value, and block literals.
   in_blocks := Set<Int>()
+  # The kept member lines (see ChainShape), which the arguments before them stay on the line of
+  # their call for.
+  kept_lines: KeptLines[] = []
   # The heads of the bodies that may go on their line whose statement is a call without
   # parentheses, which takes them there (see parenthesize): the width of its last token counts the
   # `)` until the body goes in a block.
@@ -174,6 +182,8 @@ export class Breaker
   prepare := (shapes: Shape[]): void ->
     for shape in shapes
       case shape
+        when ChainShape
+          @kept_lines.push { first: shape.first, dot: shape.dots[0] } if shape.kept
         when ListShape
           @undecided.add shape.items[0] unless shape.items.is_empty()
           @prepare shape.shapes
@@ -372,6 +382,11 @@ export class Breaker
   # deeper than its first, from its first `.` on.
   chain := (chain: ChainShape) ->
     { first, dots, last } := chain
+    if chain.kept
+      # The arguments before them stay on the call's line (see unbracketed).
+      depth := @line_depth(first) + 1
+      @gaps[dot] = LineStart(depth, rule: LAYOUT) for dot in dots
+      return
     if @fits(first, last, @column_of(first), false)
       @flatten dot, LONG_CHAINS for dot in dots
     else
@@ -515,7 +530,10 @@ export class Breaker
       literal != nil and
       literal.bracketed and
       @opens_last(literal, last)
-    if on_line or opens
+    # Arguments that kept member lines follow stay on the line, as in a block they would take the
+    # lines: the line is reported when it does not fit.
+    before_kept := @kept_lines.any((kept) -> open in kept.first..kept.dot)
+    if on_line or opens or before_kept
       @opened.add literal!.open if opens
       @join_arguments list
       @flatten_items list, LONG_LISTS

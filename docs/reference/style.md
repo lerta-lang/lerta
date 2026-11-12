@@ -130,7 +130,7 @@ None:
 - These stay on one line:
   - a chain after a literal in a block, whose members go on the line after the block (see [Multi-line literals](#multi-line-literals));
   - one with `?.`, whose rest is in the `?.`, not after the value so far, as a member line would be;
-  - one that ends with arguments without parentheses, which follow its last member;
+  - one that ends with arguments without parentheses, which follow its last member; a member line after them, which applies to the call's value, stays one, one level deeper than the call's line, and keeps them on the call's line, which is reported if it does not fit, and keeps a function body that ends with it below its `->`;
   - one inside brackets, whose lines are items, or in the arguments of a call without parentheses, which go below the call instead;
   - one in the head of a block, whose lines below are the block, as an operation there does;
   - one that is an operand, as of `.length + 1`, which no member line can be followed by, or the target of an assignment;
