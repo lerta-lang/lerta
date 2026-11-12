@@ -52,6 +52,8 @@ LertaString *lerta_resolve_path(const LertaString *path) {
   return lerta_string_from_os(resolved);
 }
 
+LertaString *lerta_current_dir(void) { return lerta_string_from_os(lerta_os_current_dir()); }
+
 LertaString *lerta_make_temp_dir(void) {
   return lerta_string_from_os(lerta_os_make_temp_dir());
 }

@@ -1,7 +1,7 @@
 # Standard modules
 
 - `'std:<name>'` is the Lerta file `std/<name>.lerta` of the repository. The compiler carries it, and a program [imports](modules.md) it as any module.
-- The standard modules so far: `'std:args'`, `'std:async'`, `'std:codable'`, `'std:enums'`, `'std:http'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:process'`, `'std:scanner'` and `'std:time'` (below), and `'std:builtins'`, the module of the [builtins](builtins.md).
+- The standard modules so far: `'std:args'`, `'std:async'`, `'std:codable'`, `'std:enums'`, `'std:http'`, `'std:io'`, `'std:json'`, `'std:math'`, `'std:net'`, `'std:path'`, `'std:process'`, `'std:scanner'` and `'std:time'` (below), and `'std:builtins'`, the module of the [builtins](builtins.md).
 - A standard module may import the files of `std/`'s directories, as `std/internal/`, by relative paths, as a file imports another: `import JsonWriter from './internal/json_writer'`.
   - Those files are not standard modules: a program cannot import them as `std:...`.
   - Their warnings show only when a standard module that imports them is built on its own.
@@ -405,10 +405,10 @@ These responses, and the 500 below, have an empty body.
 | `FileKind` | An enum of `FILE`, `DIR` and `OTHER`, as a device. |
 | `list_dir(path: String): String[]` | The names of the entries of a directory (below). |
 | `make_dir(path: String)` | Makes a directory and any of its parents that are missing; a directory that is there already is no failure. Throws `cannot make directory: <path>` on failure, including for an empty path or one that holds a NUL byte. |
-| `make_temp_dir(): Binary` | Makes a new, empty directory for temporary files, and gives its path (below). |
+| `make_temp_dir(): String` | Makes a new, empty directory for temporary files, and gives its path (below). |
 | `rename(from: String, to: String)` | Moves a file or a directory (below). |
 | `make_link(target: String, path: String)` | Makes a symbolic link at `path` to `target` (below). |
-| `real_path(path: String): Binary` | The absolute path of what the path names, without `.`, `..` or symbolic links (below). |
+| `real_path(path: String): String` | The absolute path of what the path names, without `.`, `..` or symbolic links (below). |
 
 - `open` is under [open and File](#open-and-file).
 - `read_file`, `write_file`, `remove_tree` and `copy_file` run on the event loop, at the same time as each other and as the program. So one that depends on another, as a read of a file that a write makes, awaits it first.
@@ -441,7 +441,7 @@ These responses, and the 500 below, have an empty body.
 - The directory is made in the system's directory for temporary files:
   - on POSIX systems, the first of `TMPDIR`, `TMP`, `TEMP` and `TEMPDIR` that is set, or else `/tmp`, also if that is set empty;
   - on Windows, `GetTempPathW`.
-- Its path is a `Binary`, as `real_path` gives.
+- Throws, as `real_path` does, if its path is not valid UTF-8.
 - Throws `cannot make a temporary directory` on failure.
 
 #### rename
@@ -458,7 +458,7 @@ These responses, and the 500 below, have an empty body.
 
 #### real_path
 
-- It is a `Binary`, as nothing makes it UTF-8.
+- Throws `cannot resolve path: <path>, as its path is not valid UTF-8` if the real path is not, as a path a POSIX system gives may be: a `String` is UTF-8. On Windows, whose paths are UTF-16, what is not valid UTF-16 is read as U+FFFD, as `list_dir` reads a name.
 - Throws `cannot resolve path: <path>` if it names nothing, or holds a NUL byte.
 - On POSIX systems, the system works a path out as it reads it. So a `..` names the directory above the one that a symbolic link before it points into, and a path through a name that is not there names nothing.
 - On Windows, it works `.` and `..` out as text first. So a `..` cancels the name before it, a link or not, there or not.
@@ -747,6 +747,7 @@ print datagram.data.text()!
 | `RunOptions` | A struct of the options of `run` (below). |
 | `Output` | An enum of where `run` sends a program's output or errors besides a `Writer` or a `Pipe`: `DISCARD` and `STDOUT` (see [RunOptions](#runoptions)). |
 | `Exit` | A struct of how a program ended (below). |
+| `cwd(): String` | The absolute path of the current directory, which relative paths start from. Throws `cannot read the current directory` on failure, or if its path is not valid UTF-8. |
 | `env(name: String): String?` | The value of an environment variable, or nil if it is not set, including for a name that holds `=` or a NUL byte. Throws a `ValueError`, `the environment variable <name> is not valid UTF-8`, if the value is not. |
 | `Platform` | `enum Platform`: `'macos'`, `'linux'` and `'windows'`, the systems that a program may be built for. |
 | `platform: Platform` | The system the program is built for, which the compiler writes in the code: a member of `enum Platform`, `'macos'`, `'linux'` or `'windows'`. |
@@ -808,6 +809,32 @@ Each option may be left out.
 - `code: Int`: the exit code, which a signal makes 128 plus its number, as shells do.
 - `signal: Int?`: that signal, on POSIX systems.
 - On Windows, the code of a program that an exception or `TerminateProcess` ended is a non-negative 32-bit value, such as 3221225477 (0xC0000005) for an access violation.
+
+## std:path
+
+```lerta
+import base_name, extension, join, relative from 'std:path'
+
+source := join(dir, 'lib', 'util.lerta')
+print "#{base_name(source)} #{extension(source)!}"
+print relative(dir, source)
+```
+
+- Functions of file paths, which are `String`s, worked out as text, as those of Node's `path` module are: they read no file system, but `absolute` and `relative` take the current directory.
+- They write `/` between names. On Windows, `\` separates names too, and an absolute path starts at a drive, `C:\`, or a network share, `\\server\share\`. A path relative to the current directory of a drive, as `C:a`, is not supported.
+- Names compare as written, case and all, also on Windows, where the system takes them without case: `relative('C:/Foo', 'C:/foo/x')` is `../foo/x`. Real paths, as `real_path` gives them, write each name alike.
+
+| Name | |
+|---|---|
+| `dir_name(path: String): String` | The path without its last name: `a/b` for `a/b/c`, `.` for a name alone, and the root for the root. |
+| `base_name(path: String): String` | The last name: `c` for `a/b/c`, and `` for a root. |
+| `extension(path: String): String?` | The last name's part after its last `.`, or nil if it has none: `gz` for `a.tar.gz`; nil for `.profile` or `..`, as the `.`s that start a name start none. |
+| `stem(path: String): String` | The last name without its extension and that `.`: `a.tar` for `a.tar.gz`. |
+| `join(first: String, rest: String...): String` | The paths one after another, normalized: `join('a', '../b', 'c')` is `b/c`. An empty one adds nothing, and a later absolute path does not start again, as in Node's `join`. |
+| `normalize(path: String): String` | The path without `.` and empty names, and with each `..` removing the name before it, as text: a `..` after a symbolic link may name another directory than the system resolves it to, as `real_path` of [std:io](#stdio) does. `.` for nothing left. |
+| `is_absolute(path: String): Bool` | Whether the path starts at a root. On Windows, one that starts at `\` alone names a file on the current drive, and is absolute too. |
+| `absolute(path: String, base: String = cwd()): String` | The path as it is if absolute, else from `base`, normalized. |
+| `relative(from: String, to: String, base: String = cwd()): String` | The path from the directory `from` to `to`, each from `base` unless absolute: `.` for the same one, and `to`, absolute, where they start at different roots. |
 
 ## std:scanner
 

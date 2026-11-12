@@ -1,7 +1,8 @@
 # Compiles the runtime, with libuv, once for each kind of build, and keeps its object files in a
 # cache directory, so that a build only links them (see docs/reference/compiler.md).
 import
-  Buffer, copy_file, is_dir, is_file, list_dir, make_dir, read_text, remove_tree, rename, write_file
+  Buffer, copy_file, is_dir, is_file, list_dir, make_dir, read_text, real_path, remove_tree, rename,
+  write_file
 from 'std:io'
 import env, is_running, platform, process_id, run from 'std:process'
 import embedded_source, EMBEDDED_PATHS from '../build/embedded'
@@ -9,8 +10,7 @@ import build_flags, BuildKind, run_clang_jobs from './clang'
 import CompileError from './errors'
 import LIBUV_PATHS, platform_build, write_libuv_sources from './libuv'
 import PlatformBuild, runtime_c_names from './platform_description'
-import real_path_text from './loader'
-import basename, join from './paths'
+import base_name, join from 'std:path'
 
 RUNTIME_PATHS := [path for path in EMBEDDED_PATHS when path.starts_with('runtime/')]
 
@@ -52,7 +52,7 @@ export cached_runtime := (kind: BuildKind, temp_dir: String) ->
     return await runtime() if is_complete(files)
     throw CompileError("the cached runtime #{dir} is incomplete: remove it")
   await remove_abandoned_staging(cache, runtime_name)
-  staging_dir := "#{dir}#{STAGING_INFIX}#{process_id}-#{basename(temp_dir)}"
+  staging_dir := "#{dir}#{STAGING_INFIX}#{process_id}-#{base_name(temp_dir)}"
   make_dir staging_dir
   compiled :=
     try
@@ -100,7 +100,7 @@ MODULE_PREFIX := 'module-'
 # renames its own there first compiled the same IR. The staging file is named as a runtime's
 # staging directory is, after the build's temporary directory too (see STAGING_INFIX).
 export keep_module_object := (object: String, path: String, temp_dir: String) ->
-  staging_path := "#{path}#{STAGING_INFIX}#{process_id}-#{basename(temp_dir)}"
+  staging_path := "#{path}#{STAGING_INFIX}#{process_id}-#{base_name(temp_dir)}"
   await copy_file(object, staging_path)
   await remove_tree(staging_path) unless renamed(staging_path, path)
 
@@ -113,8 +113,8 @@ INCLUDE_PREFIX := 'include-'
 export cached_include_dir := ->
   header := embedded_source(HEADER_PATH)!
   dir := join(cache_dir(), "#{INCLUDE_PREFIX}#{texts_hash([header])}")
-  path := join(dir, basename(HEADER_PATH))
-  return real_path_text(dir) if is_file(path)
+  path := join(dir, base_name(HEADER_PATH))
+  return real_path(dir) if is_file(path)
   make_dir dir
   # Written beside its place and renamed there, so that a build that runs meanwhile never reads a
   # part of it. Another that renames its own there first wrote the same header; on Windows, renaming
@@ -125,7 +125,7 @@ export cached_include_dir := ->
     await remove_tree(staging_path)
     failed := CompileError("cannot write the runtime's header into the cache: #{path}")
     throw failed unless is_file(path)
-  real_path_text dir
+  real_path dir
 
 # What `clang --version` prints, or nil if clang fails.
 clang_version_text := ->
@@ -240,10 +240,10 @@ export texts_hash := (texts: String[]) ->
 
 # The runtime's C files that the build compiles.
 c_paths := (build: PlatformBuild) ->
-  names := [basename(path) for path in RUNTIME_PATHS]
+  names := [base_name(path) for path in RUNTIME_PATHS]
   ["runtime/#{name}" for name in runtime_c_names(names, build)]
 
-object_name := (c_path: String) -> "#{basename(c_path).without_suffix('.c')!}.o"
+object_name := (c_path: String) -> "#{base_name(c_path).without_suffix('.c')!}.o"
 
 # libuv's object files are named by their sources' paths, as its directories for different systems
 # hold files of the same names, as `src/unix/async.c` and `src/win/async.c`.
@@ -262,14 +262,14 @@ compile_runtime := (kind: BuildKind, build: PlatformBuild, staging_dir: String, 
   source_dir := join(temp_dir, 'runtime')
   make_dir source_dir
   for path in RUNTIME_PATHS
-    await write_file(join(source_dir, basename(path)), embedded_source(path)!)
+    await write_file(join(source_dir, base_name(path)), embedded_source(path)!)
   libuv_dir := join(temp_dir, 'libuv')
   libuv_includes := await write_libuv_sources(libuv_dir)
   # uv.h, which the runtime includes, asks nothing of its users but where it is; libuv's own flags
   # are for its sources, whose warnings are not the program's, which a build prints.
   flags := [build_flags(kind)..., libuv_includes...]
   runtime_job := (path: String) ->
-    ['-c', flags..., join(source_dir, basename(path)), '-o', join(staging_dir, object_name(path))]
+    ['-c', flags..., join(source_dir, base_name(path)), '-o', join(staging_dir, object_name(path))]
   libuv_flags := [flags..., build.libuv_flags..., '-w']
   libuv_job := (path: String) ->
     object := join(staging_dir, libuv_object_name(path))

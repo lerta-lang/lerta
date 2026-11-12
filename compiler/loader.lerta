@@ -2,10 +2,10 @@
 # the others import (see builtins_import).
 import is_file, real_path from 'std:io'
 import Import, Statement from './ast'
-import compile_error, CompileError, Located from './errors'
+import compile_error, Located from './errors'
 import Token, tokenize from './lexer/tokens'
 import parse, parse_partially from './parser/statement'
-import basename, dirname, join, relative from './paths'
+import base_name, dir_name, join, relative from 'std:path'
 import
   given_sources, is_standard_name, module_location, read_entry_source, read_source, standard_import,
   standard_names, standard_source
@@ -74,13 +74,13 @@ export struct EntryModule
 # last: each file as `given` by its key (see module_key), if it is, else read. The standard modules
 # are those embedded in the compiler.
 export load_modules := (entry_path: String, given: Map<String, EntryModule> = Map()) ->
-  await load_all(Loader(entry_path, given, cwd: real_path_text('.'), parse_errors: nil))
+  await load_all(Loader(entry_path, given, cwd: real_path('.'), parse_errors: nil))
 
 # The modules as load_modules gives them, but each with the statements that parse, for an
 # editor, which checks the code that is being written; the errors of those that do not go into
 # `parse_errors`, those found before an error that ends the loading too.
 export load_modules_partially := (entry_path: String, parse_errors: Located[]) ->
-  await load_all(Loader(entry_path, parse_errors, given: Map(), cwd: real_path_text('.')))
+  await load_all(Loader(entry_path, parse_errors, given: Map(), cwd: real_path('.')))
 
 load_all := (loader: Loader) ->
   { entry_path, given } := loader
@@ -136,9 +136,9 @@ visit := (loader: Loader, statement: Import, from: String, location: String): Pr
     source := imported_standard_source(statement, location)
     return loaded(loader, module) ? await load(loader, module, source, module)
   return await visit_standard_file(loader, statement, from, location) if is_standard_name(from)
-  path := imported_file(statement, dirname(from), location)
-  real := real_path_text(path)
-  display_path := relative(loader.cwd, dirname(loader.entry_path), path)
+  path := imported_file(statement, dir_name(from), location)
+  real := real_path(path)
+  display_path := relative(dir_name(loader.entry_path), path, loader.cwd)
   return id if id := loaded(loader, real)
   if given := loader.given[real]
     return await load(loader, real, given.source, display_path, given.program)
@@ -198,7 +198,7 @@ finished_module := (loader: Loader, id: Int) ->
   imported: Map<Import, Int>
   imported[statement] = index_of(place) for (statement, place) in loading.imported.entries()
   { index, key, display_path, source, program } := loading
-  symbol_name := display_path ? "./#{basename(loader.entry_path)}"
+  symbol_name := display_path ? "./#{base_name(loader.entry_path)}"
   cycle := [index_of(place) for place in loading.cycle]
   Module index, display_path, symbol_name, key, source, program, imported, cycle
 
@@ -208,17 +208,12 @@ export is_standard_module := (module: Module) ->
 
 # The key of the module at the path (see load).
 export module_key := (path: String) ->
-  is_standard_name(path) or path in given_sources then path else real_path_text(path)
+  is_standard_name(path) or path in given_sources then path else real_path(path)
 
 # The keys of the files that the file at the path imports, read without loading them.
 export imported_files := (path: String) ->
   location := module_location(path, nil)
   program := parse(tokenize(await read_source(path), location), location)
-  from := dirname(module_key(path))
+  from := dir_name(module_key(path))
   imports := [s for s in program when s is Import and not is_standard_name(s.module)]
-  [real_path_text(imported_file(s, from, location)) for s in imports]
-
-# Paths are compared as text, so a real path must be UTF-8.
-export real_path_text := (path: String) ->
-  message := "the real path of '#{path}' is not valid UTF-8"
-  real_path(path).text() ? throw CompileError(message)
+  [real_path(imported_file(s, from, location)) for s in imports]

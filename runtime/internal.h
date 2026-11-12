@@ -303,6 +303,8 @@ bool lerta_os_copy_file(const char *from, const char *to);
 bool lerta_os_list_dir(const char *path, LertaArray *names);
 // The absolute path with no links, which the caller frees.
 char *lerta_os_real_path(const char *path);
+// The absolute path of the current directory, which the caller frees, or NULL.
+char *lerta_os_current_dir(void);
 // A new, empty directory in the system's directory for temporary files, whose path the caller
 // frees.
 char *lerta_os_make_temp_dir(void);

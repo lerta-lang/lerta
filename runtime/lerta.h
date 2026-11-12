@@ -367,6 +367,7 @@ bool lerta_symlink(const LertaString *target, const LertaString *path);
 LertaArray *lerta_dir_names(const LertaString *path);
 LertaString *lerta_resolve_path(const LertaString *path);
 LertaString *lerta_make_temp_dir(void);
+LertaString *lerta_current_dir(void);
 // Makes the directory, or finds one there; not its parents.
 bool lerta_make_one_dir(const LertaString *path);
 bool lerta_remove_file(const LertaString *path);

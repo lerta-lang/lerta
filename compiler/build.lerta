@@ -1,6 +1,6 @@
 # Builds a program: has clang compile the IR that codegen generates for it, written to a temporary
 # directory, which is removed afterwards, and link it with the runtime's cached objects.
-import is_file, make_dir, make_temp_dir, open, remove_tree from 'std:io'
+import is_file, make_dir, make_temp_dir, open, real_path, remove_tree from 'std:io'
 import exit, run from 'std:process'
 import ProgramWide from './checker/shared'
 import
@@ -10,10 +10,9 @@ from './clang'
 import generate from './codegen/codegen'
 import check_program, write_ir from './compile'
 import CompileError from './errors'
-import basename, is_absolute, join from './paths'
+import base_name, is_absolute, join from 'std:path'
 import is_standard_name, SOURCE_EXTENSION, STDIN_NAME from './source'
 import target_system from './platform_description'
-import real_path_text from './loader'
 import
   cache_dir, cached_include_dir, cached_module_object, cached_runtime, CachedRuntime,
   keep_module_object
@@ -52,8 +51,7 @@ build_then := (request: BuildRequest, run_args: String[]?) ->
   program := await check_program(request.source, request.warnings_as_errors)
   reject_input_as_output request, program
   reject_objective_c_off_macos request
-  not_utf8 := CompileError('the temporary directory is not valid UTF-8')
-  dir := make_temp_dir().text() ? throw not_utf8
+  dir := make_temp_dir()
   code :=
     try
       await build_in_dir(request, program, dir, run_args)
@@ -68,8 +66,8 @@ build_then := (request: BuildRequest, run_args: String[]?) ->
 reject_input_as_output := (request: BuildRequest, program: ProgramWide) ->
   output := request.output ? return
   return unless is_file(output)
-  real_output := real_path_text(output)
-  linked := [real_path_text(file) for file in request.linked_files when is_file(file)]
+  real_output := real_path(output)
+  linked := [real_path(file) for file in request.linked_files when is_file(file)]
   inputs := [[module.key for module in program.modules]..., linked...]
   return unless inputs.any((input) -> input == real_output)
   throw CompileError("the output '#{output}' is an input of the build")
@@ -92,7 +90,7 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
   # copies it beside the executable first; it reads their paths from the executable, as the link
   # was given them, in the directory it ran in.
   if request.source_lines and target_system(request.kind.target) == 'macos'
-    return 1 if (await run('dsymutil', executable, cwd: real_path_text(dir))).code != 0
+    return 1 if (await run('dsymutil', executable, cwd: real_path(dir))).code != 0
   program_args := run_args ? return 0
   (await run(executable, program_args...)).code
 
@@ -114,14 +112,14 @@ build_universal := (request: BuildRequest, program: ProgramWide, dir: String) ->
 # std:process's `program` gives the name to the program, in a directory of `dir` of its own, apart
 # from the files of the build.
 executable_path := (request: BuildRequest, dir: String) ->
-  return link_path(real_path_text('.'), output) if output := request.output
-  executable_dir := join(real_path_text(dir), 'executable')
+  return link_path(real_path('.'), output) if output := request.output
+  executable_dir := join(real_path(dir), 'executable')
   make_dir executable_dir
   join executable_dir, "#{program_name(request.source)}#{executable_suffix(request.kind.target)}"
 
 # The source's file name without `.lerta`, or `program` for a source without a file.
 program_name := (source: String) ->
-  name := basename(source)
+  name := base_name(source)
   stem := name.without_suffix(SOURCE_EXTENSION) ? name
   is_given := source == STDIN_NAME
   is_given or stem.is_empty() then 'program' else stem
@@ -153,12 +151,12 @@ link_executable := (request: BuildRequest, program: ProgramWide, dir: String, pr
   # The link runs in the temporary directory and names the modules' objects in it, and the paths it
   # is given besides are under the directory the compiler runs in (see
   # docs/internals/architecture.md#per-module-output).
-  cwd := real_path_text('.')
-  work_dir := real_path_text(dir)
+  cwd := real_path('.')
+  work_dir := real_path(dir)
   executable := executable_path(request, dir)
   # libm, which std:math calls, is apart from libc on Linux; elsewhere -lm links nothing more.
   libraries := ["-l#{library}" for library in ['m', runtime.libraries...]]
-  lto_cache := join(real_path_text(cache_dir()), LTO_CACHE)
+  lto_cache := join(real_path(cache_dir()), LTO_CACHE)
   system := target_system(kind.target)
   lto_flags := kind.optimize then lto_link_flags(system, lto_cache)
   # dsymutil (below) reads the debug information from the objects, which the link-time optimizer
@@ -172,7 +170,7 @@ link_executable := (request: BuildRequest, program: ProgramWide, dir: String, pr
     include_flags...
     (lto_flags ? [])...
     lto_objects...
-    [real_path_text(object) for object in runtime.objects]...
+    [real_path(object) for object in runtime.objects]...
     [link_path(cwd, file) for file in request.linked_files]...
     ["-Wl,#{flag}" for flag in request.linker_flags]...
     # Last, as GNU ld with --as-needed drops a library that nothing before it on the line needs.
@@ -192,7 +190,7 @@ link_executable := (request: BuildRequest, program: ProgramWide, dir: String, pr
 # did when clang ran in that directory. Worked out as text instead, a `..` would cancel the name
 # before it, which names another file when that name is a link or is not there at all. A path from a
 # root alone, as `/out` on Windows, is left to the drive of the directory the link runs in, as `C:a`
-# is left to the drive's own directory (see compiler/paths.lerta).
+# is left to the drive's own directory (see std/path.lerta).
 link_path := (cwd: String, path: String) -> is_absolute(path) then path else "#{cwd}/#{path}"
 
 # Has clang compile the IR of each module, written to `dir`, into an object file there, as many at
@@ -224,7 +222,7 @@ compile_modules := (request: ModulesRequest, dir: String, prefix: String) ->
   # build would not find otherwise. The link runs in `dir`, and the cache may be named relative to
   # where the compiler runs.
   [
-    path and is_file(path) then real_path_text(path) else "#{name}.o"
+    path and is_file(path) then real_path(path) else "#{name}.o"
     for (name, path) in names.zip(cached)
   ]
 

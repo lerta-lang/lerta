@@ -139,6 +139,20 @@ int lerta_os_stat(const char *path, LertaFileStatus *status) {
   return 1;
 }
 
+char *lerta_os_current_dir(void) {
+  size_t size = 256;
+  char *buffer = lerta_checked_malloc(size);
+  int error;
+  // A buffer too small for it is given the size it needs, its terminating NUL included.
+  while ((error = uv_cwd(buffer, &size)) == UV_ENOBUFS) {
+    free(buffer);
+    buffer = lerta_checked_malloc(size);
+  }
+  if (error == 0) return buffer;
+  free(buffer);
+  return NULL;
+}
+
 char *lerta_os_real_path(const char *path) {
   uv_fs_t request;
   bool resolved = uv_fs_realpath(NULL, &request, path, NULL) == 0;
