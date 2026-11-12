@@ -14,6 +14,7 @@ import is_file, read_text, write_file from 'std:io'
 import ArgsError, decode_args, usage, wants_help from 'std:args'
 import members from 'std:enums'
 import argv, cpu_count, env, exit, program from 'std:process'
+import suite as bootstrap_suite from './bootstrap'
 import suite as run_suite from './run'
 import suite as cli_suite from './cli'
 import suite as format_suite from './format'
@@ -25,7 +26,9 @@ import suite as self_suite from './self'
 # LERTA_TEST_FAILED_FILE names another file, for the self checks (see self.lerta).
 FAILED_FILE := env('LERTA_TEST_FAILED_FILE') ? "#{root_dir}/build/test-failed.txt"
 
+# The bootstrap first, as the longest check, so that no run ends waiting on it.
 enum Suite
+  bootstrap
   run
   cli
   format
@@ -133,6 +136,7 @@ run_suites := (suites: Suite[], target: String?) ->
     try
       checks :=
         case suite
+          when bootstrap then bootstrap_suite()
           when run then await run_suite(target_of(target))
           when cli then await cli_suite()
           when format then format_suite()

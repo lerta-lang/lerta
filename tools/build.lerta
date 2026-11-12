@@ -10,8 +10,8 @@ import all as all_of from 'std:async'
 import is_dir, remove_tree, stat from 'std:io'
 import argv, cpu_count, exit from 'std:process'
 import
-  bootstrap_for, BUILD_TOOL, HARNESS_PROGRAM, HOST_COMPILER, make_compiler, make_harness,
-  make_host_compiler, make_seed, make_stage2, test_bootstrap
+  bootstrap_for, HARNESS_PROGRAM, HOST_COMPILER, make_compiler, make_harness, make_host_compiler,
+  make_seed, make_stage2, test_bootstrap
 from './build/stages'
 import write_embedded from './build/embed'
 import BuildError, call, captured, shared_batches, step from './build/steps'
@@ -51,9 +51,13 @@ COMMAND_SPEC :=
 
 struct Goal
   target: String?
+  built: Bool
 
+# The harness runs test-bootstrap --built beside checks that run stage2 and bin/lerta, which it
+# must not build again meanwhile.
 GOAL_SPEC :=
   target: { help: 'the target, for all and test-bootstrap; the others but test and seed ignore it' }
+  built: { help: 'for test-bootstrap: build no stage before stage3, and fail if stage2 is stale' }
 
 struct Targets
   targets: String[] = default []
@@ -69,18 +73,13 @@ struct Embed
 
 EMBED_SPEC := { output: { positional: true }, paths: { positional: true, value: 'path' } }
 
-# Every suite runs even if one before it fails. stage2 is built first, as the leak checks run it.
-# Both run under nice, as check does, so that the machine stays usable.
+# stage2 is built first, as the leak checks and the bootstrap, a suite of the harness, run it. Under
+# nice, as check does, so that the machine stays usable.
 test := ->
   await make_host_compiler()
   await make_harness()
   await make_stage2(bootstrap_for(nil))
-  # Together, as the bootstrap only reads stage2 and the compiler's source.
-  harness := call('nice', HARNESS_PROGRAM)
-  bootstrap := call('nice', BUILD_TOOL, 'test-bootstrap')
-  harness_code := await harness
-  bootstrap_code := await bootstrap
-  exit harness_code == 0 and bootstrap_code == 0 then 0 else 1
+  exit await call('nice', HARNESS_PROGRAM)
 
 # The .lerta files that git lists, those not added yet included, but those deleted and not yet
 # from git, are in the style, tests/ too, where `# fmt: skip` and `# fmt: off` keep the code that
@@ -117,13 +116,15 @@ run_program := (source: String, args: String...) ->
 # target given by mistake cannot change it.
 HOST_ONLY := ['test', 'seed']
 
-# The bootstrap of the target that the goal's arguments give, of the host if none.
-goal_bootstrap := (args: String[], name: String) ->
-  { target } := parse_args<Goal>(args, GOAL_SPEC, name)
-  if target != nil and name in HOST_ONLY
+# The goal's arguments, each only where the goal takes it.
+goal_of := (args: String[], name: String) ->
+  goal := parse_args<Goal>(args, GOAL_SPEC, name)
+  if goal.target != nil and name in HOST_ONLY
     hint := name == 'seed' then '' else ': run bin/test --target <target>'
     throw BuildError(message: "make #{name} does not take TARGET#{hint}", code: 2)
-  bootstrap_for target
+  if goal.built and name != 'test-bootstrap'
+    throw BuildError(message: "#{name} does not take --built", code: 2)
+  goal
 
 try
   (command, args) := parse_command<Command>(argv, COMMAND_SPEC)
@@ -131,13 +132,15 @@ try
   name := command.to_string().replace('_', '-')
   # A goal reads its arguments before it does anything, though most ignore the target.
   is_goal := command not in [Command.embed, Command.test_targets, Command.test_target]
-  bootstrap := is_goal then goal_bootstrap(args, name)
+  goal := is_goal then goal_of(args, name)
+  # Of the target that the goal gives, of the host if none.
+  bootstrap := goal then bootstrap_for(goal.target)
   # A member is qualified where a function of its name, which runs it, takes the name.
   case command
     when all then await make_compiler(bootstrap!)
     when 'bin/lerta' then await make_host_compiler()
     when 'bin/test' then await make_harness()
-    when Command.test_bootstrap then await test_bootstrap(bootstrap!)
+    when Command.test_bootstrap then await test_bootstrap(bootstrap!, goal!.built)
     when seed then await make_seed()
     when Command.test then await test()
     when Command.check then await check()

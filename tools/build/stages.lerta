@@ -144,10 +144,16 @@ export make_stage2 := (bootstrap: Bootstrap) ->
 
 # Checks that stage2 and stage3 print the same IR for the compiler, and that minilerta, which
 # bin/lerta builds for the host, as the seed is only ever built there, prints it too.
-export test_bootstrap := (bootstrap: Bootstrap) ->
-  await make_stage2(bootstrap)
+# With `built`, stage2 and what it is built from must be up to date, as nothing before it is built.
+export test_bootstrap := (bootstrap: Bootstrap, built = false) ->
   dir := bootstrap.dir
   stage2 := bootstrap.stage2
+  if not built
+    await make_stage2(bootstrap)
+  else if is_stale(stage2, [HOST_COMPILER])
+    throw BuildError(
+      message: "#{stage2} is missing or older than #{HOST_COMPILER}: make test builds it"
+    )
   run_stage2 := bootstrap.run_stage2
   stage2_ir := "#{dir}/stage2.ll"
   stage3_ir := "#{dir}/stage3.ll"

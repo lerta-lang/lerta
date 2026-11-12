@@ -1,13 +1,16 @@
 # Self checks: the driver, bin/test, run as a program of its own, must report the tests of
 # tests/harness, most of which must fail, each as it should (see run.lerta), and must take its
 # arguments and keep the failed checks as main.lerta says.
-import at_once, Check, CheckFailed, posix_check, run_one, select, SuiteChecks from './lib/report'
+import
+  at_once, Check, CheckFailed, posix_check, run_one, select, Slots, SuiteChecks
+from './lib/report'
 import compare_text, expect_status, lines, reason_unless from './lib/expect'
 import host_target_name from './lib/cli'
 import
   build_runtimes, cache_dir, exit_in_time, OUTPUT_LIMIT, read_text_or_throw, root_dir, shown_text,
   suite_dir
 from './lib/lerta'
+import all from 'std:async'
 import Buffer, list_dir, write_file from 'std:io'
 import platform, run from 'std:process'
 
@@ -193,6 +196,28 @@ thrown_checks :=
   thrown_check(CheckFailed(['x']), ['x'])
   thrown_check(ValueError('y'), ['threw:', '  y'])
 
+# Slots are given no more than there are, and in the order that they were asked for.
+slots_check := Check(name: 'slots are given in the order that they were asked for', run: ->
+  slots := Slots(free: 1)
+  taken: String[]
+  take := (name: String) ->
+    await slots.take()
+    taken.push name
+  await take('first')
+  second := take('second')
+  third := take('third')
+  given_early := taken.length
+  # Both given back before either is awaited, so that slots given in another order fail the check
+  # rather than leave one waiting.
+  slots.give_back()
+  slots.give_back()
+  await all([second, third])
+  [
+    reason_unless(given_early == 1, "#{given_early} slots given while one was held")...
+    compare_text('order', 'first second third', taken.join(' '))...
+  ]
+)
+
 # The problem is the line that the usage follows, after the program's name, as std:args writes it.
 usage_check := (args: String[], problem: String) ->
   Check name: "bin/test #{args.join(' ')} is a usage error", run: ->
@@ -220,7 +245,10 @@ format_case := 'tests/format/eof'
 format_key := "format checks\t#{format_case}"
 
 driver_checks :=
-  usage_check(['nothing'], "<run|cli|format|runtime|leaks|self> takes a Suite, not 'nothing'")
+  usage_check(
+    ['nothing']
+    "<bootstrap|run|cli|format|runtime|leaks|self> takes a Suite, not 'nothing'"
+  )
   usage_check(['-k'], '-k needs a value')
   help_check(['--help'])
   help_check(['-h'])
@@ -250,6 +278,13 @@ driver_checks :=
     ran := await run_driver(['format', '-k', format_case, '--list'], await new_failed_file([]))
     [
       compare_text('stdout', "format checks:\n  #{format_case}\n", ran.stdout)...
+      expect_status(0, ran.status)...
+    ]
+  )
+  Check(name: 'bin/test --list names the check of the bootstrap suite', run: ->
+    ran := await run_driver(['bootstrap', '--list'], await new_failed_file([]))
+    [
+      compare_text('stdout', "bootstrap:\n  the compiler builds itself\n", ran.stdout)...
       expect_status(0, ran.status)...
     ]
   )
@@ -386,7 +421,14 @@ export suite := ->
   title := 'self checks'
   checks := select(
     title
-    [harness_check, harness_listed_check, thrown_checks..., driver_checks..., leak_checks...]
+    [
+      harness_check
+      harness_listed_check
+      thrown_checks...
+      slots_check
+      driver_checks...
+      leak_checks...
+    ]
   ) ? return nil
   # The drivers that the checks run share the cache (see cache_dir), filled first, as each would
   # compile the runtimes otherwise.

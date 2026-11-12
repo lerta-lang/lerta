@@ -1,7 +1,7 @@
 # Runtime checks that no Lerta program can trigger: a C program of test/runtime stands in for the
 # generated code and is linked with the runtime as `build` links it.
 import build_flags from '../compiler/clang'
-import Check, posix_check, select, SuiteChecks from './lib/report'
+import Check, in_slot, posix_check, select, SuiteChecks from './lib/report'
 import compare_text, expect_status, lines, reason_unless from './lib/expect'
 import
   exit_in_time, host_build, OUTPUT_LIMIT, root_dir, SetupError, shown_text, suite_dir
@@ -61,17 +61,15 @@ set_up_runtime := ->
   { libuv_sources, libuv_flags, libraries } := build
   objects_dir := "#{work_dir}/libuv"
   make_dir objects_dir
-  await clang(
-    [
-      '-c'
-      libuv_flags...
-      "-I#{libuv_dir}/include"
-      "-I#{libuv_dir}/src"
-      '-w'
-      ("#{libuv_dir}/#{source}" for source in libuv_sources)...
-    ]
-    objects_dir
-  )
+  libuv_args := [
+    '-c'
+    libuv_flags...
+    "-I#{libuv_dir}/include"
+    "-I#{libuv_dir}/src"
+    '-w'
+    ("#{libuv_dir}/#{source}" for source in libuv_sources)...
+  ]
+  await in_slot(-> clang(libuv_args, objects_dir))
   c_files := ["#{runtime_dir}/#{file}" for file in runtime_c_names(list_dir(runtime_dir), build)]
   libuv_objects := ["#{objects_dir}/#{file}" for file in list_dir(objects_dir)]
   runtime = { c_files, libuv_objects, libraries }

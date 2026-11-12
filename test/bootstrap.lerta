@@ -1,0 +1,26 @@
+# The bootstrap: build/build test-bootstrap checks that the compiler builds itself (see
+# docs/internals/architecture.md#bootstrap). It is one check, which runs the build tool, so that it
+# shares the slots of the checks rather than runs beside them all; with --built, as the other
+# suites run bin/lerta and stage2 meanwhile, which it must not build again.
+import select, SuiteChecks from './lib/report'
+import exit_in_time, host_executable_suffix, OUTPUT_LIMIT, root_dir, shown_text from './lib/lerta'
+import Buffer from 'std:io'
+import run from 'std:process'
+
+BUILD_TOOL := "#{root_dir}/build/build#{host_executable_suffix}"
+
+# Far beyond what the bootstrap takes, which builds the compiler twice.
+TIMEOUT_SECONDS := 1800.0
+
+# The steps that it printed, and why it failed, if it did.
+bootstrap := (): Promise<String[]?> ->
+  output := Buffer(limit: OUTPUT_LIMIT)
+  args := ['test-bootstrap', '--built']
+  ran := run(BUILD_TOOL, args..., cwd: root_dir, stdout: output, stderr: STDOUT)
+  exit := await exit_in_time(BUILD_TOOL, ran, TIMEOUT_SECONDS)
+  exit.code == 0 then [] else [shown_text(output.binary)]
+
+export suite := ->
+  title := 'bootstrap'
+  checks := select(title, [{ name: 'the compiler builds itself', run: bootstrap }]) ? return nil
+  SuiteChecks title, checks

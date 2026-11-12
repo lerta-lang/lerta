@@ -103,7 +103,7 @@ make clean
 The tests run on Linux, macOS and Windows. A check of what only POSIX systems have, such as signals, does not run on Windows; nor do the tests of a `posix/` directory.
 
 ```
-make test              # builds bin/lerta, then runs the tests and test-bootstrap, on the host only
+make test              # builds bin/lerta, then runs the tests, the bootstrap's among them, on the host only
 make test-targets      # the tests of the targets that test-targets.llit names, each where it says (see below)
 make test-target TARGET=<target>  # the tests of that target here, as test-targets runs them
 make check             # the code in the style (lerta fmt)
@@ -129,7 +129,7 @@ make check             # the code in the style (lerta fmt)
 #### The driver
 
 - `test/main.lerta`, the driver, is built by minilerta into `bin/test`, as `tools/build.lerta` is. Why: a change to `compiler/` cannot break the harness that tests it.
-- `make test` builds and runs it. It runs all the suites, or those named, their checks as one list: several at once, each result shown as it finishes, and each suite's summary at the end.
+- `make test` builds and runs it. It runs all the suites, or those named, their checks as one list: as many at once as `-j` says, each result shown as it finishes, and each suite's summary at the end. The processes that the suites run to get ready, such as the builds of the runtimes, count toward `-j` too.
 - Its options are listed at the top of `test/main.lerta`: `-k <text>` (checks whose names hold the text), `--failed` (those that failed last time), `--target <target>` (the run tests built for another target), and more.
 - A failed check runs once more, alone, after the others, and passes as flaky if it passes then. `--no-retry` turns that off.
 
@@ -143,6 +143,7 @@ bin/test --failed           # the checks that failed when they last ran
 
 | Suite | File | Checks |
 |---|---|---|
+| `bootstrap` | `test/bootstrap.lerta` | That the compiler builds itself, as `make test-bootstrap` checks, but with stage2 and `bin/lerta` as they are: it fails when stage2 is older than `bin/lerta`; `make test` builds both first |
 | `run` | `test/run.lerta` | The run tests |
 | `cli` | `test/cli.lerta`, checks in `test/cli/*.lerta` | The command line |
 | `format` | `test/format.lerta` | The formatter; its cases are the exact specification of the style |

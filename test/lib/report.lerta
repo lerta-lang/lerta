@@ -1,7 +1,7 @@
 # Selects the checks of each suite, runs those of every suite as one list, several at once, and
 # prints each result in order as soon as it and those before it have finished; and keeps which
 # checks ran and which failed, for the driver (see main).
-import all from 'std:async'
+import all, Signal from 'std:async'
 import platform from 'std:process'
 import monotonic from 'std:time'
 
@@ -41,11 +41,45 @@ export struct Options
 # Set by the driver before any suite selects its checks.
 var given_options: Options?
 
-export set_options := (given: Options) -> given_options = given
+export set_options := (given: Options) ->
+  given_options = given
+  slots = Slots(free: given.jobs)
 
 options := -> given_options!
 
 export jobs := -> options().jobs
+
+# As many slots as checks run at once, each taken by a check as it runs, or by a process that a
+# suite runs to get ready, so that those processes do not run beside as many checks; given in the
+# order they were asked for, so that the checks start in their order.
+export class Slots
+  var free: Int
+  waiting: Signal[] = []
+
+  take := ->
+    if @free > 0
+      @free -= 1
+      return
+    signal := Signal()
+    @waiting.push signal
+    await signal.promise()
+
+  give_back := ->
+    if @waiting.is_empty()
+      @free += 1
+    else
+      @waiting.remove_at(0).resolve()
+
+var slots = Slots(free: 1)
+
+# Runs the task in a slot. A task that holds a slot, as a check, must not run another in one, which
+# could wait for its own slot.
+export in_slot := <T>(task: () -> Promise<T>) ->
+  await slots.take()
+  try
+    await task()
+  finally
+    slots.give_back()
 
 # The keys of the checks that the suites have, selected or not, of those that they selected, of
 # those that ran, those that turned out not to apply too, and of those that failed.
@@ -87,8 +121,18 @@ milliseconds := -> monotonic() * 1000.0
 # The code points of the text, which pad_end counts.
 width := (text: String) -> text.count()
 
+# Runs the check alone, as the retry does; its wait is not counted in its time.
 export run_one := (check: Check) ->
   await wait() if wait := check.wait
+  await run_started(check)
+
+# The check, run once what it waits for has finished: in a slot, which it would hold idle while it
+# waits.
+run_in_slot := (check: Check) ->
+  await wait() if wait := check.wait
+  await in_slot(-> run_started(check))
+
+run_started := (check: Check) ->
   started := milliseconds()
   reasons :=
     try
@@ -183,7 +227,7 @@ class ChecksRun
       tally.setup_error = tally.setup_error ? error.message
     return Result(reasons: nil, duration: 0.0) if tally.setup_error
     tally.started = tally.started ? milliseconds()
-    result := await run_one(entry.check)
+    result := await run_in_slot(entry.check)
     tally.finished = max(tally.finished, milliseconds())
     result
 
