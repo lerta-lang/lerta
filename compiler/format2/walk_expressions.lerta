@@ -39,7 +39,7 @@ extend Walker
     @shapes.push shape
 
   value_kind := (after: Int, node: Expression, in_block: Bool): ValueKind? ->
-    return BELOW_COMMENT if after in @ending_comments
+    return BELOW_COMMENT if @comment_follows(after)
     return nil if @in_brackets or not in_block
     case node
       when Case, Try then BRANCH
@@ -485,9 +485,11 @@ extend Walker
 
   map := (node: MapLiteral, before: CodeGap) ->
     { entries } := node
+    # A value in a block goes on the next line where it does not fit on its own, as after `=`.
+    in_block := is_written_in_block(node)
     walk := (i: Int, gap: CodeGap) ->
       @expression entries[i].key, gap
-      @value @take(':', NONE), entries[i].value, false
+      @value @take(':', NONE), entries[i].value, in_block
     items := ListItems
       walk
       count: entries.length
@@ -498,13 +500,14 @@ extend Walker
   record := (node: RecordLiteral, before: CodeGap) ->
     { spread, fields } := node
     spread_count := spread then 1 else 0
+    in_block := is_written_in_block(node)
     walk := (i: Int, gap: CodeGap) ->
       if item := i == 0 then spread
         @element item, gap
       else
         field := fields[i - spread_count]
         @take IDENTIFIER, gap
-        @value @take(':', NONE), field.value, false if @at_kind(':')
+        @value @take(':', NONE), field.value, in_block if @at_kind(':')
     items := ListItems
       walk
       count: spread_count + fields.length

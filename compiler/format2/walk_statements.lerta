@@ -1,18 +1,19 @@
 # The walk of statements and blocks (see walk.lerta).
 import
   Assignment, Binding, Call, Case, CaseArm, Condition, Declaration, EnumDeclaration, Extend, Extern,
-  For, If, Import, ImportName, InterfaceDeclaration, Intrinsic, MemberDeclaration, Pass, Position,
-  Statement, StringLiteral, Try, TypeAlias, TypeDeclaration, TypeParameter, UnaryOperation, While
+  For, FunctionTypeName, If, Import, ImportName, InterfaceDeclaration, Intrinsic, MemberDeclaration,
+  Pass, Position, Statement, StringLiteral, Try, TypeAlias, TypeDeclaration, TypeParameter,
+  UnaryOperation, UnionTypeName, While
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import BRANCHES, StyleRule from '../format/rules'
 import
-  is_block_call, is_destructuring_holder, is_inline, is_taken_apart, is_written_as_type,
-  is_written_postfix, takes_postfix
+  is_block_call, is_destructuring_holder, is_inline, is_taken_apart,
+  is_written_as_type, is_written_postfix, takes_postfix
 from './forms'
 import
   ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, CodeGap, ImportShape, LineStart, ListShape,
-  PostfixShape, StatementShape
+  PostfixShape, StatementShape, ValueKind, ValueShape
 from './shapes'
 import NONE, ONE, spelling_of, unhandled, Unhandled, Walker from './walk'
 import './walk_expressions'
@@ -316,8 +317,20 @@ extend Walker
   type_alias := (node: TypeAlias, before: CodeGap) ->
     @declaration_head node.exported, IDENTIFIER, before
     @take IDENTIFIER, ONE
-    @take '=', ONE
-    @type node.type, ONE
+    # The type, as a value, on the line of `=` if it fits there and on the next otherwise; but the
+    # next line holds only union members, which a function type, or a union in parentheses, is not.
+    after := @take('=', ONE)
+    { type } := node
+    grouped := type is FunctionTypeName or (type is UnionTypeName and type.optional)
+    return @type(type, ONE) if grouped
+    kind: ValueKind = @comment_follows(after) then BELOW_COMMENT else OTHER
+    first := @at
+    outer := @shapes
+    @shapes = []
+    @type type, ONE
+    shape := ValueShape(first, kind, last: @at - 1, shapes: @shapes)
+    @shapes = outer
+    @shapes.push shape
 
   # `extern`, its symbol, `as` and its name if it has one, and its type.
   extern_declaration := (node: Extern, before: CodeGap) ->
