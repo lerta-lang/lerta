@@ -70,13 +70,6 @@ FORCE:
 build/seed.ll: seed/minilerta.ll build/host_llvm.sed
 	sed -f build/host_llvm.sed seed/minilerta.ll > $@
 
-# What minilerta prints for the source $(1), into the IR file $(2).
-define minilerta_ir
-build/minilerta $(1) > $(2).unfixed || { rm -f $(2).unfixed; exit 1; }
-sed -f build/host_llvm.sed $(2).unfixed > $(2)
-rm $(2).unfixed
-endef
-
 # Links the IR $(1) into $(2) with the debug runtime, as the compiler's own unoptimized build does:
 # clang compiles the IR far faster without optimization than the program loses running unoptimized,
 # and each such program runs little.
@@ -93,7 +86,9 @@ build/libuv/built: $(LIBUV)
 	touch $@
 
 build/build.ll: build/minilerta$(HOST_EXE) build/host_llvm.sed $(BUILD_TOOL_SOURCES)
-	$(call minilerta_ir,tools/build.lerta,$@)
+	build/minilerta tools/build.lerta > $@.unfixed || { rm -f $@.unfixed; exit 1; }
+	sed -f build/host_llvm.sed $@.unfixed > $@
+	rm $@.unfixed
 
 build/build$(HOST_EXE): build/build.ll $(RUNTIME) build/libuv/built
 	$(call link_debug,$<,$@)
