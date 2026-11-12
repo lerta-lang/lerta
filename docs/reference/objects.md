@@ -63,7 +63,8 @@ The members of a type, one per line, are declared as locals are (see [declaratio
   - Fields that are not arguments are computed again.
   - For a class, it constructs a new object, which shares what the fields hold.
 - **Order.** The arguments given are assigned first. Then the initializers, and the defaults of the arguments left out, run in declaration order; each sees the arguments and the fields before it. Then `init` runs.
-- A field with an initializer is not an argument, unless it is marked `default`, so that what it computes cannot be overridden from outside.
+- A field with an initializer is not an argument, unless it is marked `default`, so that what it computes cannot be overridden from outside. Giving it is an error that suggests `default`.
+- A field is computed once. One of a class whose initializer reads a `var` field keeps the value that field had then, which a warning tells, suggesting a method, `double := -> @count * 2`, that reads it each time. Not an initializer of a `var` field or a default, which only start from it, nor a function literal in an initializer, which reads it when called.
 - Where a struct is expected, `{ x: 1, y: 2 }` constructs it too (see [anonymous structs](types.md#anonymous-structs)).
 
 #### A construction that throws

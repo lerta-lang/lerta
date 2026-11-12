@@ -181,6 +181,10 @@ An Iter or a Promise that a branch of an `if` gives is reported too where the `i
   - a `try` whose block and catches all end so, or whose `finally` ends with a `throw`.
 - The warning is at the first statement after it. A statement after that one is warned about again only if it follows another that never ends.
 
+## Stale fields
+
+A computed field of a class whose initializer reads a `var` field produces a warning, `'double' is computed once, from the value 'count' has then`, suggesting a method (see [construction](objects.md#construction)).
+
 ## Cycles
 
 A function literal that captures `@`, stored where `@` holds it, produces a warning: the object and the literal then hold each other, and neither is ever freed (see [weak references](objects.md#weak-references)). The warning suggests a [weak function literal](functions.md#weak-function-literals), `weak -> ...`, which captures `@` weakly.
