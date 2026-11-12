@@ -32,7 +32,7 @@ new_failed_file := (keys: String[]) ->
 
 # Runs the driver with the arguments, the run tests of tests/harness and the file of failed checks,
 # two checks at once, as the checks run together, and with no retry unless `retry`, so that each
-# test runs once and the failures are reported in order.
+# test runs once.
 run_driver := (
   args: String[]
   failed_file: String
@@ -144,6 +144,15 @@ reported_results := (stdout: String) ->
       in_result = false
   [result_line(result.name, result.reasons) for result in results]
 
+# The driver shows the results, and keeps the failed checks, as the checks finish, in an order that
+# may change from run to run, so both are compared sorted.
+expect_results := (expected: String[], stdout: String) ->
+  compare_text 'results', lines(expected.sorted()), lines(reported_results(stdout).sorted())
+
+expect_failed := (failed_file: String, expected_keys: String[]) ->
+  kept := (await read_text_or_throw(failed_file)).lines()
+  compare_text 'failed checks', lines(expected_keys.sorted()), lines(kept.sorted())
+
 harness_check := Check
   name: 'bin/test reports each test of tests/harness as it should, and keeps those that failed'
   run: ->
@@ -153,14 +162,10 @@ harness_check := Check
     summary := "run tests: #{harness_results.length - failed_names.length} passed, " +
       "#{failed_names.length} failed in "
     [
-      compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
+      expect_results(expected, ran.stdout)...
       reason_unless(summary in ran.stdout, "no summary `#{summary}...`")...
       expect_status(1, ran.status)...
-      compare_text(
-        'failed checks'
-        lines([run_key(name) for name in failed_names])
-        await read_text_or_throw(failed_file)
-      )...
+      await expect_failed(failed_file, [run_key(name) for name in failed_names])...
     ]
 
 # Each source of tests/harness is in harness_results, so that a test added there is checked.
@@ -256,20 +261,14 @@ driver_checks :=
       for result in harness_results
       when result.reasons.length > 0
     ]
-    [
-      compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
-      expect_status(1, ran.status)...
-    ]
+    [expect_results(expected, ran.stdout)..., expect_status(1, ran.status)...]
   )
   Check(name: "bin/test --target takes the host's short name for the run tests", run: ->
     target := host_target_name ? return nil
     name := 'tests/harness/passes'
     ran := await run_driver(['--target', target, '-k', name], await new_failed_file([]))
     expected := [result_line(name, []), result_line("#{name} (-O)", [])]
-    [
-      compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
-      expect_status(0, ran.status)...
-    ]
+    [expect_results(expected, ran.stdout)..., expect_status(0, ran.status)...]
   )
   Check(
     name: 'bin/test --failed runs the failed checks, and drops those that pass or that a suite ' +
@@ -280,9 +279,9 @@ driver_checks :=
         await new_failed_file([format_key, "format checks\ta check that is gone", kept])
       ran := await run_driver(['--failed'], failed_file)
       [
-        compare_text('results', "ok #{format_case}\n", lines(reported_results(ran.stdout)))...
+        expect_results(["ok #{format_case}"], ran.stdout)...
         expect_status(0, ran.status)...
-        compare_text('failed checks', lines([kept]), await read_text_or_throw(failed_file))...
+        await expect_failed(failed_file, [kept])...
       ]
   )
   Check(name: 'bin/test --failed -q keeps a check that fails again, and prints its failure', run: ->
@@ -291,13 +290,9 @@ driver_checks :=
     ran := await run_driver(['--failed', '-q'], failed_file)
     expected := result_line(name, ['stdout differs from line 1'])
     [
-      compare_text('results', lines([expected]), lines(reported_results(ran.stdout)))...
+      expect_results([expected], ran.stdout)...
       expect_status(1, ran.status)...
-      compare_text(
-        'failed checks'
-        lines([run_key(name)])
-        await read_text_or_throw(failed_file)
-      )...
+      await expect_failed(failed_file, [run_key(name)])...
     ]
   )
   Check(
@@ -309,18 +304,18 @@ driver_checks :=
       # With -q, the -O check, which passed at once, is not shown.
       expected := [result_line(name, [])]
       [
-        compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
+        expect_results(expected, ran.stdout)...
         reason_unless(ran.stdout.contains("FAIL? #{name} "), "no `FAIL? #{name}`")...
         reason_unless(
           'run tests: 2 passed, 0 failed, 1 flaky in ' in ran.stdout
           'no summary with 1 flaky'
         )...
         expect_status(0, ran.status)...
-        compare_text('failed checks', '', await read_text_or_throw(failed_file))...
+        await expect_failed(failed_file, [])...
       ]
   )
   Check(
-    name: 'bin/test runs the checks of two suites, and reports them in order with a summary each'
+    name: 'bin/test runs the checks of two suites, and reports them with a summary each'
     run: ->
       name := 'tests/harness/wrong_stdout'
       failed_file := await new_failed_file([])
@@ -331,18 +326,14 @@ driver_checks :=
         result_line("#{name} (-O)", reasons)
         result_line("#{name}.lerta", [])
       [
-        compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
+        expect_results(expected, ran.stdout)...
         reason_unless(
           'run tests: 0 passed, 2 failed in ' in ran.stdout
           'no summary of run tests'
         )...
         reason_unless('leak checks: 1 passed, 0 failed in ' in ran.stdout, 'no summary of leaks')...
         expect_status(1, ran.status)...
-        compare_text(
-          'failed checks'
-          lines([run_key(name), run_key("#{name} (-O)")])
-          await read_text_or_throw(failed_file)
-        )...
+        await expect_failed(failed_file, [run_key(name), run_key("#{name} (-O)")])...
       ]
   )
   Check(name: 'bin/test keeps a check that fails when run once more', run: ->
@@ -352,18 +343,14 @@ driver_checks :=
     reasons := ['stdout differs from line 1']
     expected := [result_line(name, reasons), result_line("#{name} (-O)", reasons)]
     [
-      compare_text('results', lines(expected), lines(reported_results(ran.stdout)))...
+      expect_results(expected, ran.stdout)...
       reason_unless(ran.stdout.contains("FAIL? #{name} "), "no `FAIL? #{name}`")...
       reason_unless(
         'running the checks that failed once more, one at a time: 2' in ran.stdout
         'no retry of the 2 that failed'
       )...
       expect_status(1, ran.status)...
-      compare_text(
-        'failed checks'
-        lines([run_key(name), run_key("#{name} (-O)")])
-        await read_text_or_throw(failed_file)
-      )...
+      await expect_failed(failed_file, [run_key(name), run_key("#{name} (-O)")])...
     ]
   )
   Check(name: 'bin/test --failed says so when no check failed', run: ->

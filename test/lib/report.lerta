@@ -131,9 +131,9 @@ class Tally
   var setup_error: String? = nil
   var setup_error_shown = false
 
-# The run of the checks of every suite as one list: several at once, each result shown in order as
-# soon as it and those before it have finished, then, with retry, those that failed, once more, one
-# at a time; so the checks of a suite run while the last ones of the suite before it still do.
+# The run of the checks of every suite as one list: several at once, each result shown as soon as it
+# has finished, then, with retry, those that failed, once more, one at a time; so the checks of a
+# suite run while the last ones of the suite before it still do.
 class ChecksRun
   suites: SuiteChecks[]
   entries: Entry[]
@@ -141,8 +141,6 @@ class ChecksRun
   name_width: Int
   tallies: Tally[]
   retried: Entry[] = []
-  var results: Result?[] = []
-  var next_to_print = 0
   var next_to_start = 0
 
   key_of := (entry: Entry) -> key(@suites[entry.suite].title, entry.check.name)
@@ -189,20 +187,14 @@ class ChecksRun
     tally.finished = max(tally.finished, milliseconds())
     result
 
-  # Runs the checks not started yet, one after another, and reports those finished in order.
+  # Runs the checks not started yet, one after another, and reports each as it finishes.
   work := ->
     while @next_to_start < @entries.length
-      index := @next_to_start
+      entry := @entries[@next_to_start]
       @next_to_start += 1
-      @results[index] = await @run_entry(@entries[index])
-      while @next_to_print < @entries.length
-        result := @results[@next_to_print] ? break
-        @report @entries[@next_to_print], result
-        @next_to_print += 1
+      @report entry, await @run_entry(entry)
 
-  run_all := ->
-    @results = [nil for _ in @entries]
-    await all([@work() for _ in 0..jobs()])
+  run_all := -> await all([@work() for _ in 0..jobs()])
 
   retry := ->
     unless @retried.is_empty()
@@ -236,7 +228,7 @@ class ChecksRun
       flaky := tally.flaky_count > 0 then ", #{tally.flaky_count} flaky" else ''
       passed := tally.run_count - failed.length
       print "#{suite.title}: #{passed} passed, #{failed.length} failed#{flaky} in #{total}"
-      print "  FAIL #{name}" for name in failed
+      print "  FAIL #{name}" for name in failed.sorted()
       print ''
     failed_suites
 
