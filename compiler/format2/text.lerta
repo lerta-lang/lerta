@@ -4,7 +4,7 @@ import scan, Scanner from 'std:scanner'
 import is_exported, Position, Statement from '../ast'
 import common_indentation, is_blank from '../lexer/string_literal'
 import Comment, Lexed, Token, TokenKind from '../lexer/tokens'
-import is_destructuring_part from './forms'
+import is_taken_apart, is_tuple_holder from './forms'
 
 export struct TextToken
   text: String
@@ -39,15 +39,34 @@ export struct SourceTokens
 
   # Where the first token of the statement is, which is `export` for an exported one.
   first_position := (statement: Statement) ->
-    at := @starts[statement.position] ? return statement.position
-    @is_exported_at(statement, at) then @code[at - 1].position() else statement.position
+    at := @first_index(statement) ? return statement.position
+    @code[at].position()
 
   # The index of the code token that starts the statement, if it starts a line.
   statement_start := (statement: Statement) ->
-    return nil if is_destructuring_part(statement)
-    at := @starts[statement.position] ? return nil
-    start := @is_exported_at(statement, at) then at - 1 else at
+    return nil if is_taken_apart(statement)
+    start := @first_index(statement) ? return nil
     start in @line_starts then start
+
+  # The index of the first code token of the statement: `export` for an exported one.
+  first_index := (statement: Statement) ->
+    at := @starts[statement.position] ? return nil
+    return at - 1 if @is_exported_at(statement, at)
+    is_tuple_holder(statement) then @tuple_start(at) else at
+
+  # The first code token of `(a, b) := value`, or of `var (a, b) = value`, whose value is at
+  # `value`: the holder of a tuple is where its value is.
+  tuple_start := (value: Int) ->
+    var open = value - 1
+    open -= 1 while @code[open].kind != ':=' and @code[open].kind != '='
+    var depth = 0
+    while true
+      open -= 1
+      kind := @code[open].kind
+      depth += 1 if kind == ')'
+      depth -= 1 if kind == '('
+      break if depth == 0
+    open > 0 and @code[open - 1].kind == 'var' then open - 1 else open
 
   is_exported_at := (statement: Statement, at: Int) ->
     is_exported(statement) and at > 0 and @code[at - 1].kind == 'export'

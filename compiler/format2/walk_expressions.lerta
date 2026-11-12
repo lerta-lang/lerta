@@ -177,14 +177,21 @@ extend Walker
       when Member then @member(node, before)
       when Call then @call(node, before)
       when Index
-        unhandled() if node.default_value
         @chain node.object, before
-        index := node.index
+        { index, default_value } := node
+        # `xs[i, default: value]`: the index, then its default.
+        walk := (i: Int, gap: CodeGap) ->
+          if i == 0
+            @expression index, gap
+          else
+            @take_spelled 'default', gap
+            @value @take(':', NONE), default_value!, false
+        last := default_value ? index
         items := ListItems
-          count: 1
-          walk: (_, gap) -> @expression(index, gap)
+          walk
+          count: default_value then 2 else 1
           simple: (_) -> false
-          function_last: index is FunctionLiteral
+          function_last: last is FunctionLiteral
         @bracketed '[', NONE, ']', NONE, items
       when Unwrap
         @chain node.operand, before
@@ -275,15 +282,22 @@ extend Walker
   # source has them, as the tree keeps none for a part that is `_`; and the name of its index.
   loop_names := (variable: Identifier, index: Identifier?) ->
     if variable.name.starts_with('_tuple.')
-      @take '(', ONE
-      count := 1 + [i for i in @at..@closing_bracket(@at - 1) when @code[i].kind == ','].length
-      @list count, NONE, (_, gap) -> @take(IDENTIFIER, gap), false
-      @take ')', NONE
+      @names ONE
     else
       @take IDENTIFIER, ONE
     if index
       @take ',', NONE
       @take IDENTIFIER, ONE
+
+  # The names that a destructuring takes a value apart into, as the source has them, as the tree
+  # keeps none for a part that is `_`: `(a, b)` for a tuple, or `{ a, b }` for fields.
+  names := (before: CodeGap) ->
+    braced := @at_kind('{')
+    inside := braced then INSIDE else NONE
+    open := @take(braced then '{' else '(', before)
+    count := 1 + [i for i in open..@closing_bracket(open) when @code[i].kind == ','].length
+    @list count, inside, (_, gap) -> @take(IDENTIFIER, gap), false
+    @take braced then '}' else ')', inside
 
   # `x as T?` or `x as T!`, or the `x as T` of `x as T ? y`, whose `?`, after a space, is the
   # fallback's.
