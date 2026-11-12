@@ -313,7 +313,9 @@ print shape.area() for shape in shapes
 
 - `struct IndexError: Error` or `class Counter: Source<Int>` names an interface that the type satisfies, checked where the type is declared.
 - Each member of the interface that the type does not declare becomes a const field of the member's type, a constructor argument, before the type's own fields. So `struct IndexError: Error`, without a body, declares a struct with a `message: String`.
-- A method of an extend of the type cannot stand for such a member, which is a field already.
+- But a member of a function type, a method, must be declared, as a method or as a field: one left out is an error where the type is declared, `Square does not declare 'area', a method of Shape`, which suggests a field `area: () -> Int` for a function that the constructor takes.
+  - Why: a method left out would otherwise be a field that the constructor takes, so the error would come only where the type is constructed, as a missing argument.
+- A method of an extend of the type cannot stand for such a member.
 - The interface may name `Self`, as a bound may.
 - The type still satisfies other interfaces by its members alone. Only one interface can be named so far.
 
