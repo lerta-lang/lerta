@@ -146,26 +146,24 @@ extend Walker
     return @postfix_for(node, before) if is_written_postfix(node)
     head := @take('for', before)
     @loop_head node
-    @nested_block node.body, head
-    # One whose item is taken apart has the declarations that do it in its body.
-    @block_form head, node.body
+    body := written_body(node)
+    @nested_block body, head
+    @block_form head, body
 
   # The variables of the loop, and its iterable after `in`.
   loop_head := (node: For) ->
-    @take IDENTIFIER, ONE
-    if node.index
-      @take_spelled 'at', ONE
-      @take IDENTIFIER, ONE
+    @loop_names node.variable, node.index
     @take_spelled 'in', ONE
     @operand node.iterable, ONE
 
   # The `for` in its postfix form; with a guard, `s for x in xs when g`, its body is the `if` of it,
   # as that of `s if g for x in xs` is, which the walk does not handle yet.
   postfix_for := (node: For, before: CodeGap) ->
-    unhandled() if node.body.length != 1
-    guarded := node.body[0] as If?
+    written := written_body(node)
+    unhandled() if written.length != 1
+    guarded := written[0] as If?
     has_guard := guarded != nil and is_written_postfix(guarded)
-    body := has_guard then guarded!.then_body[0] else node.body[0]
+    body := has_guard then guarded!.then_body[0] else written[0]
     @postfix_form body, before, ->
       @take 'for', ONE
       @loop_head node
@@ -503,3 +501,8 @@ extend Walker
       patterns: walked.starts
       breakable: has_subject
       commas: walked.commas
+
+# The body of the loop as written, without the declarations that take its item apart, which have no
+# tokens, as of `for (a, b) in xs`.
+written_body := (node: For) ->
+  [statement for statement in node.body when not (statement is Declaration and statement.of_loop)]

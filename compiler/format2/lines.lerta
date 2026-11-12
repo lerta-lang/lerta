@@ -7,13 +7,14 @@
 # lines_edits.lerta), and the statement laid out once it is applied.
 import Token from '../lexer/tokens'
 import
-  BRANCHES, COMMENTS, LAYOUT, LONG_LISTS, LONG_OPERATIONS, MULTI_LINE_LITERALS, SPACING, StyleRule,
-  TWO_WAY_VALUES, VALUE_LINES
+  BRANCHES, COMMENTS, LAYOUT, LINE_LENGTH, LONG_LISTS, LONG_OPERATIONS, MULTI_LINE_LITERALS,
+  SPACING, StyleRule, TWO_WAY_VALUES, VALUE_LINES
 from '../format/rules'
 import Change, Edit from './edits'
 import
-  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, Closer, CodeGap, ImportShape, LineStart,
-  ListShape, OperationShape, PostfixShape, Shape, Spaces, StatementShape, ValueShape
+  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, Closer, CodeGap, ComprehensionShape,
+  ImportShape, LineStart, ListShape, OperationShape, PostfixShape, Shape, Spaces, StatementShape,
+  ValueShape
 from './shapes'
 import literal_lines, SourceTokens from './text'
 import Tokens from './tokens'
@@ -150,7 +151,8 @@ export class Breaker
       add_shapes statement.shapes for statement in body.block.statements
     for shape in shapes
       case shape
-        when ListShape, OperationShape, ValueShape, CallShape then add_shapes(shape.shapes)
+        when ListShape, OperationShape, ValueShape, CallShape, ComprehensionShape
+          add_shapes shape.shapes
         when ImportShape then add_shapes([shape.names])
         when PostfixShape then add_shapes([shape.body.shapes..., shape.shapes...]) if shape.postfix
         when BodyShape then add_body(shape)
@@ -172,6 +174,9 @@ export class Breaker
           @undecided.add shape.items[0] unless shape.items.is_empty()
           @prepare shape.shapes
         when OperationShape then @prepare(shape.shapes)
+        when ComprehensionShape
+          @undecided.add shape.parts[0]
+          @prepare shape.shapes
         when ValueShape
           case shape.kind
             when BELOW_COMMENT, BRANCH then @gaps[shape.first] = LineStart(depth: 0)
@@ -225,6 +230,7 @@ export class Breaker
         when ArmsShape then @arms(shape)
         when PostfixShape then @postfix(shape)
         when ImportShape then @import_names(shape)
+        when ComprehensionShape then @comprehension(shape)
         else pass
 
   list := (list: ListShape) ->
@@ -303,6 +309,27 @@ export class Breaker
     { items, close } := list
     next := i < items.length - 1 then items[i + 1] else close
     next - 1 > items[i] and @code[next - 1].kind == ',' then next - 2 else next - 1
+
+  # On its line if it fits there; otherwise on a line of its own inside its brackets if it fits
+  # there, and on a line for each part if it does not.
+  comprehension := (shape: ComprehensionShape) ->
+    { open, close, parts } := shape
+    @undecided.remove parts[0]
+    @closes.add close
+    flatten_parts := -> @flatten(part, LINE_LENGTH) for part in parts[1..]
+    if @fits(open, close, @column_of(open), false)
+      @flatten parts[0], LINE_LENGTH
+      flatten_parts()
+      @flatten close, LINE_LENGTH
+    else
+      depth := @line_depth(open) + 1
+      @gaps[parts[0]] = LineStart(depth, rule: LINE_LENGTH)
+      if @fits(parts[0], close - 1, 2 * depth + 1, false, false)
+        flatten_parts()
+      else
+        @gaps[part] = LineStart(depth, rule: LINE_LENGTH) for part in parts[1..]
+      @gaps[close] = LineStart(depth: depth - 1, rule: LINE_LENGTH)
+    @decide shape.shapes
 
   # See ImportShape.
   import_names := (shape: ImportShape) ->

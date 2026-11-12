@@ -1,7 +1,7 @@
 # The walk of lists in brackets, and of the parentheses that group an expression (see walk.lerta).
 import
-  BinaryOperation, Call, Coalesce, Conditional, Expression, FunctionLiteral, Index, Member, Range,
-  TupleLiteral, Unwrap
+  BinaryOperation, Call, Coalesce, Comprehension, Conditional, Expression, FunctionLiteral, Index,
+  Member, Range, TupleLiteral, Unwrap
 from '../ast'
 import CLOSING_BRACKETS, OPENING_BRACKETS, TokenKind from '../lexer/tokens'
 import is_simple from './forms'
@@ -37,6 +37,7 @@ extend Walker
     case node
       when TupleLiteral then @has_comma(open + 1, close)
       when FunctionLiteral then @kind_at(close + 1) == '->' or @kind_at(close + 1) == ':'
+      when Comprehension then @has_kind(open + 1, close, 'for')
       else false
 
   # The index of the bracket that closes the one at `open`.
@@ -50,13 +51,16 @@ extend Walker
     @code.length
 
   # Whether a comma is between `start` and `end`, outside the brackets there.
-  has_comma := (start: Int, end: Int) ->
+  has_comma := (start: Int, end: Int) -> @has_kind(start, end, ',')
+
+  # Whether a token of the kind is between `start` and `end`, outside the brackets there.
+  has_kind := (start: Int, end: Int, wanted: TokenKind) ->
     var depth = 0
     for index in start..end
       kind := @code[index].kind
       depth += 1 if kind in OPENING_BRACKETS
       depth -= 1 if kind in CLOSING_BRACKETS
-      return true if depth == 0 and kind == ','
+      return true if depth == 0 and kind == wanted
     false
 
   element_items := (elements: Expression[]) ->

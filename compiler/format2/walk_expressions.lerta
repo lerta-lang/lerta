@@ -14,7 +14,7 @@ import
   literal_under_members
 from './forms'
 import starts_command from '../format/print_statement'
-import CodeGap, ListShape, OperationShape, ValueKind, ValueShape from './shapes'
+import CodeGap, ComprehensionShape, ListShape, OperationShape, ValueKind, ValueShape from './shapes'
 import INSIDE, NONE, ONE, unhandled, Walker from './walk'
 import ListItems from './walk_lists'
 import './walk_statements'
@@ -197,6 +197,9 @@ extend Walker
         @operand node.fallback, ONE
       when Range then @range(node, before)
       when IsTest then @is_test(node, before, false)
+      when Comprehension
+        unhandled() if node.spread
+        @comprehension node, before
       when Cast then @cast(node, before)
       when If
         unhandled() unless node.nil_safe
@@ -243,6 +246,44 @@ extend Walker
       @take kind, NONE
     else
       @take kind, before
+
+  # `[element for x in xs when guard]`, or the same in parentheses, an Iter (see
+  # ComprehensionShape).
+  comprehension := (node: Comprehension, before: CodeGap) ->
+    lazy := node.lazy != nil
+    open := @take(lazy then '(' else '[', before)
+    outer := @save()
+    @shapes = []
+    @in_brackets = true
+    @on_own_line = false
+    @breaks_operations = true
+    parts := [@at]
+    @expression node.element, NONE
+    parts.push @take('for', ONE)
+    @loop_names node.variable, node.index
+    @take_spelled 'in', ONE
+    @expression node.iterable, ONE
+    if guard := node.guard
+      parts.push @take_spelled('when', ONE)
+      @expression guard, ONE
+    close := @take(lazy then ')' else ']', NONE)
+    shape := ComprehensionShape(open, close, parts, shapes: @shapes)
+    @restore outer
+    @shapes.push shape
+
+  # The variable of a loop, or the names in parentheses that its item is taken apart into, as the
+  # source has them, as the tree keeps none for a part that is `_`; and the name of its index.
+  loop_names := (variable: Identifier, index: Identifier?) ->
+    if variable.name.starts_with('_tuple.')
+      @take '(', ONE
+      count := 1 + [i for i in @at..@closing_bracket(@at - 1) when @code[i].kind == ','].length
+      @list count, NONE, (_, gap) -> @take(IDENTIFIER, gap), false
+      @take ')', NONE
+    else
+      @take IDENTIFIER, ONE
+    if index
+      @take ',', NONE
+      @take IDENTIFIER, ONE
 
   # `x as T?` or `x as T!`, or the `x as T` of `x as T ? y`, whose `?`, after a space, is the
   # fallback's.
@@ -452,11 +493,14 @@ extend Walker
     @literal node, '{', before, '}', items.count == 0 then NONE else INSIDE, items
 
   function := (node: FunctionLiteral, before: CodeGap) ->
-    unhandled() if node.weak
     var open_before = before
     var arrow_before = before
+    if node.weak
+      @take_spelled 'weak', before
+      open_before = ONE
+      arrow_before = ONE
     unless node.type_params.is_empty()
-      @type_parameters node.type_params, before
+      @type_parameters node.type_params, open_before
       open_before = NONE
       arrow_before = ONE
     if @at_kind('(')
