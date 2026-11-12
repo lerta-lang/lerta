@@ -123,6 +123,19 @@ None:
 - Name a part of one that still does not fit (`product := b * c * d`, then `a + product`), by hand: `lerta fmt` reports the line.
   - Why not break it inside the operand: `a +` over `b * c *` and `d` reads as if `a + b * c` came first.
 
+### Long chains
+
+- A chain of two or more members (`items.map(f).to_array()`) goes on one line if it fits, and otherwise each member goes on a [member line](syntax.md#member-lines) of its own, one level deeper than the line where the chain starts. A value that is one breaks on the line of its `:=`, rather than going below it.
+  - Why: a member a line reads as the steps it takes, which a line broken inside the arguments of one of them hides.
+- These stay on one line:
+  - a chain after a literal in a block, whose members go on the line after the block (see [Multi-line literals](#multi-line-literals));
+  - one with `?.`, whose rest is in the `?.`, not after the value so far, as a member line would be;
+  - one that ends with arguments without parentheses, which follow its last member;
+  - one inside brackets, whose lines are items, or in the arguments of a call without parentheses, which go below the call instead;
+  - one in the head of a block, whose lines below are the block, as an operation there does;
+  - one that is an operand, as of `.length + 1`, which no member line can be followed by, or the target of an assignment;
+  - one in parentheses, whose `)` would end its last line.
+
 ### Long lists
 
 A list is parameters, arguments, an index, the items of an array or a map, the names of an import, or the patterns of a `when`.

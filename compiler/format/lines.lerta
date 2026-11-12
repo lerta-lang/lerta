@@ -7,14 +7,14 @@
 # lines_edits.lerta), and the statement laid out once it is applied.
 import Token from '../lexer/tokens'
 import
-  BRANCHES, COMMENTS, LAYOUT, LINE_LENGTH, LONG_LISTS, LONG_OPERATIONS, MULTI_LINE_LITERALS,
-  SPACING, StyleRule, TWO_WAY_VALUES, VALUE_LINES
+  BRANCHES, COMMENTS, LAYOUT, LINE_LENGTH, LONG_CHAINS, LONG_LISTS, LONG_OPERATIONS,
+  MULTI_LINE_LITERALS, SPACING, StyleRule, TWO_WAY_VALUES, VALUE_LINES
 from './rules'
 import Change, Edit from './edits'
 import
-  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, Closer, CodeGap, ComprehensionShape,
-  ImportShape, LineStart, ListShape, OperationShape, PostfixShape, Shape, Spaces, StatementShape,
-  ValueShape
+  ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, ChainShape, Closer, CodeGap,
+  ComprehensionShape, ImportShape, LineStart, ListShape, OperationShape, PostfixShape, Shape,
+  Spaces, StatementShape, ValueKind, ValueShape
 from './shapes'
 import literal_lines, SourceTokens from './text'
 import Tokens from './tokens'
@@ -166,6 +166,7 @@ export class Breaker
             tokens.add arm.start
             add_shapes arm.shapes
             add_body arm.body
+        when ChainShape then pass
     tokens
 
   # Sets the gaps that the shapes break in every form, as blocks do, and notes those that they may
@@ -226,6 +227,7 @@ export class Breaker
           else
             @unbracketed shape
         when OperationShape then @operation(shape)
+        when ChainShape then @chain(shape)
         when ValueShape then @value(shape)
         when CallShape then @call(shape)
         when BodyShape then @body(shape)
@@ -366,6 +368,16 @@ export class Breaker
       @flatten operand, LONG_OPERATIONS for operand in operands
     @decide operation.shapes
 
+  # A chain of members on its line if it fits there, and otherwise one member a line, one level
+  # deeper than its first, from its first `.` on.
+  chain := (chain: ChainShape) ->
+    { first, dots, last } := chain
+    if @fits(first, last, @column_of(first), false)
+      @flatten dot, LONG_CHAINS for dot in dots
+    else
+      depth := @line_depth(first) + 1
+      @gaps[dot] = LineStart(depth, rule: LONG_CHAINS) for dot in dots
+
   value := (value: ValueShape) ->
     { first, last, kind } := value
     @undecided.remove first
@@ -373,7 +385,10 @@ export class Breaker
     below := (rule: StyleRule) -> @gaps[first] = LineStart(depth, rule)
     on_line := -> @fits(first, last, @column_of(first), false)
     on_next_line := -> @fits(first, last, 2 * depth + 1, false)
-    case kind
+    # A member or a call that is no chain of members is laid out as any other value.
+    laid_out: ValueKind =
+      kind == CHAIN and value.shapes.first() is not ChainShape then OTHER else kind
+    case laid_out
       when BELOW_COMMENT then below(COMMENTS)
       when BRANCH then below(BRANCHES)
       when LITERAL_BLOCK
@@ -381,6 +396,12 @@ export class Breaker
           literal := value.shapes[0] as ListShape!
           @decide [literal.shapes..., value.shapes[1..]...]
           return
+      when CHAIN
+        # A chain that does not fit on the line of its value breaks there rather than below it.
+        if on_line() or @starts_on_line(value)
+          @flatten first, VALUE_LINES
+        else
+          below VALUE_LINES
       when OPERATION
         if on_line() or (not on_next_line() and @starts_on_line(value))
           @flatten first, VALUE_LINES
@@ -445,10 +466,14 @@ export class Breaker
     @gaps[close] = LineStart(depth: depth - 1, rule: MULTI_LINE_LITERALS) if members
     false
 
-  # Whether the first operand and operator of the operation that is the value fit on its line.
+  # Whether the first operand and operator of the operation that is the value fit on its line, or
+  # the start of the chain of members up to its first `.`, after which the chain breaks.
   starts_on_line := (value: ValueShape) ->
-    operation := value.shapes.first() as OperationShape ? return false
-    @end_column(operation.operands[0] - 1) - 1 <= WIDTH
+    shape := value.shapes.first()
+    case shape
+      when OperationShape then @end_column(shape.operands[0] - 1) - 1 <= WIDTH
+      when ChainShape then @end_column(shape.dots[0] - 1) <= WIDTH
+      else false
 
   # A call at the start of a statement takes its arguments without parentheses where it can, but on
   # the line of `->`, `then` or `else`, which holds it with them (see Calls without parentheses).

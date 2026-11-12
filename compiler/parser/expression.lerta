@@ -6,7 +6,7 @@ import
   Range, Statement, TupleItem, TypeName, UnaryOperation, Unwrap
 from '../ast'
 import TokenKind from '../lexer/tokens'
-import at_block, parse_block_literal from './block_literal'
+import at_block, parse_block_literal, starts_member from './block_literal'
 import integer_literal, parse_primary from './primary'
 import parse_element, spread_of from './compound'
 import parse_if from './statement'
@@ -68,17 +68,38 @@ export parse_call_value := (tokens: TokenStream): Expression ->
 export parse_continued_value := (tokens: TokenStream) ->
   continue_with_members tokens, parse_call_value(tokens)
 
-# The value with the members that the lines after it take, those that start with `.` or `?.` at
-# the indentation of its first line, so that a member applies to the whole value, however many
-# lines it took.
+# The value with the members that the lines after it take, those that start with `.` or `?.`, so
+# that a member applies to the whole value, however many lines it took: lines one level deeper than
+# its first, or at its indentation, as after a value that ends with a block, which the deeper lines
+# would be part of.
 export continue_with_members := (tokens: TokenStream, value: Expression) ->
   nesting := tokens.nesting
   var continued = value
+  continued = parse_member_block(tokens, continued) if at_member_block(tokens)
   while at_member_line(tokens)
     tokens.deepen()
     tokens.accept NEWLINE
     continued = parse_member_line(tokens, continued)
   tokens.nesting = nesting
+  continued
+
+# An indented block of member lines after a value that does not end with a block.
+at_member_block := (tokens: TokenStream) ->
+  is_block := tokens.peek().kind == NEWLINE and tokens.peek_at(1).kind == INDENT
+  is_block and not tokens.ended_with_block() and starts_member(tokens, 2)
+
+# Its lines, and its end, after which the statement ends as after any block.
+parse_member_block := (tokens: TokenStream, value: Expression) ->
+  tokens.next()
+  tokens.next()
+  var continued = value
+  while true
+    tokens.deepen()
+    continued = parse_member_line(tokens, continued)
+    break if tokens.peek().kind != NEWLINE or not starts_member(tokens, 1)
+    tokens.next()
+  tokens.expect NEWLINE, 'end of line'
+  tokens.expect DEDENT, 'the end of the member lines'
   continued
 
 # After a block, its NEWLINE is consumed already, so the line's first token is next; otherwise it
@@ -87,10 +108,7 @@ at_member_line := (tokens: TokenStream) ->
   after_block := tokens.ended_with_block()
   at_line_end := tokens.peek().kind == NEWLINE
   line_start := after_block then 0 else 1
-  first := tokens.peek_at(line_start).kind
-  dot := tokens.peek_at(line_start + 1)
-  nil_safe_follows := first == '?' and dot.kind == '.' and not dot.spaced
-  (after_block or at_line_end) and (first == '.' or nil_safe_follows)
+  (after_block or at_line_end) and starts_member(tokens, line_start)
 
 # A line's `.` or `?.` follows the space of its indentation, which parse_postfix would not take.
 parse_member_line := (tokens: TokenStream, object: Expression): Expression ->

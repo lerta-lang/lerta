@@ -213,6 +213,10 @@ A callee followed by an indented block gives the block as the call's arguments, 
 A line that starts with `.` or `?.` continues a value with a member, so a method chain may be split across lines.
 
 ```lerta
+names := items
+  .map((x) -> x.name)
+  .to_array()
+
 text :=
   'the first part of a long text'
   'the second part of the same long text'
@@ -220,8 +224,9 @@ text :=
 .join(' ')
 ```
 
-- The value is that of a declaration, an assignment, an item of a [bracketless block](#bracketless-blocks), a statement, or the operand of `return`, `throw` or `yield`. The line has the indentation of the line where the value starts.
-- The member applies to the whole value, however many lines it takes: `a + b` and then `.text` on the next line is `(a + b).text`, as `.join(' ')` above applies to the block.
+- The value is that of a declaration, an assignment, an item of a [bracketless block](#bracketless-blocks), a statement, or the operand of `return`, `throw` or `yield`.
+- The lines are one level deeper than the line where the value starts, as `.map(f)` under `names := items`; or at its indentation, as `.join(' ')` above, which a value that ends with a block takes, whose lines the deeper ones would be.
+- The member applies to the whole value, however many lines it takes: `a + b` and then `.text` on the next line is `(a + b).text`, as `.join(' ')` above applies to the block. So it applies to a statement's: `print items` and then `.length` below it is the length of what `print` gives, not of `items`.
 - The line holds members only. An operator after them, as in `.length + 1`, is an error, and so are arguments without parentheses, as in `.push x`, since the line does not start a statement (see [calls](#calls)).
 - A statement may still go on to an assignment: `p` and then `.x = 1` on the next line assigns to `p.x`.
 - Where several such values start on that line, the line continues the innermost one that ends before it:

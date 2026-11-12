@@ -13,8 +13,16 @@ struct Element
 type Item = NamedValue | MapEntry | Element
 
 # Whether the line ends here and an indented block follows.
+# An indented block after the line, unless its lines are members (see continue_with_members).
 export at_block := (tokens: TokenStream) ->
-  tokens.peek().kind == NEWLINE and tokens.peek_at(1).kind == INDENT
+  is_block := tokens.peek().kind == NEWLINE and tokens.peek_at(1).kind == INDENT
+  is_block and not starts_member(tokens, 2)
+
+# Whether the token at the offset starts a member, `.` or `?.`, as a member line does.
+export starts_member := (tokens: TokenStream, offset: Int) ->
+  first := tokens.peek_at(offset)
+  dot := tokens.peek_at(offset + 1)
+  first.kind == '.' or (first.kind == '?' and dot.kind == '.' and not dot.spaced)
 
 export parse_block_literal := (tokens: TokenStream) ->
   # Diagnostics about the literal point at its first line, after the line end and the indentation.

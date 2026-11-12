@@ -92,11 +92,20 @@ extend Breaker
     return if args.bracketed
     { open, close, items } := args
     last := close - 1
+    # A member line in them would be an item in the parentheses: they take them once the layout has
+    # joined it, in a later round.
+    return if @has_member_line(items[0], last)
     @rewrite CALLS_WITHOUT_PARENTHESES, [
       { from: @tokens.end(open), to: @tokens.start(items[0]), text: '(' }
       @missing_commas(items)...
       { from: @tokens.end(last), to: @tokens.end(last), text: ')' }
     ]
+
+  # Whether a code token from `first` through `last` starts a member line, as `.map(f)` does.
+  has_member_line := (first: Int, last: Int) ->
+    for at in first..=last
+      return true if at in @line_starts and @code[at].kind == '.'
+    false
 
   # The arguments in parentheses without them, where they can go so: `opening` for the `(`, a space
   # before them on the line of the callee, or a line start before them in a block below it.
