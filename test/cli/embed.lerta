@@ -1,9 +1,9 @@
 # `build/build embed` (see tools/build/embed.lerta) writes a module whose embedded_source gives
 # each file exactly, whatever its path and contents hold.
 import Check, posix_check from '../lib/report'
-import compare_output, expect_status from '../lib/expect'
-import compiler, root_dir, host_executable_suffix from '../lib/lerta'
-import succeed, new_cli_dir, run_command from '../lib/cli'
+import compare_output, compare_text, expect_status from '../lib/expect'
+import compiler, read_text_or_throw, root_dir, host_executable_suffix from '../lib/lerta'
+import expect_success, succeed, new_cli_dir, run_command from '../lib/cli'
 import write_file from 'std:io'
 
 # Contents with what a literal escapes or interpolates, and control characters.
@@ -59,7 +59,26 @@ embed_nothing := ->
   ran := await run_command(executable, [], dir)
   [expect_status(0, ran.status)..., compare_output('stdout', b"[]\ntrue\n", ran.stdout)...]
 
+# `lerta license` prints the notices that the compiler carries, each under its path, without the
+# repository's files, which a directory of its own does not hold.
+license_check := ->
+  dir := new_cli_dir('license')
+  printed := await run_command(compiler, ['license'], dir)
+  paths :=
+    'LICENSE-MIT'
+    'LICENSE-APACHE'
+    'third_party/libuv/LICENSE'
+    'third_party/libuv/LICENSE-extra'
+  notices := ["== #{path} ==\n#{await read_text_or_throw("#{root_dir}/#{path}")}" for path in paths]
+  [
+    expect_success('license', printed)...
+    compare_text('stdout', notices.join("\n"), printed.stdout_text())...
+  ]
+
 export checks :=
+  Check(name: 'lerta license prints the notices that the compiler carries', run: ->
+    await license_check()
+  )
   Check(name: 'embed writes a module of no file', run: -> await embed_nothing())
   Check(name: 'embed gives back a file whose path holds a quote', run: ->
     await embed_round_trip('embed-quote', "it's.txt", "\"it's.txt\"")

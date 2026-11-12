@@ -105,16 +105,16 @@ Every build so checks that the seed builds the current source.
 
 ### Embedded files
 
-- The compiler carries `std/*.lerta`, `runtime/*.c` and `runtime/*.h` as string constants of the generated module `build/embedded.lerta`.
+- The compiler carries `std/*.lerta`, `runtime/*.c`, `runtime/*.h`, libuv's sources and the license notices that `LICENSE_PATHS` (`compiler/license.lerta`) lists as string constants of the generated module `build/embedded.lerta`.
 - `build/build` writes the module (`tools/build/embed.lerta`) from the files that it finds in those directories, so no list of them is written by hand.
-- The loader reads a standard module from it, and `build` writes the runtime from it for clang to compile into [the cache](../reference/compiler.md#cache).
+- The loader reads a standard module from it, `build` writes the runtime from it for clang to compile into [the cache](../reference/compiler.md#cache), and [`license`](../reference/compiler.md#license) prints the notices.
 
 ### Seed mode
 
 - The seed is built in seed mode. Its `embedded.lerta` holds neither the files nor their paths.
   - It finds the files of `std/` as the compiler starts, with `list_dir`, and reads them all with `read_file`, which awaits, so that `embedded_source` is the same function in both modes.
   - The paths are relative to the current directory, so minilerta must run from the repository's root, as the Makefile and `build/build` run it.
-  - It holds nothing of the runtime and libuv, which minilerta, printing IR only, does not use.
+  - It holds nothing of the runtime, libuv and the license notices, which minilerta, printing IR only, does not use.
 - So stage1 is built with the working tree's std and runtime, and the seed does not hold them.
 - `make seed` writes such a module beside a copy of `compiler/`, in `build/seed/`, so that the build's own one stays as it is.
 

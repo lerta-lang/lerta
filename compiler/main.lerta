@@ -4,11 +4,13 @@ import stdin, stdout from 'std:io'
 import argv, exit, program from 'std:process'
 import build, build_and_run, BuildRequest from './build'
 import executable_suffix, target_triple from './clang'
+import embedded_source from '../build/embedded'
 import check_program, generate_ir, write_ir from './compile'
 import dump_ast, dump_checked, dump_tokens from './dumps'
 import CompileError from './errors'
 import format_command from './format/command'
 import tokenize from './lexer/tokens'
+import LICENSE_PATHS from './license'
 import lsp_command from './lsp/server'
 import parse from './parser/statement'
 import base_name from 'std:path'
@@ -22,6 +24,7 @@ enum Command
   lsp
   cflags
   clean
+  license
   dump_tokens
   dump_ast
   dump_checked
@@ -34,6 +37,7 @@ COMMAND_SPEC :=
   lsp: { help: 'serve the language server protocol on standard input and output' }
   cflags: { help: 'print the flags that C code of externs is compiled with' }
   clean: { help: 'remove the cache' }
+  license: { help: 'print the license notices that go with the programs built' }
   dump_tokens: { help: 'print the tokens of the source' }
   dump_ast: { help: 'print the syntax tree of the source' }
   dump_checked: { help: 'print the checked program of the source' }
@@ -179,6 +183,11 @@ cflags_command := -> print("-I#{await cached_include_dir()}")
 
 clean_command := -> print("removed #{path}") for path in await clean_cache()
 
+# Each notice under a line that names its file.
+license_command := ->
+  notices := ["== #{path} ==\n#{embedded_source(path)!}" for path in LICENSE_PATHS]
+  await stdout.write(notices.join("\n"))
+
 # The dumps of one module read no module that it imports.
 dump_file_tokens := (path: String) -> dump_tokens(tokenize(await read_entry_source(path), path))
 
@@ -207,6 +216,9 @@ try
     when clean
       no_arguments()
       await clean_command()
+    when license
+      no_arguments()
+      await license_command()
     when Command.dump_tokens then await run_dump(source(), dump_file_tokens)
     when Command.dump_ast then await run_dump(source(), dump_file_ast)
     when Command.dump_checked then await run_dump(source(), dump_program_checked)
