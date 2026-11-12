@@ -4,7 +4,7 @@ import
   Coalesce, Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, FunctionTypeName,
   Identifier, If, Index, IntegerLiteral, Interpolation, IsTest, Jump, MapLiteral, Member, NamedType,
   NamedValue, NilLiteral, Parameter, Range, RecordLiteral, RecordTypeField, RecordTypeName, Return,
-  StringLiteral, This, Throw, Try, TupleLiteral, TupleTypeName, TypeName, UnaryOperation,
+  Statement, StringLiteral, This, Throw, Try, TupleLiteral, TupleTypeName, TypeName, UnaryOperation,
   UnionTypeName, Unwrap, Yield
 from '../ast'
 import TokenKind from '../lexer/tokens'
@@ -91,10 +91,11 @@ extend Walker
     case type
       when NamedType
         @take IDENTIFIER, before
-        unless type.args.is_empty()
-          @take '<', NONE
-          @list type.args.length, NONE, (i, gap) -> @type(type.args[i], gap), false
-          @take '>', NONE
+        # `module.Name`, whose name holds the `.`.
+        for _ in type.name.split('.')[1..]
+          @take '.', NONE
+          @take IDENTIFIER, NONE
+        @type_arguments type.args
       when UnionTypeName
         for member at i in type.members
           @take '|', ONE if i > 0
@@ -534,10 +535,27 @@ extend Walker
       arrow_before = ONE
     if type := node.return_type
       @take ':', NONE
-      @type type, ONE
+      @return_type type, node.body[0]
       arrow_before = ONE
     arrow := @take('->', arrow_before)
     @shapes.push @body(arrow, node.body, FUNCTION_BODIES)
+
+  # The result type of a function literal, before the `->` of its body, whose first statement is
+  # `first`. Parentheses that group all of it, as in `(): (() -> Int) ->`, look like those of a
+  # function type's parameters, as that `->` follows them, so they are told by their `)`, which is
+  # the last token before it; but a tuple type's own are no group.
+  return_type := (type: TypeName, first: Statement) ->
+    arrow := (@starts[first.position] ? unhandled()) - 1
+    var groups = 0
+    var gap = ONE
+    groups_all := -> @at_kind('(') and @closing_bracket(@at) == arrow - 1
+    own_tuple := -> type is TupleTypeName and @has_comma(@at + 1, arrow - 1)
+    while groups_all() and not own_tuple()
+      @take '(', gap
+      gap = NONE
+      groups += 1
+    @type type, gap
+    @take ')', NONE for _ in 0..groups
 
   parameter := (node: Parameter, before: CodeGap) ->
     @take IDENTIFIER, before

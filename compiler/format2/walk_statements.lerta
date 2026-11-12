@@ -248,10 +248,12 @@ extend Walker
 
   declaration := (node: Declaration, before: CodeGap) ->
     return @destructuring(node, before) if is_destructuring_holder(node)
-    unhandled() if node.weak
     var next = before
     if node.exported
       @take 'export', next
+      next = ONE
+    if node.weak
+      @take_spelled 'weak', next
       next = ONE
     if node.mutable
       @take 'var', next
@@ -418,7 +420,19 @@ extend Walker
 
   assignment := (node: Assignment, before: CodeGap) ->
     @operand node.target, before
-    @value @take_spelled(node.operator, ONE), node.value, true
+    @value @assignment_operator(node.operator), node.value, true
+
+  # The operator, of which `<<=` and `>>=` are two tokens, `<` and `<=`, or `>` and `>=`; the
+  # index of its last.
+  assignment_operator := (operator: String) ->
+    case operator
+      when '<<='
+        @take '<', ONE
+        @take '<=', NONE
+      when '>>='
+        @take '>', ONE
+        @take '>=', NONE
+      else @take_spelled(operator, ONE)
 
   # A call that is a statement, whose callee could take its arguments without parentheses (see
   # CallShape).
