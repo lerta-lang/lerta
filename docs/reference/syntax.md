@@ -325,7 +325,7 @@ These words are not keywords. Each acts as one only where it is written so, and 
 
 | Word | Where it acts as a keyword |
 |---|---|
-| `in`, `when` | after the variables of a `for` (`for x in xs when c`, also in comprehensions), and `when` at the start of a `case` arm; so `for x in in` reads a variable `in` |
+| `at`, `in`, `when` | after the variables of a `for` (`for x at i in xs when c`, also in comprehensions), and `when` at the start of a `case` arm; so `for x in in` reads a variable `in` |
 | `pass` | alone as an arm's body (see [case](control-flow.md#case-without-a-subject)) |
 | `is`, `as`, `in`, `not in` | after an operand (see [unions](types.md#unions) and [operators](#operators)), so that a call without parentheses does not start with one of them as a name: `print(in)` |
 | `as` | also in an [import](modules.md), an [export](modules.md#exports) or an [extern](functions.md#c-functions) |

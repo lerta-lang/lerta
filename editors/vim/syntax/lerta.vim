@@ -11,14 +11,15 @@ syn match lertaType "\<[A-Z]\w*\>"
 syn match lertaConstant "\<[A-Z][A-Z0-9_]\+\>"
 syn match lertaDeclarationName "\%(\<\%(class\|struct\|extend\|enum\|interface\)\s\+\)\@<=\h\w*"
 
-" The keywords are those of docs/reference/syntax.md. `is`, `as`, `in` and `when` are not
+" The keywords are those of docs/reference/syntax.md. `is`, `as`, `at`, `in` and `when` are not
 " keywords, so they are highlighted only where they take that role, and can be names elsewhere:
-" `is` and `as` where a name follows, `in` after the variables of `for`, and `when` after that
-" `in` on the same line or at the start of a `case` arm.
+" `is` and `as` where a name follows, `at` and `in` after the variables of `for`, and `when` after
+" that `in` on the same line or at the start of a `case` arm.
 syn match lertaWordOperator "\.\@<!\<\%(is\|as\)\>\ze\s\+\h"
-syn match lertaControl "\%(\<for\s\+\h\w*\%(\s*,\s*\h\w*\)\=\s\+\)\@<=in\>"
-syn match lertaControl "\%(\<for\s\+\h\w*\%(\s*,\s*\h\w*\)\=\s\+in\s.*\)\@<=\<when\>\ze\s"
+syn match lertaControl "\%(\<for\s\+\%(\h\w*\|([^)]*)\)\%(\s\+at\s\+\h\w*\)\=\s\+\)\@<=in\>"
+syn match lertaControl "\%(\<for\s\+\%(\h\w*\|([^)]*)\)\%(\s\+at\s\+\h\w*\)\=\s\+in\s.*\)\@<=\<when\>\ze\s"
 syn match lertaControl "\%(^\s*\)\@<=when\>\ze\s"
+syn match lertaControl "\%(\<for\s\+\%(\h\w*\|([^)]*)\)\s\+\)\@<=at\>\ze\s\+\h\w*\s\+in\>"
 syn keyword lertaBoolean true false nil
 syn keyword lertaWordOperator and or not
 syn keyword lertaControl if else then while unless until for break continue return case throw try catch finally yield await import export

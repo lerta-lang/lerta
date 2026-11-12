@@ -426,13 +426,16 @@ parse_index_default := (tokens: TokenStream): Expression? ->
   tokens.expect ':'
   parse_expression tokens
 
-# `in` and `when` are not keywords, so that they stay usable as names.
+# `at`, `in` and `when` are not keywords, so that they stay usable as names. `for x, i in` is the
+# old spelling of `for x at i in`, which the compiler's own source uses until the seed reads the
+# new.
 export parse_loop_header := (tokens: TokenStream) ->
   tokens.expect 'for'
   position := tokens.peek().position()
   parts: Identifier[] = tokens.peek().kind == '(' then parse_tuple_names(tokens) else []
   variable := not parts.is_empty() then tuple_holder(position) else parse_identifier(tokens)
-  index := tokens.accept(',') then parse_identifier(tokens)
+  has_index := tokens.accept_word('at') or tokens.accept(',')
+  index := has_index then parse_identifier(tokens)
   tokens.expect_word 'in'
   iterable := parse_expression(tokens)
   tokens.continue_line_before 'when'

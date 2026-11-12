@@ -91,7 +91,7 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
 - Whether `-1.abs()` is `(-1).abs()` (the negative literal binds first) or `-(1.abs())` (as in Rust and Python). Decide when methods on literals are implemented.
 - Renaming in destructuring (`{ a: x } := value`).
 - Notation for an array inside an array without brackets (CoffeeScript has one).
-- An index in an Iter comprehension, `(f(x, i) for x, i in xs)`.
+- An index in an Iter comprehension, `(f(x, i) for x at i in xs)`.
 - How an Iter gives an item in one call rather than two (`has_next` and `next`, each through a pointer to code now; see [internals](../internals/iteration.md#iter)):
   - `next` giving the item with whether there was one, as Rust's `Option` and Swift's optional. Its `{ i1, T }` in IR can be that for the Iters the compiler generates, but an Iter written in Lerta, `{ has_next, next }`, cannot write `next: () -> T?` for an `Iter<T?>`.
   - Or the end signalled as an exception, as Python's `StopIteration`, which the check after each call that Lerta has anyway would carry.

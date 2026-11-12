@@ -217,14 +217,16 @@ for i in 0..3
 
 ### Index
 
-- `for <name>, <index> in <iterable>` also names each item's place, an `Int` from 0, as CoffeeScript's `for` does: `print "#{i}: #{word}" for word, i in words`.
+- `for <name> at <index> in <iterable>` also names each item's place, an `Int` from 0: `print "#{i}: #{word}" for word at i in words`.
+  - Why a word rather than a comma, as in CoffeeScript's `for word, i`: Go's `for i, x` names the two the other way round, and a comma would let either reading compile wherever the items are `Int`s.
+  - `at` is no keyword, so it stays usable as a name.
 - For a range it counts from 0 too, not from the start.
-- A postfix `for` and an array comprehension take one too, `[f(x, i) for x, i in xs]`; a lazy comprehension does not, so far.
+- A postfix `for` and an array comprehension take one too, `[f(x, i) for x at i in xs]`; a lazy comprehension does not, so far.
 
 ### Tuples
 
 - `for (<name>, <name>) in <iterable>` takes each item, a [tuple](types.md#tuples) of as many items, apart, as `(a, b) := item` would: `for (key, value) in pairs`.
-- A postfix `for` and both kinds of comprehension take one too, and an index may follow: `for (key, value), i in pairs`.
+- A postfix `for` and both kinds of comprehension take one too, and an index may follow: `for (key, value) at i in pairs`.
 - Like the loop variable, the names need not be used.
 
 ## case with a subject
