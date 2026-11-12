@@ -2,7 +2,7 @@
 import
   Assignment, Binding, Call, Case, CaseArm, Condition, Declaration, EnumDeclaration, Extend, Extern,
   For, If, Import, ImportName, InterfaceDeclaration, Intrinsic, MemberDeclaration, Pass, Position,
-  Statement, StringLiteral, TypeAlias, TypeDeclaration, TypeParameter, UnaryOperation, While
+  Statement, StringLiteral, Try, TypeAlias, TypeDeclaration, TypeParameter, UnaryOperation, While
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import BRANCHES, StyleRule from '../format/rules'
@@ -460,6 +460,25 @@ extend Walker
       }
     @shapes.push ArmsShape(head, arms)
     @close head, true
+
+  # `try` and its block, then each `catch`, its name and its type if it has one, and `finally`,
+  # each at the depth of `try` with its block below it.
+  try_value := (node: Try, before: CodeGap) ->
+    var head = @take('try', before)
+    @nested_block node.body, head
+    # Each resumes at its keyword, as the block before it may end with a statement skipped.
+    for clause in node.catches
+      @resume_at @starts[clause.position] ? unhandled()
+      head = @take('catch', LineStart(@depth))
+      @take IDENTIFIER, ONE
+      if type := clause.type
+        @take ':', NONE
+        @type type, ONE
+      @nested_block clause.body, head
+    if body := node.finally_body
+      @resume_at (@starts[body[0].position] ? unhandled()) - 1
+      head = @take('finally', LineStart(@depth))
+      @nested_block body, head
 
   # An arm, `when` and its patterns, which a subject's may write on lines of their own below it, and
   # its body, after `then` if it is written.
