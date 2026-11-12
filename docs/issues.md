@@ -26,31 +26,23 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 
 `uses_run_loop` (`runtime/loop.c`) looks for CoreFoundation once, at the program's first wait (see [the main run loop](internals/iteration.md#the-main-run-loop)). A program that waits, then loads a framework with `dlopen` and has it post a block to the main dispatch queue, never runs the block. Fix: look again at later waits while it is not found, if that costs a waiting program little.
 
-## fmt writes a program that does not parse for an operation after a comment in block arguments
-
-`x := f`, over the arguments `1`, a comment on a line of its own and `2 +  3`, makes `lerta fmt` fail with `the formatter would write a program that does not parse, which is a bug`; with `2` in place of `2 +  3`, it does not. The operation after the comment is laid out where it cannot be read back, by `value_after` or `bracketed_or` (`compiler/format/print_literal.lerta`, `compiler/format/printing.lerta`) for arguments that a comment puts in a block. Fix: find the form that the formatter writes there, and lay the operation out on a line of its own in the block.
-
-## fmt writes a program that does not parse for a long call after a comment
-
-`# a comment` on the line before `print [1].map((v) -> v + 1000000000000000000 + 2000000000000000000 + 3000000000000000 + 40000).count()`, a call without parentheses whose argument holds a function with a body too long for its line, makes `lerta fmt` fail with `the formatter would write a program that does not parse, which is a bug`; without the comment, it reports Long lists and breaks the list. Where the formatter lays out the call after the comment is not found yet: `call_statement` (`compiler/format/print_statement.lerta`) and the comments put back by `print_comments_before` (`compiler/format/doc.lerta`) are where to look. Fix: find the text written there and lay it out as without the comment.
-
 ## lerta_platform is left in the runtime for the seed
 
 `lerta_platform` (`runtime/process.c`) gives the system's name, which std read as `platform` before the intrinsic value took its place; no source calls it now, but the seed, compiled from a std that did, still does. Fix: once the seed is refreshed, remove it from the runtime and `runtime/lerta.h`.
 
-## fmt2 drops the parentheses of a function returned before a postfix if
+## fmt drops the parentheses of a function returned before a postfix if
 
-`lerta fmt2` on `mk := (n: Int): ((Int) -> Int) ->`, then `  return ((m) -> m) if n > 0` and `  (m) -> n + m`, fails with "its rewrites would change the program, which is a fault of the formatter": a rewrite of `compiler/format2/` takes out the parentheses around the function literal, whose body would then take the `if`. Fix: keep the parentheses of a function literal that a postfix form follows.
+`lerta fmt` on `mk := (n: Int): ((Int) -> Int) ->`, then `  return ((m) -> m) if n > 0` and `  (m) -> n + m`, fails with "its rewrites would change the program, which is a fault of the formatter": a rewrite of `compiler/format/` takes out the parentheses around the function literal, whose body would then take the `if`. Fix: keep the parentheses of a function literal that a postfix form follows.
 
-## fmt2 moves a comment at the end of an else block into the if it joins
+## fmt moves a comment at the end of an else block into the if it joins
 
-`lerta fmt2 --fix` on an `else` whose block holds one `if`, then a comment line at the depth of that `if`, joins them into `else if` and puts the comment at the depth of the innermost block, as if it were the last line of the joined `if`'s `else`. Fix: keep the comment at the depth of the `else`, or leave the `else` unjoined where a comment follows its `if`.
+`lerta fmt --fix` on an `else` whose block holds one `if`, then a comment line at the depth of that `if`, joins them into `else if` and puts the comment at the depth of the innermost block, as if it were the last line of the joined `if`'s `else`. Fix: keep the comment at the depth of the `else`, or leave the `else` unjoined where a comment follows its `if`.
 
-## fmt2 writes a program that does not parse for some arms with blocks
+## fmt writes a program that does not parse for some arms with blocks
 
-`lerta fmt` fails with "its rewrites would not parse" on two arms that `# fmt: skip` keeps in the tests: in `tests/case/pattern_block.lerta`, patterns in the block of `when` with `then` on a line of its own and a block below it; in `tests/case/arm_blocks.lerta`, `when Box` whose block holds one call, among arms written after `then`. Fix: find the rewrite of `compiler/format2/` that each takes, and lay out its result so that it parses.
+`lerta fmt` fails with "its rewrites would not parse" on two arms that `# fmt: skip` keeps in the tests: in `tests/case/pattern_block.lerta`, patterns in the block of `when` with `then` on a line of its own and a block below it; in `tests/case/arm_blocks.lerta`, `when Box` whose block holds one call, among arms written after `then`. Fix: find the rewrite of `compiler/format/` that each takes, and lay out its result so that it parses.
 
-## fmt2 writes a program that does not parse for a case or try after then
+## fmt writes a program that does not parse for a case or try after then
 
-`lerta fmt2` on an arm `when 1 then try`, with the block of `try` and its `catch` on the lines below, fails with "its rewrites would not parse", as does one whose value after `then` is a `case` with its arms below: `compiler/format2/` lays out the value as continued on the line of `then`, which the grammar does not allow for a block below it. Fix: lay out such a value as the arm's block, on the lines below `when`.
+`lerta fmt` on an arm `when 1 then try`, with the block of `try` and its `catch` on the lines below, fails with "its rewrites would not parse", as does one whose value after `then` is a `case` with its arms below: `compiler/format/` lays out the value as continued on the line of `then`, which the grammar does not allow for a block below it. Fix: lay out such a value as the arm's block, on the lines below `when`.
 

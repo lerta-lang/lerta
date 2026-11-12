@@ -237,22 +237,29 @@ Checks that each file is in the [style](style.md). What of the style it does not
 
 #### Reports
 
-- It prints each file again from its syntax tree, in the style, and reports each place where the file differs from that, as a diagnostic is:
+- It reports each place where the file is not in the style, as a diagnostic is:
 
   ```
   <path>:<line>:<column>: <message> (<rule>)
   ```
 
-  The rule is named by its heading in the style.
-- It reports once for each line, or each run of lines, that differs.
-- A run of a different number of lines, as where lines are joined or broken, or of lines that move, as the lines below a line that a body joins shift up by one, is reported once, at its first difference.
-- What else breaks the style in it is reported once that is fixed.
+  - each gap between its tokens and comments that the style decides otherwise: the spaces, the line start and its indentation, the blank lines;
+  - each [rewrite](#rewrites) of its tokens that the style asks for.
+
+  The rule is named by its heading in the style: the one that decides the gap, or that asks for the rewrite.
+- What a rewrite changes in the layout of the statement that holds it is reported once the rewrite is made.
+- A comment that it cannot place where it is, as one after a `(` that opens an operand, is reported under [Comments](style.md#comments) with a message saying to move it, and its statement keeps its gaps as written.
 - A line over 100 columns that it keeps or writes, such as one of a comment, a string or an operation that stays on one line (see [Long operations](style.md#long-operations)), which it cannot break, is reported under [Line length](style.md#line-length) with a message saying to shorten it by hand: one that it keeps at its 101st column, but one [kept as written](#code-kept-as-written).
 
 #### `--fix`
 
-- Writes the files that differ instead of reporting them.
-- Reports only the lines over 100 columns that remain.
+- Writes the files that differ instead of reporting them: rewritten, and laid out, in rounds, as a rewrite may enable others, until nothing changes, for at most 32 rounds.
+- Reports what remains: the lines over 100 columns, and the rewrites that are only reported, which are left to be made by hand:
+  - those of the [rewrites](#rewrites) below that say so;
+  - a `not` of an `and` or an `or` (see [Negated conditions](style.md#negated-conditions));
+  - a two-way value written as an `if` that fits on a line as `c then a else b`, or written `c then a else b` where it fits neither on its line nor on the next, which an `if` then writes (see [Branches](style.md#branches));
+  - a change of the layout that a rewrite of tokens would make, as the commas between items or the brackets of a literal, where it would take out a comment;
+  - a comment that it cannot place.
 
 #### What it keeps
 
@@ -264,16 +271,17 @@ Checks that each file is in the [style](style.md). What of the style it does not
 
 - 1 if:
   - a file differs (without `--fix`);
-  - a file holds a line over 100 columns that it reports (with `--fix` too);
+  - a file holds what remains after `--fix` (with `--fix`);
   - a path names nothing (`'<path>' is not a file or a directory`);
-  - a file is not valid UTF-8 or does not parse (its compile error is reported).
+  - a file is not valid UTF-8 or does not parse (its compile error is reported);
+  - the [self-check](#self-check) finds a fault of the formatter.
 - 0 otherwise.
 - The other files are still taken.
 
 #### Self-check
 
-- Before it reports or writes, it parses the text that it printed.
-- If that is another program, which would be a bug of the formatter, it reports `<path>: the formatter would change the program, which is a bug` and leaves the file.
+- Before it reports or writes, it parses the text that it writes, after each round.
+- If that does not parse, or is another program than the rewrites make, which would be a fault of the formatter, it reports `<path>: its rewrites would not parse: <error>, which is a fault of the formatter`, or `... would change the program ...`, `its layout ...` for the layout, and leaves the file.
 
 #### Programs checked
 
@@ -298,14 +306,10 @@ The rewrites below depend on the checking of a program that holds the file.
 | [Arms of one body](#arms-of-one-body) | [Shared arm bodies](style.md#shared-arm-bodies) |
 | [Copies written as spreads](#copies-written-as-spreads) | [Spreads](style.md#spreads) |
 | [Casts left out](#casts-left-out) | [Redundant casts](style.md#redundant-casts) |
-| [Imports of enums and structs left out](#imports-of-enums-and-structs-left-out) | [Expected types](style.md#expected-types) |
+| [Unused names left out](#unused-names-left-out) | [Unused names](style.md#unused-names) |
 
 - None is made in the body of a generic function, whose instances may give its values other types.
-- Where a rewrite below says it is checked, it checks the program with it and keeps those without which the program does not check the same: to the same types, conversions and warnings.
-- Order:
-  1. [Structs constructed with `{}`](#structs-constructed-with-) are decided first.
-  2. [Arms of one body](#arms-of-one-body) next, checked with them.
-  3. Then the others, checked with both, so that a type that the constructions take is kept.
+- Those that say they are only reported are left to be made by hand: `--fix` does not make them.
 
 #### Type annotations left out
 
@@ -327,7 +331,8 @@ Not where the type comes from where it is:
 Besides:
 
 - It does not leave out the other types that the checker could infer, such as those of functions that call each other.
-- It is checked: it keeps, for one, a type that alone uses an import other than an enum's (see [Imports of enums and structs left out](#imports-of-enums-and-structs-left-out)), found by halving them.
+- It keeps a type that names an import, which leaving it out could leave unused.
+- It is checked: once the rounds end, the types of the declarations and the functions of the program rewritten, checked again, must be those of the file; where they are not, or the program does not check, it keeps every type of the file.
 
 #### Enum members written alone
 
@@ -336,29 +341,28 @@ Besides:
   - the left operand of `==`;
   - the first item of an array;
   - an argument of a call of a generic function for a parameter whose type names a type parameter.
-- It is checked, with the types it leaves out.
 
 #### Structs constructed with `{}`
 
 - It writes a construction of a struct, `S(x: 1)`, as `{ x: 1 }` where `S` is expected.
 - Not where the expected type comes only from the other items of an array or a map, nor as the left operand of `==`.
-- It is checked.
+- A construction without parentheses is only reported.
 
 #### Named arguments written alone
 
 - It writes a named argument of a construction of a class or a struct that is a variable of its name, `Point(y: 2, x: x)`, as the name alone, `Point(x, y: 2)`.
-- Only where the named arguments it then goes before are names, `@`, literals or members of these, whose values that order does not change.
+- From the first named argument, up to one that is not written alone: one after such an argument, which would go before it, is only reported.
 - Not a named argument of a call of a function, which a name alone would pass as positional.
 
 #### Membership tests written with `in`
 
 - It writes `xs.contains(x)`, a call of `contains` of one argument, as `x in xs`, and `not xs.contains(x)` as `x not in xs`.
 - Only where the object and the argument are names, `@`, fields of them or literals, which run no code, and the call gives a `Bool`.
-- Not where it is the whole element or the whole guard of a comprehension, or in an interpolation, which are printed as written.
+- Not where it is the whole element or the whole guard of a comprehension, or in an interpolation, which are kept as written.
 
 #### Range tests written with `in`
 
-- It writes two comparisons joined by `and` that test a value against a start and an end, `x >= a and x <= b` or `a <= x and x < b`, the second either way round, as `x in a..=b` or `x in a..b`, after the `and`s before them in a chain.
+- It reports two comparisons joined by `and` that test a value against a start and an end, `x >= a and x <= b` or `a <= x and x < b`, the second either way round, which may be written `x in a..=b` or `x in a..b`, after the `and`s before them in a chain. They are only reported.
 - Only where the value, written the same in both, and the end are names, `@`, fields of them or literals, which run no code, as `and` evaluates the end only where the first holds, and the value is a number or a `Char`.
 - Not in the places that [membership tests](#membership-tests-written-with-in) are not written in.
 
@@ -376,17 +380,20 @@ Besides:
   - a comparison of a `String` with `''`, `s == ''` or `s != ''`, either way round too.
 - It writes `not (x.length != 0)` as `x.is_empty()`.
 - Only where `x` is an array, a map, a set, a `Binary` or a `String`, whose `is_empty` std gives; not that of another type, nor of an optional.
-- Not where it is the whole element or the whole guard of a comprehension, or in an interpolation, which are printed as written.
+- Not where it is the whole element or the whole guard of a comprehension, or in an interpolation, which are kept as written.
 
 #### Arms of one body
 
-- It writes arms of a `case` with a subject next to each other whose bodies are written alike as one arm of their patterns, in their order.
-- Only where the program checks the same with the subject narrowed to the union of their types, but for the types in that body, which narrowing changes there.
+- It reports arms of a `case` with a subject next to each other whose bodies are written alike, which may be one arm of their patterns, in their order. They are only reported.
+- Not where the body may read the subject, whose type narrowing to the union of their types would change there:
+  - a name, or a path of fields from one, where the body names that name;
+  - a path of fields from `@`, which a method may read through;
+  - any other subject but a call, or a path of fields from one.
 - Not an arm of `nil`, nor arms with a comment from the line where the first starts, which the arm kept could not hold where it is.
 
 #### Copies written as spreads
 
-- It writes a construction whose named arguments copy the fields of the same names of one value, `Point(x: 1, y: p.y)`, with a spread of that value first and the other arguments, `Point(p..., x: 1)`.
+- It reports a construction whose named arguments copy the fields of the same names of one value, `Point(x: 1, y: p.y)`, which may be written with a spread of that value first and the other arguments, `Point(p..., x: 1)`. It is only reported.
 - Only where:
   - the value is a name, `@` or a path of fields from one;
   - it is of the type constructed;
@@ -395,13 +402,14 @@ Besides:
 
 #### Casts left out
 
-- It leaves out a cast that throws, `x as T!`, of a value that is a `T` already, as narrowing makes it.
-- It is checked, with the others; it keeps, for one, a cast whose value an optional is expected of, which would then be converted to it.
+- It leaves out a cast that throws, `x as T!`, of a value that is a `T` already, as narrowing makes it, where the checking shows it.
 
-#### Imports of enums and structs left out
+#### Unused names left out
 
-- That an import of an enum is no longer used once the types and the enums of members are left out, or that of a struct once its constructions are written with `{}`, does not count in the checks of the rewrites above.
-- It leaves out the name from the import, and the import if it takes no other name, and reports it under [Expected types](style.md#expected-types).
+- It leaves out the names that an import takes and the module never uses, with the commas between them.
+- An import that takes no name that is used, or a module alias that is not, is only reported, as the import runs the module's top-level code and brings its extends: `import 'module'` keeps them.
+- So is one whose last name left out a comment follows, which would then follow a name kept.
+- Not an import that exports its names, which the modules that import it use.
 
 #### Code kept as written
 
@@ -422,7 +430,7 @@ identity := [  # fmt: skip
   - a line of an `if`'s block keeps that statement alone;
   - one of a list keeps all of it;
   - an arm on the line of its `when` keeps the whole `case`, and a member the whole class.
-- The statement is printed as it is written, with its comments, its types and the enums of its members, and with the imports that it uses.
+- The statement keeps its gaps as written, and no rewrite is made in it.
 - A statement on lines that hold a [`;`](syntax.md#statements) is not kept, as it shares a line with another.
 - It is indented as its block is, and its lines after the first as much deeper or shallower than the first as they were, but none shallower than the first column.
 - The blank lines and the comments between such statements are printed as elsewhere.

@@ -114,9 +114,6 @@ LLVM emits objects, and `lld` links them, on all platforms.
   - the rules that change the syntax tree, such as implicit return;
   - applied only when the file type-checks, the rules that need types, such as whether a `case` handles every member of its subject.
   - The compiler reports only what concerns correctness, such as unused names.
-- **Reports by rule.** `lerta fmt` is to report each difference under the rule that it breaks, and each run of differing lines apart, as [the reference](../reference/compiler.md#fmt) states. Now:
-  - some are reported under another rule: the shorthand of `{ x: x }` under **Inside {}**; a cast left out before a space, or a rewrite that starts a function's body on the line of `->`, under the rule of what holds it; a difference inside a body or an arm that could go on its line, under **Function bodies** or **Branches**; a list split by an item that holds a block, as a `case`, under **Layout**; a difference in a call's arguments that go in a block for a comment or a block among them, under the rule of what holds it; a line of spaces inside a `'''` literal whose indentation changes, under **Blank lines**; the named arguments that a name written alone goes before, and a literal under a named argument in a block, under **Long lists**; a value under `key:` in a block that goes on the next line, under **Multi-line literals**;
-  - separate runs that differ may be reported as one.
 - The formatter has no options, as it applies the style as written. Settings wait for a configuration file (see [open questions](#open-questions)).
 
 ### lsp

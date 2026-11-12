@@ -72,8 +72,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `loader.lerta` | Reads the modules of a program |
 | `checker/` | Checks them |
 | `codegen/` | Emits LLVM IR |
-| `format/` | The formatter |
-| `format2/` | The formatter that is to replace `format/` (see [the formatter](docs/internals/compiler.md#formatter)) |
+| `format/` | The formatter (see [the formatter](docs/internals/compiler.md#formatter)) |
 | `llit.lerta` | Reads [llit](docs/internals/llit.md), Lerta literals as data, for the tools |
 | `main.lerta` | The commands |
 | `minilerta.lerta` | The entry the seed is made from |
