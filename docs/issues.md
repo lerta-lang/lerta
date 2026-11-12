@@ -46,6 +46,6 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 
 `lerta fmt2` on an arm `when 1 then try`, with the block of `try` and its `catch` on the lines below, fails with "its rewrites would not parse", as does one whose value after `then` is a `case` with its arms below: `compiler/format2/` lays out the value as continued on the line of `then`, which the grammar does not allow for a block below it. Fix: lay out such a value as the arm's block, on the lines below `when`.
 
-## fmt2 does not space the type arguments of a call
+## fmt2 does not space a type that a declaration moves
 
-`lerta fmt2` spaces a type written in an annotation, as `Map<String,Int>` to `Map<String, Int>`, but not the type arguments of a call, as `Map<String,Int>()`, which stay as written; a type that a declaration moves to its `Map()` or `Set()` (see Type annotations) keeps the spacing it was written with. Fix: lay out the type arguments of a call as those of an annotation.
+`lerta fmt2 --fix` on `counts := Map< String,Int >()` writes `counts: Map< String,Int >`: the type that a declaration moves from its `Map()` or `Set()` (see Empty initial values) keeps the spacing it was written with, as a declaration without a value is not laid out. Fix: lay out a declaration without a value.

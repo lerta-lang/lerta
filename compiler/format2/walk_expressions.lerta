@@ -2,8 +2,8 @@
 import
   ArrayLiteral, ArrayTypeName, Await, BinaryOperation, BooleanLiteral, Call, Case, Coalesce,
   Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, FunctionTypeName,
-  Identifier, Index, IntegerLiteral, Interpolation, Jump, MapLiteral, Member, NamedType, NamedValue,
-  NilLiteral, Parameter, Range, RecordLiteral, RecordTypeField, RecordTypeName, Return,
+  Identifier, Index, IntegerLiteral, Interpolation, IsTest, Jump, MapLiteral, Member, NamedType,
+  NamedValue, NilLiteral, Parameter, Range, RecordLiteral, RecordTypeField, RecordTypeName, Return,
   StringLiteral, This, Throw, TupleLiteral, TupleTypeName, Try, TypeName, UnaryOperation,
   UnionTypeName, Unwrap, Yield
 from '../ast'
@@ -194,6 +194,7 @@ extend Walker
         @take '?', ONE
         @operand node.fallback, ONE
       when Range then @range(node, before)
+      when IsTest then @is_test(node, before, false)
       when Conditional
         # Its parts are operands, whose operations stay on their lines.
         breaks := @breaks_operations
@@ -248,8 +249,13 @@ extend Walker
   # A call with parentheses, or without them, whose arguments follow a space on its line or are in a
   # block below it.
   call := (node: Call, before: CodeGap) ->
-    unhandled() unless node.type_args.is_empty()
     @chain node.callee, before
+    { type_args } := node
+    # On one line, as the grammar takes no line end between type arguments.
+    unless type_args.is_empty()
+      @take '<', NONE
+      @list type_args.length, NONE, (i, gap) -> @type(type_args[i], gap), false
+      @take '>', NONE
     { args, named_args } := node
     values := [args..., [named.value for named in named_args]...]
     items := ListItems
@@ -332,6 +338,9 @@ extend Walker
       @take_before_operand 'not', before
       @operand node.operand, ONE
     else
+      if test := node.operand as IsTest?
+        @is_test test, before, true
+        return
       # `x not in xs`, which is read as `not (x in xs)`.
       test := node.operand as BinaryOperation ? unhandled()
       unhandled() if test.operator != 'in'
@@ -339,6 +348,13 @@ extend Walker
       @take_before_operand 'not', ONE
       @take_spelled 'in', ONE
       @operand test.right, ONE
+
+  # `x is T`, or `x is not T`, which is read as `not (x is T)`.
+  is_test := (node: IsTest, before: CodeGap, negated: Bool) ->
+    @chain node.value, before
+    @take_spelled 'is', ONE
+    @take 'not', ONE if negated
+    @type node.type, ONE
 
   # A binary operation, and the chain of those of its level on its left, which breaks where it is a
   # whole value (see OperationShape).
