@@ -529,9 +529,11 @@ print ages['ann'] ? 0
 
 #### Default
 
-- `m[k, default: d]` is the value of `k`, of type `V`. Where `k` is missing, `d` is evaluated, then and only then, and the map holds it under `k` first, even where the index is only read.
+- `m[k, default: d]` is the value of `k`, of type `V`. Where `k` is missing, `d` is evaluated, then and only then, and the map holds it under `k` first.
   - `counts[word, default: 0] += 1` counts, and `groups[key, default: []].push(item)` groups, each array made for its own key.
-  - To read a value without changing the map, write `m[k] ? d`.
+  - It is written only where the value is: as the target of `+=` and so on or of a field's assignment, or as the object of a method's call, as `push`, or what such a place is reached through, as `m[a, default: Map()][b, default: 0] += 1`. Elsewhere it is an error, which suggests `m[k] ? d`, as reading a map changes nothing.
+  - Why: a read that adds a key is a surprise, as `dict.get(k, d)` and `getOrDefault` change nothing. A method call counts as a write, as the method may change the value, which the compiler does not know.
+  - To read a value without changing the map, write `m[k] ? d`; to read it and add what is missing, as a cache does, `m.get_or_add(k, -> d)`.
 - `+=` and so on read the value, or `d`, and add the key only once the result is written, so one that throws, as on overflow, leaves the map as it was.
 - `m[k, default: d] = v` is an error, as the default would go unused.
 

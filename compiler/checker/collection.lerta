@@ -1,7 +1,7 @@
 # Types arrays, maps and sets: their literals, `Map()`, `Set()`, and indexing (of a Binary too).
 import
-  ArrayLiteral, Call, Expression, Identifier, Index, is_spread, MapLiteral, NamedType, NilLiteral,
-  Position, Range, RecordLiteral, Throw, TupleLiteral
+  ArrayLiteral, Call, Expression, Identifier, Index, is_spread, MapLiteral, Member, NamedType,
+  NilLiteral, Position, Range, RecordLiteral, Throw, TupleLiteral
 from '../ast'
 import fail from './diagnostics'
 import is_equatable, is_hashable from './equality'
@@ -259,6 +259,17 @@ written_or_expected := (body: Body, call: Call, name: String, expected: Type?) -
   written := NamedType(name, args: call.type_args, position: call.callee.position)
   resolve body.program, body.resolver, written
 
+# Lets the indexes of maps that the place is reached through take their defaults, which add their
+# keys: the place is written, as the target of `+=` or of a field's assignment, or the object of a
+# method's call, as `push`; not one only read, as reading a map changes nothing.
+export allow_default := (body: Body, place: Expression): void ->
+  case place
+    when Index
+      body.written_defaults.add place
+      allow_default body, place.object
+    when Member then allow_default(body, place.object)
+    else return
+
 # An item of an array or a Binary, or the value of a map's key, which may not be there, but for
 # `m[k, default: d]`, which puts `d` first where it is not.
 export type_of_index := (body: Body, index: Index): Type ->
@@ -273,6 +284,11 @@ export type_of_index := (body: Body, index: Index): Type ->
     reject_set_index body, index, object_type
     expect_type body, index.index, object_type.key
     return optional_type(object_type.value) if default_value == nil
+    unless index in body.written_defaults
+      read := 'write m[k] ? d to read it without adding k'
+      message :=
+        "a default adds its key, so it is only for a value written, as by += or push: #{read}"
+      fail body.program, default_value.position, message
     expect_type body, default_value, object_type.value
     return object_type.value
   if object_type is not ArrayType and not is_kind(object_type, 'Binary')

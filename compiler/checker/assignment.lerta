@@ -3,6 +3,7 @@ import
   Assignment, BinaryOperation, combining_operator, Expression, Identifier, Index, IntegerLiteral,
   Member, Range, StringLiteral, This, UnaryOperation
 from '../ast'
+import allow_default from './collection'
 import warn_if_cycle from './cycles'
 import fail from './diagnostics'
 import require_type, type_of from './expression'
@@ -21,6 +22,7 @@ import ArrayType, format_type, is_kind, is_number, is_one_of_kinds, MapType, Typ
 # through the method that its operator calls (see check_operator_assignment).
 export check_assignment := (body: Body, assignment: Assignment) ->
   { target, operator } := assignment
+  allow_default body, target
   target_type :=
     case target
       when Index then check_item_target(body, target, operator)
@@ -88,7 +90,8 @@ check_item_target := (body: Body, target: Index, operator: String) ->
   object_type := body.facts.types[target.object]!
   if object_type is MapType
     if target.default_value and operator == '='
-      message := 'a default is for reading the value; write m[k] = x to assign it'
+      message :=
+        'a default would go unused, as = writes the value without reading it: write m[k] = x'
       fail body.program, target.position, message
     if operator != '=' and target.default_value == nil
       # A number may default to 0; other values to what the program chooses.

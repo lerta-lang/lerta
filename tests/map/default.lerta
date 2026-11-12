@@ -1,5 +1,6 @@
-# `m[k, default: d]` is the key's value, or else `d`, which the map then holds; `d` is evaluated
-# only where the key is missing. `m[k] ? d` reads the value without changing the map.
+# `m[k, default: d]` is the key's value, or else `d`, which the map then holds, where the value is
+# written; `d` is evaluated only where the key is missing. `m[k] ? d` reads the value without
+# changing the map, and `get_or_add` reads it, adding what its function makes where it is missing.
 counts: Map<String, Int>
 counts[word, default: 0] += 1 for word in 'a b a c a b'.split(' ')
 print ["#{word}=#{count}" for (word, count) in counts.entries()]
@@ -8,18 +9,20 @@ groups: Map<Int, String[]>
 groups[word.binary.length, default: []].push(word) for word in ['one', 'two', 'three', 'four']
 print ["#{length}=#{words}" for (length, words) in groups.entries()]
 
-# A read puts the default too, where the key is missing.
 seen: Map<String, Int>
-print seen['x', default: 7]
-print "#{seen.contains('x')} #{seen['y'] ? 8} #{seen.contains('y')}"
+print "#{seen['y'] ? 8} #{seen.contains('y')}"
+first := seen.get_or_add('x', -> 7)
+again := seen.get_or_add('x', -> 9)
+print "#{first} #{again} #{seen.contains('x')}"
 
 var made = 0
 make := ->
   made += 1
   10
 known := { 'k': 1 }
-print known['k', default: make()]
-print "#{made} #{known['new', default: make()]} #{made}"
+known['k', default: make()] += 1
+known['new', default: make()] += 1
+print "#{made} #{known['k']!} #{known['new']!}"
 
 # An update that throws leaves the map as it was.
 small: Map<String, Int8>
@@ -115,9 +118,9 @@ bits['a', default: 100] -= 2
 bits['c', default: 100] -= 2
 print ["#{key}=#{value}" for (key, value) in bits.entries()]
 
-# A default that is itself an index with a default, which puts its own key first.
+# A default that adds a key itself, which the map holds first.
 nested: Map<String, Int>
-nested['outer', default: nested['inner', default: 5] * 2] += 1
+nested['outer', default: nested.get_or_add('inner', -> 5) * 2] += 1
 print ["#{key}=#{value}" for (key, value) in nested.entries()]
 
 # Struct keys, maps reached through a field, a call or another map's default, and a key whose
@@ -127,7 +130,7 @@ struct Point
   y: Int
 by_point: Map<Point, Int>
 by_point[{ x: 1, y: 2 }, default: 1] += 1
-print "#{by_point[{ x: 1, y: 2 }, default: 9]} #{by_point[{ x: 2, y: 1 }, default: 9]}"
+print "#{by_point[{ x: 1, y: 2 }] ? 9} #{by_point[{ x: 2, y: 1 }] ? 9}"
 class Holder
   map: Map<String, Int>
 holder := Holder(Map())
@@ -150,3 +153,26 @@ print "#{holder.map['h']!} #{held['k']!} #{nested_maps['a']!['b']!} #{keys_made}
 lines: Map<String, Int>
 lines['key', default: 3] += 1
 print lines['key']!
+
+# A field's assignment writes the value, and a method's call may, so both take a default, which
+# adds the key though the method only reads it.
+class Tally
+  var count = 0
+tallies: Map<String, Tally>
+tallies['t', default: Tally()].count = 5
+labels: Map<Int, Int>
+print labels[1, default: 7].to_string()
+print "#{tallies['t']!.count} #{1 in labels}"
+
+# `get_or_add` makes the value only where the key is missing.
+var makes = 0
+made_value := ->
+  makes += 1
+  makes * 10
+cache: Map<String, Int>
+cached := [cache.get_or_add(key, made_value) for key in ['p', 'q', 'p']]
+print "#{cached} #{makes}"
+# An item of the value that is assigned writes it too.
+rows: Map<String, Int[]>
+rows['r', default: [0, 0]][1] = 9
+print rows['r']!
