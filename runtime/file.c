@@ -282,6 +282,14 @@ bool lerta_make_one_dir(const LertaString *path) {
   return made;
 }
 
+// std:io refuses an empty path and one that holds a NUL byte first (see require_names).
+bool lerta_remove_file(const LertaString *path) {
+  char *name = lerta_c_string(path);
+  bool removed = lerta_os_remove_file(name);
+  free(name);
+  return removed;
+}
+
 bool lerta_rename_path(const LertaString *from, const LertaString *to) {
   return lerta_with_c_strings(from, to, lerta_os_rename);
 }

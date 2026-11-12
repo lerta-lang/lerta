@@ -369,6 +369,7 @@ LertaString *lerta_resolve_path(const LertaString *path);
 LertaString *lerta_make_temp_dir(void);
 // Makes the directory, or finds one there; not its parents.
 bool lerta_make_one_dir(const LertaString *path);
+bool lerta_remove_file(const LertaString *path);
 bool lerta_rename_path(const LertaString *from, const LertaString *to);
 
 // Handles (handle.c), each of a libuv stream, for std:net: one from lerta_tcp_new is a socket or a

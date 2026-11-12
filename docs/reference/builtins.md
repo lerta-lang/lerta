@@ -186,7 +186,7 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `to_int()`, `to_byte()`, `to_int8()`, `to_int16()`, `to_int32()`, `to_uint16()`, `to_uint32()`, `to_uint64()`: of that type, optional unless every value fits
 - `to_char(): Char?`; `Char` for a `Byte`
 - `Int` and `UInt64`: `to_hex(width: Int = 0): String`
-- `Int` only: `to_bits(): UInt64`
+- `Int` only: `to_bits(): UInt64`, `abs(): Int`, which throws for `INT_MIN`, whose magnitude no `Int` holds
 - `Byte` only: `is_digit(): Bool`, `is_letter(): Bool`, `is_space(): Bool`, `is_utf8_continuation(): Bool`, `hex_value(): Int?`
 
 ### Char
@@ -263,8 +263,11 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `sort(compare: (T, T) -> Ordering = (a, b) -> a.compare(b))`
 - `sort_by<K: Comparable>(key: (T) -> K)`
 - `append(items: T[])`
-- `reversed(): T[]`
-- `truncate(length: Int)`, `split_off(at: Int): T[]`
+- `reversed(): T[]`, and `reverse()`, in place
+- `insert(at: Int, item: T)`, at a place in `0..=length`, moving the items from there on one place later
+- `remove_at(at: Int): T`, the item there, moving the items after it one place earlier
+- `truncate(length: Int)`, `split_off(at: Int): T[]`, `clear()`
+- `insert` and `remove_at` throw an `IndexError` for a place out of range, and take as long as the items they move.
 - `all_but_last(): T[]`
 - Of [Equatable](#equatable-comparable-and-hashable) items: `contains(item: T): Bool`, `index_of(item: T): Int?`, `remove(item: T): Bool`
 - Of [Literal](#literal) items: `to_string(): String`, `to_literal(): String` (see [Stringable](#stringable))

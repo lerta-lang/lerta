@@ -308,6 +308,9 @@ char *lerta_os_real_path(const char *path);
 char *lerta_os_make_temp_dir(void);
 // Removes a file, or a directory with everything in it; a symbolic link is removed, not followed.
 bool lerta_os_remove_tree(const char *path);
+// Removes a file, or a link, not what it links to; not a directory, which libuv's unlink refuses on
+// every system.
+bool lerta_os_remove_file(const char *path);
 // lerta_os_remove_tree by paths, as Windows removes a tree (see platform.c).
 bool lerta_remove_tree_by_paths(const char *path);
 // Makes the directory, whose parent must be there; true if it is a directory afterwards, made now

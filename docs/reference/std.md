@@ -397,6 +397,7 @@ These responses, and the 500 below, have an empty body.
 | `write_file(path: String, data: String \| Binary): Promise` | Replaces the contents of a file, creating it if needed, with the data: a Binary's bytes, or a String's UTF-8. Rejected with `cannot write file: <path>` on failure. |
 | `copy_file(from: String, to: String): Promise` | Copies the contents of a file, replacing a file at `to` (below). |
 | `remove_tree(path: String): Promise` | Removes a file, or a directory with everything in it (below). |
+| `remove_file(path: String)` | Removes a file, or a symbolic link, not what it links to. Throws `cannot remove file: <path>` on failure, including for a directory, a path that names nothing, an empty path or one that holds a NUL byte. |
 | `is_file(path: String): Bool` | Whether the path names a regular file, through symbolic links. False where `stat` gives nil, and for a directory. |
 | `is_dir(path: String): Bool` | Whether the path names a directory, through symbolic links. False where `stat` gives nil, and for a file. |
 | `stat(path: String): FileStatus?` | What the path names, through symbolic links, or nil if nothing is there or its status cannot be read, as for a dangling link, a loop of links or a path that holds a NUL byte. |

@@ -282,6 +282,13 @@ static bool remove_entries(const char *path) {
   }
 }
 
+bool lerta_os_remove_file(const char *path) {
+  uv_fs_t request;
+  bool removed = uv_fs_unlink(NULL, &request, path, NULL) == 0;
+  uv_fs_req_cleanup(&request);
+  return removed;
+}
+
 bool lerta_remove_tree_by_paths(const char *path) {
   uv_fs_t request;
   int error = uv_fs_lstat(NULL, &request, path, NULL);
