@@ -292,6 +292,8 @@ LertaString *lerta_env(const LertaString *name) {
   return lerta_string_from_os(value);
 }
 
+LertaString *lerta_executable(void) { return lerta_string_from_os(lerta_os_executable()); }
+
 int64_t lerta_cpu_count(void) { return lerta_os_cpu_count(); }
 
 void lerta_environ(LertaArray *entries) { lerta_os_environ(entries); }

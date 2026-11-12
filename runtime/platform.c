@@ -153,6 +153,23 @@ char *lerta_os_current_dir(void) {
   return NULL;
 }
 
+char *lerta_os_executable(void) {
+  size_t capacity = 256;
+  for (;;) {
+    char *buffer = lerta_checked_malloc(capacity);
+    size_t size = capacity;
+    // A buffer too small for it is given as much as fits, with no error, so a path that fills it is
+    // taken as cut short.
+    if (uv_exepath(buffer, &size) != 0) {
+      free(buffer);
+      return NULL;
+    }
+    if (size + 1 < capacity) return buffer;
+    free(buffer);
+    capacity *= 2;
+  }
+}
+
 char *lerta_os_real_path(const char *path) {
   uv_fs_t request;
   bool resolved = uv_fs_realpath(NULL, &request, path, NULL) == 0;

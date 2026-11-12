@@ -299,6 +299,8 @@ int64_t lerta_utc_offset(int64_t seconds);
 // values, as nothing makes them UTF-8.
 LertaArray *lerta_argv(void);
 LertaString *lerta_program_path(void);
+// The path of the executable file, or NULL.
+LertaString *lerta_executable(void);
 // Flushes stdout and ends the program; only the objects that nothing in use holds are checked for
 // leaks, and a leak ends it with LERTA_LEAK_EXIT_CODE in place of `code`, which std:process checks
 // is from 0 to 255.
