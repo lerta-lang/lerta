@@ -673,6 +673,13 @@ xs := decode_json<Int[]>(text)
 | `sqrt(x: Float): Float` | The square root. Throws `square root of a negative number` for one below 0. |
 | `pow(x: Float, y: Float): Float` | `x` to the power `y`, as C's `pow` gives it: an infinity where the result is too large, or for 0 to a negative power. A result below the normal range may be one ulp off, as on 64-bit Windows. Throws `a negative number to a fractional power` for a finite negative `x` and a `y` that is no integer. |
 | `remainder(x: Float, y: Float): Float` | The remainder of `x` divided by `y` (below). |
+| `sin(x: Float): Float`, `cos(x: Float): Float`, `tan(x: Float): Float` | Of an angle in radians. Throw `not a number` for an infinite one. |
+| `asin(x: Float): Float`, `acos(x: Float): Float` | The angle whose sine or cosine `x` is, in `-PI / 2.0..=PI / 2.0` and `0.0..=PI`. Throw `a sine or cosine out of -1.0..=1.0` for an `x` out of it. |
+| `atan(x: Float): Float` | The angle whose tangent `x` is, in `-PI / 2.0..=PI / 2.0`. |
+| `atan2(y: Float, x: Float): Float` | The angle of the point (`x`, `y`), in `-PI..=PI`. Its sign is that of `y`, so a `y` of `-0.0` and a negative `x` give `-PI`. |
+| `exp(x: Float): Float` | e to the power `x`: an infinity where the result is too large, 0 where it is too small. |
+| `log(x: Float): Float`, `log2(x: Float): Float`, `log10(x: Float): Float` | The logarithm to the base e, 2 or 10; `-INFINITY` for 0. Throw `logarithm of a negative number` for one below 0. |
+| `hypot(x: Float, y: Float): Float` | `sqrt(x * x + y * y)`, without overflowing where the result does not. |
 
 `remainder`:
 
