@@ -36,6 +36,7 @@ The members of a type, one per line, are declared as locals are (see [declaratio
 | `var` before any of the above | A field of a class that can be assigned (see [mutability](#mutability)). |
 | `weak name: Type?`, `weak name: Type!`, either with `weak var` | A [weak field](#weak-references). |
 | `name := (params) -> body` | A method (see below). |
+| `pass` alone | No members: a type without them, as an empty struct (see [pass](syntax.md#pass)). |
 
 - A field may hold a function (`on_click: () -> void`); `b.on_click()` calls it (see [function values](functions.md#function-values)).
 - `name = value` in a type body is an error, as it reads as an assignment: `write 'name := value' to declare a member`.

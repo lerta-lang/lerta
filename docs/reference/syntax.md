@@ -231,6 +231,16 @@ text :=
 - The line is an error after `break` or `continue`, and after a statement that ends with a block, such as an `if`, or with [arguments in a block](#arguments-in-a-block).
 - A value that ends with arguments in a block takes it, as it takes one after a literal.
 
+### pass
+
+`pass` alone is a body that does nothing, which is `void`:
+
+- a block's only statement, as of a function, a `catch`, an `if` or a loop;
+- an arm's or a function literal's on its line: `else pass`, `noop := -> pass`;
+- the body of a class or a struct without members, which declares one that has none.
+
+`pass` is not a keyword: among other statements it is a name, and only there may a value of that name be read.
+
 ## Calls
 
 - `f(x, y)` calls `f`. The `(` must follow the callee without whitespace.
@@ -326,7 +336,7 @@ These words are not keywords. Each acts as one only where it is written so, and 
 | Word | Where it acts as a keyword |
 |---|---|
 | `at`, `in`, `when` | after the variables of a `for` (`for x at i in xs when c`, also in comprehensions), and `when` at the start of a `case` arm; so `for x in in` reads a variable `in` |
-| `pass` | alone as an arm's body (see [case](control-flow.md#case-without-a-subject)) |
+| `pass` | alone as a body (see [pass](#pass)) |
 | `is`, `as`, `in`, `not in` | after an operand (see [unions](types.md#unions) and [operators](#operators)), so that a call without parentheses does not start with one of them as a name: `print(in)` |
 | `as` | also in an [import](modules.md), an [export](modules.md#exports) or an [extern](functions.md#c-functions) |
 | `from` | in an [import](modules.md) or an [export](modules.md#exports) |

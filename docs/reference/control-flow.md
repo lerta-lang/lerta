@@ -302,7 +302,7 @@ print case
     "minus #{magnitude}"
   ```
 - On the same line, it is an expression, an assignment or a call without parentheses (`when '(' then depth += 1`), with the postfix forms of a statement (`when c then n += 1 if d`).
-- `pass` alone on the same line is an arm that does nothing, which is `void`: `else pass`. `pass` is not a [keyword](syntax.md#contextual-words).
+- `pass` alone on the same line, or alone in its block, is an arm that does nothing, which is `void`: `else pass` (see [pass](syntax.md#pass)).
 - A block is a scope; its last statement gives the arm's value if it is an expression.
 - An arm has no value (it is `void`) if it is a call to a `void` function or a block that ends with another statement, such as an assignment.
 - An arm never gives a value (it is `never`) if it ends with `return`, `break`, `continue`, `throw`, or an `if` whose branches both end so.

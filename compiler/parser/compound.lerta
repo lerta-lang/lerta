@@ -67,6 +67,7 @@ export parse_function_literal := (tokens: TokenStream, weak = false) ->
   if start := tokens.interpolation
     tokens.fail start, 'a function cannot be written in an interpolation'
   parse_body := ->
+    return [pass] if pass := parse_pass(tokens)
     case
       when is_block then parse_block(tokens)
       # Inside brackets, a postfix `for` or `if` after the body belongs to them, as in
@@ -274,9 +275,11 @@ parse_pattern_block := (tokens: TokenStream, parse_pattern: () -> Expression) ->
 # A simple statement on the same line (`when c then x`, `else i += 1`), or an indented block.
 # `arm` is 'then', which comes first, or 'else', which is read already, as `then` is after a block
 # of patterns.
-parse_arm_body := (tokens: TokenStream, arm: TokenKind) ->
+parse_arm_body := (tokens: TokenStream, arm: TokenKind): Statement[] ->
   is_inline := arm == 'then' then tokens.accept('then') else tokens.peek().kind != NEWLINE
   if is_inline
+    # `then` may be followed by a block too, which the line continues with.
+    return [pass] if pass := accept_pass_block(tokens)
     statement := parse_pass(tokens) ? parse_inline_arm(tokens)
     tokens.expect_line_end()
     return [statement]
@@ -284,11 +287,28 @@ parse_arm_body := (tokens: TokenStream, arm: TokenKind) ->
   tokens.fail_expecting next, "'then' or end of line" if next.kind != NEWLINE
   parse_block tokens
 
-# `pass` is not a keyword: a name alone after `then` or `else` would be an unused value, so it can
-# mean nothing else there.
-parse_pass := (tokens: TokenStream): Statement? ->
-  return nil if not tokens.at_word('pass') or tokens.peek_at(1).kind != NEWLINE
+# `pass` alone, a body that does nothing: an arm's, or a function literal's on its line, where the
+# line or the brackets end after it. It is not a keyword: there it means nothing else, as a name
+# alone after `then` or `else` would be an unused value.
+export parse_pass := (tokens: TokenStream): Statement? ->
+  ends := tokens.peek_at(1).kind in PASS_FOLLOWERS
+  return nil if not tokens.at_word('pass') or not ends
   Pass tokens.next().position()
+
+PASS_FOLLOWERS: TokenKind[] = [NEWLINE, ',', 'else', CLOSING_BRACKETS...]
+
+# A block of `pass` alone, after the line end, which does nothing, read if it is one: a block of
+# statements, or the body of a class or a struct without members.
+export accept_pass_block := (tokens: TokenStream) ->
+  is_block := tokens.peek().kind == NEWLINE and tokens.peek_at(1).kind == INDENT
+  is_alone := tokens.peek_at(3).kind == NEWLINE and tokens.peek_at(4).kind == DEDENT
+  return nil if not is_block or not tokens.peek_at(2).is_word('pass') or not is_alone
+  tokens.next()
+  tokens.next()
+  pass := Pass(tokens.next().position())
+  tokens.next()
+  tokens.next()
+  pass
 
 # A declaration's scope would end with the line, so none may follow `then` or `else`.
 parse_inline_arm := (tokens: TokenStream) ->

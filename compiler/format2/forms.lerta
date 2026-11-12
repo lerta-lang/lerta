@@ -3,9 +3,9 @@ import
   ArrayLiteral, Assignment, Await, BinaryOperation, BooleanLiteral, Call, Case, Coalesce,
   Conditional, Declaration, EnumDeclaration, Expression, Extend, Extern, FloatLiteral, For,
   FunctionLiteral, Identifier, If, Import, Index, IntegerLiteral, InterfaceDeclaration, Intrinsic,
-  is_spread, MapLiteral, Member, NamedValue, NilLiteral, Position, Range, RecordLiteral, Return,
-  Statement, StringLiteral, Throw, Try, TupleItem, TypeAlias, TypeDeclaration, UnaryOperation,
-  While, Yield
+  is_spread, MapLiteral, Member, NamedValue, NilLiteral, Pass, Position, Range, RecordLiteral,
+  Return, Statement, StringLiteral, Throw, Try, TupleItem, TypeAlias, TypeDeclaration,
+  UnaryOperation, While, Yield
 from '../ast'
 import is_command_callee from '../format/print_statement'
 
@@ -42,14 +42,13 @@ export is_simple := (node: Expression) ->
     else false
 
 # A statement that the line of `->`, `then` or `else` can hold: one that holds no block, nor
-# declares; and not the name `pass` alone, which there would be the arm that does nothing.
+# declares.
 export is_inline := (statement: Statement) ->
   case statement
     # One in its postfix form, which the line may keep, unless the formatter writes it in a block.
     when If, While, For
       postfix := is_written_postfix(statement)
       postfix then takes_postfix(postfix_body(statement)) else holds_no_block(statement)
-    when Identifier then statement.name != 'pass'
     else holds_no_block(statement)
 
 # A statement that holds no block, nor declares.
@@ -83,11 +82,10 @@ at_body := (body: Statement, position: Position) -> body.position.compare(positi
 
 # A statement that a postfix `if`, `while` or `for` can follow: one that holds no block, nor
 # declares, has no postfix form of its own, and ends with nothing that would take the postfix
-# condition, as a function literal does (see Postfix forms); not the name `pass` alone, whose block
-# stays one.
+# condition, as a function literal does (see Postfix forms); not `pass`, which is one only alone in
+# its body.
 export takes_postfix := (statement: Statement) ->
-  is_pass := statement is Identifier and statement.name == 'pass'
-  holds_no_block(statement) and not ends_open(statement) and not is_pass
+  holds_no_block(statement) and not ends_open(statement) and statement is not Pass
 
 ends_open := (node: Statement): Bool ->
   case node
