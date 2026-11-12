@@ -66,11 +66,5 @@ In the compiler and std, the positions that text handling needs fall in three ki
 
 ## Open questions
 
-- How to take part of a `String`:
-  - Options: a separate type `StringSlice`, as in Swift, whose conversion to `String` is an explicit copy, or a `String` method.
-  - Finding a part: how to find one (an `s.index_of(part)` giving a byte offset or a slice), since a `String` has no integer index (see [the reference](../reference/types.md#string)).
-  - Now: `s.binary.text(i, j)!` serves, and std:scanner where a String is read through (see [the reference](../reference/std.md#stdscanner)).
-  - One answer, since only the lexer needs positions: only `Binary` has them, as its byte offsets, which `b.index_of(part, from)` gives already (see [the reference](../reference/types.md#binary)), and `String` only operations without positions: `split_once`, `contains`, `replace` and the like.
 - Whether the lexer reads bytes, as Go's, Rust's and Zig's do, which suits a syntax of ASCII (an ASCII byte never occurs inside a multi-byte character), or code points, through a std:scanner `Scanner`. Either way, columns could be counted when a diagnostic needs one, rather than through a table per line (`count_code_points`).
 - Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).
-- Operations without positions that a `String` lacks: the number of its bytes, which code takes as `s.binary.length` now.

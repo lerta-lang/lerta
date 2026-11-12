@@ -292,6 +292,10 @@ So `not a number` may be reported at a line after the one that makes the NaN, an
 | `s.starts_with(prefix)`, `s.ends_with(suffix)` | Whether `s` begins or ends with those bytes. |
 | `s.without_prefix(prefix)` | What follows `prefix`, or nil if `s` does not begin with it: `'std:io'.without_prefix('std:')` is `'io'`. |
 | `s.without_suffix(suffix)` | What comes before `suffix`, or nil. |
+| `s.before(part)`, `s.after(part)` | What comes before or after the first occurrence of `part`, or nil if there is none: `'k = v = w'.after(' = ')` is `'v = w'`. |
+| `s.skip(n)` | `s` after its first `n` code points, those that `s.take(n)` gives: `'café'.skip(3)` is `'é'`; empty if it has no more. |
+| `s.skip_while(f)` | `s` after the code points for which `f` holds, from the start. |
+| `s.byte_count()` | The number of its bytes, its UTF-8's, where `s.count()` counts its code points. |
 | `s.contains(part)` | Whether the bytes of `part` occur in `s`; every `String` contains the empty one. A `Char` is taken as its `String`: `'abc'.contains(c)`. |
 | `s.is_digits()` | Whether `s` is one or more ASCII digits: no sign, not empty. |
 | `s.replace(part, by)` | `s` with each occurrence of `part`, from the start and without overlapping, replaced by `by`. |
@@ -320,7 +324,8 @@ These throw a `ValueError`:
 
 - Code points rather than bytes or graphemes: a `Binary` already gives the bytes, and code points are what UTF-8 encodes, while graphemes need Unicode's tables.
 - UTF-8: a PEP 393 style variable-width representation was considered, but it costs a conversion at every I/O boundary.
-- No integer indexing `s[i]`, which could be taken for a character.
+- No integer indexing `s[i]`, which could be taken for a character, nor positions at all: a `String` is taken apart by what it holds (`split_once`, `before`, `after`) or by code points from the start (`take`, `skip`). Code that needs positions, as a lexer, reads the bytes of `s.binary`, whose offsets `b.index_of(part, from)` gives, and makes a `String` of a part by `b.text(start, end)`.
+- Why `skip` gives a `String` while `take` gives an `Iter<Char>`: `take` is every Iterable's, and a `String` method of the same name would clash with it; `s.take(n).join()` makes it a `String`.
 - No StringBuilder, since `+=` appends in place (see [internals](../internals/representation.md#strings)).
 
 ## Binary

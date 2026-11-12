@@ -228,6 +228,9 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `contains(part: String): Bool`, which takes a `Char` too
 - `starts_with(prefix: String): Bool`, `ends_with(suffix: String): Bool`
 - `without_prefix(prefix: String): String?`, `without_suffix(suffix: String): String?`
+- `before(part: String): String?`, `after(part: String): String?`
+- `skip(n: Int): String`, `skip_while(skipped: (Char) -> Bool): String`
+- `byte_count(): Int`
 - `is_digits(): Bool`
 - `parse_int(): Int?`, `parse_float(): Float?`
 - `split(separator: String): String[]`, `split_once(separator: String): (String, String)?`, `split_whitespace(): String[]`, `lines(): String[]`
@@ -303,6 +306,7 @@ The signatures of the methods of the builtin types, by type. What each does is i
 
 - `has_next(): Bool`, `next(): T`
 - `iter(): Iter<T>`
+- `skip(n: Int): Iter<T>`, `skip_while(skipped: (T) -> Bool): Iter<T>`: the items after those that `take(n)` and `take_while` give, read but not given. An array is cut by a [slice](types.md#slices) instead, and a `String` by its own (see [String](types.md#string)).
 - Of an `Iter<String>` or an `Iter<Char>`: `join(separator = ''): String`, as an array's
   - Why of arrays and `Iter`s rather than of an Iterable: an extend of `Iterable<String>` and one of `Iterable<Char>` would clash, as a type may satisfy both, and one of an interface takes its object as an interface value, which an array's loop would then go through an item at a time. Another Iterable joins by its `iter()`: `names.iter().join(', ')` of a set.
 

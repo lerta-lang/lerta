@@ -48,7 +48,6 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
   | Method | Gives |
   |---|---|
   | `flatten` of an Iterable of Iterables | A lazy `Iter` of their items |
-  | `skip(n)`, `skip_while(f)` | The items after those that `take(n)` and `take_while(f)` give, for an `Iter` or a `String`, which no index by a range copies from |
   | `flat_map(f)` | The items of the Iterables that `f` gives, one after another |
   | `chunks(n)`, `windows(n)` | Arrays of `n` items in a row: each item in one chunk, or in every window that holds it |
 
