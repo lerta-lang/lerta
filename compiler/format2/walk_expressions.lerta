@@ -1,10 +1,10 @@
 # The walk of expressions (see walk.lerta).
 import
-  ArrayLiteral, ArrayTypeName, Await, BinaryOperation, BooleanLiteral, Call, Case, Coalesce,
-  Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, FunctionTypeName,
-  Identifier, Index, IntegerLiteral, Interpolation, IsTest, Jump, MapLiteral, Member, NamedType,
+  ArrayLiteral, ArrayTypeName, Await, BinaryOperation, Binding, BooleanLiteral, Call, Case, Cast,
+  Coalesce, Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, FunctionTypeName,
+  Identifier, If, Index, IntegerLiteral, Interpolation, IsTest, Jump, MapLiteral, Member, NamedType,
   NamedValue, NilLiteral, Parameter, Range, RecordLiteral, RecordTypeField, RecordTypeName, Return,
-  StringLiteral, This, Throw, TupleLiteral, TupleTypeName, Try, TypeName, UnaryOperation,
+  StringLiteral, This, Throw, Try, TupleLiteral, TupleTypeName, TypeName, UnaryOperation,
   UnionTypeName, Unwrap, Yield
 from '../ast'
 import TokenKind from '../lexer/tokens'
@@ -57,12 +57,13 @@ extend Walker
   # A type, on one line, in the parentheses that group it: those that the tree does not keep, as
   # around a union or a function type that `?` or `[]` follows. One whose items line ends separate,
   # which a line would need commas between, is left as written.
-  type := (type: TypeName, before: CodeGap): void ->
+  # Its `?` is taken where `optional` is true.
+  type := (type: TypeName, before: CodeGap, optional: Bool = type.optional): void ->
     if type is ArrayTypeName
       @type type.element, before
       @take '[', NONE
       @take ']', NONE
-      @take '?', NONE if type.optional
+      @take '?', NONE if optional
       return
     var groups = 0
     var gap = before
@@ -72,7 +73,7 @@ extend Walker
       groups += 1
     @ungrouped_type type, gap
     @take ')', NONE for _ in 0..groups
-    @take '?', NONE if type.optional
+    @take '?', NONE if optional
 
   # Whether the `(` at `open` is the type's own: that of the parameters of a function type, which
   # `->` follows, or of a tuple type, which holds a comma.
@@ -163,7 +164,8 @@ extend Walker
   # tuple, or of the parameters of a function literal, rather than one around `-> body`.
   node := (node: Expression, before: CodeGap): void ->
     case node
-      when Identifier then @take(IDENTIFIER, before)
+      # The name that `x?.rest` binds x to stands for no token, as `?` is written in its place.
+      when Identifier then @take(IDENTIFIER, before) unless node.name.starts_with('?')
       when StringLiteral then @take(STRING, before)
       when Interpolation then @take(node.binary then BINARY else INTERPOLATED, before)
       when BooleanLiteral then @take(node.value then 'true' else 'false', before)
@@ -195,6 +197,10 @@ extend Walker
         @operand node.fallback, ONE
       when Range then @range(node, before)
       when IsTest then @is_test(node, before, false)
+      when Cast then @cast(node, before)
+      when If
+        unhandled() unless node.nil_safe
+        @nil_safe node, before
       when Conditional
         # Its parts are operands, whose operations stay on their lines.
         breaks := @breaks_operations
@@ -237,6 +243,23 @@ extend Walker
       @take kind, NONE
     else
       @take kind, before
+
+  # `x as T?` or `x as T!`, or the `x as T` of `x as T ? y`, whose `?`, after a space, is the
+  # fallback's.
+  cast := (node: Cast, before: CodeGap) ->
+    @chain node.value, before
+    @take_spelled 'as', ONE
+    @type node.type, ONE, false
+    if node.throws
+      @take '!', NONE
+    else if not @code[@at].spaced
+      @take '?', NONE
+
+  # `x?.rest`, which is read as an `if` that binds x to a name that rest starts with.
+  nil_safe := (node: If, before: CodeGap) ->
+    @chain (node.condition as Binding!).value, before
+    @take '?', NONE
+    @chain node.then_body[0] as Expression!, NONE
 
   member := (node: Member, before: CodeGap) ->
     if node.object is This and @at_kind('@')
@@ -429,15 +452,20 @@ extend Walker
     @literal node, '{', before, '}', items.count == 0 then NONE else INSIDE, items
 
   function := (node: FunctionLiteral, before: CodeGap) ->
-    unhandled() if node.weak or not node.type_params.is_empty()
+    unhandled() if node.weak
+    var open_before = before
     var arrow_before = before
+    unless node.type_params.is_empty()
+      @type_parameters node.type_params, before
+      open_before = NONE
+      arrow_before = ONE
     if @at_kind('(')
       { params } := node
       items := ListItems
         count: params.length
         walk: (i, gap) -> @parameter(params[i], gap)
         simple: (i) -> params[i].default == nil
-      @bracketed '(', before, ')', NONE, items
+      @bracketed '(', open_before, ')', NONE, items
       arrow_before = ONE
     if type := node.return_type
       @take ':', NONE
