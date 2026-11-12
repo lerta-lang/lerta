@@ -46,6 +46,10 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 
 `lerta fmt2 --fix` on an `else` whose block holds one `if`, then a comment line at the depth of that `if`, joins them into `else if` and puts the comment at the depth of the innermost block, as if it were the last line of the joined `if`'s `else`. Fix: keep the comment at the depth of the `else`, or leave the `else` unjoined where a comment follows its `if`.
 
+## fmt2 writes a program that does not parse for some arms with blocks
+
+`lerta fmt` fails with "its rewrites would not parse" on two arms that `# fmt: skip` keeps in the tests: in `tests/case/pattern_block.lerta`, patterns in the block of `when` with `then` on a line of its own and a block below it; in `tests/case/arm_blocks.lerta`, `when Box` whose block holds one call, among arms written after `then`. Fix: find the rewrite of `compiler/format2/` that each takes, and lay out its result so that it parses.
+
 ## fmt2 writes a program that does not parse for a case or try after then
 
 `lerta fmt2` on an arm `when 1 then try`, with the block of `try` and its `catch` on the lines below, fails with "its rewrites would not parse", as does one whose value after `then` is a `case` with its arms below: `compiler/format2/` lays out the value as continued on the line of `then`, which the grammar does not allow for a block below it. Fix: lay out such a value as the arm's block, on the lines below `when`.
