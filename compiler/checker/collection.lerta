@@ -30,14 +30,6 @@ export check_value_type := (program: ProgramWide, type: Type, at: Position, cont
     fail program, at, "#{container} cannot hold values of type #{format_type(type)}"
   type
 
-# The type of an item of a container, such as 'an array', which `at` gives. An optional
-# interface value has no item kind yet (see docs/issues.md).
-export check_item_type := (program: ProgramWide, type: Type, at: Position, container: String) ->
-  check_value_type program, type, at, container
-  if type is OptionalType and type.inner is InterfaceType
-    fail program, at, "#{container} cannot hold values of type #{format_type(type)}"
-  type
-
 # A key is any value that `==` compares but an optional one, since a missing key reads as nil, and
 # hashes as equal values do (see is_hashable). `role` names the key in messages: 'a map key', or
 # 'a set item'.
@@ -77,7 +69,7 @@ export type_of_array := (body: Body, array: ArrayLiteral, expected: Type?) ->
   anchor := anchor_of(elements) ? empty()
   anchor_type := type_of(body, anchor)
   element_type := is_spread(anchor) then (anchor_type as ArrayType!).element else anchor_type
-  element := check_item_type(body.program, element_type, anchor.position, 'an array')
+  element := check_value_type(body.program, element_type, anchor.position, 'an array')
   for item in elements
     expect_element body, item, element if item != anchor
   keep_constructions body, elements
@@ -228,7 +220,7 @@ export type_of_filled_array := (body: Body, call: Call, expected: Type?) ->
   expected_array := inner_of_expected(expected) as ArrayType?
   element := expected_array then expected_array.element else type_of(body, value)
   expect_type body, value, element if expected_array
-  check_item_type program, element, value.position, 'an array'
+  check_value_type program, element, value.position, 'an array'
   if value is not NilLiteral and holds_changing(program, element, value.position, Set())
     shared := "Array() would make every item share one #{format_type(element)}"
     changing := 'which may hold a value that changes'

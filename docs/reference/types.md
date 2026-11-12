@@ -394,7 +394,6 @@ print n + 1 if n := '42'.parse_int()
 - A `T` or `nil` fits where a `T?` is expected.
 - `nil` has no type of its own, so `x := nil` needs a type: `x: String? = nil`.
 - An optional value can be a condition (see [control flow](control-flow.md#if-and-while)).
-- An array cannot hold optional interface values yet. Other optional values are fine: `Int?[]`, `String?[]`.
 
 ### Operators
 
