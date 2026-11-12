@@ -28,13 +28,13 @@ A top-level function's declaration may write its type, a function type, as any `
 
 ### Defaults
 
-A parameter of a top-level function or a method may have a default, `name: Type = value`, which a call may leave out: `greet('a')` calls `greet = (name: String, greeting = 'hello') -> ...` with `'hello'`.
+A parameter of a top-level function or a method may have a default, `name: Type = value`, which a call may leave out: `greet('a')` calls `greet := (name: String, greeting = 'hello') -> ...` with `'hello'`.
 
 - The parameters after one with a default must have defaults too. A call leaves out some of them from the last.
 - The type may be left out when the default is an `Int`, `Float`, `String` or `Bool` literal.
 - A default is computed at each call that leaves it out, in order, before the body runs.
 - It sees the names of the function's module, `@` in a method and the parameters before it. It cannot `return`, `break` or `continue`.
-- A default of a generic function or method is checked for an instance only where a call leaves it out, so that it need fit only the type arguments of such calls. With `total = <T: Add<T, T>>(xs: T[], zero: T = 0)`:
+- A default of a generic function or method is checked for an instance only where a call leaves it out, so that it need fit only the type arguments of such calls. With `total := <T: Add<T, T>>(xs: T[], zero: T = 0)`:
   - `total([1, 2])` takes 0 as an `Int`;
   - `total(['a'], '')` gives its own zero;
   - `total(['a'])` is an error at the call, `expected String, got Int (in the defaults of total<String>)`.
@@ -44,7 +44,7 @@ A parameter of a top-level function or a method may have a default, `name: Type 
 
 ### Variadic parameters
 
-The last parameter of a top-level function or a method may be variadic, `rest: Type...`, or the one before a [last struct parameter](#a-last-struct-parameter). It takes the arguments after the others, none or more, as a `Type[]`: `sum(1, 2, 3)` calls `sum = (first: Int, rest: Int...) -> ...` with `[2, 3]` as `rest`.
+The last parameter of a top-level function or a method may be variadic, `rest: Type...`, or the one before a [last struct parameter](#a-last-struct-parameter). It takes the arguments after the others, none or more, as a `Type[]`: `sum(1, 2, 3)` calls `sum := (first: Int, rest: Int...) -> ...` with `[2, 3]` as `rest`.
 
 - Among those arguments, a spread `xs...` gives the items of `xs`, anything a `for` goes through, as in an [array literal](types.md#array), which they make.
 - The array is new, so the function changing it changes nothing of the caller's.
@@ -56,7 +56,7 @@ The last parameter of a top-level function or a method may be variadic, `rest: T
 
 ### A last struct parameter
 
-When the last parameter is of a struct type, a call may give it as named arguments, which construct the struct as a call of its name does, or leave it out, which constructs it from none. With a struct `Options` whose members are `cwd: String? = default nil` and `count := default 1`, and `run = (command: String, args: String..., options: Options)`:
+When the last parameter is of a struct type, a call may give it as named arguments, which construct the struct as a call of its name does, or leave it out, which constructs it from none. With a struct `Options` whose members are `cwd: String? = default nil` and `count := default 1`, and `run := (command: String, args: String..., options: Options)`:
 
 | Call | Is |
 |---|---|
@@ -83,7 +83,7 @@ When the last parameter is of a struct type, a call may give it as named argumen
   - a mix of a union and some of its members gives the union;
   - `nil` alone does not give a type, so the return type must then be written.
 - A recursive function must write its return type.
-- A function whose return type is not `void` must end with its return value or a `return`. This is decided by the last statement alone: a body ending in `while true`, or in an `if` whose branches all return, still needs a final value.
+- A function whose return type is not `void` must end with its return value or a `return`. This is decided by the last statement alone: a body ending in an `if` or `case` whose branches all return or throw ends so, while one ending in `while true` still needs a final value.
 
 ## Top-level values
 

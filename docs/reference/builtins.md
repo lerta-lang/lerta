@@ -52,7 +52,7 @@ n := dbg(xs.length) + 1
 
 ### min and max
 
-- `T` is that of the arguments, which [infer it](functions.md#generic-functions) as for any generic function: `min(1.0, 2)` compares `Float`s, while `min(1, 2.5)` is an error.
+- `T` is that of the arguments, which [infer it](functions.md#generic-functions) as for any generic function: `min(1.0, 2)` compares `Float`s, while `min(n, 2.5)` with an `Int` `n` is an error.
 - More values are compared by an Iterable's `min` and `max` (see [Iterable](#iterable)): `[a, b, c].min()`.
   - Why two parameters rather than a variadic one: two values alone take no array, which a variadic parameter would make at each call.
 
