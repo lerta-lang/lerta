@@ -308,7 +308,7 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 
 - Write `names: String[]`, not `names: String[] = []`.
 - Write `seen: Set<String>`, not `seen := Set<String>()` or `seen: Set<String> = Set()`; the same for `Map`.
-- A `var` and a field keep their values.
+- A `var` may leave its empty value out too, but `lerta fmt` keeps the one it has; a field keeps its value, as one without is a constructor argument.
 
 ### Type annotations
 

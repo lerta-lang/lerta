@@ -168,14 +168,16 @@ A callee followed by an indented block gives the block as the call's arguments, 
 |---|---|
 | `name := value` | a const, a name that cannot be reassigned |
 | `name: Type = value` | a const of the type written: `limit: Int? = 10` |
-| `var name = value`, `var name: Type = value` | a `var`, one that can be reassigned: `var xs: Int[] = []` |
+| `var name = value`, `var name: Type = value` | a `var`, one that can be reassigned: `var count = 0` |
 | `var name: Type?` | a `var` of an optional type, nil: `var found: String?` |
+| `var name: Type[]` | a `var` of an array, a map or a set, empty (below): `var xs: Int[]` |
 
 - The type is the type of the value, or the one written after the name.
 - `:=` after `var` is an error.
 - A [destructuring](types.md#anonymous-structs) declares its names with `:=` too, and so does the condition of an `if` or a `while` that binds a name (see [control flow](control-flow.md#if-and-while)).
 - The members of a class or struct are declared so too (see [members](objects.md#members)).
-- A const (not a field) whose type is written as an array, `Map<K, V>` or `Set<T>` (not optional, nor through an alias) may leave out its value. It is then empty, a new one each time the declaration runs: `names: String[]` is `names: String[] = []`, and `seen: Set<String>` is `seen := Set<String>()`.
+- A const or a `var` (not a field) whose type is written as an array, `Map<K, V>` or `Set<T>` (not optional, nor through an alias) may leave out its value. It is then empty, a new one each time the declaration runs: `names: String[]` is `names: String[] = []`, and `var seen: Set<String>` is `var seen = Set<String>()`.
+  - A field does not, as one without a value is a constructor argument (see [members](objects.md#members)).
 - Why: there is no `let` and no function declaration (`def`), so that declarations look the same at the top level and inside functions, for values and for functions.
   - `:=`, a written type or `var` tells a declaration from an assignment, which avoids the CoffeeScript ambiguity between them.
   - The most common declaration, of a name that is not reassigned, is the shortest.

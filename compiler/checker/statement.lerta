@@ -2,8 +2,8 @@
 import
   Assignment, Await, Binding, Call, Case, Coalesce, Condition, Declaration, EnumDeclaration,
   Expression, Extend, Extern, Intrinsic, For, FunctionLiteral, Identifier, If, Import,
-  InterfaceDeclaration, is_exported, Pass, Statement, statement_else_body, This, Try, TypeAlias,
-  TypeDeclaration, While
+  InterfaceDeclaration, is_exported, NilLiteral, OMITTED_VALUES, Pass, Statement,
+  statement_else_body, This, Try, TypeAlias, TypeDeclaration, While
 from '../ast'
 import check_assignment from './assignment'
 import check_case_statement, check_try_statement from './case'
@@ -240,12 +240,14 @@ check_declaration := (body: Body, declaration: Declaration) ->
     identifier: name, used: exported
   define_local body, local
 
-# `var x: T` without a value, which is nil.
+# `var x: T` without a value: of a type other than an array, a map or a set, which start empty, it
+# is nil, which the type must fit.
 reject_omitted_value := (body: Body, declaration: Declaration, type: Type?) ->
   written := type ? return
-  return if not declaration.omits_value or is_assignable(nil_type, written)
+  is_nil := declaration.value is NilLiteral
+  return if not declaration.omits_value or not is_nil or is_assignable(nil_type, written)
   needs := "a var of type #{format_type(written)} needs an initial value"
-  message := "#{needs}: only one of an optional type starts at nil"
+  message := "#{needs}: #{OMITTED_VALUES}"
   fail body.program, declaration.type!.position, message
 
 # A weak local holds an object of a class, or nil, and is no top-level value, which would stay

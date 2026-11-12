@@ -3,7 +3,7 @@
 import
   ArrayLiteral, ArrayTypeName, Assignment, AssignmentTarget, Binding, Call, Condition, Conditional,
   copy_identifier, Declaration, Expression, For, Identifier, If, Index, Jump, Member, NamedType,
-  NilLiteral, Return, Statement, Throw, TypeName, UnaryOperation, While, Yield
+  NilLiteral, OMITTED_VALUES, Return, Statement, Throw, TypeName, UnaryOperation, While, Yield
 from '../ast'
 import accept_pass_block, at_weak_function_literal from './compound'
 import
@@ -249,27 +249,26 @@ parse_declaration := (tokens: TokenStream) ->
   name := parse_identifier(tokens)
   type := parse_type_annotation(tokens)
   tokens.fail_expecting tokens.peek(), "'='" if mutable and tokens.peek().kind == ':='
-  # `var x: T?` without a value is nil at first; the checker rejects a type that nil does not fit.
-  if mutable and tokens.peek().kind != '='
-    if type == nil
-      why := 'only one of an optional type starts at nil'
-      tokens.fail_here "a var without a type needs an initial value: #{why}"
-    value := NilLiteral(name.position)
-    return Declaration(name, type, value, mutable, position, weak, omits_value: true)
-  if type and tokens.peek().kind == NEWLINE
+  # Without a value, one whose type is written as `T[]`, `Map<K, V>` or `Set<T>` starts empty, and
+  # a `var` of another type at nil, which the checker rejects for a type that nil does not fit.
+  omits_value := mutable and tokens.peek().kind != '='
+  if omits_value or (type and tokens.peek().kind == NEWLINE)
     types := 'T[], Map<K, V> or Set<T>'
+    tokens.fail_here "a var without a type needs an initial value: #{OMITTED_VALUES}" if type == nil
     message := "expected '=': only a const whose type is written as #{types} starts empty"
-    value := empty_value(type) ? tokens.fail_here(message)
+    empty := empty_value(type)
+    value := empty ? (omits_value then NilLiteral(name.position) else tokens.fail_here(message))
     # The type of an empty Map or Set goes to its type arguments, as the formatter writes it.
     written := value is Call then nil else type
-    return Declaration(name, value, mutable, position, weak, type: written)
+    return Declaration(name, value, mutable, position, weak, omits_value, type: written)
   # A type, as `var` does, tells a declaration from an assignment; `:=` does without.
   operator: TokenKind = mutable or type then '=' else ':='
   tokens.expect operator
   value := parse_value(tokens)
   Declaration name, type, value, mutable, position, weak
 
-# `[]`, or `Map<K, V>()` or `Set<T>()`, for a const of the type that is written without a value.
+# `[]`, or `Map<K, V>()` or `Set<T>()`, for a const or a `var` of the type that is written without a
+# value.
 empty_value := (type: TypeName): Expression? ->
   at := type.position
   return ArrayLiteral(position: at, elements: []) if type is ArrayTypeName and not type.optional
