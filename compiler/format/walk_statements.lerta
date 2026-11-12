@@ -132,7 +132,11 @@ extend Walker
     block := @block(node.else_body, @depth + 1, else_at)
     if_at := @starts[first.position]!
     if_alone := first is If and node.else_body.length == 1 and @code[if_at].kind == 'if'
-    joins_if := if_alone and not @has_comments(else_at, if_at)
+    # Nor a comment after the `if` in the block, as deep as the `if`, which would go into the block
+    # of its last branch; one deeper is in that block already.
+    after_if := (column: Int) -> column > @indentation_of(else_at) and column <= @code[if_at].column
+    trails := (@own_line_comments[@at] ? []).any(after_if)
+    joins_if := if_alone and not @has_comments(else_at, if_at) and not trails
     @shapes.push BlockShape(block..., joins_if, head: else_at)
     @close else_at, true
 

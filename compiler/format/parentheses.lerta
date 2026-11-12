@@ -7,6 +7,7 @@ import
   If, Index, IntegerLiteral, IsTest, MapLiteral, Member, Range, Statement, This, UnaryOperation,
   Unwrap
 from '../ast'
+import CLOSING_BRACKETS from '../lexer/tokens'
 import Place, places_of from './places'
 import runs_to_end, starts_with_parenthesis from './forms'
 import
@@ -103,7 +104,7 @@ dropped := (tokens: Tokens, operand: Operand) ->
   var pairs = 1
   while tokens.is_kind(open + pairs, '(') and tokens.matching(open + pairs) == close - pairs
     pairs += 1
-  runs_on := runs_to_end(expression) and not last
+  runs_on := runs_to_end(expression) and (not last or continues_line(tokens, close))
   # `-(1).abs()` would read `-1` as one literal.
   joins_minus := is_number(expression) and tokens.is_kind(open - 1, '-')
   needed := clarified or precedence(expression) < level or runs_on or joins_minus
@@ -112,6 +113,15 @@ dropped := (tokens: Tokens, operand: Operand) ->
   opening := tokens.run_removed(open, open + dropped_pairs - 1)
   closing := tokens.run_removed_with_spaces_before(close - dropped_pairs + 1, close)
   tokens.edit PARENTHESES, [opening, closing]
+
+# Whether a token that is no closing bracket nor comma follows the one at `close` on its line, as
+# the `if` of a postfix form follows the value of a `return`.
+continues_line := (tokens: Tokens, close: Int) ->
+  next := close + 1
+  return false if next >= tokens.code.length
+  return false if tokens.code[next].line != tokens.code[close].end_line
+  kind := tokens.code[next].kind
+  kind != ',' and kind not in CLOSING_BRACKETS
 
 # Whether the parentheses at the position of the expression are its own: those of an operand that
 # starts it, as `(a) + b`, give their position to what it starts too.

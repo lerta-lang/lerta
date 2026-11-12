@@ -30,8 +30,8 @@ export struct SourceTokens
   line_starts: Set<Int>
   # The comments that end a line, by the index of the code token before them.
   ending_comments := comments_by_code_before(@tokens)
-  # The comments on lines of their own, by the index of the code token after them: the greatest
-  # column of those before it, which tells whether one is inside the block that the token ends (see
+  # The comments on lines of their own, by the index of the code token after them: the columns of
+  # those before it, which tell whether one is inside the block that the token ends (see
   # has_comments in walk.lerta).
   own_line_comments := own_line_columns(@tokens)
   # The index of the code token at each position.
@@ -109,11 +109,12 @@ comments_by_code_before := (tokens: TextToken[]) ->
   comments
 
 own_line_columns := (tokens: TextToken[]) ->
-  columns: Map<Int, Int>
+  columns: Map<Int, Int[]>
   for token in tokens
     comment := token.comment ? continue
     continue unless comment.own_line
-    columns[token.next_code] = max(columns[token.next_code] ? 0, comment.column)
+    before: Int[] = columns.get_or_add(token.next_code, -> [])
+    before.push comment.column
   columns
 
 line_start_indexes := (tokens: Token[]) ->

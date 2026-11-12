@@ -333,10 +333,15 @@ class Layout
       when LineStart
         next_column := has_code then code[token.next_code].column else 1
         # A comment before a dedent indented deeper than the line after it, as at the end of a
-        # block, is indented as the line before it.
+        # block, stays in the block that its column reads as in, moved as the line before it is,
+        # two spaces a level, the deeper of two that it is between, from that of the line before it
+        # out to that of the line after it.
         dedent := code_gap.depth < @depth
-        deeper_comment := comment and dedent and comment.column > next_column
-        @depth = code_gap.depth unless deeper_comment
+        if comment and dedent and comment.column > next_column
+          read := (comment.column + @shift) / 2
+          @depth = min(@depth, max(code_gap.depth, read))
+        else
+          @depth = code_gap.depth
         @shift = 2 * @depth - token.line_indentation
         line_feed gap, 2 * @depth, code_gap.rule
 

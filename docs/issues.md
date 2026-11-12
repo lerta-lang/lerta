@@ -29,20 +29,3 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 ## lerta_platform is left in the runtime for the seed
 
 `lerta_platform` (`runtime/process.c`) gives the system's name, which std read as `platform` before the intrinsic value took its place; no source calls it now, but the seed, compiled from a std that did, still does. Fix: once the seed is refreshed, remove it from the runtime and `runtime/lerta.h`.
-
-## fmt drops the parentheses of a function returned before a postfix if
-
-`lerta fmt` on `mk := (n: Int): ((Int) -> Int) ->`, then `  return ((m) -> m) if n > 0` and `  (m) -> n + m`, fails with "its rewrites would change the program, which is a fault of the formatter": a rewrite of `compiler/format/` takes out the parentheses around the function literal, whose body would then take the `if`. Fix: keep the parentheses of a function literal that a postfix form follows.
-
-## fmt moves a comment at the end of an else block into the if it joins
-
-`lerta fmt --fix` on an `else` whose block holds one `if`, then a comment line at the depth of that `if`, joins them into `else if` and puts the comment at the depth of the innermost block, as if it were the last line of the joined `if`'s `else`. Fix: keep the comment at the depth of the `else`, or leave the `else` unjoined where a comment follows its `if`.
-
-## fmt writes a program that does not parse for some arms with blocks
-
-`lerta fmt` fails with "its rewrites would not parse" on two arms that `# fmt: skip` keeps in the tests: in `tests/case/pattern_block.lerta`, patterns in the block of `when` with `then` on a line of its own and a block below it; in `tests/case/arm_blocks.lerta`, `when Box` whose block holds one call, among arms written after `then`. Fix: find the rewrite of `compiler/format/` that each takes, and lay out its result so that it parses.
-
-## fmt writes a program that does not parse for a case or try after then
-
-`lerta fmt` on an arm `when 1 then try`, with the block of `try` and its `catch` on the lines below, fails with "its rewrites would not parse", as does one whose value after `then` is a `case` with its arms below: `compiler/format/` lays out the value as continued on the line of `then`, which the grammar does not allow for a block below it. Fix: lay out such a value as the arm's block, on the lines below `when`.
-

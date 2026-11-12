@@ -80,6 +80,9 @@ export class Breaker
   # parentheses, which takes them there (see parenthesize): the width of its last token counts the
   # `)` until the body goes in a block.
   widened := Set<Int>()
+  # The first tokens of the bodies that a `then` added goes before, whose line holds a call with its
+  # parentheses (see call).
+  thened := Set<Int>()
   # The closing brackets of the lists decided.
   closes := Set<Int>()
   # Whether the statement being decided keeps its gaps as written, whether it has a rewrite to
@@ -451,7 +454,7 @@ export class Breaker
   # the line of `->`, `then` or `else`, which holds it with them (see Calls without parentheses).
   call := (call: CallShape) ->
     args := call.shapes.last() as ListShape!
-    if @joined
+    if @joined or @start in @thened
       @parenthesize args
     else if @start in @line_starts
       # One that the source has on the line of `->`, `then` or `else` takes them until the layout
@@ -588,12 +591,14 @@ export class Breaker
     @decide arm.shapes
     is_else := patterns.is_empty()
     if then_at == nil and not is_else
-      @add_then last if @fits_after_then(body, last)
+      if @fits_after_then(body, last)
+        @add_then last
+        @thened.add body.block.statements[0].start
       @block_body body, depth + 1
     else if @goes_on_line(body)
       @join_body body
     else
-      @remove_then then_at!, body if not broken and not is_else
+      @remove_then arm, then_at!, body if not broken and not is_else
       @block_body body, depth + 1
 
   # Whether the body is one statement that fits on the line of the patterns that end at `last`,

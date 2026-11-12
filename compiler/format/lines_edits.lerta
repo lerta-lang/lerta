@@ -193,15 +193,35 @@ extend Breaker
       }
     ]
 
-  # The arm without `then`, its body in a block below it.
-  remove_then := (then_at: Int, body: BodyShape) ->
+  # The arm without `then`, its body in a block below it: the patterns on the line of `when`, where
+  # `then` is on a line of its own, which would read the block as more of them otherwise; and a body
+  # on the line of `then` on the next, its lines after the first, as the blocks of a `try` there, as
+  # much deeper.
+  remove_then := (arm: ArmShape, then_at: Int, body: BodyShape) ->
+    patterns: Change[] = then_at in @line_starts then @on_one_line(arm.patterns, ' ') else []
     start := body.block.starts[0]
-    change :=
-      if start in @line_starts
-        @tokens.removed_with_spaces_before then_at
-      else
-        @line_start then_at - 1, start, @source_indentation(then_at) + 2
-    @rewrite BRANCHES, [change]
+    if start in @line_starts
+      removed := Change(from: @tokens.end(then_at - 1), to: @tokens.end(then_at), text: '')
+      return @rewrite(BRANCHES, [patterns..., removed])
+    last := body.block.statements.last()!.end - 1
+    @rewrite BRANCHES, [
+      patterns...
+      @line_start(then_at - 1, start, @source_indentation(arm.start) + 2)
+      @shifted_lines(start, last, 2)...
+      @shifted_comments(last, @source_indentation(arm.start))...
+    ]
+
+  # The lines of comments after the code token at `last`, up to the next, deeper than `columns`,
+  # which end the block that the token ends, moved two columns deeper with it.
+  shifted_comments := (last: Int, columns: Int) ->
+    changes: Change[]
+    next_line := last + 1 < @code.length then @code[last + 1].line else @code[last].end_line + 1
+    for line in (@code[last].end_line + 1)..next_line
+      indentation := @tokens.line_indentation(line) ? continue
+      continue if indentation <= columns
+      start := Position(line, column: 1)
+      changes.push { from: start, to: start, text: '  ' }
+    changes
 
   # The statement in its postfix form: its body where its head starts, and the head after it.
   to_postfix := (shape: PostfixShape) ->
