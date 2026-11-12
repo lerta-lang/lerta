@@ -148,7 +148,7 @@ A signed type takes the rules of [`Int`](#int), an unsigned one those of [`Byte`
 
 ```lerta
 kana := (c: Char) -> c in 'ぁ'..='ゖ' then c + 0x60 else c
-print [kana(c).to_string() for c in 'ひらがな'].join('')
+print [kana(c) for c in 'ひらがな'].join()
 ```
 
 - `Char` is a Unicode scalar value: a code point from 0 to 0x10FFFF, except the surrogates, 0xD800 to 0xDFFF.
@@ -492,7 +492,7 @@ print xs[0] + xs.length
 | `xs.sorted(compare)` | A new array ordered by `compare`, an [`Ordering`](builtins.md#equatable-comparable-and-hashable) that is `LESS` when its first argument goes first, equal items keeping their order; without it, by the `compare` of [Comparable](builtins.md#equatable-comparable-and-hashable) items: `names.sorted()`. |
 | `xs.sorted_by(key)` | Ordered as by `sorted`, by the Comparable key that `key` gives each item: `names.sorted_by((name) -> name.binary.length)`. |
 | `xs.sort(compare)`, `xs.sort_by(key)` | Order the array itself as `sorted` and `sorted_by` order a copy, making no array but one copy of its items to merge into: `names.sort()`. A `compare` that throws leaves the items in some order, each once. |
-| `parts.join(separator)` | A `String[]` joined into one `String`, or a `Binary[]` into one `Binary`. |
+| `parts.join(separator)` | A `String[]` or a `Char[]` joined into one `String`, or a `Binary[]` into one `Binary`; the separator may be left out (see [builtins](builtins.md#arrays)). |
 | `xs.iter()` | An [`Iter`](#iter) of the items. |
 
 - `contains`, `index_of` and `remove` take items that `==` compares; other items are an error.

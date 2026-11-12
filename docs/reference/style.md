@@ -54,7 +54,7 @@ In a literal, and in the lines of a `"""` literal but its interpolations:
 
 - A literal that fits on its line goes there, in its brackets.
 - One that does not, where it can be written without brackets, is written without them, the names of an import included.
-- Where only a member call after the closing bracket keeps them, put it on the line after the block (`.join('')`).
+- Where only a member call after the closing bracket keeps them, put it on the line after the block (`.join()`).
 - A function returning one ends with `return` and the block, since a body is not a literal.
 
 ## Lines and spacing

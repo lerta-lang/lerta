@@ -268,8 +268,8 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `all_but_last(): T[]`
 - Of [Equatable](#equatable-comparable-and-hashable) items: `contains(item: T): Bool`, `index_of(item: T): Int?`, `remove(item: T): Bool`
 - Of [Literal](#literal) items: `to_string(): String`, `to_literal(): String` (see [Stringable](#stringable))
-- Of a `String[]`: `join(separator: String): String`
-- Of a `Binary[]`: `join(separator: Binary): Binary`
+- Of a `String[]` or a `Char[]`: `join(separator = ''): String`, the parts one after another, with the separator between each two
+- Of a `Binary[]`: `join(separator: Binary = b''): Binary`
 - Of a `Byte[]`: `to_binary(): Binary`
 
 ### Map
@@ -300,6 +300,8 @@ The signatures of the methods of the builtin types, by type. What each does is i
 
 - `has_next(): Bool`, `next(): T`
 - `iter(): Iter<T>`
+- Of an `Iter<String>` or an `Iter<Char>`: `join(separator = ''): String`, as an array's
+  - Why of arrays and `Iter`s rather than of an Iterable: an extend of `Iterable<String>` and one of `Iterable<Char>` would clash, as a type may satisfy both, and one of an interface takes its object as an interface value, which an array's loop would then go through an item at a time. Another Iterable joins by its `iter()`: `names.iter().join(', ')` of a set.
 
 ### Promise
 
