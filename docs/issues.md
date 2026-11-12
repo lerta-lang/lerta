@@ -29,3 +29,7 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 ## lerta_platform is left in the runtime for the seed
 
 `lerta_platform` (`runtime/process.c`) gives the system's name, which std read as `platform` before the intrinsic value took its place; no source calls it now, but the seed, compiled from a std that did, still does. Fix: once the seed is refreshed, remove it from the runtime and `runtime/lerta.h`.
+
+## fmt does not break a long line of union members below =
+
+`lerta fmt` keeps each line of a union written on the lines below `=` (see `union_lines` in `compiler/format/walk_statements.lerta`), and reports one over 100 columns as too long to break, though the parser takes the members on any lines. Fix: start a line before the first member that does not fit on its line.

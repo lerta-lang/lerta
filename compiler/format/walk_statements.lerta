@@ -3,7 +3,7 @@ import
   Assignment, Binding, Call, Case, CaseArm, Condition, Declaration, EnumDeclaration, Extend, Extern,
   For, FunctionTypeName, If, Import, ImportName, InterfaceDeclaration, Intrinsic, MemberDeclaration,
   Pass, Position, Statement, StringLiteral, Try, TypeAlias, TypeDeclaration, TypeParameter,
-  UnaryOperation, UnionTypeName, While
+  UnaryOperation, UnionMember, UnionTypeName, While
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import BRANCHES, StyleRule from './rules'
@@ -327,6 +327,8 @@ extend Walker
     { type } := node
     grouped := type is FunctionTypeName or (type is UnionTypeName and type.optional)
     return @type(type, ONE) if grouped
+    if union := type as UnionTypeName?
+      return @union_lines(union) if @is_on_lines(union)
     kind: ValueKind = @comment_follows(after) then BELOW_COMMENT else OTHER
     first := @at
     outer := @shapes
@@ -335,6 +337,20 @@ extend Walker
     shape := ValueShape(first, kind, last: @at - 1, shapes: @shapes)
     @shapes = outer
     @shapes.push shape
+
+  # Whether the union is written on the lines below `=`, more than one, which the parser joins
+  # without `|` between them (see parse_aliased_type).
+  is_on_lines := (union: UnionTypeName) ->
+    starts_line := (member: UnionMember) -> @starts[member.position] ? -1 in @line_starts
+    @at in @line_starts and union.members[1..].any(starts_line)
+
+  # The members of a union on the lines below `=`, one level deeper, as they are written on them,
+  # with `|` between those on a line.
+  union_lines := (union: UnionTypeName) ->
+    for member at i in union.members
+      starts := @at in @line_starts
+      @take '|', ONE if i > 0 and not starts
+      @type member, starts then LineStart(@depth + 1) else ONE
 
   # `extern`, its symbol, `as` and its name if it has one, and its type.
   extern_declaration := (node: Extern, before: CodeGap) ->
