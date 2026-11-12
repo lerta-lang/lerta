@@ -1,0 +1,120 @@
+# A to-do list kept in a JSON file, run by commands as `todo add -p 1 'fix the build'`. Without
+# arguments, it runs a demo of commands on a list in a temporary directory, which it removes after.
+import ArgsError, decode_args, parse_args, parse_command from 'std:args'
+import is_file, make_temp_dir, read_text, remove_tree, write_file from 'std:io'
+import decode_json, encode_json from 'std:json'
+import join from 'std:path'
+import argv, cwd from 'std:process'
+
+enum Command
+  add
+  done
+  list
+
+COMMAND_SPEC :=
+  add: { help: 'add a task' }
+  done: { help: 'mark a task done' }
+  list: { help: 'list the tasks' }
+
+struct Add
+  text: String
+  priority := default 2
+  tags: String[] = default []
+
+ADD_SPEC :=
+  text: { positional: true }
+  priority: { short: 'p', help: 'from 1, the most urgent, to 3' }
+  tags: { short: 't', value: 'tag', help: 'a tag, which may be given again' }
+
+struct Done
+  number: Int
+
+DONE_SPEC := { number: { positional: true } }
+
+struct List
+  all: Bool
+  tag: String?
+
+LIST_SPEC :=
+  all: { short: 'a', help: 'list the done tasks too' }
+  tag: { help: 'list only the tasks of the tag' }
+
+struct Task
+  text: String
+  priority: Int
+  tags: String[] = default []
+  done := default false
+
+load := (file: String): Promise<Task[]> ->
+  return [] unless is_file(file)
+  decode_json<Task[]>((await read_text(file))!)
+
+save := (file: String, tasks: Task[]) -> await write_file(file, encode_json(tasks))
+
+show := (task: Task, number: Int) ->
+  mark := task.done then 'x' else ' '
+  tags := (" ##{tag}" for tag in task.tags).join()
+  print "  [#{mark}] #{number}. (#{task.priority}) #{task.text}#{tags}"
+
+run := (file: String, args: String[]) ->
+  tasks := await load(file)
+  (command, rest) := parse_command<Command>(args, COMMAND_SPEC)
+  case command
+    when add
+      add := parse_args<Add>(rest, ADD_SPEC, 'add')
+      tasks.push { text: add.text, priority: add.priority, tags: add.tags }
+      print "added #{tasks.length}"
+    when done
+      number := parse_args<Done>(rest, DONE_SPEC, 'done').number
+      if task := tasks.get(number - 1)
+        tasks[number - 1] = { task..., done: true }
+        print "done #{number}: #{task.text}"
+      else
+        print "no task #{number}"
+    when list
+      list := parse_args<List>(rest, LIST_SPEC, 'list')
+      # The most urgent first; sorted_by keeps the order of tasks of the same priority.
+      for i in [i for i in 0..tasks.length].sorted_by((i) -> tasks[i].priority)
+        task := tasks[i]
+        tag_fits := list.tag == nil or list.tag in task.tags
+        show task, i + 1 if (list.all or not task.done) and tag_fits
+  await save(file, tasks)
+
+DEMO :=
+  "add 'buy milk' -t home"
+  "add 'fix the build' -p 1 -t work"
+  "add 'call Ann' -p 3 -t home -t phone"
+  'done 1'
+  'list'
+  'list --all --tag home'
+  'done 9'
+
+demo := ->
+  dir := make_temp_dir()
+  try
+    file := join(dir, 'todo.json')
+    for line in DEMO
+      print "$ todo #{line}"
+      await run(file, split_words(line))
+    print "$ todo add --soon 'tidy up'"
+    try
+      decode_args<Add>(['--soon', 'tidy up'], ADD_SPEC, 'add')
+    catch e: ArgsError
+      print "todo: #{e.message}"
+  finally
+    await remove_tree(dir)
+
+# Splits a line into words as a shell would, with '...' around a word that holds spaces.
+split_words := (line: String) ->
+  words: String[]
+  for part at i in line.split("'")
+    if i % 2 == 1
+      words.push part
+    else
+      words.push word for word in part.split_whitespace()
+  words
+
+if argv.is_empty()
+  await demo()
+else
+  await run(join(cwd(), 'todo.json'), argv)

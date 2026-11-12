@@ -1,0 +1,45 @@
+# Counts the primes below a limit in worker processes, each of which is this program run again on
+# a range of its own, at the same time, and gives up on a worker that does not answer in time.
+import all, timeout, TimeoutError from 'std:async'
+import Buffer from 'std:io'
+import argv, executable, exit, run from 'std:process'
+import sleep from 'std:time'
+
+is_prime := (n: Int) ->
+  return false if n < 2
+  var d = 2
+  while d * d <= n
+    return false if n % d == 0
+    d += 1
+  true
+
+# The worker's side: `worker <from> <to>` prints the count of primes in the range.
+work := (from: Int, to: Int) -> print([n for n in from..to when is_prime(n)].length)
+
+# The parent's side: the count that a worker prints for the range, or nil if it fails.
+count_in := (from: Int, to: Int) ->
+  output := Buffer()
+  ended := await run(executable(), 'worker', from.to_string(), to.to_string(), stdout: output)
+  return nil if ended.code != 0
+  output.text()?.trim().parse_int()
+
+if argv.length == 3 and argv[0] == 'worker'
+  work argv[1].parse_int()!, argv[2].parse_int()!
+  exit 0
+if argv == ['stuck']
+  await sleep(60)
+  exit 0
+
+LIMIT := 100_000
+WORKERS := 4
+step := LIMIT / WORKERS
+ranges := [(i * step, (i + 1) * step) for i in 0..WORKERS]
+counts := await all([count_in(from, to) for (from, to) in ranges])
+for (from, to) at i in ranges
+  print "worker #{i + 1}: #{counts[i]?.to_string() ? 'failed'} primes in #{from}..#{to}"
+print "total: #{(count ? 0 for count in counts).sum()}"
+
+try
+  await timeout(run(executable(), 'stuck'), 0.5)
+catch e: TimeoutError
+  print "a stuck worker: #{e.message}"

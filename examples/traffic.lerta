@@ -1,0 +1,73 @@
+# A traffic light at a crossing with a button for walkers, as a state machine of enums, run by a
+# script of events with a short real wait between them.
+import members, parse from 'std:enums'
+import sleep from 'std:time'
+
+enum Light
+  GREEN
+  YELLOW
+  RED
+
+enum Event
+  tick
+  button
+  'power-cut'
+  'power-back'
+
+next := (light: Light): Light ->
+  case light
+    when GREEN then YELLOW
+    when YELLOW then RED
+    when RED then GREEN
+
+class Crossing
+  var light: Light = RED
+  var flashing = false
+  var waiting = false
+  var seconds_left = 0
+
+  init := -> @switch_to(GREEN)
+
+  # How long each light lasts, in ticks, which a walker waiting shortens.
+  duration := (light: Light) ->
+    case light
+      when GREEN then @waiting then 2 else 5
+      when YELLOW then 1
+      when RED then 3
+
+  switch_to := (light: Light) ->
+    @light = light
+    @seconds_left = @duration(light)
+    @waiting = false if light == RED
+    print "  -> #{light}"
+
+  status := -> @flashing then 'flashing' else "#{@light}, #{@seconds_left} left"
+
+  handle := (event: Event) ->
+    case event
+      when tick
+        return if @flashing
+        @seconds_left -= 1
+        @switch_to next(@light) if @seconds_left == 0
+      when button
+        @waiting = true unless @light == RED
+        @seconds_left = min(@seconds_left, @duration(GREEN)) if @light == GREEN
+      when 'power-cut'
+        @flashing = true
+        print '  -> flashing yellow'
+      when 'power-back'
+        @flashing = false
+        @switch_to RED
+
+print "lights: #{[light.to_string() for light in members<Light>()].join(', ')}"
+
+SCRIPT := 'tick tick button tick tick tick tick tick power-cut tick power-back tick tick tick honk'
+
+crossing := Crossing()
+for word in SCRIPT.split(' ')
+  if event := parse<Event>(word)
+    print "#{event} (#{crossing.status()})"
+    crossing.handle event
+  else
+    print "unknown event '#{word}'"
+  await sleep(0.001)

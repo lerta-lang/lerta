@@ -1,0 +1,57 @@
+# Views that watch a shared value and show it, freed as soon as nothing uses them, though the value
+# keeps their listeners and each view refers back to the panel that holds it. Weak references break
+# the cycles that would otherwise keep them alive for ever.
+class Value
+  var current = 0
+  listeners: ((Int) -> void)[] = []
+
+  listen := (listener: (Int) -> void) -> @listeners.push(listener)
+
+  set := (value: Int) ->
+    @current = value
+    listener value for listener in @listeners
+
+class Panel
+  name: String
+  views: View[] = []
+
+  add := (view: View) ->
+    @views.push view
+    view.panel = @
+
+  deinit := -> print("#{@name} closed")
+
+class View
+  name: String
+  value: Value
+  format: (Int) -> String
+  # The panel holds the view, so the view must not hold the panel.
+  weak var panel: Panel? = nil
+
+  # The value keeps the listener, so the listener must not keep the view.
+  init := -> @value.listen(weak (n) -> print("  #{@path()}: #{@format(n)}"))
+  deinit := -> print("#{@name} freed")
+
+  path := -> "#{@panel?.name ? '-'}/#{@name}"
+
+temperature := Value()
+
+main := Panel('main')
+main.add View(name: 'celsius', value: temperature, format: (n) -> "#{n} C")
+main.add View(name: 'fahrenheit', value: temperature, format: (n) -> "#{n * 9 / 5 + 32} F")
+
+# A view of its own panel, which goes when the function returns.
+peek := ->
+  side := Panel('side')
+  side.add
+    View(name: 'alarm', value: temperature, format: (n) -> n >= 30 then 'too hot' else 'fine')
+  print 'set to 31'
+  temperature.set 31
+
+peek()
+print 'set to 20'
+temperature.set 20
+
+main.views.clear()
+print 'set to 10, with no view left'
+temperature.set 10

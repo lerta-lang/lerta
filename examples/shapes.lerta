@@ -1,0 +1,68 @@
+# Measures shapes of different kinds through one interface, on points of a 2D vector type with
+# arithmetic operators.
+import abs, atan2, hypot, PI from 'std:math'
+
+struct Vec
+  x: Float
+  y: Float
+
+  add := (other: Vec) -> vec(@x + other.x, @y + other.y)
+  sub := (other: Vec) -> vec(@x - other.x, @y - other.y)
+  mul := (k: Float) -> vec(@x * k, @y * k)
+  neg := -> vec(-@x, -@y)
+  to_string := -> "(#{@x.to_fixed(1)}, #{@y.to_fixed(1)})"
+
+vec := (x: Float, y: Float) -> Vec(x, y)
+
+# Kept apart from Vec itself, as what geometry asks of a vector rather than what makes one.
+extend Vec
+  length := -> hypot(@x, @y)
+  cross := (other: Vec) -> @x * other.y - @y * other.x
+  degrees := -> atan2(@y, @x) * 180.0 / PI
+
+interface Shape
+  name: String
+  area: () -> Float
+  perimeter: () -> Float
+
+struct Circle: Shape
+  radius: Float
+  name := 'circle'
+  area := -> PI * @radius * @radius
+  perimeter := -> 2.0 * PI * @radius
+
+# The corners in order, either way round.
+struct Polygon: Shape
+  corners: Vec[]
+
+  next := (i: Int) -> @corners[(i + 1) % @corners.length]
+  edges := -> [@next(i) - corner for corner at i in @corners]
+  # The shoelace formula, whose sign tells the way round.
+  area := -> abs([corner.cross(@next(i)) for corner at i in @corners].sum()) / 2.0
+  perimeter := -> (edge.length() for edge in @edges()).sum()
+
+rectangle := (corner: Vec, size: Vec) ->
+  Polygon name: 'rectangle', corners: [
+    corner
+    corner + vec(size.x, 0)
+    corner + size
+    corner + vec(0, size.y)
+  ]
+
+origin := vec(0, 0)
+shapes: Shape[] =
+  Circle(radius: 1.5)
+  rectangle(origin, vec(4, 2))
+  Polygon(name: 'triangle', corners: [origin, vec(3, 0), vec(0, 4)])
+  Polygon(name: 'arrow', corners: [origin, vec(2, 1), vec(0, 2), vec(1, 1)])
+
+for shape at i in shapes.sorted_by((shape) -> -shape.area())
+  area := shape.area().to_fixed(2).pad_start(6)
+  perimeter := shape.perimeter().to_fixed(2).pad_start(6)
+  print "#{i + 1}. #{shape.name.pad_end(10)} area #{area}  perimeter #{perimeter}"
+
+a := vec(3, 4)
+b := vec(-1, 2)
+print "#{a} + #{b} = #{a + b}, #{a} - #{b} = #{a - b}"
+print "-#{a} = #{-a}, #{a} * 0.5 = #{a * 0.5}"
+print "|#{a}| = #{a.length()}, at #{a.degrees().to_fixed(1)} degrees"
