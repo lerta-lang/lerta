@@ -185,7 +185,7 @@ emit_read_tuple := (ir: IrBuilder, reader: Coder, type: TupleType) ->
   count := "i64 #{type.items.length}"
   items: String[]
   unwind := ->
-    emit_release_value ir, item, type.items[i] for item, i in items
+    emit_release_value ir, item, type.items[i] for item at i in items
     emit_return_thrown ir, type
   call_void_method ir, reader, 'begin_tuple', [count], unwind
   for item_type in type.items
@@ -218,7 +218,7 @@ emit_read_object := (ir: IrBuilder, reader: Coder, type: ObjectType) ->
   fields := [to_read(field) for field in info.fields when is_argument(field)]
   make := (values: FieldValues) ->
     args: String[]
-    for field, i in fields
+    for field at i in fields
       args.push "#{ir_type(field.type)} #{values.value(i)}"
       args.push "i1 #{values.given(i)}" if field.has_default
     # The constructor takes the values over, owned, and releases them if it throws.
@@ -242,7 +242,7 @@ class FieldValues
   given := (i: Int) -> @ir.load('i1', @slots[i].given)
 
   unwind := ->
-    emit_release_value @ir, @value(i), field.type for field, i in @fields
+    emit_release_value @ir, @value(i), field.type for field at i in @fields
     emit_return_thrown @ir, @type
 
 # The slots of a field: of its value, and of whether its key was given.
@@ -267,7 +267,7 @@ emit_read_fields := (
     emit_read_field_of_key ir, reader, values, key, release_key
     emit_release ir, key
   emit_for_each_key ir, reader, 'read_field', unwind, read_key
-  for field, i in fields
+  for field at i in fields
     continue unless is_required(field)
     fail := ->
       call_void_method ir, reader, 'fail_missing_field', [name_arg(ir, field.name)], unwind
@@ -280,7 +280,7 @@ emit_read_field_of_key := (
   ir: IrBuilder, reader: Coder, values: FieldValues, key: String, unwind: () -> void
 ) ->
   done := ir.fresh_label('decode.key.done')
-  for field, i in values.fields
+  for field at i in values.fields
     read := ir.fresh_label('decode.key.field')
     next := ir.fresh_label('decode.key.next')
     args := ["ptr #{key}", name_arg(ir, field.name)]
@@ -303,10 +303,10 @@ emit_read_union := (ir: IrBuilder, reader: Coder, type: UnionType) ->
   done := ir.fresh_label('decode.member.done')
   other := ir.fresh_label('decode.member.other')
   labels := [ir.fresh_label('decode.member') for _ in type.members]
-  cases := ["i64 #{codable_kind(member)!}, label %#{labels[i]}" for member, i in type.members]
+  cases := ["i64 #{codable_kind(member)!}, label %#{labels[i]}" for member at i in type.members]
   ir.emit "switch i64 #{kind}, label %#{other} [ #{cases.join(' ')} ]"
   incoming: String[]
-  for member, i in type.members
+  for member at i in type.members
     ir.start_block labels[i]
     value := emit_read(ir, reader, member, unwind)
     boxed := is_boxed(member) then emit_box(ir, value, member) else value

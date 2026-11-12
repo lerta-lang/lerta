@@ -153,7 +153,7 @@ export emit_settling_closure := (g: Generator, closure: String, source: Type, ta
   { params } := function_type_of(source)
   value := (function_type_of(target).result as PromiseType!).value
   slots := [fixed(value_field(source))]
-  args := ["%p#{i}" for _, i in params]
+  args := ["%p#{i}" for _ at i in params]
   generate_body := ->
     ir := body_generator.ir
     pointer := emit_capture_pointer(ir, '%closure', slots, 0)
@@ -255,13 +255,13 @@ generate_function_body := (
     emit_retain_value ir, operand, local_type
     scope[name] = store_in_slot(g, operand, local_type)
   bind '@', '%this', this_type if this_type
-  bind param.name.name, "%p#{i}", type.params[i] for param, i in literal.params
+  bind param.name.name, "%p#{i}", type.params[i] for param at i in literal.params
   # The name cannot be written in the source, so no code can read it.
   bind '(closure)', '%closure', type if holds and captures != nil
   # A captured var is its cell, which the closure holds; the literal reads and writes through it.
   captured := captures ? []
   slots := [capture_slot(capture) for capture in captured]
-  for capture, i in captured
+  for capture at i in captured
     { name, type, is_var } := capture
     pointer := emit_capture_pointer(ir, '%closure', slots, i)
     value := ir.load(slots[i].ir_type, pointer, access_tag(ir, slots[i]))
@@ -289,7 +289,7 @@ generate_default_entry := (
   scope := g.locals.push()
   scope['@'] = ValueLocal(operand: '%this', type: this_type) if this_type
   operands: String[]
-  for param, i in literal.params
+  for param at i in literal.params
     param_type := type.params[i]
     if i < given
       scope[param.name.name] = ValueLocal(operand: "%p#{i}", type: param_type)
@@ -348,7 +348,7 @@ export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo)
     call_void_runtime ir, 'void @lerta_free_unfinished(ptr, ptr, i64)', args
   arguments := [field for field in info.fields when is_argument(field)]
   given := (field: FieldInfo) -> "%given#{argument_index(arguments, field)}"
-  for field, i in arguments
+  for field at i in arguments
     store_argument := -> store_field(g, object, info, field, "%p#{i}")
     if field.has_default
       emit_when ir, given(field), store_argument
@@ -370,7 +370,7 @@ export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo)
     emit_exception_check g
   ir.emit "ret ptr #{object}"
   params: String[]
-  for argument, i in arguments
+  for argument at i in arguments
     params.push "#{ir_type(argument.type!)} %p#{i}"
     params.push "i1 %given#{i}" if argument.has_default
   finish g, "#{linkage}ptr #{constructor_symbol(info.type)}(#{params.join(', ')})"
@@ -431,7 +431,7 @@ export hold_arguments := (
 ) ->
   scope := g.locals.push()
   operands: String[]
-  for arg, i in args
+  for arg at i in args
     operand := generate_arg(arg, i)
     scope["(#{prefix} argument #{i})"] = store_in_slot(g, operand, type_at_use(g, arg))
     operands.push operand

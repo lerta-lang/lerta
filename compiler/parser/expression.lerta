@@ -28,7 +28,7 @@ export struct Arguments
   args: Expression[]
   named_args: NamedValue[]
 
-# `for x in xs`, or `for x, i in xs` with the item's place, with `when guard` after it if there is
+# `for x in xs`, or `for x at i in xs` with the item's place, with `when guard` after it if there is
 # one. `for (a, b) in xs` takes the item, a tuple, apart into `parts`, which the loop declares
 # from `variable` (see take_apart).
 export struct LoopHeader
@@ -426,16 +426,16 @@ parse_index_default := (tokens: TokenStream): Expression? ->
   tokens.expect ':'
   parse_expression tokens
 
-# `at`, `in` and `when` are not keywords, so that they stay usable as names. `for x, i in` is the
-# old spelling of `for x at i in`, which the compiler's own source uses until the seed reads the
-# new.
+# `at`, `in` and `when` are not keywords, so that they stay usable as names.
 export parse_loop_header := (tokens: TokenStream) ->
   tokens.expect 'for'
   position := tokens.peek().position()
   parts: Identifier[] = tokens.peek().kind == '(' then parse_tuple_names(tokens) else []
   variable := not parts.is_empty() then tuple_holder(position) else parse_identifier(tokens)
-  has_index := tokens.accept_word('at') or tokens.accept(',')
-  index := has_index then parse_identifier(tokens)
+  comma := tokens.peek()
+  if comma.kind == ','
+    tokens.fail comma.position(), 'write the index after `at`: `for x at i in xs`'
+  index := tokens.accept_word('at') then parse_identifier(tokens)
   tokens.expect_word 'in'
   iterable := parse_expression(tokens)
   tokens.continue_line_before 'when'
@@ -462,7 +462,7 @@ export take_apart := (holder: Identifier, names: Identifier[], mutable: Bool, of
     { position } := name
     value := TupleItem(index, count, position, tuple: copy_identifier(holder))
     Declaration mutable, name, value, position, of_loop
-  [declaration(name, i) for name, i in names when name.name != '_']
+  [declaration(name, i) for name at i in names when name.name != '_']
 
 # The declarations of the parts of a loop's item (see LoopHeader).
 export take_apart_item := (header: LoopHeader) ->
