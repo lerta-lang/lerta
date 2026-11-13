@@ -166,6 +166,10 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 
 - Construct a value of one argument that must be given with that argument alone: `ValueError('bad')`, not `ValueError(message: 'bad')`.
 
+### Destructured values
+
+- Take a value apart itself, `(key, value) := s.split_once('=') ? return`, not through a const that holds it only for that: `parts := s.split_once('=') ? return` followed by `(key, value) := parts`. So for `{ a, b } := value`.
+
 ### Spreads
 
 - Construct a value from another of its type with a spread, `Point(p..., x: 1)`, not by copying its fields one by one, `Point(x: 1, y: p.y, z: p.z)`.

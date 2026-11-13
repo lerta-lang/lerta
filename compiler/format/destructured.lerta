@@ -1,0 +1,49 @@
+# `(a, b) := value` for `x := value` followed by `(a, b) := x`, and so for `{ a, b }`, where nothing
+# else reads x (see Destructured values).
+import Declaration, Identifier, Statement from '../ast'
+import dump_ast_without_positions from '../dumps'
+import Edit from './edits'
+import DESTRUCTURED_VALUES from './rules'
+import Tokens from './tokens'
+
+export destructured_value_edits := (tokens: Tokens, statements: Statement[]): Edit?[] ->
+  [destructured_value(tokens, statements, i) for i in 0..statements.length - 1]
+
+# The holder at `at`, a const of a value of its own, and the destructuring after it, which takes it
+# apart, as one destructuring of the value. The other statements of the list must not name the
+# holder: those before it too, as a function above a top-level const may read it. The name is found
+# in their dump, as in may_read of typed.lerta: another of the same name, as a parameter, counts
+# too, which only leaves the const as it is.
+destructured_value := (tokens: Tokens, statements: Statement[], at: Int) ->
+  holder := statements[at] as Declaration ? return nil
+  return nil unless is_plain_const(holder)
+  destructuring := statements[at + 1] as Declaration ? return nil
+  taken := destructuring.value as Identifier ? return nil
+  return nil if taken.name != holder.name.name or not is_destructuring(destructuring)
+  others := [statements[..at]..., statements[at + 2..]...]
+  return nil if "name: \"#{holder.name.name}\"" in dump_ast_without_positions(others)
+  name := tokens.at(holder.name.position) ? return nil
+  # Not a name that a destructuring declares, as `b` of `{ a, b } := value`.
+  return nil unless tokens.is_kind(name + 1, ':=')
+  first := tokens.text.first_index(destructuring) ? return nil
+  return nil if tokens.is_kind(first, 'var')
+  value := tokens.at(taken.position) ? return nil
+  names := tokens.slice(tokens.start(first), tokens.end(value - 2))
+  tokens.edit_at DESTRUCTURED_VALUES, holder.position, [
+    tokens.replaced(name, names)
+    { text: '', from: tokens.end(first - 1), to: tokens.end(value) }
+  ]
+
+# A const without a type, which a destructuring may stand for.
+is_plain_const := (declaration: Declaration) ->
+  { name } := declaration
+  not declaration.mutable and
+    declaration.type == nil and
+    not declaration.exported and
+    not declaration.weak and
+    '.' not in name.name
+
+# The const that `(a, b) := x` or `{ a, b } := x` declares to hold x, whose name cannot be written.
+is_destructuring := (declaration: Declaration) ->
+  name := declaration.name.name
+  name.starts_with('_tuple.') or name.starts_with('destructured.')
