@@ -2,7 +2,7 @@
 # the member of a name that an interface reads.
 import Call, FunctionLiteral, Identifier, Member, Position, This from '../ast'
 import check_arguments from './arguments'
-import builtin_method, BuiltinMethod from './builtins'
+import builtin_method, BuiltinMember, BuiltinMethod from './builtins'
 import COMPLETION_NAME, probe_member from './completion_probe'
 import warn_if_kept from './cycles'
 import is_equatable from './equality'
@@ -263,7 +263,12 @@ interface_property := (body: Body, type: Type, name: String) ->
 export record_member := (body: Body, member: Member, target: MemberTarget) ->
   body.facts.members[member] = target
   object := member.object
-  body.facts.consuming_reads.add object if target is Method and object is Identifier
+  return if target is not Method or object is not Identifier
+  source := target.source
+  steppers: BuiltinMember[] = [ITER_HAS_NEXT, ITER_NEXT]
+  steps := source is BuiltinMethod and source.member in steppers
+  reads := steps then body.facts.stepping_reads else body.facts.consuming_reads
+  reads.add object
 
 reject_deinit := (body: Body, object_type: Type, member: Member) ->
   { name, position } := member.name

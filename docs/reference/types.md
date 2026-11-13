@@ -664,6 +664,7 @@ These methods of an Iterable go through its items and give a result:
   - the consuming methods above;
   - the lazy methods, whose `Iter` reads it.
 - A consumer throws `an Iter can be traversed only once` if a traversal has started. To go through the items several times, keep them with `to_array()`.
+- A `:=` local holding an `Iter` warns where a consumer reads it after another traversal, `'items' is an Iter, which this traverses again after another traversal`, as it would throw there. `has_next` and `next` go on with one traversal. Only the reads in the local's own block count, one after another; those in branches, loops and function literals do not, so a consumer that a loop repeats does not warn.
 
 ### Iters written in Lerta
 

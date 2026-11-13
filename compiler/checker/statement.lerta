@@ -98,7 +98,9 @@ export check_top_level_code := (body: Body, statements: Statement[]) ->
     body.loop_depth = 0
     if declaration := top_level_value(statement)
       body.shared.top_level.failed.add declaration.name.name
-  body.scopes.pop()
+  scope := body.scopes.pop()
+  warn_if_consumed_twice body, local for local in scope.values()
+  scope
 
 # A block that gives a value: its last statement, typed in its scope by `type_of_last` if it is an
 # expression; the block is void if it ends with another statement, and never if with a jump.
@@ -144,6 +146,7 @@ export check_block := (
   scope := body.scopes.pop()
   warn_if_unused body.shared, local for local in scope.values()
   record_only_read body, local for local in scope.values()
+  warn_if_consumed_twice body, local for local in scope.values()
 
 # A `:=` local that is read once, in its own scope, as what a loop or a comprehension goes through
 # or as the object of a method, and nowhere else, so that codegen may evaluate its value there
@@ -153,6 +156,32 @@ record_only_read := (body: Body, local: Local) ->
   return if local.reads.length != 1 or local.read_in_inner_scope
   read := local.reads[0]
   body.facts.lazy_reads[local.identifier] = read if read in body.facts.consuming_reads
+
+# Warns at the read of a `:=` local holding an Iter that starts a second traversal of it, as one
+# that goes through it, by a loop, a comprehension or a method, throws once another has started.
+# has_next and next go on with a traversal: only the first of them starts one, and only before a
+# consumer, after which they find the end. Only the reads in the local's own block count, as they
+# run one after another; those in a branch, a loop or a function literal may run any number of
+# times.
+warn_if_consumed_twice := (body: Body, local: Local) ->
+  return if not local.declared or local.mutable or local.type is not IterType
+  { consuming_reads, stepping_reads } := body.facts
+  var stepped = false
+  var consumes = false
+  starts: Identifier[]
+  for read in Set<Identifier>(local.reads)
+    continue if read in local.inner_reads
+    if read in consuming_reads
+      consumes = true
+      starts.push read
+    else if read in stepping_reads and not stepped and not consumes
+      stepped = true
+      starts.push read
+  return if not consumes or starts.length < 2
+  name := local.identifier.name
+  message := "'#{name}' is an Iter, which this traverses again after another traversal; " +
+    "write #{name}.to_array() where it is made to go through it more than once"
+  warn body.shared, starts[1].position, message
 
 export check_statement := (body: Body, statement: Statement): void ->
   is_top_level := body.is_top_level()
