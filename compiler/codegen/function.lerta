@@ -111,14 +111,8 @@ export no_locals := (_scope: Map<String, CodegenLocal>) -> return
 # a call of it gives holds the closure.
 export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = false) ->
   captures := g.facts.captures[literal]!
-  symbol := g.code.ir_module.fresh_symbol('lerta.lambda')
   name := "#{g.function_name}.<anonymous>"
-  body_generator := function_generator(g.code, g.extensions, g.facts, name)
-  # It is generated within the functions taken in place around it, and copied as many times as the
-  # code it is in (see fusion).
-  body_generator.fusion = g.fusion
-  # Its symbol is numbered within the module.
-  generate_function body_generator, 'private ', symbol, literal, nil, captures
+  symbol := literal_symbol(g, literal, name, captures)
   return emit_static_closure(g.ir, symbol) if captures.is_empty()
   local_of := (capture: Capture) -> referred_local(g, capture.source, capture.name)
   is_weak := (capture: Capture) -> capture.is_weak or local_of(capture).weak
@@ -142,6 +136,27 @@ export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = f
     operands.push owned.cell
   return emit_local_closure(g.ir, symbol, slots, operands) if on_stack
   emit_closure g.ir, symbol, name, slots, operands
+
+# The code of the literal, generated once outside the loops that take functions in place; within
+# them, as many times as the code it is in is copied (see fusion).
+literal_symbol := (g: Generator, literal: FunctionLiteral, name: String, captures: Capture[]) ->
+  symbols: Map<FunctionLiteral, String>? = g.fusion.literals.is_empty() then shared_symbols(g)
+  if symbols
+    return found if found := symbols[literal]
+  # Its symbol is numbered within the module.
+  symbol := g.code.ir_module.fresh_symbol('lerta.lambda')
+  symbols[literal] = symbol if symbols
+  body_generator := function_generator(g.code, g.extensions, g.facts, name)
+  body_generator.fusion = g.fusion
+  generate_function body_generator, 'private ', symbol, literal, nil, captures
+  symbol
+
+shared_symbols := (g: Generator) ->
+  symbols := g.code.literal_symbols
+  return found if found := symbols[g.facts]
+  added: Map<FunctionLiteral, String>
+  symbols[g.facts] = added
+  added
 
 # The function value, an owned closure of the type `source`, as one of the type `target` that calls
 # it and settles the Promise that it returns with its result (see settles_into): a new closure,

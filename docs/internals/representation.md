@@ -30,6 +30,7 @@
 - A function value is a closure: a heap object with the header, the pointer to its code, then its captured values.
 - The code takes the closure first, then the arguments, borrowed as in any call.
 - A local function that sees itself (`sees_itself` in the checker's facts) reads its name as the closure it is given, so that calling itself makes no closure and holds none, which would hold itself.
+- A local function read before its declaration (`LocalFunction` in the checker's references), as by another that it calls in turn, is a closure made where it is read, on the stack where it is called, with the code shared by its closures (`literal_symbols`). The body reading it captures what it captures (`finish_local_functions`), so that no closure holds another that holds it.
 - A function literal's closure is allocated where the literal is evaluated, with the captured values copied in (references retained), and a generated type whose drop function releases those that are references.
 - **Immortal closures.**
   - A closure that captures nothing, such as that of a top-level function, is an immortal constant. Its code is a generated thunk that calls the function without the closure.

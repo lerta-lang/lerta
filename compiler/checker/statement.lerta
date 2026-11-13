@@ -2,7 +2,7 @@
 import
   Assignment, Await, Binding, Call, Case, Coalesce, Condition, Declaration, EnumDeclaration,
   Expression, Extend, Extern, Intrinsic, For, FunctionLiteral, Identifier, If, Import,
-  InterfaceDeclaration, is_exported, NilLiteral, OMITTED_VALUES, Pass, Statement,
+  InterfaceDeclaration, is_exported, NilLiteral, OMITTED_VALUES, Pass, Position, Statement,
   statement_else_body, This, Try, TypeAlias, TypeDeclaration, While
 from '../ast'
 import check_assignment from './assignment'
@@ -10,17 +10,17 @@ import check_case_statement, check_try_statement from './case'
 import declared_constant from './constants'
 import check_part, fail, fail_already_defined, warn, warn_if_unused from './diagnostics'
 import expect_condition, expect_optional, expect_type, type_of from './expression'
-import has_function, required_params from './functions'
+import has_function, parameter_types, required_params from './functions'
 import names_literals_assign from './literal_assignments'
-import named_function from './name'
+import lookup, named_function from './name'
 import check_for, check_while from './loop'
 import ends_with_jump, narrow, narrowings_of, narrowings_where from './narrowing'
 import ObjectInfo from './object_types'
 import check_last_statement from './result'
 import Local from './scopes'
-import Body, SelfContext from './shared'
+import Body, Capture, LocalFunctionUse, SelfContext from './shared'
 import define_top_level, top_level_value from './top_level_values'
-import names_type_or_import, resolve from './type_names'
+import names_type_or_import, resolve, resolve_result from './type_names'
 import is_standard_name, module_location from '../source'
 import
   format_type, FunctionType, inner_of, is_assignable, is_kind, is_one_of_kinds, IterType,
@@ -54,10 +54,12 @@ export check_function_body := (
   holds: Expression?
   checks_defaults = true
 ) ->
+  statements := literal.body
   define_params := ->
     define_parameters body, literal, params, checks_defaults
     narrow_where_holds body, holds if holds
-  statements := literal.body
+    # The last statement, which check_block leaves to `finish`, may declare one too.
+    predeclare_local_functions body, statements.last() then [statements.last()!] else []
   body.names_literals_assign = names_literals_assign(statements)
   before_last := statements.all_but_last()
   finish := ->
@@ -145,14 +147,106 @@ export check_block := (
 ) ->
   body.scopes.push()
   define()
-  for statement at i in statements
-    warn_if_unreachable body, statements[i - 1], statement if i > 0
-    check_statement body, statement
-  finish()
+  predeclare_local_functions body, statements
+  try
+    for statement at i in statements
+      warn_if_unreachable body, statements[i - 1], statement if i > 0
+      check_statement body, statement
+    finish()
+    finish_local_functions body
+  finally
+    # The uses hold the bodies reading the functions, which hold the facts.
+    forget_local_function_uses body
   scope := body.scopes.pop()
   warn_if_unused body.shared, local for local in scope.values()
   record_only_read body, local for local in scope.values()
   warn_if_consumed_twice body, local for local in scope.values()
+
+# The local functions of the block whose types are written, seen from its start, so that they may
+# call each other whatever their order, and be called before their declarations.
+predeclare_local_functions := (body: Body, statements: Statement[]) ->
+  for statement in statements
+    declaration := statement as Declaration ? continue
+    literal := declaration.value as FunctionLiteral ? continue
+    continue if declaration.mutable
+    type := written_function_type(body, declaration, literal) ? continue
+    { name } := declaration
+    scope_depth := body.scopes.depth()
+    local := Local(type, scope_depth, identifier: name, declared: true, local_function: literal)
+    local.pending = true
+    body.scopes.define name.name, local
+
+# The type of a local function, written on its literal or on its declaration, if it is.
+written_function_type := (body: Body, declaration: Declaration, literal: FunctionLiteral) ->
+  { program, resolver } := body
+  return resolve(program, resolver, written) as FunctionType? if written := declaration.type
+  return_type := literal.return_type ? return nil
+  result := resolve_result(program, resolver, return_type)
+  return nil unless literal.params.all((param) -> param.type != nil)
+  FunctionType result, params: parameter_types(program, resolver, literal, [])
+
+# Each body that reads a local function of the block before its declaration captures what the
+# function captures, to make its closure there, and so on until no function captures more, as
+# functions that call each other capture what each other does. What it captures of the block must
+# be declared where the block makes the closure of that body, or reads the function itself.
+finish_local_functions := (body: Body) ->
+  literals := local_functions(body)
+  uses := body.facts.local_function_uses
+  return unless literals.any((literal) -> literal in uses)
+  captures := (literal: FunctionLiteral) -> body.facts.captures[literal] ? []
+  count := -> literals.map((literal) -> captures(literal).length).sum()
+  var before = -1
+  while before != count()
+    before = count()
+    for literal in literals
+      capture_for body, use.reader, captures(literal) for use in uses[literal] ? []
+  for literal in literals
+    reject_undeclared_capture body, use, captures(literal) for use in uses[literal] ? []
+
+# The local functions of the innermost scope, whose types are written.
+local_functions := (body: Body) ->
+  literals: FunctionLiteral[]
+  for local in body.scopes.innermost_locals()
+    literals.push literal if literal := local.local_function
+  literals
+
+forget_local_function_uses := (body: Body) ->
+  body.facts.local_function_uses.remove literal for literal in local_functions(body)
+
+# The reader captures what a local function captures. The scopes of the bodies from it out to the
+# block are gone by then, as they are checked: each body that sees itself (see self_local) gets it
+# back meanwhile, so that the lookup of its own name finds it rather than capturing the local.
+capture_for := (block: Body, reader: Body, captures: Capture[]) ->
+  readers: Body[]
+  var current = reader
+  while current != block
+    readers.push current
+    current = current.enclosing ? break
+  for each in readers
+    each.scopes.push()
+    each.scopes.define itself.identifier.name, itself if itself := each.self_local
+  lookup reader, capture.name for capture in captures
+  each.scopes.pop() for each in readers
+
+# Where the block reads a local function, or makes the closure of the function literal in it that
+# reads the function.
+made_at := (block: Body, use: LocalFunctionUse) ->
+  var reader = use.reader
+  return use.name.position if reader == block
+  reader = reader.enclosing ? return use.name.position while reader.enclosing != block
+  reader.context!.literal.position
+
+reject_undeclared_capture := (body: Body, use: LocalFunctionUse, captures: Capture[]) ->
+  at := made_at(body, use)
+  for capture in captures
+    local := body.scopes.innermost_locals().find((each) -> each.identifier.name == capture.name)
+    continue if not local or not is_after(local.identifier.position, at)
+    name := use.name.name
+    message := "'#{name}' is read before '#{capture.name}', which it captures, is declared"
+    fail body.program, use.name.position, message
+
+is_after := (a: Position, b: Position) ->
+  a.line > b.line or (a.line == b.line and a.column > b.column)
 
 # A `:=` local that is read once, in its own scope, as what a loop or a comprehension goes through
 # or as the object of a method, and nowhere else, so that codegen may evaluate its value there
@@ -272,10 +366,20 @@ check_declaration := (body: Body, declaration: Declaration) ->
   assigned_by_literal := mutable and name.name in body.names_literals_assign
   scope_depth := body.scopes.depth()
   constant := body.is_top_level() and not mutable then declared_constant(body, value, type)
+  if predeclared := predeclared_function(body, value)
+    predeclared.pending = false
+    body.facts.types[name] = type
+    return
   local := Local
     type, mutable, declared, weak, is_this, assigned_by_literal, scope_depth, constant,
     identifier: name, used: exported
   define_local body, local
+
+# The local that predeclare_local_functions declared for the value, a function literal.
+predeclared_function := (body: Body, value: Expression) ->
+  literal := value as FunctionLiteral ? return nil
+  local := body.scopes.innermost_locals().find((each) -> each.local_function == literal)
+  local?.pending == true then local
 
 # `var x: T` without a value: of a type other than an array, a map or a set, which start empty, it
 # is nil, which the type must fit.

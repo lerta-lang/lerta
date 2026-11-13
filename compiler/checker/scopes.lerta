@@ -1,5 +1,5 @@
 # Nested scopes of local names, innermost last.
-import Identifier from '../ast'
+import FunctionLiteral, Identifier from '../ast'
 import Constant from './constants'
 import Type from '../types'
 
@@ -32,6 +32,10 @@ export class Local
   # The reads from a block inside the local's scope or from a function literal, which may run
   # any number of times, or not at all (see warn_if_consumed_twice).
   inner_reads: Set<Identifier> = Set()
+  # A const of a function literal whose type is written, which its block sees from its start, and
+  # whether its declaration is still to come there (see predeclare_local_functions).
+  local_function: FunctionLiteral?
+  var pending = false
 
   # The local itself, of which this may be a view.
   original := -> @origin ? @
@@ -56,6 +60,8 @@ export class Scopes
   depth := -> @scopes.length
 
   push := -> @scopes.push(Scope())
+
+  innermost_locals := -> @scopes.last()!.locals.values()
 
   # The innermost scope ends; returns its locals.
   pop := -> @scopes.pop().locals

@@ -1,12 +1,12 @@
 # Calls: of functions written in Lerta, of C functions, of closures, of constructors and of
 # methods.
-import Call, construction_arguments, Expression, Identifier, Member from '../ast'
-import generate_statement from './function'
+import Call, construction_arguments, Expression, FunctionLiteral, Identifier, Member from '../ast'
+import generate_closure, generate_statement from './function'
 import BuiltinMethod from '../checker/builtins'
 import EnumValue, InterfaceProperty, Method, Property from '../checker/member_targets'
 import
   CodableConversion, CollectionMaker, Constructor, EnumQuery, ExternReference, FunctionReference,
-  ScopedLocal, TopLevelValue
+  LocalFunction, ScopedLocal, TopLevelValue
 from '../checker/references'
 import
   ExtensionSource, InterfaceMethod, MethodSource, OwnMethod, UnionMethod
@@ -82,6 +82,7 @@ generate_named_call := (g: Generator, call: Call, callee: Identifier) ->
     when FunctionReference
       call_function g, function_reference_symbol(g, reference), callee_type(), args, nil
     when ScopedLocal, TopLevelValue then call_closure(g, callee, args)
+    when LocalFunction then call_local_function(g, reference.literal, callee_type(), args)
     when EnumValue then panic('an enum value is not called')
 
 generate_new_collection := (g: Generator, call: Call, type: MapType | ArrayType) ->
@@ -329,6 +330,20 @@ call_closure := (g: Generator, callee: Expression, args: Expression[]) ->
   call_with_arguments := -> borrowing_all(g, args, emit_call)
   result := is_owned then holding(g, closure, type, call_with_arguments) else call_with_arguments()
   emit_release g.ir, closure if is_owned
+  emit_exception_check g
+  result
+
+# A local function before its declaration, whose closure takes what the function calling it
+# captures for it: on the stack, as it is only called, unless the function lets itself out, as a
+# value of its own name.
+call_local_function := (g: Generator, literal: FunctionLiteral, type: Type, args: Expression[]) ->
+  declaration := g.facts.local_function_names[literal]!
+  on_heap := declaration in g.facts.escaping_locals
+  closure := generate_closure(g, literal, not on_heap)
+  call_with_arguments := ->
+    borrowing_all g, args, (operands) -> emit_closure_call(g.ir, closure, type, operands)
+  result := on_heap then holding(g, closure, type, call_with_arguments) else call_with_arguments()
+  emit_release g.ir, closure if on_heap
   emit_exception_check g
   result
 

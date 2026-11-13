@@ -1,0 +1,58 @@
+# The local functions of a block whose types are written are seen from its start: they call each
+# other, in whichever order, and are called, or read as values, before their declarations, with a
+# closure made there of what they capture; so are they from a function literal in one of them, and
+# out of the call that makes them.
+main := ->
+  limit := 0
+  is_even := (n: Int): Bool -> n == limit or is_odd(n - 1)
+  print is_even(4)
+  is_odd: (Int) -> Bool = (n) -> n != limit and is_even(n - 1)
+  print is_odd(7)
+
+  print twice(5)
+  as_value := [twice]
+  print as_value[0](1)
+  twice := (n: Int): Int -> n * 2 + limit
+
+  outer := (n: Int): Int ->
+    steps := [inner(m) for m in 0..n]
+    steps.length
+  inner := (n: Int): Int -> n + limit
+  print outer(3)
+  [is_even, is_odd]
+
+functions := main()
+print functions[1](9)
+
+# Called before its declaration, one that lets itself out is made on the heap, directly or through
+# another; an inner block's local of its name hides it.
+holder: (() -> Int)[]
+escaping := ->
+  base := 10
+  lets_out()
+  through()
+  through := (): Int -> lets_out()
+  lets_out := (): Int ->
+    holder.push lets_out
+    base
+  if base > 0
+    lets_out := 2
+    print lets_out
+escaping()
+print holder[0]() + holder[1]()
+
+# Each instance of a generic function has its own.
+generic := <T: Stringable>(x: T) ->
+  print first()
+  first := (): T -> x
+generic 1
+generic 'one'
+
+# One read before its declaration reads a captured var as it is then.
+changing := ->
+  var count = 1
+  print current()
+  count = 5
+  print current()
+  current := (): Int -> count
+changing()

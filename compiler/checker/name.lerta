@@ -12,7 +12,9 @@ import
   ValueExport
 from './imports'
 import object_type from './object_types'
-import ExternReference, FunctionReference, Reference, ScopedLocal, TopLevelValue from './references'
+import
+  ExternReference, FunctionReference, LocalFunction, Reference, ScopedLocal, TopLevelValue
+from './references'
 import Local from './scopes'
 import Body, has_declared_type, Shared from './shared'
 import abort_if_failed, fail_runs_later, reject_pending from './top_level_values'
@@ -61,6 +63,9 @@ export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Boo
       origin.read_in_inner_scope = true
       origin.inner_reads.add identifier
     body.facts.escaping_locals.add origin.identifier if not is_callee or not is_own
+    if origin.pending
+      record_local_function_use body, identifier, origin.local_function!
+      return local.type
     record_reference body, identifier, local_reference(body, name, local)
     record_name_constant body, identifier, origin.constant
     return local.type
@@ -89,6 +94,13 @@ export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Boo
   undefined_name := -> fail(program, position, "undefined name '#{name}'#{hint}")
   builtin := builtin_export(shared, name) ? undefined_name()
   type_of_export body, builtin, identifier, is_callee
+
+# A local function read before its declaration: its closure is made where it is read, with what the
+# body reading it captures for it (see finish_local_functions).
+record_local_function_use := (body: Body, identifier: Identifier, literal: FunctionLiteral) ->
+  record_reference body, identifier, LocalFunction(literal)
+  uses := body.facts.local_function_uses
+  uses[literal] = [(uses[literal] ? [])..., { reader: body, name: identifier }]
 
 # Why a local function does not see its own name in its body, or in a function literal in it: its
 # type is not written.
