@@ -347,6 +347,7 @@ Besides:
 
 - It writes a construction of a struct, `S(x: 1)`, as `{ x: 1 }` where `S` is expected.
 - Not where the expected type comes only from the other items of an array or a map, nor as the left operand of `==`.
+- It writes a variable or a field without a type whose value is an array of a struct that is not generic, `xs := [S(x: 1), s]`, with the type, as the first construction names it, and each construction in the array that a record can write as a record: `xs: S[] = [{ x: 1 }, s]`. Not an array where no construction gives an argument but a value alone.
 - A construction without parentheses is only reported.
 
 #### Named arguments written alone

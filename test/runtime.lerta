@@ -180,16 +180,16 @@ long_temp_dir_check := posix_check
 # A check of what only POSIX systems have, such as /dev/null, fcntl and `script`.
 on_posix := (check: Check) -> posix_check(check.name, check.run)
 
-checks := [
+checks: Check[] = [
   remove_tree_check
   long_temp_dir_check
-  Check(name: 'the debug runtime reports a leak', run: ->
+  { name: 'the debug runtime reports a leak', run: ->
     outcome := await build_and_run('leak', false)
     [
       compare_text('stderr', "leak: 1 object(s)\n", outcome.stderr)...
       expect_status(23, outcome.status)...
     ]
-  )
+  }
   clean_check('the debug runtime accepts released objects', 'released', false)
   clean_check('a LertaQueue keeps its items in order as it drops and grows', 'queue', false)
   use_after_drop('retain')
@@ -219,7 +219,7 @@ checks := [
     'release_queued'
     'release of a dropped object'
   )
-  Check(name: 'lerta_string_slice throws unless both ends are within and at characters', run: ->
+  { name: 'lerta_string_slice throws unless both ends are within and at characters', run: ->
     outcome := await build_and_run('string_slice', false)
     out_of_range := 'error 0: slice out of range'
     within := 'error 0: slice within a character'
@@ -235,8 +235,8 @@ checks := [
       out_of_range
     ]
     [compare_text('stdout', lines(expected), outcome.stdout)..., expect_clean(outcome)...]
-  )
-  Check(name: 'lerta_string_hash is wyhash under a seed and a secret made in each process', run: ->
+  }
+  { name: 'lerta_string_hash is wyhash under a seed and a secret made in each process', run: ->
     executable := await build('string_hash', true)
     first := await execute(executable)
     second := await execute(executable)
@@ -292,7 +292,7 @@ checks := [
       expect_clean(second)...
       reason_unless(own_hashes[0] != own_hashes[1], 'two processes hashed "a" alike')...
     ]
-  )
+  }
   clean_check('the optimized runtime does not count objects', 'leak', true)
   on_posix(clean_check('a write of more than 2 GiB is done whole', 'write_large', false))
   on_posix(
@@ -344,12 +344,12 @@ checks := [
       expect_status(0, outcome.status)...
     ]
   )
-  Check(
+  {
     name: 'the writes of Writers stay in the buffer, for stderr too, until it is written out'
     run: ->
       outcome := await build_and_run('interleaved_writes', false, ['EXIT_AT_ONCE'])
       [compare_text('stdout', '', outcome.stdout)..., compare_text('stderr', '', outcome.stderr)...]
-  )
+  }
   posix_check('the buffer is written out at exit, to a terminal too, in the order of the writes', ->
     shown := await run_on_terminal(await build('interleaved_writes', false))
     expected := "first\r\nsecond\r\nthird\r\n"

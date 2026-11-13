@@ -245,7 +245,7 @@ help_check := (args: String[]) ->
 format_case := 'tests/format/eof'
 format_key := "format checks\t#{format_case}"
 
-driver_checks :=
+driver_checks: Check[] =
   usage_check(
     ['nothing']
     "<bootstrap|run|cli|format|runtime|leaks|self> takes a Suite, not 'nothing'"
@@ -259,37 +259,37 @@ driver_checks :=
   usage_check(['-j', '2', '-j', '3'], '--jobs is given twice')
   usage_check(['-j', 'x'], "--jobs takes an Int, not 'x'")
   usage_check(['--nope'], 'unknown option --nope')
-  Check(name: 'bin/test runs a suite given twice once', run: ->
+  { name: 'bin/test runs a suite given twice once', run: ->
     once := await run_driver(['format', '-k', format_case, '--list'], await new_failed_file([]))
     twice :=
       await run_driver(['format', 'format', '-k', format_case, '--list'], await new_failed_file([]))
     [expect_status(0, twice.status)..., compare_text('stdout', once.stdout, twice.stdout)...]
-  )
+  }
   usage_check(['-j', '0'], '--jobs takes a count above 0, not 0')
   usage_check(['cli', '--target', 'x86_64-w64-mingw32'], '--target is for the run suite alone')
   usage_check(['--target', 'x86_64-w64-mingw32', '--failed'], '--failed is for the host alone')
-  Check(name: 'bin/test fails when no check is selected', run: ->
+  { name: 'bin/test fails when no check is selected', run: ->
     ran := await run_driver(['format', '-k', 'no such check'], await new_failed_file([]))
     [
       compare_text('stderr', "no check is selected\n", ran.stderr)...
       expect_status(2, ran.status)...
     ]
-  )
-  Check(name: 'bin/test --list names the selected checks under their suites', run: ->
+  }
+  { name: 'bin/test --list names the selected checks under their suites', run: ->
     ran := await run_driver(['format', '-k', format_case, '--list'], await new_failed_file([]))
     [
       compare_text('stdout', "format checks:\n  #{format_case}\n", ran.stdout)...
       expect_status(0, ran.status)...
     ]
-  )
-  Check(name: 'bin/test --list names the check of the bootstrap suite', run: ->
+  }
+  { name: 'bin/test --list names the check of the bootstrap suite', run: ->
     ran := await run_driver(['bootstrap', '--list'], await new_failed_file([]))
     [
       compare_text('stdout', "bootstrap:\n  the compiler builds itself\n", ran.stdout)...
       expect_status(0, ran.status)...
     ]
-  )
-  Check(name: 'bin/test -q prints the checks that failed but none that passed', run: ->
+  }
+  { name: 'bin/test -q prints the checks that failed but none that passed', run: ->
     ran := await run_driver(['run', '-q'], await new_failed_file([]))
     expected := [
       result_line(result.name, result.reasons)
@@ -297,15 +297,15 @@ driver_checks :=
       when result.reasons.length > 0
     ]
     [expect_results(expected, ran.stdout)..., expect_status(1, ran.status)...]
-  )
-  Check(name: "bin/test --target takes the host's short name for the run tests", run: ->
+  }
+  { name: "bin/test --target takes the host's short name for the run tests", run: ->
     target := host_target_name ? return nil
     name := 'tests/harness/passes'
     ran := await run_driver(['--target', target, '-k', name], await new_failed_file([]))
     expected := [result_line(name, []), result_line("#{name} (-O)", [])]
     [expect_results(expected, ran.stdout)..., expect_status(0, ran.status)...]
-  )
-  Check(
+  }
+  {
     name: 'bin/test --failed runs the failed checks, and drops those that pass or that a suite ' +
       'no longer has'
     run: ->
@@ -318,8 +318,8 @@ driver_checks :=
         expect_status(0, ran.status)...
         await expect_failed(failed_file, [kept])...
       ]
-  )
-  Check(name: 'bin/test --failed -q keeps a check that fails again, and prints its failure', run: ->
+  }
+  { name: 'bin/test --failed -q keeps a check that fails again, and prints its failure', run: ->
     name := 'tests/harness/wrong_stdout'
     failed_file := await new_failed_file([run_key(name)])
     ran := await run_driver(['--failed', '-q'], failed_file)
@@ -329,49 +329,42 @@ driver_checks :=
       expect_status(1, ran.status)...
       await expect_failed(failed_file, [run_key(name)])...
     ]
-  )
-  Check(
-    name: 'bin/test passes and shows a check that fails, then passes when run once more'
-    run: ->
-      name := 'tests/harness/flaky'
-      failed_file := await new_failed_file([])
-      ran := await run_driver(['run', '-q', '-k', name], failed_file, true)
-      # With -q, the -O check, which passed at once, is not shown.
-      expected := [result_line(name, [])]
-      [
-        expect_results(expected, ran.stdout)...
-        reason_unless(ran.stdout.contains("FAIL? #{name} "), "no `FAIL? #{name}`")...
-        reason_unless(
-          'run tests: 2 passed, 0 failed, 1 flaky in ' in ran.stdout
-          'no summary with 1 flaky'
-        )...
-        expect_status(0, ran.status)...
-        await expect_failed(failed_file, [])...
-      ]
-  )
-  Check(
-    name: 'bin/test runs the checks of two suites, and reports them with a summary each'
-    run: ->
-      name := 'tests/harness/wrong_stdout'
-      failed_file := await new_failed_file([])
-      ran := await run_driver(['run', 'leaks', '-k', name], failed_file)
-      reasons := ['stdout differs from line 1']
-      expected :=
-        result_line(name, reasons)
-        result_line("#{name} (-O)", reasons)
-        result_line("#{name}.lerta", [])
-      [
-        expect_results(expected, ran.stdout)...
-        reason_unless(
-          'run tests: 0 passed, 2 failed in ' in ran.stdout
-          'no summary of run tests'
-        )...
-        reason_unless('leak checks: 1 passed, 0 failed in ' in ran.stdout, 'no summary of leaks')...
-        expect_status(1, ran.status)...
-        await expect_failed(failed_file, [run_key(name), run_key("#{name} (-O)")])...
-      ]
-  )
-  Check(name: 'bin/test keeps a check that fails when run once more', run: ->
+  }
+  { name: 'bin/test passes and shows a check that fails, then passes when run once more', run: ->
+    name := 'tests/harness/flaky'
+    failed_file := await new_failed_file([])
+    ran := await run_driver(['run', '-q', '-k', name], failed_file, true)
+    # With -q, the -O check, which passed at once, is not shown.
+    expected := [result_line(name, [])]
+    [
+      expect_results(expected, ran.stdout)...
+      reason_unless(ran.stdout.contains("FAIL? #{name} "), "no `FAIL? #{name}`")...
+      reason_unless(
+        'run tests: 2 passed, 0 failed, 1 flaky in ' in ran.stdout
+        'no summary with 1 flaky'
+      )...
+      expect_status(0, ran.status)...
+      await expect_failed(failed_file, [])...
+    ]
+  }
+  { name: 'bin/test runs the checks of two suites, and reports them with a summary each', run: ->
+    name := 'tests/harness/wrong_stdout'
+    failed_file := await new_failed_file([])
+    ran := await run_driver(['run', 'leaks', '-k', name], failed_file)
+    reasons := ['stdout differs from line 1']
+    expected :=
+      result_line(name, reasons)
+      result_line("#{name} (-O)", reasons)
+      result_line("#{name}.lerta", [])
+    [
+      expect_results(expected, ran.stdout)...
+      reason_unless('run tests: 0 passed, 2 failed in ' in ran.stdout, 'no summary of run tests')...
+      reason_unless('leak checks: 1 passed, 0 failed in ' in ran.stdout, 'no summary of leaks')...
+      expect_status(1, ran.status)...
+      await expect_failed(failed_file, [run_key(name), run_key("#{name} (-O)")])...
+    ]
+  }
+  { name: 'bin/test keeps a check that fails when run once more', run: ->
     name := 'tests/harness/wrong_stdout'
     failed_file := await new_failed_file([])
     ran := await run_driver(['run', '-q', '-k', name], failed_file, true)
@@ -387,14 +380,14 @@ driver_checks :=
       expect_status(1, ran.status)...
       await expect_failed(failed_file, [run_key(name), run_key("#{name} (-O)")])...
     ]
-  )
-  Check(name: 'bin/test --failed says so when no check failed', run: ->
+  }
+  { name: 'bin/test --failed says so when no check failed', run: ->
     ran := await run_driver(['--failed'], await new_failed_file([]))
     [
       compare_text('stdout', "no check failed when it last ran\n", ran.stdout)...
       expect_status(0, ran.status)...
     ]
-  )
+  }
 
 # The leak checks of tests/empty with a compiler that is a shell script of `body`, which must fail
 # them exactly when `fails`.

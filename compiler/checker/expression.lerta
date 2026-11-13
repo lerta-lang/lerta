@@ -32,7 +32,7 @@ from './name'
 import type_of_intrinsic_call from './intrinsics'
 import narrowable from './narrowable'
 import
-  constructed_type, expected_struct, positional_value, type_of_construction, type_of_record,
+  constructed_type, expected_struct, has_record_arguments, type_of_construction, type_of_record,
   type_of_this
 from './object'
 import char_as_text, type_of_binary, type_of_coalesce, type_of_unary from './operator'
@@ -178,11 +178,8 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
     type := type_of_construction(body, call, object_type, expected)
     body.facts.object_constructions.add call
     struct_type := expected_struct(expected) ? return type
-    # `{}` is no record but an empty map.
-    has_arguments := not call.args.is_empty() or not call.named_args.is_empty()
-    # A value alone names no argument for a record to take.
-    is_positional := positional_value(body, call, object_type) != nil
-    body.facts.recordable.add call if has_arguments and type == struct_type and not is_positional
+    if type == struct_type and has_record_arguments(body, call, object_type)
+      body.facts.recordable.add call
     return type
   if callee is Member
     if text_call := contains_of_char(body, call, callee)

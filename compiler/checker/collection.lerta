@@ -12,6 +12,7 @@ import float_first, is_contextual from './literals'
 import lookup, record_reference from './name'
 import CollectionMaker from './references'
 import Body, ProgramWide from './shared'
+import has_record_arguments from './object'
 import field_type, info_of from './object_types'
 import names_type_or_import, resolve from './type_names'
 import
@@ -74,7 +75,23 @@ export type_of_array := (body: Body, array: ArrayLiteral, expected: Type?) ->
   for item in elements
     expect_element body, item, element if item != anchor
   keep_constructions body, elements
+  record_typed_array body, array, element
   ArrayType element
+
+# The constructions among the items of an array of a struct, not generic, that a record can write
+# (see NodeFacts.typed_arrays).
+record_typed_array := (body: Body, array: ArrayLiteral, element: Type) ->
+  struct_type := element as ObjectType ? return
+  return if not struct_type.is_struct or not struct_type.args.is_empty()
+  { facts } := body
+  is_recordable := (call: Call) ->
+    is_construction := call in facts.object_constructions and facts.types[call] == struct_type
+    is_construction and has_record_arguments(body, call, struct_type)
+  constructions: Call[]
+  for item in array.elements
+    call := item as Call ? continue
+    constructions.push call if is_recordable(call)
+  facts.typed_arrays[array] = constructions unless constructions.is_empty()
 
 # The item whose type the others take: one that decides its own type rather than taking it from
 # the context, or else one that holds a float literal (see float_first), or else the first; a throw,

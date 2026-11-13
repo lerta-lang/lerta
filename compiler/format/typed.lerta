@@ -2,8 +2,9 @@
 # so the facts that it records of them are found by those nodes; those of the types written are in
 # annotations.lerta.
 import
-  BinaryOperation, Call, Case, CaseArm, Cast, Expression, Identifier, Import, ImportName, Index,
-  Member, NamedValue, Range, Statement, StringLiteral, This
+  ArrayLiteral, BinaryOperation, Call, Case, CaseArm, Cast, Declaration, Expression, Identifier,
+  Import, ImportName, Index, Member, NamedValue, Range, Statement, StringLiteral, This,
+  TypeDeclaration
 from '../ast'
 import is_file from 'std:io'
 import check_program from '../checker/modules'
@@ -100,6 +101,15 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
 export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Typed): Edit?[] ->
   case statement
     when Import then [unused_imports(tokens, statement, typed.unused_imports)]
+    when Declaration
+      return [] if statement.type != nil
+      [typed_array(tokens, statement.name, statement.value, typed.facts)]
+    when TypeDeclaration
+      [
+        typed_array(tokens, member.name, member.value, typed.facts)
+        for member in statement.members
+        when member.type == nil
+      ]
     else []
 
 # The import without the names that are never used (see Unused names); only reported where it gives
@@ -158,22 +168,61 @@ unqualified := (tokens: Tokens, member: Member, facts: NodeFacts) ->
   change := Change(from: tokens.start(first), to: tokens.start(name), text: '')
   tokens.edit_at EXPECTED_TYPES, member.position, [change]
 
-# `{ x: 1 }` for `S(x: 1)` where S is expected (see Expected types): the arguments as they are
-# written, between braces for the parentheses. A construction without them, its arguments in a block
-# below it, or of type arguments, is only reported.
+# `{ x: 1 }` for `S(x: 1)` where S is expected (see Expected types). A construction without
+# parentheses is only reported (see record_changes).
 recorded := (tokens: Tokens, call: Call, facts: NodeFacts) ->
   return nil unless call in facts.recordable
+  changes := record_changes(tokens, call) ? return tokens.report(EXPECTED_TYPES, call.position)
+  tokens.edit_at EXPECTED_TYPES, call.position, changes
+
+# The arguments of the construction as they are written, between braces for the parentheses; nil
+# for one without them, its arguments in a block below it, or of type arguments.
+record_changes := (tokens: Tokens, call: Call) ->
   callee := tokens.at(call.callee.position) ? return nil
-  open := callee + 1
-  return tokens.report(EXPECTED_TYPES, call.position) unless tokens.is_kind(open, '(')
+  open := after_callee(tokens, call) ? return nil
+  return nil unless tokens.is_kind(open, '(')
   close := tokens.matching(open) ? return nil
   # A space inside each brace that has the arguments on its line.
   opening := tokens.code[open + 1].line == tokens.code[open].line then '{ ' else '{'
   closing := tokens.code[close - 1].end_line == tokens.code[close].line then ' }' else '}'
-  changes :=
+  [
     Change(from: tokens.start(callee), to: tokens.end(open), text: opening)
     tokens.replaced(close, closing)
-  tokens.edit_at EXPECTED_TYPES, call.position, changes
+  ]
+
+# The token after the callee of the construction, its last name, as `Point` of `geo.Point`.
+after_callee := (tokens: Tokens, call: Call) ->
+  { callee } := call
+  name := callee is Member then callee.name else callee
+  last := tokens.at(name.position) ? return nil
+  last + 1
+
+# `xs: S[] = [{ x: 1 }, s]` for `xs := [S(x: 1), s]`, of a variable or a field without a type whose
+# value is an array of S (see Expected types): the type written as the first construction names
+# S, and each construction that a record can write written so, in one edit, as without the records
+# the type would be left out again (see Type annotations). Only reported where one is written
+# without parentheses.
+typed_array := (tokens: Tokens, name: Identifier, value: Expression?, facts: NodeFacts) ->
+  array := value as ArrayLiteral ? return nil
+  constructions := facts.typed_arrays[array] ? return nil
+  name_at := tokens.at(name.position) ? return nil
+  first := constructions[0]
+  callee := tokens.at(first.callee.position) ? return nil
+  open := after_callee(tokens, first) ? return nil
+  type := ": #{tokens.slice(tokens.start(callee), tokens.start(open))}[]"
+  # `:=` goes into `: S[] =`; a `var`'s `=` stays after the type.
+  annotation :=
+    if tokens.is_kind(name_at + 1, ':=')
+      Change from: tokens.end(name_at), to: tokens.end(name_at + 1), text: "#{type} ="
+    else if tokens.is_kind(name_at + 1, '=')
+      Change from: tokens.end(name_at), to: tokens.end(name_at), text: type
+    else
+      return nil
+  changes := [annotation]
+  for call in constructions
+    record := record_changes(tokens, call) ? return tokens.report(EXPECTED_TYPES, call.position)
+    changes.push each for each in record
+  tokens.edit_at EXPECTED_TYPES, name.position, changes
 
 # `S(x, y: 1)` for `S(x: x, y: 1)` in a construction (see Shorthand): the named arguments that are
 # variables of their names, from the first, up to one that is not or whose name and value are not
