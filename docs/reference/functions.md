@@ -70,7 +70,7 @@ When the last parameter is of a struct type, a call may give it as named argumen
 - Nor do the other parameters of its function have defaults so far, as the call would have to construct it after the defaults.
 - Its type is a struct as written, not through a type parameter, so that every instance of a generic function agrees.
 - A class is not constructed so, as a call would make one that the caller may not expect to share.
-- A call of a generic function or method takes no named arguments, nor leaves out such a parameter, so far: `a generic function takes no named arguments so far`.
+- A call of a generic function or method does so only where the struct's type names no type parameter, as `Options` or `Options<Int>`, which every instance agrees on: `a generic function takes named arguments only for a struct with no type parameter`.
 - For an anonymous struct, see [anonymous structs](types.md#anonymous-structs).
 
 ### The body and the result

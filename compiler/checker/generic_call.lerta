@@ -1,8 +1,8 @@
 # Types calls of generic functions and methods: checks their type arguments (see
 # type_argument_inference) against the bounds and the signature, and has the instance checked
 # (see generics).
-import Call, Member, Position, TypeParameter from '../ast'
-import check_argument_count, packed_arguments from './arguments'
+import Call, Expression, Member, Position, TypeParameter from '../ast'
+import check_argument_count, check_gathered, gathered_of, packed_arguments from './arguments'
 import fail, fail_cannot_infer from './diagnostics'
 import require_type from './expression'
 import ExtensionMethod from './extensions'
@@ -12,12 +12,13 @@ import ExtensionSource, find_method, MethodSource, OwnMethod from './methods'
 import
   bindings, check_defaults, generic_of, GenericFunction, GenericRef, Instance, instantiate
 from './generics'
+import is_struct_type from './functions'
 import reject_unsatisfied from './satisfaction'
 import Body, InstanceLink, ProgramWide from './shared'
 import infer_type_arguments, receiver_type_arguments, TypeBinding from './type_argument_inference'
-import infer, substitute from './type_patterns'
+import infer, substitute, type_parameter_names from './type_patterns'
 import reject_invalid_type from './type_validity'
-import FunctionType, InterfaceType, Type, type_key from '../types'
+import FunctionType, inner_of, InterfaceType, RecordType, Type, type_key from '../types'
 
 # The result of a call of a generic function.
 export type_of_generic_call := (body: Body, call: Call, generic: GenericRef, expected: Type?) ->
@@ -50,19 +51,18 @@ instance_of_call := (
 ) ->
   program := body.program
   generic := generic_of(program, ref)
-  unless call.named_args.is_empty()
-    kind := generic.receiver == nil then 'function' else 'method'
-    message := "a generic #{kind} takes no named arguments so far"
-    fail program, call.named_args[0].name.position, message
   packed := packed_arguments(body, call, generic.literal)
   args := packed ? call.args
+  gathered := gathered_in_generic(body, call, args, generic)
+  passed := gathered then [args..., gathered] else args
   check_argument_count
     body
     call
     generic.literal
-    given: args.length
+    given: passed.length
     params: generic.params.length
-  body.facts.arguments[call] = packed if packed
+  check_gathered body, gathered, generic.params.last()! if gathered
+  body.facts.arguments[call] = passed if packed or gathered
   inference := infer_type_arguments(body, call, args, generic, expected, receiver)
   type_arguments := type_arguments_of(body, call, generic, inference.bindings)
   reject_invalid_signature body, generic, type_arguments, call.position
@@ -71,8 +71,22 @@ instance_of_call := (
   require_type body, each.arg, each.type, type.params[each.index] for each in inference.inferred
   body.facts.instances[call] = InstanceLink(instance)
   # Leaving arguments out uses defaults, which are checked for the instance then.
-  check_defaults program, generic, instance, call.position if args.length < generic.params.length
+  check_defaults program, generic, instance, call.position if passed.length < generic.params.length
   instance
+
+# The argument gathered as for any call, but not into a struct whose type names a type parameter,
+# which instances may differ in.
+gathered_in_generic := (body: Body, call: Call, args: Expression[], generic: GenericFunction) ->
+  last := generic.params.last()
+  if last and not type_parameter_names(last).is_empty()
+    inner := inner_of(last)
+    if is_struct_type(inner) or inner is RecordType
+      unless call.named_args.is_empty()
+        kind := generic.receiver == nil then 'function' else 'method'
+        takes := 'named arguments only for a struct with no type parameter'
+        fail body.program, call.named_args[0].name.position, "a generic #{kind} takes #{takes}"
+      return nil
+  gathered_of body, call, args, generic.params
 
 # The instance's body, checked at its definition, reaches the type arguments only through their
 # bounds, so it sees the methods of the extends in effect here that satisfy them: the witnesses.
