@@ -285,8 +285,8 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `is_empty(): Bool`
 - `contains(key: K): Bool`
 - `remove(key: K): Bool`
-- `keys(): Iter<K>`, `values(): Iter<V>`, `entries(): Iter<(K, V)>`
-- `iter(): Iter<(K, V)>`, as `entries()`, so that a map is an [Iterable](#iterable)
+- `keys(): Iter<K>`, `values(): Iter<V>`
+- `iter(): Iter<(K, V)>`, its entries, so that a map is an [Iterable](#iterable)
 - `get_or_add(key: K, make: () -> V): V`: the value of the key, or else what `make` makes, which the map then holds under it
 - Of [Literal](#literal) keys and values: `to_string(): String`, `to_literal(): String` (see [Stringable](#stringable))
 

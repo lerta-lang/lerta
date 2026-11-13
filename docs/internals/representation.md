@@ -75,7 +75,7 @@ What `std:builtins`, in the files of `std/builtins/`, cannot write in Lerta (see
 - **Optional items.** An optional value that is not a reference, of a number, `Bool`, `Char` or an enum, is an item of its own kind (`LERTA_OPTIONAL_ITEMS`), its `{ i1, T }` in the 16 bytes of a `LertaItem`. The runtime moves it by its size, and gives the functions that compare and hash items its address in place of a word (`lerta_word_item`), which they read it through (`from_item` in `compiler/codegen/array.lerta`).
 - **Items in place.** The generated code reads and writes the items of arrays, maps and Iters in place, as their types, at the place that the runtime gives once it has checked the index (`lerta_array_checked_items`) or found or placed the key (`lerta_map_find` and `lerta_map_place`), so that no copy of a size known only at run time is made.
   - An item is an integer of fewer than 64 bits, or a `Bool` as a byte, at its own size; two pointers for an interface value; 16 bytes for an optional value that is not a reference (see optional items above); and 8 bytes otherwise. Items are retained by kind (see [memory management](memory.md)).
-  - The operations: `length`, indexing, `push`, `pop`, `remove`, `keys`, `entries`, and the Iter protocol, `has_next` and `next`.
+  - The operations: `length`, indexing, `push`, `pop`, `remove`, `keys`, `iter`, and the Iter protocol, `has_next` and `next`.
   - Their loads and stores have a type-based alias tag of their own (see [alias analysis](memory.md#alias-analysis)).
 - `s.binary` passes on the String itself.
 - An enum's `to_string` and `to_literal` (since an enum cannot be extended) index a constant array of the members' texts, or of the members as declared, that the compiler generates for the enum, by the value: the member's place among the members, as an `i64`.
@@ -123,7 +123,7 @@ What `std:builtins`, in the files of `std/builtins/`, cannot write in Lerta (see
 - A String's `compare` compares bytes. `<` and the like of Strings test its Ordering, through a call of it that the checker makes (`order_calls` in `compiler/checker/shared.lerta`).
 - `sqrt` and `remainder` check their arguments before calling libm.
 - An array's `to_string` writes the `to_literal` of its items.
-- `parse_int` reads bytes with `b[i]`; `contains` reads the map; `values` is a comprehension over `entries`; `iter` of an array or a `Binary` is a comprehension.
+- `parse_int` reads bytes with `b[i]`; `contains` reads the map; `values` is a comprehension over the map; `iter` of an array or a `Binary` is a comprehension.
 - The methods of an extend of `Iterable<T>`, which `Stringable` and `Iterable` are declared beside, are written once for all: `map`, `filter` and `to_array` are comprehensions; `any`, `all` and `find` are `for` loops; `take` and `zip` are Iters written in Lerta.
 
 ## Floats

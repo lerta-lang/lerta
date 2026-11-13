@@ -40,14 +40,14 @@ export test_targets := (named: String[]) ->
   targets := selected((await read_settings()).targets, named)
   outcomes: Outcome[]
   ssh_hosts: Map<String, String[]>
-  for (target, place) in targets.entries()
+  for (target, place) in targets
     if host := place.ssh
       ssh_hosts[host] = [(ssh_hosts[host] ? [])..., target]
     else if image := place.docker
       outcomes.push await run_in_docker(target, image)
     else
       outcomes.push await run_here(target)
-  for (host, host_targets) in ssh_hosts.entries()
+  for (host, host_targets) in ssh_hosts
     outcomes.push each for each in await run_on_host(host, host_targets)
   print "\ntest-targets:"
   for outcome in outcomes
@@ -59,7 +59,7 @@ read_settings := ->
   text := await read_text(SETTINGS) ? throw BuildError(message: "#{SETTINGS} is not UTF-8", code: 2)
   settings := decode_settings(text)
   throw BuildError(message: SETTINGS_USAGE, code: 2) if settings.targets.is_empty()
-  for (target, place) in settings.targets.entries()
+  for (target, place) in settings.targets
     places := [given for given in [place.local, place.docker != nil, place.ssh != nil] when given]
     if places.length != 1
       message := "#{SETTINGS}: #{target} takes one of local, docker and ssh"
@@ -84,7 +84,7 @@ selected := (targets: Map<String, Place>, named: String[]) ->
   for target in named
     throw BuildError(message: "#{SETTINGS} has no #{target}", code: 2) unless target in targets
   chosen: Map<String, Place>
-  for (target, place) in targets.entries()
+  for (target, place) in targets
     chosen[target] = place if target in named
   chosen
 

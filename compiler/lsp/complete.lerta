@@ -128,7 +128,7 @@ member_items := (program: ProgramWide, shared: Shared, probe: CompletionProbe, r
 # The names of the builtin members of the builtin types, whose methods and properties
 # checker/builtins and member_targets give by name; the operators' methods are left out.
 BUILTIN_MEMBER_NAMES :=
-  'length', 'binary', 'push', 'pop', 'to_string', 'keys', 'entries', 'remove', 'has_next', 'next',
+  'length', 'binary', 'push', 'pop', 'to_string', 'keys', 'iter', 'remove', 'has_next', 'next',
   'compare', 'equals', 'hash', 'wrapping_add', 'wrapping_sub', 'wrapping_mul', 'to_float',
   'to_float32', 'to_int', 'to_byte', 'to_int8', 'to_int16', 'to_int32', 'to_uint16', 'to_uint32',
   'to_uint64'
@@ -136,7 +136,7 @@ BUILTIN_MEMBER_NAMES :=
 local_items := (locals: Map<String, Type>) ->
   [
     CompletionItem(label: name, kind: VARIABLE, detail: format_type(type))
-    for (name, type) in locals.entries()
+    for (name, type) in locals
     when name != '@' and name != COMPLETION_NAME
   ]
 
@@ -149,7 +149,7 @@ module_items := (program: ProgramWide, shared: Shared, in_top_level: Bool) ->
   items.push { label: name, kind: MODULE, detail: nil } for name in shared.imports.modules.keys()
   # An imported name is as its module declares it, under the name it is imported by; a name of a
   # module imported as a name, `m.x`, is no name of its own.
-  for (name, imported) in shared.imports.names.entries()
+  for (name, imported) in shared.imports.names
     continue if '.' in name or has_label(items, name)
     source := imported.source
     item :=
@@ -195,15 +195,15 @@ intrinsic_item := (name: String) -> CompletionItem(label: name, kind: FUNCTION, 
 # The top-level names that the module declares.
 names_of := (program: ProgramWide, shared: Shared) ->
   items: CompletionItem[]
-  for (name, local) in shared.top_level.locals.entries()
+  for (name, local) in shared.top_level.locals
     items.push { label: name, kind: VARIABLE, detail: format_type(local.type) }
   # A method's entry is named by its receiver too, as `Point.sum`.
-  for (name, entry) in shared.functions.entries.entries()
+  for (name, entry) in shared.functions.entries
     continue if '.' in name
     items.push { label: name, kind: FUNCTION, detail: formatted(entry.type) }
   for generic in shared.generics
     items.push { label: generic.name.name, kind: FUNCTION, detail: nil } if generic.receiver == nil
-  for (name, info) in shared.objects.entries()
+  for (name, info) in shared.objects
     items.push { label: name, kind: info.type.is_struct then STRUCT else CLASS, detail: nil }
   items.push { label: name, kind: ENUM, detail: nil } for name in shared.enums.keys()
   items

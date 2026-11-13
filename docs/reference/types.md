@@ -549,11 +549,11 @@ print ages['ann'] ? 0
 |---|---|
 | `m.contains(k)`, `k in m` | Whether `k` is there. |
 | `m.remove(k)` | Removes `k` if it is there; tells whether it was. |
-| `m.entries()`, `m.iter()` | An `Iter<(K, V)>` of the keys and their values, as [tuples](#tuples); `for (key, value) in m` goes through it, as a map is [Iterable](builtins.md#iterable). |
+| `m.iter()` | An `Iter<(K, V)>` of the keys and their values, as [tuples](#tuples); `for (key, value) in m` goes through it, as a map is [Iterable](builtins.md#iterable). |
 | `m.keys()` | An `Iter<K>` of the keys; `m.keys().to_array()` gives them as an array. |
 | `m.values()` | An `Iter<V>` of the values. |
 
-- `entries`, `keys` and `values` go in the order the keys were first added; a key removed and added again counts as new.
+- `iter`, `keys` and `values` go in the order the keys were first added; a key removed and added again counts as new.
 - They give the entries there when the Iter is made: one removed before the Iter reaches it is skipped, and one added meanwhile is not given, even under a key that was there before.
 
 ### Equality
@@ -588,7 +588,7 @@ print 4 in primes
 | `s.add(x)` | Adds `x` if it is not there; tells whether it was not, so `continue if not seen.add(x)` skips what was seen. |
 | `s.remove(x)` | Removes `x` if it is there; tells whether it was. |
 | `a.is_subset(b)` | Whether `b` has every item of `a`. |
-| `s.iter()` | An `Iter<T>` of the items there when it is made, in the order they were first added, as `m.entries()` gives a map's; `for x in s` goes through it. |
+| `s.iter()` | An `Iter<T>` of the items there when it is made, in the order they were first added, as `m.iter()` gives a map's; `for x in s` goes through it. |
 
 ### Operators
 
