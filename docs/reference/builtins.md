@@ -185,9 +185,9 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `to_float(): Float`
 - `to_int()`, `to_byte()`, `to_int8()`, `to_int16()`, `to_int32()`, `to_uint16()`, `to_uint32()`, `to_uint64()`: of that type, optional unless every value fits
 - `to_char(): Char?`; `Char` for a `Byte`
-- `Int` and `UInt64`: `to_hex(width: Int = 0): String`
+- `Int`, `UInt64` and `Byte`: `to_hex(width: Int = 0): String`
 - `Int` only: `to_bits(): UInt64`, `abs(): Int`, which throws for `INT_MIN`, whose magnitude no `Int` holds
-- `Byte` only: `is_digit(): Bool`, `is_letter(): Bool`, `is_space(): Bool`, `is_utf8_continuation(): Bool`, `hex_value(): Int?`
+- `Byte` only: `is_digit(): Bool`, `is_letter(): Bool`, `is_alphanumeric(): Bool`, `is_space(): Bool`, `is_utf8_continuation(): Bool`, `hex_value(): Int?`
 
 ### Char
 
@@ -197,7 +197,7 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `add(count: Int): Char`, `sub(count: Int): Char`
 - `to_string(): String`, `to_literal(): String`
 - `to_int(): Int`
-- `is_digit(): Bool`, `is_letter(): Bool`, `is_space(): Bool`, `is_lower(): Bool`, `is_upper(): Bool`
+- `is_digit(): Bool`, `is_letter(): Bool`, `is_alphanumeric(): Bool`, `is_space(): Bool`, `is_lower(): Bool`, `is_upper(): Bool`
 - `to_upper(): Char`, `to_lower(): Char`, `hex_value(): Int?`
 
 ### Float and Float32

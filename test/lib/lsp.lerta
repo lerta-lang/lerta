@@ -18,17 +18,13 @@ export uri_of := (path: String) ->
   in_work_dir := path.without_prefix(cli_work_dir)
   canonical_path := in_work_dir != nil then "#{real_work_dir}#{in_work_dir}" else path
   portable := canonical_path.replace('\', '/')
-  hexadecimal := b'0123456789ABCDEF'
-  bytes: Byte[]
-  for byte in portable.binary
-    if byte.is_letter() or byte.is_digit() or byte in unreserved_marks
-      bytes.push byte
-    else
-      bytes.push b'%'
-      bytes.push hexadecimal[byte.to_int() >> 4]
-      bytes.push hexadecimal[byte.to_int() & 0xF]
+  is_kept := (byte: Byte) -> byte.is_alphanumeric() or byte in unreserved_marks
+  pieces := [
+    is_kept(byte) then byte.to_char().to_string() else "%#{byte.to_hex(2).to_upper()}"
+    for byte in portable.binary
+  ]
   prefix := host_platform == 'windows' then 'file:///' else 'file://'
-  "#{prefix}#{bytes.to_binary().text()!}"
+  "#{prefix}#{pieces.join()}"
 
 export frame := (json: String) -> "Content-Length: #{json.binary.length}\r\n\r\n#{json}"
 

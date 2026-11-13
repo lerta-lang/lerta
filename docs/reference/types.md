@@ -77,9 +77,11 @@
 |---|---|
 | `b.is_digit()` | An ASCII digit. |
 | `b.is_letter()` | An ASCII letter, `a` to `z`, `A` to `Z`. |
+| `b.is_alphanumeric()` | An ASCII letter or digit. |
 | `b.is_space()` | A space, `\t`, `\n` or `\r`. |
 | `b.is_utf8_continuation()` | A byte that continues a UTF-8 sequence, 0x80 to 0xBF, as when counting the code points of a `Binary`. |
 | `b.hex_value()` | The value of a hexadecimal digit of either case, 0 to 15, or nil. |
+| `b.to_hex(width = 0)` | Its value in hexadecimal, as [that of an `Int`](#int): `b'\n'.to_hex(2)` is `'0a'`. |
 
 ### Literals by context
 
@@ -175,7 +177,7 @@ print [kana(c) for c in 'ひらがな'].join()
 - `c.to_string()`, which `print` and interpolation use, gives the `String` of the code point.
 - `c.to_int()` gives its number.
 - `n.to_char()`, of any integer type, gives the `Char` of a number as a `Char?`, nil for a number that is none; of a `Byte`, which always is one, a `Char`.
-- `c.is_digit()`, `c.is_letter()` and `c.is_space()` tell what those of a [`Byte`](#byte-methods) tell, so they are true only for ASCII: `'０'`, `'é'` and U+3000 are in no class. So are `c.is_lower()` and `c.is_upper()`, of the ASCII letters of each case.
+- `c.is_digit()`, `c.is_letter()`, `c.is_alphanumeric()` and `c.is_space()` tell what those of a [`Byte`](#byte-methods) tell, so they are true only for ASCII: `'０'`, `'é'` and U+3000 are in no class. So are `c.is_lower()` and `c.is_upper()`, of the ASCII letters of each case.
 - `c.to_upper()` and `c.to_lower()` change the case of an ASCII letter, as those of a `String` do, and give any other `Char` as it is; `c.hex_value()` gives what that of a `Byte` gives, or nil for a `Char` beyond the `Byte`s.
 
 ### Keys, items and JSON
