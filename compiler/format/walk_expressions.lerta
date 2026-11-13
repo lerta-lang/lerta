@@ -10,8 +10,8 @@ from '../ast'
 import TokenKind from '../lexer/tokens'
 import FUNCTION_BODIES from './rules'
 import
-  is_block_call, is_block_literal, is_simple, is_written_in_block, literal_under_members,
-  starts_command
+  is_block_call, is_block_literal, is_simple, is_taken_apart, is_written_in_block,
+  literal_under_members, starts_command
 from './forms'
 import binary_precedence, COMPARISON from './precedence'
 import
@@ -603,7 +603,7 @@ extend Walker
       arrow_before = ONE
     if type := node.return_type
       @take ':', NONE
-      @return_type type, node.body[0]
+      @return_type type, node.body.find((statement) -> not is_taken_apart(statement))!
       arrow_before = ONE
     arrow := @take('->', arrow_before)
     @shapes.push @body(arrow, node.body, FUNCTION_BODIES)
@@ -626,7 +626,10 @@ extend Walker
     @take ')', NONE for _ in 0..groups
 
   parameter := (node: Parameter, before: CodeGap) ->
-    @take IDENTIFIER, before
+    if @at_kind(IDENTIFIER)
+      @take IDENTIFIER, before
+    else
+      @names before
     if type := node.type
       @take ':', NONE
       @type type, ONE

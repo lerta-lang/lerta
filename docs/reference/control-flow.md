@@ -47,6 +47,7 @@ until n >= 10
 ### Binding a name
 
 - `if name := value` and `while name := value` hold when the optional value is not nil; inside the body, `name` is the value without nil.
+- A [destructuring](types.md#destructuring) can take the place of the name: `if { x, y } := find(p)` or `while (key, value) := next()` takes the value apart, without nil, inside the body.
 
 ### unless and until
 

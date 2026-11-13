@@ -859,6 +859,7 @@ divide := (a: Int, b: Int): { quotient: Int, remainder: Int } ->
 - `{ a, b } := value`, or `var { a, b } = value`, declares `a` and `b` from the fields of those names of an anonymous struct, a class or a struct.
 - The value is evaluated once.
 - It must be on a line of its own.
+- It can also be the condition of an `if` or a `while` (see [control flow](control-flow.md#binding-a-name)), and a parameter of a function literal, `({ x, y }) -> x * y` or `({ x }: Point) -> x`, which takes no default and is not variadic.
 
 ## Tuples
 
@@ -880,6 +881,7 @@ swap := (t: (String, Int)) ->
 - The value must be a tuple of as many items. It is evaluated once.
 - `_` discards an item.
 - It must be on a line of its own.
+- The condition of an `if` or a `while` and a parameter of a function literal take items apart too: `((key, value)) -> key`.
 - A loop takes items apart too (see [for](control-flow.md#for-and-ranges)).
 
 ### Why

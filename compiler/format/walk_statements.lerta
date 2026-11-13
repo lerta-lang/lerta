@@ -9,7 +9,7 @@ import TokenKind from '../lexer/tokens'
 import BRANCHES, StyleRule from './rules'
 import
   is_block_call, is_destructuring_holder, is_inline, is_pass_body, is_taken_apart,
-  is_written_as_type, is_written_postfix, takes_postfix
+  is_written_as_type, is_written_postfix, postfix_body, takes_postfix
 from './forms'
 import
   ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, ChainShape, CodeGap, ImportShape,
@@ -112,7 +112,7 @@ extend Walker
   if_statement := (node: If, before: CodeGap, in_else = false): void ->
     return @nil_safe(node, before) if node.nil_safe
     if is_written_postfix(node)
-      @postfix_form node.then_body[0], before, -> @postfix_head(node.condition, ['if', 'unless'])
+      @postfix_form postfix_body(node), before, -> @postfix_head(node.condition, ['if', 'unless'])
       return
     keyword := @code[@at].kind
     unhandled() unless keyword in ['if', 'unless']
@@ -143,7 +143,7 @@ extend Walker
 
   while_statement := (node: While, before: CodeGap) ->
     if is_written_postfix(node)
-      @postfix_form node.body[0], before, -> @postfix_head(node.condition, ['while', 'until'])
+      @postfix_form postfix_body(node), before, -> @postfix_head(node.condition, ['while', 'until'])
       return
     keyword := @code[@at].kind
     unhandled() unless keyword in ['while', 'until']
@@ -220,8 +220,9 @@ extend Walker
   block_form := (head: Int, body: Statement[]) ->
     block := @shapes.last() as BlockShape!
     statement := block.statements.first() ? return
-    one := body.length == 1 and block.statements.length == 1
-    return if not one or not takes_postfix(body[0]) or @has_comments(head, statement.end)
+    written := written_statements(body)
+    one := written.length == 1 and block.statements.length == 1
+    return if not one or not takes_postfix(written[0]) or @has_comments(head, statement.end)
     head_last := block.starts[0] - 1
     shape := PostfixShape
       head_last
@@ -244,7 +245,10 @@ extend Walker
   condition := (condition: Condition, keyword: TokenKind) ->
     case condition
       when Binding
-        @take IDENTIFIER, ONE
+        if @at_kind(IDENTIFIER)
+          @take IDENTIFIER, ONE
+        else
+          @names ONE
         @take ':=', ONE
         @operand condition.value, ONE
       when UnaryOperation
@@ -502,11 +506,12 @@ extend Walker
   # statement on its line (see BodyShape).
   body := (head: Int, statements: Statement[], rule: StyleRule): BodyShape ->
     start := @at
+    written := written_statements(statements)
     if start in @line_starts
       block := @block(statements, @depth + 1, head)
-      one := statements.length == 1 and block.statements.length == 1
+      one := written.length == 1 and block.statements.length == 1
       # A postfix form inside brackets would not end its line, which it must.
-      first := statements[0]
+      first := written[0]
       postfix := first is If | While | For and is_written_postfix(first)
       # A member line that stays one keeps the body below its head, whose line it would seem to
       # apply to.
@@ -518,13 +523,13 @@ extend Walker
         not keeps_lines
       @close head, true
       return { head, block, joinable, rule }
-    unhandled() if statements.length != 1
-    joinable := is_inline(statements[0])
+    unhandled() if written.length != 1
+    joinable := is_inline(written[0])
     outer_shapes := @shapes
     outer_line := @on_own_line
     @shapes = []
     @on_own_line = false
-    @statement statements[0], ONE
+    @statement written[0], ONE
     statement := StatementShape(start, end: @at, shapes: @shapes)
     @shapes = outer_shapes
     @on_own_line = outer_line

@@ -485,6 +485,38 @@ export take_apart := (holder: Identifier, names: Identifier[], mutable: Bool, of
     Declaration(mutable, name, value, position, of_loop)
   [declaration(name, i) for name at i in names when name.name != '_']
 
+# `{ a, b }`, the names of the fields that a struct is taken apart into, or `(a, b)`, those of the
+# items of a tuple.
+export struct Destructuring
+  names: Identifier[]
+  of_tuple: Bool
+
+export at_destructuring_names := (tokens: TokenStream) -> tokens.peek().kind in ['{', '(']
+
+export parse_destructuring_names := (tokens: TokenStream): Destructuring ->
+  return { names: parse_tuple_names(tokens), of_tuple: true } if tokens.peek().kind == '('
+  tokens.expect '{'
+  names := tokens.parse_list('}', -> parse_identifier(tokens))
+  tokens.fail_expecting tokens.peek(), 'a name' if names.is_empty()
+  { names, of_tuple: false }
+
+# What holds the value that the destructuring takes apart, named after `at`, where an error about
+# the value is reported.
+export destructured_holder := (destructuring: Destructuring, at: Position) ->
+  return tuple_holder(at) if destructuring.of_tuple
+  Identifier(position: at, name: "destructured.#{at.line}.#{at.column}")
+
+# The declarations of the names, each from the field of its name, or from the item at its place, of
+# what `holder` holds.
+export take_apart_held := (destructuring: Destructuring, holder: Identifier, mutable: Bool) ->
+  { names } := destructuring
+  return take_apart(holder, names, mutable, false) if destructuring.of_tuple
+  field_of := (name: Identifier) ->
+    Member(object: copy_identifier(holder), name: copy_identifier(name), position: name.position)
+  declare := (name: Identifier): Statement ->
+    Declaration(mutable, name, value: field_of(name), position: name.position)
+  [declare(name) for name in names]
+
 # The declarations of the parts of a loop's item (see LoopHeader).
 export take_apart_item := (header: LoopHeader) ->
   take_apart(header.variable, header.parts, false, true)

@@ -2,8 +2,8 @@
 # and calls without parentheses; `declaration` reads the other declarations.
 import
   ArrayLiteral, ArrayTypeName, Assignment, AssignmentTarget, Binding, Call, Condition, Conditional,
-  copy_identifier, Declaration, Expression, For, Identifier, If, Index, Jump, Member, NamedType,
-  NilLiteral, OMITTED_VALUES, Return, Statement, Throw, TypeName, UnaryOperation, While, Yield
+  Declaration, Expression, For, Identifier, If, Index, Jump, Member, NamedType, NilLiteral,
+  OMITTED_VALUES, Return, Statement, Throw, TypeName, UnaryOperation, While, Yield
 from '../ast'
 import accept_pass_block, at_weak_function_literal from './compound'
 import
@@ -13,7 +13,8 @@ from './declaration'
 import
   at_block_arguments, call_of, COMPARISON_WORDS, continue_with_members, operator_at,
   parse_arguments, parse_block_arguments, parse_expression, parse_identifier, parse_loop_header,
-  parse_tuple_names, parse_value, take_apart, take_apart_item, tuple_holder
+  at_destructuring_names, destructured_holder, parse_destructuring_names, parse_value,
+  take_apart_held, take_apart_item
 from './expression'
 import compile_errors, CompileError, Located from '../errors'
 import Token, TokenKind from '../lexer/tokens'
@@ -147,11 +148,16 @@ export at_destructuring := (tokens: TokenStream) ->
 # `{ a, b } := value` or `(a, b) := value`, which only `:=` after the names tells from an
 # expression.
 at_bare_destructuring := (tokens: TokenStream, offset: Int) ->
-  open := tokens.peek_at(offset).kind
-  return false unless open in ['{', '(']
-  close: TokenKind = open == '{' then '}' else ')'
-  closing := tokens.closing_offset(open, close, is_name_list_token, offset) ? return false
+  closing := names_closing_offset(tokens, offset) ? return false
   tokens.peek_at(closing + 1).kind == ':='
+
+# The offset of the `}` or `)` that closes names to take apart, `{ a, b }` or `(a, b)`, at the
+# offset; nil if no such names are there.
+export names_closing_offset := (tokens: TokenStream, offset: Int) ->
+  open := tokens.peek_at(offset).kind
+  return nil unless open in ['{', '(']
+  close: TokenKind = open == '{' then '}' else ')'
+  tokens.closing_offset(open, close, is_name_list_token, offset)
 
 is_name_list_token := (kind: TokenKind) ->
   kind in [IDENTIFIER, ',', NEWLINE, INDENT, DEDENT, '{', '}', '(', ')']
@@ -220,12 +226,14 @@ wrap_in_postfix_condition := (tokens: TokenStream, statement: Statement): Statem
   return wrap_in_for(tokens, statement) if kind == 'for'
   return nil unless kind in POSTFIX_CONDITIONS
   tokens.next()
-  condition := parse_condition_after(tokens, kind)
+  (written, parts) := parse_written_condition(tokens, kind)
+  condition := condition_of(written, kind)
   position := statement.position
+  body := [parts..., statement]
   if kind in ['if', 'unless']
-    If(condition, position, then_body: [statement], else_body: [])
+    If(condition, position, then_body: body, else_body: [])
   else
-    While(condition, position, body: [statement])
+    While(condition, body, position)
 
 wrap_in_for := (tokens: TokenStream, statement: Statement) ->
   header := parse_loop_header(tokens)
@@ -290,24 +298,12 @@ parse_destructuring := (tokens: TokenStream) ->
   position := tokens.peek().position()
   mutable := tokens.accept('var')
   operator: TokenKind = mutable then '=' else ':='
-  if tokens.peek().kind == '('
-    names := parse_tuple_names(tokens)
-    value := parse_held_value(tokens, operator)
-    # Where the value is, for the message when it is no tuple of as many items.
-    holder := tuple_holder(value.position)
-    return [holding(holder, value), take_apart(holder, names, mutable, false)...]
-  tokens.next()
-  names := tokens.parse_list('}', -> parse_identifier(tokens))
-  tokens.fail_expecting tokens.peek(), 'a name' if names.is_empty()
+  destructuring := parse_destructuring_names(tokens)
   value := parse_held_value(tokens, operator)
-  holder := Identifier(position, name: "destructured.#{position.line}.#{position.column}")
-  field_of := (name: Identifier) ->
-    object := copy_identifier(holder)
-    Member(object, name: copy_identifier(name), position: name.position)
-  declare := (name: Identifier): Statement ->
-    Declaration(mutable, name, value: field_of(name), position: name.position)
-  declarations := [declare(name) for name in names]
-  [holding(holder, value), declarations...]
+  # A tuple's is where the value is, for the message when it is no tuple of as many items.
+  holder :=
+    destructured_holder(destructuring, destructuring.of_tuple then value.position else position)
+  [holding(holder, value), take_apart_held(destructuring, holder, mutable)...]
 
 # `= value` or `:= value`, after the names of a destructuring, which may take lines as that of a
 # declaration.
@@ -392,27 +388,33 @@ parse_for := (tokens: TokenStream) ->
   body := take_apart_item(header) + parse_block(tokens)
   For(variable, iterable, position, index, body)
 
-# A condition, or `name := value`, which holds when the value is not nil.
-parse_condition := (tokens: TokenStream): Condition ->
+# A condition, or `name := value`, which holds when the value is not nil, with no parts; or
+# `{ a, b } := value` or `(a, b) := value`, which binds a holder (see destructured_holder) and
+# whose parts, the declarations of the names, start the body.
+parse_condition := (tokens: TokenStream): (Condition, Statement[]) ->
   token := tokens.peek()
-  return parse_expression(tokens) unless at_binding(tokens)
+  position := token.position()
+  if at_destructuring_names(tokens) and at_destructuring(tokens)
+    destructuring := parse_destructuring_names(tokens)
+    tokens.next()
+    value := parse_expression(tokens)
+    holder :=
+      destructured_holder(destructuring, destructuring.of_tuple then value.position else position)
+    return (Binding(value, position, name: holder), take_apart_held(destructuring, holder, false))
+  return (parse_expression(tokens), []) unless at_binding(tokens)
   name := parse_identifier(tokens)
   tokens.next()
-  Binding(name, value: parse_expression(tokens), position: token.position())
+  (Binding(name, position, value: parse_expression(tokens)), [])
 
 at_binding := (tokens: TokenStream) ->
   tokens.peek().kind == IDENTIFIER and tokens.peek_at(1).kind == ':='
 
-# The condition after the keyword of an `if` or a `while`; that of `unless` or `until` is `not`
-# of what follows it, which binds no name, as the name would hold where the condition does not.
-parse_condition_after := (tokens: TokenStream, kind: TokenKind) ->
-  condition_of(parse_written_condition(tokens, kind), kind)
-
-# The condition as written after the keyword, which binds no name after `unless` or `until`.
-parse_written_condition := (tokens: TokenStream, kind: TokenKind): Condition ->
+# The condition as written after the keyword, which binds no name after `unless` or `until`, and
+# the parts of a destructuring one (see parse_condition).
+parse_written_condition := (tokens: TokenStream, kind: TokenKind): (Condition, Statement[]) ->
   return parse_condition(tokens) if kind in ['if', 'while']
-  tokens.fail_here "'#{kind}' cannot bind a name" if at_binding(tokens)
-  parse_expression(tokens)
+  tokens.fail_here "'#{kind}' cannot bind a name" if at_binding(tokens) or at_destructuring(tokens)
+  (parse_expression(tokens), [])
 
 condition_of := (written: Condition, kind: TokenKind) ->
   return written if kind in ['if', 'while']
@@ -423,7 +425,7 @@ condition_of := (written: Condition, kind: TokenKind) ->
 # The condition after the keyword of a statement with a block, and the block. `if c then a else b`
 # takes `c then a else b` for the condition of a block that is missing, which the error says.
 parse_head_and_block := (tokens: TokenStream, keyword: Token) ->
-  written := parse_written_condition(tokens, keyword.kind)
+  (written, parts) := parse_written_condition(tokens, keyword.kind)
   value := written is Binding then written.value else written
   has_block := tokens.peek().kind == NEWLINE and tokens.peek_at(1).kind == INDENT
   if value is Conditional and not has_block
@@ -431,7 +433,7 @@ parse_head_and_block := (tokens: TokenStream, keyword: Token) ->
     message :=
       "'#{word}' takes a block below it; write a value as 'c then a else b', without '#{word}'"
     tokens.fail keyword.position(), message
-  (condition_of(written, keyword.kind), parse_block(tokens))
+  (condition_of(written, keyword.kind), [parts..., parse_block(tokens)...])
 
 parse_while := (tokens: TokenStream) ->
   token := tokens.next()

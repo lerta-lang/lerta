@@ -9,16 +9,19 @@ from '../ast'
 import CLOSING_BRACKETS, OPENING_BRACKETS, TokenKind from '../lexer/tokens'
 import at_block from './block_literal'
 import
-  at_spread, LoopHeader, parse_expression, parse_identifier, parse_loop_header, parse_or,
-  SPREAD_FOLLOWERS, take_apart_item
+  at_destructuring_names, at_spread, destructured_holder, LoopHeader, parse_destructuring_names,
+  parse_expression, parse_identifier, parse_loop_header, parse_or, SPREAD_FOLLOWERS,
+  take_apart_held, take_apart_item
 from './expression'
-import at_declaration, parse_block, parse_line_statement, parse_simple_statement from './statement'
+import
+  at_declaration, names_closing_offset, parse_block, parse_line_statement, parse_simple_statement
+from './statement'
 import TokenStream from './token_stream'
 import parse_result_annotation, parse_type_annotation, parse_type_parameters from './type'
 
-# `(` starts a function literal when it opens typed parameters, `(a: Int`, or when its closing
-# `)` is followed by `->`, or by `:` after `()`. A parenthesized expression followed by `:` is a
-# map key: `{ (k): v }`. `<` starts the type parameters of a generic one.
+# `(` starts a function literal when it opens typed parameters, `(a: Int` or `({ a }: T`, or when
+# its closing `)` is followed by `->`, or by `:` after `()`. A parenthesized expression followed by
+# `:` is a map key: `{ (k): v }`. `<` starts the type parameters of a generic one.
 # The parameters may start on the line after the `(`.
 export at_function_literal := (tokens: TokenStream) ->
   first := tokens.peek().kind
@@ -42,6 +45,9 @@ looks_like_parameters := (tokens: TokenStream, offset: Int) ->
   return third in [':', '->'] if second == ')'
   # `(x = 1)` is no expression, as an assignment is a statement.
   return true if second == IDENTIFIER and third in [':', '=']
+  # Nor is `({ x }: P` or `((a, b): T`, a typed parameter taken apart.
+  names_close := names_closing_offset(tokens, offset)
+  return true if names_close and tokens.peek_at(names_close + 1).kind == ':'
   close := tokens.closing_offset('(', ')', (kind) -> kind != EOF) ? return false
   tokens.peek_at(close + 1).kind == '->'
 
@@ -51,12 +57,13 @@ looks_like_parameters := (tokens: TokenStream, offset: Int) ->
 export parse_function_literal := (tokens: TokenStream, weak = false) ->
   token := tokens.peek()
   type_params := parse_type_parameters(tokens)
-  parse_params := (): Parameter[] ->
+  parse_params := (): ParsedParameter[] ->
     return [] unless tokens.accept('(')
     tokens.parse_list(')', -> parse_parameter(tokens))
   # A default is computed before the body runs (see generate_default_entry), so it cannot wait.
   parsed_params := tokens.in_function(parse_params)
-  params := parsed_params.body
+  params := [parsed.parameter for parsed in parsed_params.body]
+  parts := [part for parsed in parsed_params.body for part in parsed.parts]
   tokens.fail at, "'await' cannot be in a default" if at := parsed_params.marks.await_at
   return_type := parse_result_annotation(tokens)
   tokens.expect '->'
@@ -73,21 +80,42 @@ export parse_function_literal := (tokens: TokenStream, weak = false) ->
       # `[(x) -> x for x in xs]`.
       when tokens.in_brackets() then [parse_simple_statement(tokens)]
       else [parse_line_statement(tokens)]
-  { body, marks } := tokens.in_function(parse_body)
+  parsed_body := tokens.in_function(parse_body)
+  { marks } := parsed_body
+  body := [parts..., parsed_body.body...]
   yields := marks.yields
   position := token.position()
   await_at := marks.await_at
   FunctionLiteral(type_params, params, return_type, body, yields, await_at, position, weak)
 
-# `name[: Type][ = default]`, or `name: Type...`.
-parse_parameter := (tokens: TokenStream): Parameter ->
+# A parameter, and the declarations that start the body for one that is taken apart.
+struct ParsedParameter
+  parameter: Parameter
+  parts: Statement[]
+
+# `name[: Type][ = default]`, or `name: Type...`; or `{ a, b }[: Type]` or `(a, b)[: Type]`, which
+# takes the argument apart as a destructuring declaration does.
+parse_parameter := (tokens: TokenStream): ParsedParameter ->
+  return parse_destructured_parameter(tokens) if at_destructuring_names(tokens)
   name := parse_identifier(tokens)
   type := parse_type_annotation(tokens)
   if tokens.accept('...')
     if type == nil
       tokens.fail name.position, 'a variadic parameter must have a type, as in `rest: Int...`'
-    return { name, type, default: nil, variadic: true }
-  { name, type, default: tokens.accept('=') then parse_expression(tokens) }
+    return { parameter: { name, type, default: nil, variadic: true }, parts: [] }
+  default := tokens.accept('=') then parse_expression(tokens)
+  { parameter: { name, type, default }, parts: [] }
+
+parse_destructured_parameter := (tokens: TokenStream) ->
+  position := tokens.peek().position()
+  destructuring := parse_destructuring_names(tokens)
+  type := parse_type_annotation(tokens)
+  next := tokens.peek().kind
+  tokens.fail position, 'a parameter taken apart cannot have a default' if next == '='
+  tokens.fail position, 'a parameter taken apart cannot be variadic' if next == '...'
+  holder := destructured_holder(destructuring, position)
+  parameter := Parameter(type, name: holder, default: nil)
+  ParsedParameter(parameter, parts: take_apart_held(destructuring, holder, false))
 
 # `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension. An element
 # `xs...` gives the items of `xs` in its place.
