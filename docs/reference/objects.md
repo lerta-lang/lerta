@@ -179,7 +179,8 @@ An arithmetic or bitwise operator on a value of a type it does not otherwise app
 |---|---|
 | `a + b`, `-`, `*`, `/`, `%` | `a.add(b)`, `sub`, `mul`, `div`, `rem` |
 | `&`, `\|`, `^`, `<<`, `>>` | `bit_and`, `bit_or`, `bit_xor`, `shl`, `shr` |
-| `-a` | `a.neg()` |
+| `a ** b` | `a.pow(b)`, which `**` calls on every type, the numbers too |
+| `-a`, `~a` | `a.neg()`, `a.bit_not()` |
 
 - The right operand is the argument, of the parameter's type. The result is whatever the method gives: `Meters / Meters` may give a `Float`.
 - The method is found on the left operand: `2 * v` does not call `v`'s `mul`.

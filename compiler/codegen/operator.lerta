@@ -34,11 +34,17 @@ UNSIGNED_PREDICATES := { '==': 'eq', '!=': 'ne', '<': 'ult', '<=': 'ule', '>': '
 export generate_unary := (g: Generator, unary: UnaryOperation) ->
   return generate(g, call) if call := g.facts.operator_calls[unary]
   return g.ir.negate(generate_condition(g, unary.operand)) if unary.operator == 'not'
-  negate(g, generate(g, unary.operand), type_of(g, unary))
+  operand := generate(g, unary.operand)
+  type := type_of(g, unary)
+  unary.operator == '~' then invert(g, operand, type) else negate(g, operand, type)
 
 negate := (g: Generator, operand: String, type: Type) ->
   return emit_float_negation(g.ir, operand, type) if is_float(type)
   apply_integer_operator(g, '-', '0', operand, type)
+
+# `~x`, the bits of an integer inverted, as `x ^ -1` gives them.
+invert := (g: Generator, operand: String, type: Type) ->
+  apply_integer_operator(g, '^', operand, '-1', type)
 
 # The method of a number, `add` and so on, or a String's or a Binary's add, which applies its
 # operator to the object and the arguments, both borrowed.
@@ -46,6 +52,7 @@ export apply_operator_method := (
   g: Generator, name: String, object: String, args: String[], type: Type
 ) ->
   return negate(g, object, type) if name == 'neg'
+  return invert(g, object, type) if name == 'bit_not'
   if is_bytes(type)
     emit_retain g.ir, part for part in [object, args[0]]
     return emit_concat(g.ir, [object, args[0]])

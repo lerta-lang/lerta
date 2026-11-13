@@ -49,7 +49,9 @@ import
 from '../types'
 
 export type_of := (body: Body, expression: Expression, expected: Type? = nil) ->
-  type := set_type(body, expression, compute_type(body, expression, expected))
+  retyped := body.retyped_hints[expression]
+  hint := retyped then retyped else expected
+  type := set_type(body, expression, compute_type(body, expression, hint))
   record_constant body, expression, type
   type
 
@@ -136,9 +138,7 @@ compute_type := (body: Body, expression: Expression, expected: Type?): Type ->
       return member if member := type_of_qualified_member(body, expression, expected)
       return reference if reference := type_of_function_reference(body, expression, expected)
       type_of_property(body, expression, expected)
-    when ArrayLiteral
-      in_test := body.in_test_arrays[expression]
-      type_of_array(body, expression, in_test then in_test else expected)
+    when ArrayLiteral then type_of_array(body, expression, expected)
     when MapLiteral then type_of_map(body, expression, expected)
     when Comprehension then type_of_comprehension(body, expression, expected)
     when RecordLiteral then type_of_record(body, expression, expected)

@@ -162,9 +162,12 @@ The least and the greatest [Int](types.md#int): `-9223372036854775808` and `9223
 | `BitXor<Rhs, Out>` | `bit_xor: (Rhs) -> Out` | `^` |
 | `Shl<Rhs, Out>` | `shl: (Rhs) -> Out` | `<<` |
 | `Shr<Rhs, Out>` | `shr: (Rhs) -> Out` | `>>` |
+| `Pow<Rhs, Out>` | `pow: (Rhs) -> Out` | `**` |
 | `Neg<Out>` | `neg: () -> Out` | prefix `-` |
+| `BitNot<Out>` | `bit_not: () -> Out` | prefix `~` |
 
 - The numbers have the methods of the operators that apply to them. They apply the operators, throwing as they do: `3.add(4)` is 7.
+- `Int` and `Float` have `pow`, which `**` always calls, as no type applies it otherwise.
 - `String`, `Binary` and arrays have `add`. So `<T: Add<T, T>>` takes an `Int`, a `String` or an array as well as a type that declares `add`.
 
 ## Methods of the builtin types
@@ -179,14 +182,14 @@ The signatures of the methods of the builtin types, by type. What each does is i
 [Int](types.md#int), [Byte](types.md#byte) and the [sized integers](types.md#sized-integers). `N` is the receiver's type.
 
 - `compare(other: N): Ordering`
-- `add`, `sub`, `mul`, `div`, `rem`, `bit_and`, `bit_or`, `bit_xor`, `shl`, `shr`: `(other: N): N`; `neg(): N` of the signed ones
+- `add`, `sub`, `mul`, `div`, `rem`, `bit_and`, `bit_or`, `bit_xor`, `shl`, `shr`: `(other: N): N`; `neg(): N` of the signed ones; `bit_not(): N`
 - `wrapping_add(other: N): N`, `wrapping_sub(other: N): N`, `wrapping_mul(other: N): N`
 - `to_string(): String`, `to_literal(): String`
 - `to_float(): Float`
 - `to_int()`, `to_byte()`, `to_int8()`, `to_int16()`, `to_int32()`, `to_uint16()`, `to_uint32()`, `to_uint64()`: of that type, optional unless every value fits
 - `to_char(): Char?`; `Char` for a `Byte`
 - `Int`, `UInt64` and `Byte`: `to_hex(width: Int = 0): String`
-- `Int` only: `to_bits(): UInt64`, `abs(): Int`, which throws for `INT_MIN`, whose magnitude no `Int` holds
+- `Int` only: `to_bits(): UInt64`, `abs(): Int`, which throws for `INT_MIN`, whose magnitude no `Int` holds, `pow(n: Int): Int`, which `**` calls
 - `Byte` only: `is_digit(): Bool`, `is_letter(): Bool`, `is_alphanumeric(): Bool`, `is_space(): Bool`, `is_lower(): Bool`, `is_upper(): Bool`, `is_utf8_continuation(): Bool`, `hex_value(): Int?`
 
 ### Char
@@ -208,7 +211,7 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `add`, `sub`, `mul`, `div`: `(other: F): F`; `neg(): F`
 - `to_string(): String`, `to_literal(): String`
 - `to_fixed(digits: Int): String`, which throws a `ValueError` for `digits` outside 0 to 18 or an infinity
-- `Float` only: `to_int(): Int?`, `to_float32(): Float32`
+- `Float` only: `to_int(): Int?`, `to_float32(): Float32`, `pow(exponent: Float): Float`, which `**` calls
 - `Float32` only: `to_float(): Float`
 
 ### Bool

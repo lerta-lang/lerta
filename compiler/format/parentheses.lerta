@@ -159,7 +159,7 @@ operands_of := (operand: Operand): Operand[] ->
     when IsTest, Cast then [part(expression.value, COALESCE, last: false)]
     when Coalesce then coalesce_operands(expression, last)
     when Conditional then conditional_operands(expression, last)
-    when Await then [part(expression.operand, PREFIX, last: true)]
+    when Await then [prefix_operand(expression.operand)]
     when Case then patterns_of(expression)
     when MapLiteral then [map_key(entry.key) for entry in expression.entries]
     when Comprehension then comprehension_operands(expression)
@@ -190,15 +190,26 @@ patterns_of := (case_value: Case): Operand[] ->
 
 is_number := (expression: Expression) -> expression is IntegerLiteral | FloatLiteral
 
-# `not (x is not T)` and `-(1)` keep theirs, which `not x is not T` and `-1` would read otherwise.
+# `not (x is not T)` and `-(1)` keep theirs, which `not x is not T` and `-1` would read otherwise,
+# and so does `-(x ** 2)` (see prefix_operand).
 unary_operand := (unary: UnaryOperation): Operand ->
   { operand } := unary
   if unary.operator == 'not'
     return { expression: operand, level: NOT, last: true, clarified: is_negated_test(operand) }
-  { expression: operand, level: PREFIX, last: true, clarified: is_number(operand) }
+  negates_number := unary.operator == '-' and is_number(operand)
+  { expression: operand, level: PREFIX, last: true, clarified: negates_number or is_power(operand) }
+
+# The operand of a prefix operator, which a `**` keeps its parentheses in, as `-x ** 2` is an error
+# (see parse_power).
+prefix_operand := (operand: Expression) ->
+  Operand(expression: operand, level: PREFIX, last: true, clarified: is_power(operand))
+
+is_power := (expression: Expression) ->
+  expression is BinaryOperation and expression.operator == '**'
 
 # `and` mixed with `or` is clarified.
 binary_operands := (binary: BinaryOperation, last: Bool) ->
+  return power_operands(binary, last) if binary.operator == '**'
   level := binary_precedence(binary.operator)
   compares := level == COMPARISON
   mixes := (side: Expression) ->
@@ -214,6 +225,21 @@ binary_operands := (binary: BinaryOperation, last: Bool) ->
     level: compares then COALESCE else level + 1
     clarified: mixes(binary.right)
   [left, right]
+
+# `**` groups to the right, and its base takes no prefix operator (see parse_power), so `(-x) ** 2`
+# keeps its parentheses, and so does `(-2) ** 2`, of a negative literal; its exponent may take one,
+# as `2 ** -1`.
+power_operands := (binary: BinaryOperation, last: Bool) ->
+  { left, right } := binary
+  [
+    Operand(expression: left, level: POSTFIX, last: false, clarified: is_negative_number(left))
+    Operand(last, expression: right, level: PREFIX)
+  ]
+
+is_negative_number := (expression: Expression) ->
+  case expression
+    when IntegerLiteral, FloatLiteral then expression.text.starts_with('-')
+    else false
 
 # An end that is an operation is clarified (see Ranges).
 range_ends := (range: Range, last: Bool) ->

@@ -26,9 +26,10 @@
 | `+` `-` `*`, prefix `-` | Throw `integer overflow` when the result does not fit. |
 | `/` | The quotient, truncated toward zero: `-7 / 2 == -3`. |
 | `%` | The remainder: `-7 % 2 == -1`. |
-| `&` `\|` `^` | Bitwise and, or, exclusive or. `x ^ -1` inverts the bits. |
+| `&` `\|` `^` | Bitwise and, or, exclusive or. `~x` inverts the bits. |
 | `x << n` | Throws `integer overflow` unless the result fits, as `x` times 2 to the `n` would; so it never changes the sign. |
 | `x >> n` | Shifts in copies of the sign bit. |
+| `x ** n` | `x` to the power `n`, 1 for `n` 0. Throws `integer overflow` where the result does not fit, as `*` does, and `negative exponent` for a negative `n`. |
 
 - `/` and `%` throw `division by zero` when the divisor is 0, and `integer overflow` for the minimum divided by `-1`.
 - A shift throws `shift out of range` when `n` is negative or 64 or more.
@@ -210,6 +211,7 @@ print [kana(c) for c in 'ひらがな'].join()
 - `+` `-` `*` `/` and prefix `-` follow IEEE 754.
 - A result too large to be finite is an infinity of its sign; so is a nonzero number divided by zero, of the sign of the two: `1.0 / -0.0` is `-INFINITY`.
 - A result that would be NaN throws `not a number`: `0.0 / 0.0`, an infinity less itself, zero times an infinity, an infinity divided by one.
+- `x ** y` is `x` to the power `y`, as C's `pow` gives it: an infinity where the result is too large, or for 0 to a negative power. A result below the normal range may be one ulp off, as on 64-bit Windows. It throws `a negative number to a fractional power` for a finite negative `x` and a `y` that is no integer. A literal base is a `Float` where the exponent is one: `2 ** 0.5`.
 - There is no `%`.
 
 #### Where NaN is checked
@@ -380,7 +382,7 @@ A **constant expression** is one of these, or an operator applied to them:
 - a top-level `const`, imported or not, whose value is a constant expression of the const's own type;
 - `INT_MIN` and `INT_MAX`.
 
-The operators are the arithmetic and bitwise ones of integers, prefix `-` among them, and `+` of `String`s: `SIZE := 64 * KB`, `PATH := ROOT + '/bin'`.
+The operators are the arithmetic and bitwise ones of integers, prefix `-` and `~` among them, `**` of `Int`s, and `+` of `String`s: `SIZE := 64 * KB`, `MASK := ~(2 ** 12 - 1)`, `PATH := ROOT + '/bin'`.
 
 - A local, a parameter or a `var` is none, nor are floats so far.
 - The compiler evaluates it as the program would and writes its value in its place, at no cost at run time.

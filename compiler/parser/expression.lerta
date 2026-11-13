@@ -14,7 +14,8 @@ import TokenStream from './token_stream'
 import at_type_arguments, parse_cast_type, parse_tested_type, parse_type_arguments from './type'
 
 # Arithmetic and bitwise operators by precedence, weakest first. Comparisons are weaker than all of
-# them. `<<` and `>>` bind as `*` does, each two tokens (see shift_at).
+# them. `<<` and `>>` bind as `*` does, each two tokens (see shift_at). `**` binds more tightly
+# still (see parse_power).
 ARITHMETIC_PRECEDENCE: TokenKind[][] = [['+', '-', '|', '^'], ['*', '/', '%', '&']]
 
 POSTFIX_OPERATORS: TokenKind[] = ['(', '[', '.', '!']
@@ -315,7 +316,7 @@ at_comparison := (tokens: TokenStream) ->
   tokens.peek_continuation() in COMPARISON_OPERATORS and shift_ahead(tokens, '=') == nil
 
 parse_arithmetic := (tokens: TokenStream, level: Int): Expression ->
-  return parse_unary(tokens) if level == ARITHMETIC_PRECEDENCE.length
+  return parse_power(tokens) if level == ARITHMETIC_PRECEDENCE.length
   operators := ARITHMETIC_PRECEDENCE[level]
   takes_shifts := level == ARITHMETIC_PRECEDENCE.length - 1
   nesting := tokens.nesting
@@ -352,6 +353,27 @@ shift_ahead := (tokens: TokenStream, rest: String) ->
   return nil if second.spaced or second.kind.to_string() != "#{first}#{rest}"
   "#{first}#{second.kind}"
 
+# `x ** n`, which groups to the right, as `2 ** 3 ** 2` is `2 ** 9`. A prefix operator before it
+# needs parentheses, as `-x ** 2` would read as `(-x) ** 2` in some languages and as `-(x ** 2)` in
+# others, and `-2 ** 2` as the first, of the literal `-2`, while `-x ** 2` would read as the second.
+parse_power := (tokens: TokenStream): Expression ->
+  tokens.continue_line()
+  start := tokens.peek()
+  base := parse_unary(tokens)
+  return base unless tokens.peek_continuation() == '**'
+  if start.kind in PREFIX_OPERATORS
+    prefix := start.kind == 'await' then 'await ' else start.text
+    message := "write `(#{prefix}x) ** n` or `#{prefix}(x ** n)` for `#{prefix}x ** n`"
+    tokens.fail start.position(), message
+  nesting := tokens.nesting
+  tokens.next()
+  tokens.deepen()
+  exponent := parse_power(tokens)
+  tokens.nesting = nesting
+  BinaryOperation(operator: '**', left: base, right: exponent, position: base.position)
+
+PREFIX_OPERATORS: TokenKind[] = ['-', '~', 'await']
+
 parse_unary := (tokens: TokenStream): Expression ->
   tokens.continue_line()
   token := tokens.peek()
@@ -361,9 +383,12 @@ parse_unary := (tokens: TokenStream): Expression ->
     marks := tokens.innermost_function()
     marks.await_at = position if marks and marks.await_at == nil
     return Await(position, operand: tokens.nested(-> parse_unary(tokens)))
+  position := token.position()
+  if token.kind == '~'
+    tokens.next()
+    return UnaryOperation(position, operator: '~', operand: tokens.nested(-> parse_unary(tokens)))
   return parse_postfix(tokens, parse_primary(tokens)) if token.kind != '-'
   tokens.next()
-  position := token.position()
   # `-1` with no space is a negative literal, so that the minimum Int can be written; `-1.5` is one
   # too, so that a member applies to it as it does to `-1`.
   literal := tokens.peek()

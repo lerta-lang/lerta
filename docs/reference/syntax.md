@@ -196,7 +196,7 @@ A callee followed by an indented block gives the block as the call's arguments, 
 
 ### Compound assignment
 
-- `+=` `-=` `*=` `/=` `%=` `&=` `|=` `^=` `<<=` `>>=` combine a target with a value as their binary operator does, for the types it takes (`Int`, `Byte` and `Float`; see [types](types.md)).
+- `+=` `-=` `*=` `/=` `%=` `&=` `|=` `^=` `<<=` `>>=` `**=` combine a target with a value as their binary operator does, for the types it takes (`Int`, `Byte` and `Float`; see [types](types.md)).
 - `+=` also appends a `String` to a `String`.
 - A map's value takes them only through a default, `m[k, default: 0] += 1` (see [Map](types.md#map)).
 - The target, as an object and an index, is evaluated first, then the value, and then the target is read and combined with it. So `x += f()` adds to what `x` holds once `f` has run, if `f` assigns `x` too.
@@ -294,9 +294,11 @@ From weakest to strongest:
 | ranges `..` `..=` | none |
 | `+` `-` `\|` `^` | left |
 | `*` `/` `%` `&` `<<` `>>` | left |
-| prefix `-` | - |
+| prefix `-` `~` | - |
+| `**` | right |
 
-- Arithmetic and bitwise operators are left-associative: `10 - 4 - 3` is `3`.
+- Arithmetic and bitwise operators are left-associative: `10 - 4 - 3` is `3`. `**` alone groups to the right: `2 ** 3 ** 2` is `2 ** 9`.
+- A prefix operator before `**` is an error, which asks for `(-x) ** 2` or `-(x ** 2)`, as `-x ** 2` means the one in some languages and the other in others; `-2 ** 2` too, of the literal `-2`. Its exponent may take one: `2 ** -1`.
 - They bind tighter than comparisons: `x & 0xF == 0` compares `x & 0xF`.
 - `a then x else b then y else z` is `a then x else (b then y else z)`.
 - Comparisons, `is`, `as` and `in` included, do not chain: `a < b < c` is a syntax error; use parentheses, as in `(x as T?) == nil`.

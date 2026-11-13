@@ -103,7 +103,7 @@ What `std:builtins`, in the files of `std/builtins/`, cannot write in Lerta (see
 
 - `lerta_binary_text` gives `text` the bytes as the same object if they are valid UTF-8, checking 8 bytes at a time while they are ASCII.
 - `lerta_string_slice` gives `split`, `split_once`, the `trim`s and std:scanner the bytes of a String between two characters, as a String too, as it checks that both ends are at a character.
-- std:math's `pow`, whose result C checks, as i686 holds what libm returns in an x87 register, wider than a `Float`, until it is stored.
+- Float's `pow`, which `**` calls, whose result C checks, as i686 holds what libm returns in an x87 register, wider than a `Float`, until it is stored.
 - `print` and `print_error` write with `lerta_print_stdout` and `lerta_print_stderr`, which write at once rather than through the buffer of `stdout` (see [output](platforms.md#output)).
 
 ### std:codable and std:json

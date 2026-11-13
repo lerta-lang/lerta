@@ -31,6 +31,8 @@ export declared_constant := (body: Body, value: Expression, type: Type) ->
 
 constant_value := (body: Body, expression: Expression, type: Type): Constant? ->
   constants := body.facts.constants
+  if expression is BinaryOperation and expression.operator == '**'
+    return power_constant(body, expression)
   # An operator that calls a method is no operation of numbers.
   return nil if expression in body.facts.operator_calls
   case expression
@@ -39,9 +41,11 @@ constant_value := (body: Body, expression: Expression, type: Type): Constant? ->
       integer_constant(value, type)
     when StringLiteral then is_kind(type, 'String') then expression.value
     when UnaryOperation
-      return nil if expression.operator != '-'
       operand := constants[expression.operand] ? return nil
-      evaluated(body, expression, -> negated(operand))
+      case expression.operator
+        when '-' then evaluated(body, expression, -> negated(operand))
+        when '~' then inverted(operand)
+        else nil
     when BinaryOperation
       { operator } := expression
       return nil unless is_numeric_operator(operator)
@@ -56,6 +60,25 @@ evaluated := (body: Body, operation: Expression, evaluate: () -> Constant) ->
     evaluate()
   catch thrown: ArithmeticError
     fail(body.program, operation.position, "#{thrown.message} in a constant expression")
+
+# `**` of Ints, which calls Int's pow, the one pow of constants.
+power_constant := (body: Body, power: BinaryOperation) ->
+  base := body.facts.constants[power.left] as Int ? return nil
+  exponent := body.facts.constants[power.right] as Int ? return nil
+  evaluated(body, power, -> base.pow(exponent))
+
+# Prefix `~`, of each integer type.
+inverted := (operand: Constant): Constant ->
+  case operand
+    when Int then operand ^ -1
+    when Int8 then operand ^ -1
+    when Int16 then operand ^ -1
+    when Int32 then operand ^ -1
+    when Byte then operand ^ 0xFF
+    when UInt16 then operand ^ 0xFFFF
+    when UInt32 then operand ^ 0xFFFFFFFF
+    when UInt64 then operand ^ -1.to_bits()
+    else panic('no constant to invert')
 
 # An integer literal's value as the type, which the checker has found it to fit in; nil for a type
 # of no constants, as a Float.

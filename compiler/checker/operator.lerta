@@ -14,26 +14,27 @@ import range_part, reject_steps from './loop'
 import where_right_operand from './narrowing'
 import Body from './shared'
 import
-  ArrayType, bool_type, FLOAT_KINDS, format_type, FunctionType, inner_of, inner_of_expected,
-  int_type, INTEGER_KINDS, is_identity_type, is_integer, is_kind, is_one_of_kinds, members_of,
-  NUMBER_KINDS, ObjectType, OptionalType, SIGNED_INTEGER_KINDS, string_type, Type, TypeKind,
-  TypeParameterType
+  ArrayType, bool_type, FLOAT_KINDS, float_type, format_type, FunctionType, inner_of,
+  inner_of_expected, int_type, INTEGER_KINDS, is_identity_type, is_integer, is_kind,
+  is_one_of_kinds, members_of, NUMBER_KINDS, ObjectType, OptionalType, SIGNED_INTEGER_KINDS,
+  string_type, Type, TypeKind, TypeParameterType
 from '../types'
 
 EQUALITY_KINDS: TypeKind[] = [NUMBER_KINDS..., 'Char', 'Bool', 'String', 'Binary', ENUM]
 
 # The arithmetic and bitwise operators, which give a value of their operands' type, as a comparison
 # does not.
-NUMERIC_OPERATORS := ['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>']
+NUMERIC_OPERATORS := ['+', '-', '*', '/', '%', '&', '|', '^', '<<', '>>', '**']
 
 export is_numeric_operator := (operator: String) -> operator in NUMERIC_OPERATORS
 
 # The methods that the arithmetic and bitwise operators call on values of the types that they do
-# not apply to otherwise, `a + b` as `a.add(b)`, as prefix `-` calls `neg` (see Add and the like
-# in std:builtins).
+# not apply to otherwise, `a + b` as `a.add(b)`, as prefix `-` calls `neg` and `~` calls `bit_not`
+# (see Add and the like in std:builtins). No type applies `**` itself: it always calls pow, which
+# Int and Float have in std:builtins.
 export OPERATOR_METHODS :=
   '+': 'add', '-': 'sub', '*': 'mul', '/': 'div', '%': 'rem', '&': 'bit_and', '|': 'bit_or',
-  '^': 'bit_xor', '<<': 'shl', '>>': 'shr'
+  '^': 'bit_xor', '<<': 'shl', '>>': 'shr', '**': 'pow'
 
 operators_by_method: Map<String, String>
 operators_by_method[method] = operator for (operator, method) in OPERATOR_METHODS
@@ -44,7 +45,8 @@ export operator_of_method := (name: String) -> operators_by_method[name]
 # The result of the call of the method of the name on the object, of a type that the operator,
 # written as `written`, does not apply to otherwise, with the arguments; a call recorded in the
 # facts, which codegen generates instead of the operation (see operator_calls). Nil if the type has
-# no such member, which is an error for a class or struct, or a type parameter standing for itself.
+# no such member, which is an error for a class or struct, a type parameter standing for itself, or
+# any type of pow, which no type applies otherwise.
 export type_of_operator_call := (
   body: Body, operation: BinaryOperation | UnaryOperation | Assignment, written: String,
   object: Expression, object_type: Type, name: String, args: Expression[]
@@ -52,7 +54,8 @@ export type_of_operator_call := (
   at := operation.position
   method_name := Identifier(name, position: at)
   if member_type_by_name(body, object_type, method_name) == nil
-    return nil unless object_type is ObjectType | TypeParameterType
+    reported := object_type is ObjectType | TypeParameterType or name == 'pow'
+    return nil unless reported
     message := "#{format_type(object_type)} has no #{name}, by which #{written} applies"
     fail body.program, object.position, message
   call := method_call(object, name, args, at)
@@ -83,16 +86,24 @@ export type_of_unary := (body: Body, unary: UnaryOperation, expected: Type?): Ty
   if unary.operator == 'not'
     expect_condition body, unary.operand
     return bool_type
-  type := type_of(body, unary.operand, hint_of(expected, SIGNED_KINDS))
-  unless is_one_of_kinds(type, SIGNED_KINDS)
-    operand := unary.operand
-    return result if result := type_of_operator_call(body, unary, '-', operand, type, 'neg', [])
-    message := "expected #{describe_kinds(SIGNED_KINDS)}, got #{format_type(type)}"
-    fail body.program, unary.operand.position, message
+  { operator, operand } := unary
+  kinds := unary_kinds(operator)
+  type := type_of(body, operand, hint_of(expected, kinds))
+  unless is_one_of_kinds(type, kinds)
+    name := UNARY_METHODS[operator]!
+    return result if result := type_of_operator_call(body, unary, operator, operand, type, name, [])
+    message := "expected #{describe_kinds(kinds)}, got #{format_type(type)}"
+    fail body.program, operand.position, message
   type
 
 # The types that prefix `-` takes: not an unsigned one, whose negation throws unless it is 0.
-export SIGNED_KINDS := SIGNED_INTEGER_KINDS + FLOAT_KINDS
+SIGNED_KINDS := SIGNED_INTEGER_KINDS + FLOAT_KINDS
+
+# The types that the prefix operator, `-` or `~`, applies to itself.
+export unary_kinds := (operator: String) -> operator == '~' then INTEGER_KINDS else SIGNED_KINDS
+
+# The methods that the prefix operators call on values of the other types.
+export UNARY_METHODS := { '-': 'neg', '~': 'bit_not' }
 
 type_of_nil_test := (body: Body, binary: BinaryOperation) ->
   left_is_nil := binary.left is NilLiteral
@@ -111,6 +122,7 @@ export operand_kinds := (operator: String): TypeKind[] ->
   case operator
     when '+' then [NUMBER_KINDS..., 'String', 'Binary']
     when '%', '&', '|', '^', '<<', '>>' then INTEGER_KINDS
+    when '**' then []
     else NUMBER_KINDS
 
 # An arithmetic or bitwise operator passes the expected type to its operands; a comparison's
@@ -129,6 +141,7 @@ export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?):
     reject := (type: Type) -> "cannot compare values of type #{format_type(type)}"
     type_of_operands body, binary, nil, EQUALITY_KINDS, reject
     return bool_type
+  return type_of_power(body, binary, expected) if operator == '**'
   allowed := operand_kinds(operator)
   reject := (type: Type) -> "expected #{describe_kinds(allowed)}, got #{format_type(type)}"
   if is_order_operator(operator)
@@ -136,6 +149,24 @@ export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?):
     order_by_compare body, binary if is_kind(type, 'String')
     return bool_type
   type_of_operands(body, binary, hint_of(expected, allowed), allowed, reject)
+
+# `x ** n` calls `x.pow(n)`, whose parameter types `n`, as `2.0 ** 3` makes 3 a Float. A literal
+# base takes the expected Int or Float, as `y: Float = 2 ** 3` makes 2 a Float, or else is a Float
+# where the exponent is one, as `2 ** 0.5` is.
+type_of_power := (body: Body, binary: BinaryOperation, expected: Type?) ->
+  { left, right } := binary
+  expected_hint := hint_of(expected, POWER_KINDS)
+  is_float_power := is_contextual(left) and is_float_exponent(body, right)
+  hint := expected_hint then expected_hint else is_float_power then float_type
+  body.retyped_hints[left] = hint if hint and is_contextual(left)
+  type := type_of(body, left, hint)
+  type_of_operator_call(body, binary, '**', left, type, 'pow', [right])!
+
+is_float_exponent := (body: Body, exponent: Expression) ->
+  holds_float_literal(exponent) or alone_type(body, exponent) == float_type
+
+# The types whose pow std:builtins gives.
+POWER_KINDS: TypeKind[] = ['Int', 'Float']
 
 # `x in a..=b` compares `x` with the ends in place, making no range. The parts take the type of the
 # first that has its own, or else of the first float literal, as the operands of `<=` do. Only the
@@ -162,7 +193,7 @@ type_of_in_test := (body: Body, binary: BinaryOperation) ->
   { left, right, position } := binary
   expected := expected_container(body, binary)
   # The call of contains types the literal again, and takes its type from here.
-  body.in_test_arrays[right] = expected if expected and right is ArrayLiteral
+  body.retyped_hints[right] = expected if expected and right is ArrayLiteral
   container := type_of(body, right, expected)
   contains := member_type_by_name(body, container, Identifier(position, name: 'contains'))
   unless contains

@@ -5,6 +5,8 @@ extern lerta_float_fits_int: (Float) -> Bool
 extern lerta_float_to_int: (Float) -> Int
 extern lerta_float32_to_string: (Float32) -> String
 extern lerta_float_from_bits: (Int) -> Float
+extern pow as libm_pow: (Float, Float) -> Float
+extern floor as libm_floor: (Float) -> Float
 
 # The least and the greatest Int.
 export INT_MIN := -9223372036854775808
@@ -15,6 +17,11 @@ export INFINITY := lerta_float_from_bits(0x7FF0000000000000)
 
 extend Float
   to_string := -> lerta_float_to_string(@)
+  # As C's pow gives it, which is NaN for a finite negative base and an exponent that is no integer.
+  pow := (exponent: Float) ->
+    if @ < 0.0 and @ != -INFINITY and libm_floor(exponent) != exponent
+      throw ArithmeticError('a negative number to a fractional power')
+    libm_pow(@, exponent)
   # An infinity is written as the value that names it.
   to_literal := ->
     return 'INFINITY' if @ == INFINITY
@@ -54,6 +61,18 @@ extend Bool
 extend Int
   # The magnitude, which throws for the least Int, whose magnitude no Int holds.
   abs := -> @ < 0 then -@ else @
+  # By squaring, which leaves out the square after the last factor, so that it throws only where the
+  # power itself does not fit.
+  pow := (n: Int) ->
+    throw ArithmeticError('negative exponent') if n < 0
+    var result = 1
+    var base = @
+    var rest = n
+    while rest > 0
+      result *= base if rest & 1 == 1
+      rest >>= 1
+      base *= base if rest > 0
+    result
   # The magnitude of a negative value is that of `@ + 1` plus one, as `@ + 1`, unlike the minimum
   # Int, can be negated.
   to_string := ->
