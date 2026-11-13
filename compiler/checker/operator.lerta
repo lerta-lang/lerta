@@ -12,12 +12,13 @@ import compares_by_bounds, has_method, member_type_by_name from './member'
 import appends_to_literal, holds_float_literal, is_contextual from './literals'
 import range_part, reject_steps from './loop'
 import where_right_operand from './narrowing'
+import parts_method from './parts'
 import Body from './shared'
 import
   ArrayType, bool_type, FLOAT_KINDS, float_type, format_type, FunctionType, inner_of,
   inner_of_expected, int_type, INTEGER_KINDS, is_identity_type, is_integer, is_kind,
   is_one_of_kinds, members_of, NUMBER_KINDS, ObjectType, OptionalType, SIGNED_INTEGER_KINDS,
-  string_type, Type, TypeKind, TypeParameterType
+  string_type, TupleType, Type, TypeKind, TypeParameterType
 from '../types'
 
 EQUALITY_KINDS: TypeKind[] = [NUMBER_KINDS..., 'Char', 'Bool', 'String', 'Binary', ENUM]
@@ -146,7 +147,7 @@ export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?):
   reject := (type: Type) -> "expected #{describe_kinds(allowed)}, got #{format_type(type)}"
   if is_order_operator(operator)
     type := type_of_operands(body, binary, nil, allowed, reject)
-    order_by_compare body, binary if is_kind(type, 'String')
+    order_by_compare body, binary if is_kind(type, 'String') or type is TupleType
     return bool_type
   type_of_operands(body, binary, hint_of(expected, allowed), allowed, reject)
 
@@ -277,6 +278,9 @@ type_of_operands := (
       when by_contents then compares_by_bounds(body, inner, first.position)
       # `<` and the like of a class or struct compare by its compare.
       when is_order and own_equality(program, inner) == 'compare' then true
+      # A tuple orders by the compare that it gets by its items (see PartsPlan).
+      when is_order and inner is TupleType
+        parts_method(body, inner, 'compare', first.position) != nil
       when inner is TypeParameterType then bound_compares(body, inner, is_order, first.position)
       else is_one_of_kinds(inner, allowed_kinds)
   unless is_allowed
@@ -344,7 +348,7 @@ reject_operand := (
         program
         operand.position
         "#{operator} takes no optional values, got #{format_type(type)}"
-    if type is ObjectType | TypeParameterType
+    if type is ObjectType | TypeParameterType | TupleType
       fail
         program
         operand.position

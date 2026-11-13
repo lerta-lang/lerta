@@ -1,0 +1,58 @@
+# The compare that a tuple gets by its items (see checker PartsPlan): a function for each plan,
+# defined at its first use, that gives the Ordering of the first items that differ, by their own
+# compare, or EQUAL. An exception that an item's compare throws is passed on at once.
+import ordering_type from '../checker/builtins'
+import Method from '../checker/member_targets'
+import PartCall, PartsPlan from '../checker/parts'
+import emit_method_call, MethodCall from './call'
+import EQUAL from './comparison_methods'
+import emit_check_with, emit_return_thrown from './exceptions'
+import finish from './function'
+import function_generator, Generator from './generator'
+import emit_borrowed_value from './heap_object'
+import emit_branch, IrModule from './ir_builder'
+import ir_type from './lerta_ir'
+import FunctionType, TupleType, Type from '../types'
+
+# The Ordering of the object and the other, of the plan's tuple type, as an i64; the caller checks
+# for an exception.
+export emit_compare_by_parts := (g: Generator, id: Int, object: String, other: String) ->
+  plan := g.code.program.parts_plans[id]
+  type := ir_type(plan.type)
+  symbol := compare_function(g, plan)
+  g.ir.assign("call i64 #{symbol}(#{type} #{object}, #{type} #{other})")
+
+compare_function := (g: Generator, plan: PartsPlan) ->
+  define := (name: String, _module: IrModule) ->
+    writer := function_generator(g.code, g.extensions, g.facts, '')
+    writer.result_type = ordering_type(g.code.program)
+    writer.ir.emit "ret i64 #{compare_from(writer, plan, 0)}"
+    type := ir_type(plan.type)
+    finish writer, "private i64 #{name}(#{type} %value, #{type} %other)"
+  g.ir.module.named("compare #{plan.id}", '@lerta.compare', define)
+
+# The Ordering of the items from the index on, which are compared only while those before are
+# EQUAL.
+compare_from := (w: Generator, plan: PartsPlan, index: Int): String ->
+  type := plan.type as TupleType!
+  item := (value: String) -> emit_borrowed_value(w.ir, value, type, index)
+  ordering := item_compare(w, plan.calls[index], item('%value'), item('%other'), type.items[index])
+  return ordering if index == plan.calls.length - 1
+  equal := w.ir.assign("icmp eq i64 #{ordering}, #{EQUAL}")
+  emit_branch(w.ir, 'i64', equal, -> compare_from(w, plan, index + 1), ordering)
+
+# The Ordering of two items, borrowed, by the item's compare.
+item_compare := (w: Generator, call: PartCall, value: String, other: String, type: Type) ->
+  { ir } := w
+  check := -> emit_check_with(ir, -> emit_return_thrown(ir, w.result_type))
+  method := call.target as Method!
+  method_call := MethodCall
+    check
+    name: 'compare'
+    type: FunctionType(params: [type], result: w.result_type)
+    operands: [other]
+    args: ["#{ir_type(type)} #{other}"]
+    instance: call.instance?.instance
+  ordering := emit_method_call(w, method.source, value, type, method_call)
+  check()
+  ordering

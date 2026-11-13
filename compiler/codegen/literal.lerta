@@ -1,8 +1,8 @@
-# The to_literal, and to_string, that a type gets by its parts (see checker literal_parts): a
+# The to_literal, and to_string, that a type gets by its parts (see checker PartsPlan): a
 # function for each plan, defined at its first use, that joins the literals of the parts with the
 # text around them. An exception that a part's to_literal throws is passed on at once, releasing
 # the literals made so far.
-import LiteralParts, PartCall from '../checker/literal_parts'
+import PartsPlan, PartCall from '../checker/parts'
 import Method, Property from '../checker/member_targets'
 import info_of from '../checker/object_types'
 import emit_method_call, MethodCall from './call'
@@ -23,12 +23,12 @@ from '../types'
 # The literal of the object, of the plan's type, as an owned String; the caller checks for an
 # exception.
 export emit_literal_by_parts := (g: Generator, id: Int, object: String) ->
-  parts := g.code.program.literal_parts[id]
+  parts := g.code.program.parts_plans[id]
   type := ir_type(parts.type)
   symbol := literal_function(g, parts)
   g.ir.assign("call ptr #{symbol}(#{type} #{object})")
 
-literal_function := (g: Generator, parts: LiteralParts) ->
+literal_function := (g: Generator, parts: PartsPlan) ->
   define := (name: String, _module: IrModule) ->
     writer := function_generator(g.code, g.extensions, g.facts, '')
     writer.result_type = string_type
@@ -37,7 +37,7 @@ literal_function := (g: Generator, parts: LiteralParts) ->
     finish writer, "private ptr #{name}(#{ir_type(parts.type)} %value)"
   g.ir.module.named("literal #{parts.id}", '@lerta.literal', define)
 
-write_literal := (w: Generator, parts: LiteralParts, value: String) ->
+write_literal := (w: Generator, parts: PartsPlan, value: String) ->
   type := parts.type
   case type
     when OptionalType
@@ -70,7 +70,7 @@ named_texts := (open: String, names: String[], close: String) ->
 
 # The texts, one more than the parts, with the literal of each part between two.
 join_parts := (
-  w: Generator, parts: LiteralParts, read: (Int) -> String, types: Type[], texts: String[]
+  w: Generator, parts: PartsPlan, read: (Int) -> String, types: Type[], texts: String[]
 ) ->
   pieces := [string_constant(w.ir, texts[0])]
   for call at i in parts.calls

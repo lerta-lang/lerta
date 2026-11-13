@@ -1,10 +1,10 @@
-# The to_literal, and the to_string, that the compiler gives a type by its parts, if all of them
-# are Literal (see docs/reference/builtins.md#literal): an optional's to_literal, and a struct's, a
-# tuple's or an anonymous struct's to_literal and to_string. Each part's literal comes from the
-# method that a call of it here would call, which the plan records for codegen (see
-# codegen/literal).
+# The methods that the compiler gives a type by its parts: the to_literal and the to_string, if all
+# of its parts are Literal (see docs/reference/builtins.md#literal), of an optional, and of a
+# struct, a tuple or an anonymous struct; and the compare of a tuple, if all of its items are
+# Comparable. Each part's comes from the method that a call of it here would call, which the plan
+# records for codegen (see codegen/literal and codegen/tuple_compare).
 import Identifier, Position from '../ast'
-import BuiltinMethod from './builtins'
+import BuiltinMethod, ordering_type from './builtins'
 import ExtensionMethod from './extensions'
 import field_type_by_name from './fields'
 import receiver_instance from './generic_call'
@@ -20,29 +20,39 @@ import
   TupleType, Type, type_key, UnionType
 from '../types'
 
-# How the literal of a value of the type is made: of its parts, in order, each by its call. A type
-# that holds itself reaches its own plan again through a part, so the calls are filled in after
-# the plan is kept (see literal_parts).
-export class LiteralParts
+# How the method of the name, `to_literal` or `compare`, of a value of the type is made: of its
+# parts', in order, each by its call. A type that holds itself reaches its own plan again through a
+# part, so the calls are filled in after the plan is kept (see planned).
+export class PartsPlan
   type: Type
+  method: String
   # Tells the plans apart, so that codegen defines a function for each.
   id: Int
   var calls: PartCall[] = []
 
-# The to_literal of a part, as find_member finds it, with the instance of a generic method, linked
-# as a call links it, as the instance may make the plan.
+# The method of a part, as find_member finds it, with the instance of a generic method, linked as a
+# call links it, as the instance may make the plan.
 export struct PartCall
   target: MemberTarget
   instance: InstanceLink?
 
-# The method of the name that the type gets by its parts, if it gets one: a to_string only where it
-# has no to_literal of its own, so that the two do not disagree; neither where it has a field of
-# the name, which a call reads, or gets the method from an extend of an interface it satisfies.
+# The method of the name that the type gets by its parts, if it gets one: a tuple's compare (see
+# compare_method); a to_string only where it has no to_literal of its own, so that the two do not
+# disagree; neither where it has a field of the name, which a call reads, or gets the method from
+# an extend of an interface it satisfies.
 export parts_method := (body: Body, type: Type, name: String, at: Position): BuiltinMethod? ->
+  return compare_method(body, type, at) if name == 'compare'
   return nil unless gets_by_parts(body, type, name, at)
-  plan := literal_parts(body, type, at) ? return nil
+  plan := planned(body, type, 'to_literal', at, is_literal_part) ? return nil
   to_string := FunctionType(params: [], result: string_type)
   { member: LITERAL_BY_PARTS, type: to_string, parts: plan.id }
+
+# The compare of a tuple whose items are Comparable, by the first items that differ.
+compare_method := (body: Body, type: Type, at: Position): BuiltinMethod? ->
+  return nil unless type is TupleType
+  plan := planned(body, type, 'compare', at, is_ordered_part) ? return nil
+  compare := FunctionType(params: [type], result: ordering_type(body.program))
+  { member: COMPARE_BY_PARTS, type: compare, parts: plan.id }
 
 gets_by_parts := (body: Body, type: Type, name: String, at: Position) ->
   return name == 'to_literal' if type is OptionalType
@@ -64,21 +74,26 @@ has_own_literal := (body: Body, type: Type, at: Position) ->
   found := find_method(body.program, type, 'to_literal', body.extensions)
   found != nil or has_member(body, type, 'to_literal', at)
 
-# The plan of the type, if its parts are Literal; one for the extends in effect, which decide the
-# parts' methods.
-literal_parts := (body: Body, type: Type, at: Position): LiteralParts? ->
+# The plan of the type's method, if its parts have the method, as `has_method` tells; one for the
+# extends in effect, which decide the parts' methods.
+planned := (
+  body: Body, type: Type, method: String, at: Position,
+  has_method: (Body, Type, Position, Set<String>) -> Bool
+): PartsPlan? ->
   program := body.program
-  key := type_key(type)
-  ids := body.extensions.literal_parts
-  return program.literal_parts[id] if id := ids[key]
+  key := plan_key(method, type)
+  ids := body.extensions.parts_plans
+  return program.parts_plans[id] if id := ids[key]
   parts := part_types(body, type, at)
-  visiting := Set([key])
-  return nil unless parts.all((part) -> is_literal_part(body, part, at, visiting))
-  plan := LiteralParts(type, id: program.literal_parts.length)
-  program.literal_parts.push plan
+  visiting := Set([type_key(type)])
+  return nil unless parts.all((part) -> has_method(body, part, at, visiting))
+  plan := PartsPlan(type, method, id: program.parts_plans.length)
+  program.parts_plans.push plan
   ids[key] = plan.id
-  plan.calls = [part_call(body, part, at) for part in parts]
+  plan.calls = [part_call(body, part, method, at) for part in parts]
   plan
+
+plan_key := (method: String, type: Type) -> "#{method} #{type_key(type)}"
 
 export part_types := (body: Body, type: Type, at: Position): Type[] ->
   case type
@@ -90,9 +105,9 @@ export part_types := (body: Body, type: Type, at: Position): Type[] ->
       [field_type(body.program, info, field, at) for field in info.fields]
     else []
 
-part_call := (body: Body, part: Type, at: Position) ->
-  name := Identifier(name: 'to_literal', position: at)
-  # The part is Literal (see literal_parts), so it has the member.
+part_call := (body: Body, part: Type, method: String, at: Position) ->
+  name := Identifier(name: method, position: at)
+  # The part has the method (see planned).
   target := find_member(body, part, name)!.target
   generic := target is Method then generic_method(target.source)
   instance := generic then receiver_instance(body, generic, part, at, nil)
@@ -116,14 +131,19 @@ is_literal_part := (body: Body, type: Type, at: Position, visiting: Set<String>)
     when type is OptionalType then part(type.inner)
     when type is UnionType then type.members.all(part)
     when is_composite(type) and not has_own_literal(body, type, at)
-      key := type_key(type)
-      return true if key in body.extensions.literal_parts or not visiting.add(key)
+      planned_already := plan_key('to_literal', type) in body.extensions.parts_plans
+      return true if planned_already or not visiting.add(type_key(type))
       part_types(body, type, at).all(part)
     else satisfies(body, type, std_interface(body.shared, 'Literal', at).type, at)
 
+# Whether the type satisfies Comparable, a tuple by its items, which cannot hold the tuple again.
+is_ordered_part := (body: Body, type: Type, at: Position, visiting: Set<String>): Bool ->
+  return type.items.all((item) -> is_ordered_part(body, item, at, visiting)) if type is TupleType
+  satisfies(body, type, std_interface(body.shared, 'Comparable', at).type, at)
+
 # The methods of extends that the plan calls, through its parts' plans too, which an instance of a
 # generic function sees as witnesses (see add_witnesses).
-export extension_methods := (program: ProgramWide, plan: LiteralParts) ->
+export extension_methods := (program: ProgramWide, plan: PartsPlan) ->
   methods: ExtensionMethod[]
   visited := Set([plan.id])
   pending := [plan]
@@ -135,5 +155,5 @@ export extension_methods := (program: ProgramWide, plan: LiteralParts) ->
       source := target.source
       methods.push source.method if source is ExtensionSource
       id := source is BuiltinMethod then source.parts
-      pending.push program.literal_parts[id] if id != nil and visited.add(id)
+      pending.push program.parts_plans[id] if id != nil and visited.add(id)
   methods

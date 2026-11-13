@@ -876,6 +876,7 @@ swap := (t: (String, Int)) ->
 - An item cannot be nil alone.
 - `?` after the type makes it optional: `(Int, String)?`.
 - Two tuple types are the same if their items have the same types in the same order.
+- A tuple whose items are all `Comparable` has a `compare`, by its first items that differ, and so satisfies `Comparable` (see [builtins](builtins.md#equatable-comparable-and-hashable)): `words.sorted_by((w) -> (w.count(), w))` sorts by length, then alphabetically.
 
 ### Destructuring
 
