@@ -221,7 +221,7 @@ print [1, 2].second()
 
 - `extend Type` at the top level, followed by an indented block of methods written as a class's, gives a type more methods. Inside them, `@` is the receiver.
 - An extend has no fields, and no `init` or `deinit`.
-- Only `String`, the numbers, `Char`, `Bool`, `Binary`, arrays, maps, sets, `Iter`s, classes, structs and [interfaces](#interfaces) can be extended so far. Extending an optional, a function, a union, an anonymous struct or a tuple type is an error.
+- Only `String`, the numbers, `Char`, `Bool`, `Binary`, arrays, maps, sets, `Iter`s, classes, structs, enums and [interfaces](#interfaces) can be extended so far. Extending an optional, a function, a union, an anonymous struct or a tuple type is an error.
 
 ### Scope
 

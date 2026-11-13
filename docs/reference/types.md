@@ -806,7 +806,8 @@ print kind == '('
 
 ### Comparison and text
 
-- `==` and `!=` compare two values of the same enum. There is no ordering.
+- `==` and `!=` compare two values of the same enum, and `<` and the like, `compare` and sorting order them as the members are declared: `Size.SMALL < Size.LARGE`.
+- An [extend](objects.md#extend) adds methods to an enum, with `@` as the member.
 - An enum can be a [`Map`](#map) key.
 - It is `Stringable`: `kind.to_string()` gives the member's text, `'INTEGER'` or `'('`.
 - `parse<Name>(text)` of [std:enums](std.md#stdenums) gives the member whose text is the `String` `text`, or `nil`, and `members<Name>()` the members in order.
