@@ -6,10 +6,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 
 `lerta_argv` (`runtime/process.c`) gives the arguments without the program's path, and `lerta_program_path` gives the path, which std:process's `program` reads. One function could give both, the path first, but `lerta_argv` cannot change before a seed refresh, as the seed is compiled from a std that takes its result for the arguments alone: the seed's minilerta would take its own path for its first argument. Fix: once the seed is refreshed, have `lerta_argv` give the path first, have std:process take `argv` and `program` from it, and remove `lerta_program_path` from `runtime/process.c` and `runtime/lerta.h`.
 
-## Comments in tests/ name test/cli.lerta for checks that moved to test/cli/
-
-The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` gathers, but comments of the files they run still say that `test/cli.lerta` runs or links them, as `tests/extern/lib/leak.c`, `tests/extern/lib/sized.c` and `tests/extern/lib/leak.lerta` (`test/cli/extern.lerta`), `tests/leak/lib/*.lerta`, `tests/bin/echo_stdin.lerta`, `tests/bin/read_after_cancel.lerta` and `tests/cli/status.txt`. Fix: name the file under `test/cli/` that holds each check.
-
 ## The main run loop stays off for CoreFoundation loaded after the first wait
 
 `uses_run_loop` (`runtime/loop.c`) looks for CoreFoundation once, at the program's first wait (see [the main run loop](internals/iteration.md#the-main-run-loop)). A program that waits, then loads a framework with `dlopen` and has it post a block to the main dispatch queue, never runs the block. Fix: look again at later waits while it is not found, if that costs a waiting program little.
