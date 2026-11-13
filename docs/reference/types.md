@@ -79,6 +79,7 @@
 | `b.is_letter()` | An ASCII letter, `a` to `z`, `A` to `Z`. |
 | `b.is_alphanumeric()` | An ASCII letter or digit. |
 | `b.is_space()` | A space, `\t`, `\n` or `\r`. |
+| `b.is_lower()`, `b.is_upper()` | An ASCII letter of that case. |
 | `b.is_utf8_continuation()` | A byte that continues a UTF-8 sequence, 0x80 to 0xBF, as when counting the code points of a `Binary`. |
 | `b.hex_value()` | The value of a hexadecimal digit of either case, 0 to 15, or nil. |
 | `b.to_hex(width = 0)` | Its value in hexadecimal, as [that of an `Int`](#int): `b'\n'.to_hex(2)` is `'0a'`. |
@@ -261,6 +262,7 @@ So `not a number` may be reported at a line after the one that makes the NaN, an
 - Where a `Float32` or a `Float32?` is expected, a float or integer literal is a `Float32`. It rounds to the nearest `Float32` at once; one too large to be finite as a `Float32` is an error.
 - `x.to_float32()` gives the nearest `Float32` to a `Float`, an infinity beyond the largest. `x.to_float()` gives the `Float` of a `Float32`, exactly.
 - `x.to_string()` gives the fewest digits that read back as the `Float32`, written as a `Float`'s are: `0.1`, `0.33333334`, `3.4028235e+38`. An infinity's `to_literal` is `INFINITY.to_float32()`.
+- `x.to_fixed(digits)` is that of `x.to_float()`, so it writes the `Float32`'s exact value: a `Float32` `0.1` with 10 digits is `'0.1000000015'`.
 - A C function takes and gives a `Float32` as a `float`.
 
 ## Bool
@@ -306,6 +308,7 @@ So `not a number` may be reported at a line after the one that makes the NaN, an
 | `s.pad_start(width, fill = ' ')` | `s` after as many copies of `fill`, one code point, as make it `width` code points long, or `s` itself if it is no shorter: `'7'.pad_start(3, '0')` is `'007'`. |
 | `s.pad_end(width, fill = ' ')` | The same with the copies after `s`. |
 | `s.to_upper()`, `s.to_lower()` | `s` with the case of the ASCII letters changed, every other character as it is: `'café'.to_upper()` is `'CAFé'`. |
+| `s.reversed()` | Its code points in reverse order, so a combining mark moves away from its base. |
 
 These throw a `ValueError`:
 

@@ -187,7 +187,7 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `to_char(): Char?`; `Char` for a `Byte`
 - `Int`, `UInt64` and `Byte`: `to_hex(width: Int = 0): String`
 - `Int` only: `to_bits(): UInt64`, `abs(): Int`, which throws for `INT_MIN`, whose magnitude no `Int` holds
-- `Byte` only: `is_digit(): Bool`, `is_letter(): Bool`, `is_alphanumeric(): Bool`, `is_space(): Bool`, `is_utf8_continuation(): Bool`, `hex_value(): Int?`
+- `Byte` only: `is_digit(): Bool`, `is_letter(): Bool`, `is_alphanumeric(): Bool`, `is_space(): Bool`, `is_lower(): Bool`, `is_upper(): Bool`, `is_utf8_continuation(): Bool`, `hex_value(): Int?`
 
 ### Char
 
@@ -207,7 +207,8 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `compare(other: F): Ordering`
 - `add`, `sub`, `mul`, `div`: `(other: F): F`; `neg(): F`
 - `to_string(): String`, `to_literal(): String`
-- `Float` only: `to_int(): Int?`, `to_fixed(digits: Int): String`, `to_float32(): Float32`
+- `to_fixed(digits: Int): String`, which throws a `ValueError` for `digits` outside 0 to 18 or an infinity
+- `Float` only: `to_int(): Int?`, `to_float32(): Float32`
 - `Float32` only: `to_float(): Float`
 
 ### Bool
@@ -239,6 +240,7 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `repeat(count: Int): String`
 - `pad_start(width: Int, fill = ' '): String`, `pad_end(width: Int, fill = ' '): String`
 - `to_upper(): String`, `to_lower(): String`
+- `reversed(): String`, by code points, so a combining mark moves away from its base
 
 ### Binary
 
