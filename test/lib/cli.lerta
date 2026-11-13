@@ -2,7 +2,7 @@
 # directories.
 import compare_text, lines from './expect'
 import CheckFailed from './report'
-import target_name_of_host from '../../compiler/clang'
+import clang_host_triple, target_name_of_host, target_triple from '../../compiler/clang'
 import
   at_import, cache_dir, exit_in_time, OUTPUT_LIMIT, root_dir, shown_text, suite_dir
 from './lerta'
@@ -42,18 +42,20 @@ export run_command := (
   result := await exit_in_time(command, ran)
   CliRun status: result.code, stdout: output.binary, stderr: errors.binary
 
-clang_host_triple := ->
-  ran := await run_command('clang', ['-print-target-triple'], '.')
-  throw ValueError("clang -print-target-triple failed: #{ran.status}") if ran.status != 0
-  ran.stdout_text().split("\n")[0]
-
 export host_triple := await at_import(clang_host_triple)
-export runtime_flags: String[][] = [[], ['-O'], ['--target', host_triple]]
 export host_platform := platform
 
 # The host's target by its short name, or nil for an architecture that has none, where the checks
 # of short names do not apply.
 export host_target_name := target_name_of_host(host_triple)
+
+# The host's own triple counts as no target, so the target is that of the host's short name; a host
+# without one builds for no target.
+export runtime_flags: String[][] = [
+  []
+  ['-O']
+  (host_target_name then [['--target', target_triple(host_target_name)]] else [])...
+]
 
 export hello_output := await at_import(-> await read_file("#{root_dir}/tests/examples/hello.out"))
 export cli_work_dir := suite_dir('cli')

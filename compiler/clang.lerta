@@ -2,6 +2,8 @@
 # share. The runtime checks (test/runtime.lerta), which minilerta builds, import the flags too, so
 # that they compile the runtime's sources as `build` does.
 import cpu_count, platform, run from 'std:process'
+import Buffer from 'std:io'
+import CompileError from './errors'
 
 # A kind of build: with `-O` or not, with the memory checks or not, and for `target` (a triple such
 # as i686-linux-gnu) or else for the host.
@@ -61,6 +63,20 @@ export UNIVERSAL_TRIPLES := ['arm64-apple-macos', 'x86_64-apple-macos']
 
 # The triple of a target, given by its short name or as a triple.
 export target_triple := (target: String) -> TRIPLES_BY_NAME[target] ? target
+
+# The triple of the target given by its short name or as a triple, or nil for the host's triple,
+# for which clang builds the same without --target, so that the build shares the runtime that a
+# build without a target caches. A short name is never the host's: its triple may differ, as in the
+# minimum macOS version or the C library.
+export build_target := (target: String) ->
+  target == await clang_host_triple() then nil else target_triple(target)
+
+# The triple that clang builds for without --target, as `arm64-apple-darwin25.6.0`.
+export clang_host_triple := ->
+  output := Buffer()
+  ran := await run('clang', '-print-target-triple', stdout: output)
+  throw CompileError('clang -print-target-triple failed') if ran.code != 0
+  (output.text() ? throw CompileError('clang -print-target-triple is not valid UTF-8')).trim()
 
 # Whether the target is one of the short names.
 export is_target_name := (target: String) -> target in TRIPLES_BY_NAME

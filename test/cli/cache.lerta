@@ -9,7 +9,7 @@ import
 from '../lib/lerta'
 import
   CliRun, cli_work_dir, expect_left, expect_success, succeed, host_platform, host_triple,
-  new_cli_dir, new_cli_dirs, run_command, run_in_dir, run_in_new_dir
+  host_target_name, new_cli_dir, new_cli_dirs, run_command, run_in_dir, run_in_new_dir
 from '../lib/cli'
 import is_dir, list_dir, make_dir, read_file, real_path, remove_tree, stat, write_file from 'std:io'
 import process_id from 'std:process'
@@ -216,14 +216,27 @@ invalid_target_check := ->
     ]
 
 host_target_check := ->
-  Check name: 'lerta build caches a runtime named for the host target', run: ->
+  Check name: 'lerta build for the host triple reuses the runtime built without a target', run: ->
     cache := new_cli_dir('cache-host-target')
-    ran := await build_in_cache(cache, ['--target', host_triple])
-    succeed 'build', ran.result
+    no_flags: String[]
+    for flags in [no_flags, ['--target', host_triple]]
+      ran := await build_in_cache(cache, flags)
+      reasons := expect_success("build #{flags.join(' ')}", ran.result)
+      return reasons unless reasons.is_empty()
     entries := runtimes_in(cache)
     return ["expected one cached runtime in #{cache}, found: #{entries}"] if entries.length != 1
     name := entries[0]
-    [runtime_name_reasons(name, 'debug')..., await complete_runtime(cache, name)...]
+    reasons := [runtime_name_reasons(name, 'debug')..., await complete_runtime(cache, name)...]
+    return reasons unless reasons.is_empty()
+    target := host_target_name ? return reasons
+    short_name := await build_in_cache(cache, ['--target', target])
+    [
+      expect_success("build --target #{target}", short_name.result)...
+      reason_unless(
+        runtimes_in(cache).length == 2
+        'the host short name took the runtime of the host triple'
+      )...
+    ]
 
 cache_location_check := ->
   posix_check 'lerta build uses XDG_CACHE_HOME and then HOME for its runtime cache', ->

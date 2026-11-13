@@ -168,7 +168,7 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 
 #### `--target <target>`
 
-- Has clang build the executable for that target. Without it, the executable is for the host.
+- Has clang build the executable for that target. Without it, the executable is for the host. The host's own triple, as `clang -print-target-triple` prints it, counts as no target, so that the build shares the runtime of a build without one; a short name never does, since its triple may differ from the host's, as in the minimum macOS version or the C library.
 - The target is a short name, `<system>-<architecture>`, or else a triple, such as `i686-linux-gnu`, which clang takes as it is:
 
 | Short name | Triple |
@@ -670,7 +670,7 @@ lerta license
 - Each compiled runtime is a directory of its object files, `function_attributes.txt` and `coro_end_type.txt`, and of the objects of standard modules, `module-<hash>.o`, the hash being of the module's LLVM IR, in 16 hex digits as the runtime's.
 - It is named so that a person can tell them apart, such as `runtime-debug-arm64-apple-darwin25.6.0-clang17-3F9A2C1D8E4B7065`:
   - the kind: `debug`, or `release` with `-O`, or `release-checked` with `-O --memory-checks`;
-  - the target, or the host's as `clang --version` gives it;
+  - the target, or without one the host's, as `clang --version` gives it;
   - clang's major version;
   - a hash of 64 bits, in 16 hex digits, of the runtime's sources and libuv's, of clang's flags, of the names of the files it holds and of what `clang --version` prints, since `-flto` objects depend on clang's version.
 - A target that holds `/` or `\` would name a path: the build prints `not a target: <target>` and exits with code 1.
