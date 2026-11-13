@@ -12,6 +12,7 @@ The planned design of classes and structs, interfaces, generics and equality.
   - Why: a function made for a type is found by the type, as std:json finds `from_json` (see [programs](programs.md#standard-library)).
   - An interface may have them, as `from_json: static (J) -> Self`, which only bounds type parameters, as `Self` does.
   - They replace the rule that functions related to a type are module functions ([the reference](../reference/objects.md#members)).
+  - A type cannot have a static member and a field or method of the same name, so that `Type.name` names one: a method or a field named by its type is already a function value (see [functions as values](../reference/functions.md#functions-as-values)).
 - **Local types.** Classes, structs, enums and type aliases declared inside a function, visible in its scope.
   - Their methods and initializers do not see the function's locals, so that a type does not become a closure.
   - `export`, `import`, `extend` and `extern` stay at the top level, where a module's names and the reach of its extends are decided.

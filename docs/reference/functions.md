@@ -122,9 +122,10 @@ steps := [double, square]
 ### Functions as values
 
 - The name of a top-level function, without a call, is its value. It can be stored, passed, returned and kept in arrays, maps and fields like any value, but not compared or printed.
-- Where a function type is expected, these are function values too: a method of an object (`other.contains`), a method named by its type (`Char.is_digit`), a [C function](#c-functions) and a generic function.
+- Where a function type is expected, these are function values too: a method of an object (`other.contains`), a method or a field named by its type (`Char.is_digit`, `Span.unused`), a [C function](#c-functions) and a generic function.
   - Each is the function literal that calls it, which takes its parameter types from the expected type, as a generic function's type arguments do too: `files.all(is_file)` and `s.all(Char.is_digit)` are `files.all((file) -> is_file(file))` and `s.all((c) -> c.is_digit())`.
   - A method named by its type takes the receiver as its first argument. The type is a class, a struct or a builtin type of no type arguments, so far, not an enum, an interface, an alias or a generic type.
+  - A field named by its type takes the object alone and reads the field: `spans.find(Span.unused)` is `spans.find((span) -> span.unused)`. A field that holds a function is called instead, as a method is; one that holds an optional function is read.
   - A method of an object captures the object, which is `@` or a name that cannot be assigned, so far. One of `@` stored where `@` holds it makes a cycle, as a literal that captures `@` does (see [cycles](errors.md#cycles)).
 - Elsewhere, as for a `const` without a type, generic functions, C functions and methods can only be called, and builtins (`print`) everywhere, so far.
 - Calling a value of a function type calls the function it holds: `f(x)`, `make()(x)`, and `button.on_press(x)` for a field that holds a function.

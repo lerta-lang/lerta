@@ -6,6 +6,7 @@ import
 from '../ast'
 import fail from './diagnostics'
 import type_of from './expression'
+import field_type_by_name from './fields'
 import has_method, names_method from './member'
 import extern_named, generic_callee, lookup, qualified_name from './name'
 import Body from './shared'
@@ -14,7 +15,8 @@ import Position from '../position'
 import format_type, FunctionType, inner_of_expected, Type from '../types'
 
 # A C function or a generic function by its name, or a method by its type's name, `Char.is_digit`,
-# which takes the receiver as its first argument; nil for any other expression.
+# which takes the receiver as its first argument, or a field so, `Span.unused`, which takes the
+# object alone; nil for any other expression.
 export type_of_function_reference := (body: Body, expression: Expression, expected: Type?) ->
   case expression
     when Identifier
@@ -31,21 +33,48 @@ export type_of_function_reference := (body: Body, expression: Expression, expect
       return nil unless names_type(body, object)
       { name, position } := expression.name
       count := expected_param_count(expected) ? 0
-      reject_without_receiver body, object, expression.name, expected if count == 0
+      type := named_type(body, object)
+      reject_missing body, type, expression.name
+      is_field := is_plain_field(body, type, expression.name)
+      if is_field and count != 1
+        fail
+          body.program
+          position
+          'a field by its type is a value only where a function of one parameter is expected'
+      reject_without_receiver body, type, expression.name, expected if count == 0
       names := arguments(count, position)
-      receiver := names[0]
-      call := method_call(copy_identifier(receiver), name, reads(names[1..]), position)
-      type_of_calling_literal(body, expression, expected, names, call, object)
+      receiver := copy_identifier(names[0])
+      read: Expression =
+        if is_field
+          Member position, object: receiver, name: copy_identifier(expression.name)
+        else
+          method_call receiver, name, reads(names[1..]), position
+      type_of_calling_literal(body, expression, expected, names, read, object)
     else nil
 
-# A method by its type takes its receiver as its first argument, which no function type of no
-# parameters, and no place where no function is expected, gives it.
-reject_without_receiver := (body: Body, type_name: Identifier, name: Identifier, expected: Type?) ->
-  { program } := body
+# A field of the type that holds no function, which a function by the type reads; one that holds a
+# function is called, as a method is, but not one that holds an optional function, which a call
+# could not call.
+is_plain_field := (body: Body, type: Type, name: Identifier) ->
+  return false if has_method(body, type, name)
+  field_type := field_type_by_name(body, type, name) ? return false
+  field_type is not FunctionType
+
+reject_missing := (body: Body, type: Type, name: Identifier) ->
+  return if has_method(body, type, name) or field_type_by_name(body, type, name) != nil
+  message := "type #{format_type(type)} has no field or method '#{name.name}'"
+  fail body.program, name.position, message
+
+# The type that the name names (see names_type).
+named_type := (body: Body, type_name: Identifier) ->
   written := NamedType(name: type_name.name, args: [], position: type_name.position)
-  type := resolve(program, body.resolver, written)
-  unless has_method(body, type, name)
-    fail program, name.position, "type #{format_type(type)} has no method '#{name.name}'"
+  resolve(body.program, body.resolver, written)
+
+# A method by its type, or a field that holds a function, which is called as a method is, takes
+# its receiver as its first argument, which no function type of no parameters, and no place where
+# no function is expected, gives it.
+reject_without_receiver := (body: Body, type: Type, name: Identifier, expected: Type?) ->
+  { program } := body
   message :=
     if expected_param_count(expected) == 0
       'a method by its type takes its receiver as its first argument'
@@ -118,7 +147,7 @@ type_of_calling_literal := (
   expression: Expression
   expected: Type?
   names: Identifier[]
-  call: Call
+  call: Expression
   receiver_type: Identifier? = nil
 ) ->
   param_type := (index: Int) ->
