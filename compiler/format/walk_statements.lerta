@@ -428,11 +428,10 @@ extend Walker
   # `[var | weak | weak var] name[: Type[!]][ = [default] value]`, or `name := [default] value`.
   member_declaration := (member: MemberDeclaration, before: CodeGap) ->
     var gap = before
-    { modifier } := member
-    if modifier == 'weak' or modifier == 'weak var'
+    if member.is_weak()
       @take_spelled 'weak', gap
       gap = ONE
-    if modifier == 'var' or modifier == 'weak var'
+    if member.is_mutable()
       @take 'var', gap
       gap = ONE
     @take IDENTIFIER, gap
@@ -441,7 +440,7 @@ extend Walker
       @type type, ONE
       @take '!', NONE if member.throws
     value := member.value ? return
-    var assign = @take(modifier == nil and member.type == nil then ':=' else '=', ONE)
+    var assign = @take(member.modifier == nil and member.type == nil then ':=' else '=', ONE)
     assign = @take_spelled('default', ONE) if member.has_default
     @value assign, value, true
 
