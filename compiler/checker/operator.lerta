@@ -1,8 +1,8 @@
 # Types unary and binary operators, nil tests and `?`.
 import
-  ArrayLiteral, Assignment, BinaryOperation, Coalesce, Expression, Identifier, is_equality_operator,
-  is_nil_test, is_order_operator, method_call, NilLiteral, Position, Range, StringLiteral,
-  UnaryOperation
+  ArrayLiteral, Assignment, BinaryOperation, Coalesce, Expression, Identifier, IntegerLiteral,
+  is_equality_operator, is_nil_test, is_order_operator, method_call, NilLiteral, Position, Range,
+  StringLiteral, UnaryOperation
 from '../ast'
 import fail from './diagnostics'
 import compares_by_contents, own_equality from './equality'
@@ -15,8 +15,9 @@ import where_right_operand from './narrowing'
 import Body from './shared'
 import
   ArrayType, bool_type, FLOAT_KINDS, format_type, FunctionType, inner_of, inner_of_expected,
-  INTEGER_KINDS, is_identity_type, is_kind, is_one_of_kinds, members_of, NUMBER_KINDS, ObjectType,
-  OptionalType, SIGNED_INTEGER_KINDS, string_type, Type, TypeKind, TypeParameterType
+  int_type, INTEGER_KINDS, is_identity_type, is_integer, is_kind, is_one_of_kinds, members_of,
+  NUMBER_KINDS, ObjectType, OptionalType, SIGNED_INTEGER_KINDS, string_type, Type, TypeKind,
+  TypeParameterType
 from '../types'
 
 EQUALITY_KINDS: TypeKind[] = [NUMBER_KINDS..., 'Char', 'Bool', 'String', 'Binary', ENUM]
@@ -246,14 +247,37 @@ type_of_operands := (
       when is_order and own_equality(program, inner) == 'compare' then true
       when inner is TypeParameterType then bound_compares(body, inner, is_order, first.position)
       else is_one_of_kinds(inner, allowed_kinds)
-  reject_operand body, operator, first, type, reject unless is_allowed
+  unless is_allowed
+    if first == left
+      right_type := alone_type(body, right)
+      reject_char_literal_arithmetic body, binary, right_type if right_type
+    reject_operand body, operator, first, type, reject
   return type_of_equality_operand(body, first, second, type) if is_equality
   second_type := type_of(body, second, hint(second, type))
   is_unit := not right_first and operator == '+' and appends_unit(type, second_type)
   return type if is_unit
   reject_text_and_bytes body, second, type, second_type
+  reject_char_literal_arithmetic body, binary, right_first then type else second_type
   require_type body, second, second_type, type
   type
+
+# The type of an operand of an operation that fails before it is typed, where the type does not
+# depend on what is expected, which typing it alone would get wrong.
+alone_type := (body: Body, operand: Expression): Type? ->
+  return int_type if operand is IntegerLiteral
+  takes_context(body, operand) then nil else type_of(body, operand)
+
+# `'a' + 1` or `'a' - 1`: a string literal on the left of an operator is a String, as nothing
+# expects a Char there, so a Char moved by an integer is written with a Char.
+reject_char_literal_arithmetic := (body: Body, binary: BinaryOperation, right_type: Type) ->
+  operator := binary.operator
+  return if operator not in ['+', '-'] or not is_integer(inner_of(right_type))
+  literal := binary.left as StringLiteral ? return
+  text := literal.value
+  return unless text.count() == 1
+  why := "'#{text}' on the left of #{operator} is a String, which is never moved by an integer"
+  advice := "write `c: Char = '#{text}'` and then `c #{operator} n`"
+  fail body.program, literal.position, "#{why}; #{advice}"
 
 # The type of an operation that is a call in place of the operator, or nil for one that is not: a
 # String appended to a Char, or an operator applied to a type it does not apply to.
