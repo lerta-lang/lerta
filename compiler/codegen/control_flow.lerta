@@ -14,6 +14,7 @@ from './function'
 import CodegenLocal, deferred_value, Generator, ValueLocal from './generator'
 import held_value from './expression'
 import emit_if_else, emit_when, phi_incoming from './ir_builder'
+import NONPOSITIVE_STEP, throw_if from './runtime_errors'
 import
   emit_comprehension_iter, emit_range_iter, emit_reading_iter, emit_sequence_get,
   emit_sequence_length, emit_source_start
@@ -146,6 +147,8 @@ export generate_iteration := (
   if iterable is Range
     start := generate(g, iterable.start!)
     end := generate(g, iterable.end!)
+    if iterable.step or iterable.reversed
+      return generate_stride_loop(g, iterable, start, end, variable, define_index, body)
     define := (scope: Map<String, CodegenLocal>, current: String) ->
       scope[variable.name] = ValueLocal(operand: current, type: int_type)
       define_index scope, g.ir.assign("sub i64 #{current}, #{start}") if index
@@ -203,6 +206,79 @@ generate_iter_loop := (
     generate_loop_body g, body, exit_label, next_label, define
   emit_iter_loop g.ir, iter, item, loop_body, -> emit_exception_check(g)
   release()
+
+# The items of `a..b by step`, or of `a..b reversed`, from the first, each the one before plus the
+# step, or minus it reversed, while it is in the range. Reversed, the first is the last item going
+# forward, whose distance from `a` is worked out unsigned, as the span `b - a` fits only so.
+generate_stride_loop := (
+  g: Generator, range: Range, start: String, end: String, variable: Identifier,
+  define_index: (Map<String, CodegenLocal>, String) -> void, body: () -> void
+) ->
+  ir := g.ir
+  step := range.step then generate(g, range.step!) else '1'
+  throw_if g, ir.assign("icmp slt i64 #{step}, 1"), NONPOSITIVE_STEP if range.step
+  test := range.inclusive then 'sle' else 'slt'
+  stepping := StrideStepping(step, test, first: start, bound: end, advance: 'add')
+  return generate_stepping_loop(g, stepping, variable, define_index, body) unless range.reversed
+  holds_one := ir.assign("icmp #{range.inclusive then 'sge' else 'sgt'} i64 #{end}, #{start}")
+  emit_when ir, holds_one, ->
+    span := ir.assign("sub i64 #{end}, #{start}")
+    counted := range.inclusive then span else ir.assign("sub i64 #{span}, 1")
+    distance := ir.assign("mul i64 #{ir.assign("udiv i64 #{counted}, #{step}")}, #{step}")
+    first := ir.assign("add i64 #{start}, #{distance}")
+    backward := StrideStepping(first, step, bound: start, test: 'sge', advance: 'sub')
+    generate_stepping_loop g, backward, variable, define_index, body
+
+# A loop of the items from `first`, each `advance`d by the step, while it passes the `test` against
+# the bound and the step does not overflow.
+struct StrideStepping
+  first: String
+  bound: String
+  step: String
+  test: String
+  advance: String
+
+# The item is a phi in the header, and the next is worked out in the latch block, where an overflow
+# leaves the loop, as the next item would be beyond every Int. The index is counted in a slot.
+generate_stepping_loop := (
+  g: Generator, stepping: StrideStepping, variable: Identifier,
+  define_index: (Map<String, CodegenLocal>, String) -> void, body: () -> void
+) ->
+  ir := g.ir
+  preheader_label := ir.current_block
+  header_label := ir.fresh_label('stride.header')
+  body_label := ir.fresh_label('stride.body')
+  latch_label := ir.fresh_label('stride.latch')
+  exit_label := ir.fresh_label('stride.exit')
+  next := ir.fresh_register()
+  index_slot := ir.alloca('i64')
+  ir.store 'i64', '0', index_slot
+  ir.branch header_label
+
+  ir.start_block header_label
+  incoming := [phi_incoming(stepping.first, preheader_label), phi_incoming(next, latch_label)]
+  item := ir.assign("phi i64 #{incoming.join(', ')}")
+  in_range := ir.assign("icmp #{stepping.test} i64 #{item}, #{stepping.bound}")
+  ir.branch_if in_range, body_label, exit_label
+
+  ir.start_block body_label
+  define := (scope: Map<String, CodegenLocal>) ->
+    scope[variable.name] = ValueLocal(operand: item, type: int_type)
+    index := ir.load('i64', index_slot)
+    ir.store 'i64', ir.assign("add i64 #{index}, 1"), index_slot
+    define_index scope, index
+  generate_loop_body g, body, exit_label, latch_label, define
+  ir.branch latch_label
+
+  ir.start_block latch_label
+  overflow_intrinsic := "llvm.s#{stepping.advance}.with.overflow.i64"
+  ir.module.declare overflow_intrinsic, "declare { i64, i1 } @#{overflow_intrinsic}(i64, i64)"
+  result := ir.assign("call { i64, i1 } @#{overflow_intrinsic}(i64 #{item}, i64 #{stepping.step})")
+  ir.assign_to next, "extractvalue { i64, i1 } #{result}, 0"
+  overflowed := ir.assign("extractvalue { i64, i1 } #{result}, 1")
+  ir.branch_if overflowed, exit_label, header_label
+
+  ir.start_block exit_label
 
 # Counts from start while the counter is below the end, or up to it if `inclusive`, which is
 # evaluated in the header. The counter is a phi in the header, incremented in the latch block; it

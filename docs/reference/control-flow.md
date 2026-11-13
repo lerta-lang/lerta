@@ -195,6 +195,16 @@ for i in 0..3
 - Ranges do not chain: `a..b..c` and `a..=b..c` are errors.
 - `a..=` without an end is an error, as including no end means nothing.
 
+### Steps
+
+- `by <step>` after the end goes through every `<step>`th integer from the start: `0..10 by 3` is `0`, `3`, `6` and `9`, and `0..=10 by 5` is `0`, `5` and `10`.
+- `reversed` after it, or after `by <step>`, goes through the same items in the other order: `0..10 reversed` is `9` down to `0`, and `0..10 by 3 reversed` is `9`, `6`, `3` and `0`, so the last item need not be worked out, as with Python's `range(n - 1, -1, -1)`.
+  - An index counts the items from 0 in that order: `for x at i in 0..10 reversed` gives `i` 0 with `x` 9.
+- The step is an `Int`, evaluated once before the loop with the ends, and must be positive: one below 1 throws a `ValueError`, `a step must be positive`.
+- Only a range that is gone through takes them: not a test or an index, nor, so far, a lazy comprehension.
+- Like `in` and `when`, `by` and `reversed` are not keywords.
+- Why words after the range rather than a method: `0..n.reversed()` reads as `n.reversed()`.
+
 ### Postfix for
 
 - `<statement> for <name> in <iterable>` runs one statement for each item, as a `for` block would: `print x for x in xs`.

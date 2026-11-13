@@ -56,6 +56,8 @@ export type_of_comprehension := (body: Body, comprehension: Comprehension, expec
   place := comprehension.spread then "before '...'" else "after 'in'"
   item_type := type_of_iterated(body, iterable, place, comprehension.spread then expected)
   if comprehension.lazy != nil
+    if range := iterable as Range?
+      reject_steps body, range, "an Iter comprehension takes no 'by' or 'reversed' so far"
     return type_of_iter_comprehension(body, comprehension, item_type, expected)
   expected_element := expected_array_element(expected)
   var element_type: Type = void_type
@@ -104,6 +106,10 @@ check_loop_body := (body: Body, statements: Statement[], define: () -> void) ->
 export range_part := (body: Body, range: Range, part: Expression?) ->
   part ? fail(body.program, range.position, 'only an index takes a range without a start or an end')
 
+# A step, or the other order, is only for going through the range: not for a test or an index.
+export reject_steps := (body: Body, range: Range, message: String) ->
+  fail body.program, range.position, message if range.step or range.reversed
+
 # The type of the items that a loop, a comprehension, `Set()` or `Map()` goes through. A value of a
 # type that satisfies Iterable is gone through by the Iter of its `iter()`, a call recorded in the
 # facts, which codegen generates instead (see iter_calls). `place` tells where the iterable is
@@ -118,6 +124,7 @@ export type_of_iterated := (
   if iterable is Range
     expect_type body, range_part(body, iterable, iterable.start), int_type
     expect_type body, range_part(body, iterable, iterable.end), int_type
+    expect_type body, step, int_type if step := iterable.step
     return int_type
   type := type_of(body, iterable, expected)
   return item if item := iterable_item(type)
