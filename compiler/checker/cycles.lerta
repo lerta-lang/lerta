@@ -1,50 +1,128 @@
-# Warns of the cycle that a function literal makes when it captures `@` and is stored where `@`
-# holds it, as docs/reference/errors.md#cycles states.
+# Warns of the cycle that a function literal makes when it captures `@`, or a local's object, and is
+# stored where that holds it, directly or through a method that keeps its argument, as
+# docs/reference/errors.md#cycles states.
 import
-  ArrayLiteral, Call, Coalesce, Conditional, Expression, FunctionLiteral, Index, MapLiteral, Member,
-  RecordLiteral, This, TupleLiteral, Unwrap
+  ArrayLiteral, Call, Coalesce, Conditional, Expression, FunctionLiteral, Identifier, Index,
+  MapLiteral, Member, RecordLiteral, This, TupleLiteral, Unwrap
 from '../ast'
 import BuiltinMethod, keeps_argument from './builtins'
+import captured from './closure'
 import warn from './diagnostics'
 import constructed_type from './object'
 import info_of from './object_types'
-import MethodSource from './methods'
-import arguments_of, Body from './shared'
-import ObjectType from '../types'
+import MethodSource, OwnMethod from './methods'
+import Local from './scopes'
+import arguments_of, Body, Capture, ProgramWide from './shared'
+import inner_of, ObjectType from '../types'
 
-# Warns if storing the value at the target, already checked, makes such a cycle.
+THIS := '@'
+
+# Warns if storing the value at the target, already checked, makes such a cycle, and records a
+# parameter of a method that the method so keeps.
 export warn_if_cycle := (body: Body, target: Expression, value: Expression) ->
-  return unless is_held_by_this(body, target)
-  literal := capturing_literal(body, value) ? return
-  advice := 'write it `weak -> ...`, which captures @ weakly'
-  message := "this function captures @, which then holds it, so neither is freed; #{advice}"
-  warn body.shared, literal.position, message
+  holder := holder_of(body, target) ? return
+  record_kept body, holder, value
+  literal := capturing_literal(body, value, holder) ? return
+  warn body.shared, literal.position, cycle_message(body, holder)
 
-# Warns if a builtin method that keeps its argument is given one that makes such a cycle.
-export warn_if_kept := (body: Body, call: Call, member: Member, source: MethodSource?) ->
-  keeps := source is BuiltinMethod and keeps_argument(source.member)
-  warn_if_cycle body, member.object, arguments_of(body.facts, call)[0] if keeps
+# Does the same for the arguments of a method that keeps them: a builtin's at once, and those of
+# the object's own methods once every body is checked (see warn_kept_cycles).
+export warn_if_kept := (
+  body: Body, call: Call, member: Member, source: MethodSource?, method: FunctionLiteral?
+) ->
+  args := arguments_of(body.facts, call)
+  if source is BuiltinMethod
+    warn_if_cycle body, member.object, args[0] if keeps_argument(source.member)
+    return
+  return unless source is OwnMethod
+  callee := method ? return
+  holder := holder_of(body, member.object) ? return
+  kept := body.program.kept_arguments
+  for arg at place in args
+    param := holder == THIS then parameter_place(body, arg)
+    kept.passed.push { from: body.context!.literal, param, to: callee, place } if param
+    if literal := capturing_literal(body, arg, holder)
+      message := cycle_message(body, holder)
+      kept.calls.push { literal, message, method: callee, place, module_index: body.shared.index }
 
-is_held_by_this := (body: Body, target: Expression): Bool ->
+# Once every body is checked, tells which parameters methods keep through each other, and warns of
+# the literals given to them.
+export warn_kept_cycles := (program: ProgramWide) ->
+  { kept, passed, calls } := program.kept_arguments
+  var grown = true
+  while grown
+    grown = false
+    for each in passed
+      continue unless (each.to, each.place) in kept
+      grown = kept.add((each.from, each.param)) or grown
+  warned: Set<FunctionLiteral>
+  for call in calls
+    continue if (call.method, call.place) not in kept or not warned.add(call.literal)
+    warn program.shared[call.module_index], call.literal.position, call.message
+
+# A weak local can hold only an object of a class; the cycle through another is broken by hand.
+cycle_message := (body: Body, holder: String) ->
+  if holder == THIS
+    advice := 'write it `weak -> ...`, which captures @ weakly'
+    return "this function captures @, which then holds it, so neither is freed; #{advice}"
+  type := find_local(body, holder)!.type
+  advice :=
+    if (inner_of(type) as ObjectType?)?.is_struct == false
+      "capture a weak local of it instead, as `weak #{holder}_ref := #{holder}`"
+    else
+      'take the function out of it by hand once done with it'
+  "this function captures '#{holder}', which then holds it, so neither is freed; #{advice}"
+
+# A literal's body sees the locals around it as it captures them.
+find_local := (body: Body, name: String): Local? ->
+  return local if local := body.scopes.lookup_local(name)
+  captured(body, name)
+
+# A method keeps the parameter that it stores where its object holds it.
+record_kept := (body: Body, holder: String, value: Expression) ->
+  return if holder != THIS
+  place := parameter_place(body, value) ? return
+  body.program.kept_arguments.kept.add (body.context!.literal, place)
+
+# The place of the parameter of the method being checked that the value names, if it names one.
+parameter_place := (body: Body, value: Expression): Int? ->
+  return nil if body.self == nil or body.enclosing != nil
+  identifier := value as Identifier ? return nil
+  literal := body.context?.literal ? return nil
+  local := body.scopes.lookup_local(identifier.name) ? return nil
+  [param.name for param in literal.params].index_of(local.original().identifier)
+
+# What holds the place that the target reaches, if a function literal could capture it: `@`, or a
+# `const` local that is not weak, by its name. Not a place reached through a weak field, which holds
+# its object without keeping it.
+holder_of := (body: Body, target: Expression): String? ->
   case target
-    when This then true
-    when Member then not is_weak_field(body, target) and is_held_by_this(body, target.object)
-    when Index then is_held_by_this(body, target.object)
-    when Unwrap then is_held_by_this(body, target.operand)
-    else false
+    when This then THIS
+    when Identifier
+      local := find_local(body, target.name) ? return nil
+      return THIS if local.is_this
+      not local.mutable and not local.weak then target.name
+    when Member then not is_weak_field(body, target) then holder_of(body, target.object)
+    when Index then holder_of(body, target.object)
+    when Unwrap then holder_of(body, target.operand)
+    else nil
 
 is_weak_field := (body: Body, member: Member) ->
   object_type := body.facts.types[member.object] as ObjectType ? return false
   info_of(body.program, object_type).field_named(member.name.name)?.weak == true
 
-capturing_literal := (body: Body, value: Expression): FunctionLiteral? ->
-  first := (parts: Expression[]) -> parts.find_map((part) -> capturing_literal(body, part))
+captures_holder := (body: Body, literal: FunctionLiteral, holder: String) ->
+  captures := body.facts.captures[literal] ? []
+  is_holder := (capture: Capture) ->
+    holder == THIS then capture.is_this else capture.name == holder and not capture.is_weak
+  captures.any(is_holder)
+
+capturing_literal := (body: Body, value: Expression, holder: String): FunctionLiteral? ->
+  first := (parts: Expression[]) -> parts.find_map((part) -> capturing_literal(body, part, holder))
   # A method of `@` used as a value is the literal that calls it (see function_references).
-  return capturing_literal(body, replaced) if replaced := body.facts.replacements[value]
+  return capturing_literal(body, replaced, holder) if replaced := body.facts.replacements[value]
   case value
-    when FunctionLiteral
-      captures := body.facts.captures[value] ? []
-      captures.any((capture) -> capture.is_this) then value
+    when FunctionLiteral then captures_holder(body, value, holder) then value
     when ArrayLiteral then first(value.elements)
     when TupleLiteral then first(value.items)
     when MapLiteral then first([entry.value for entry in value.entries])

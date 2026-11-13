@@ -1,0 +1,77 @@
+# A function literal that captures a local's object, stored where that object holds it, directly
+# or through a method that keeps it, is warned about as one that captures @ is. Each cycle here is
+# broken by hand before the object goes, so nothing leaks.
+class Job
+  name: String
+  var on_progress: ((Int) -> void)[] = []
+  var on_done: (() -> void)? = nil
+  listen := (handler: (Int) -> void) -> @on_progress.push(handler)
+
+build := ->
+  job := Job('build')
+  job.on_progress.push (percent) -> print("#{job.name} #{percent}%")
+  job.on_done = -> print("#{job.name} done")
+  job.listen (percent) -> print("#{job.name} again #{percent}%")
+  handler 50 for handler in job.on_progress
+  job.on_done!()
+  job.on_progress = []
+  job.on_done = nil
+build()
+
+# A parameter's object, and a literal stored by a literal, are seen too.
+attach := (job: Job) ->
+  job.listen (percent) -> print("#{job.name} attached #{percent}%")
+  later := -> job.on_done = -> print("#{job.name} later")
+  later()
+  handler 60 for handler in job.on_progress
+  job.on_done!()
+  job.on_progress = []
+  job.on_done = nil
+attach Job('param')
+
+# A struct, an array, a loop variable and an object reached on a deeper path are seen too. A weak
+# local cannot hold a struct or an array, so the warning about them suggests another way.
+struct Board
+  jobs: Job[]
+  notes: (() -> void)[]
+
+class Pair
+  child: Job
+
+more := ->
+  board := Board(jobs: [Job('a')], notes: [])
+  board.notes.push -> print(board.jobs.length)
+  jobs := [Job('b')]
+  jobs[0].listen((percent) -> print("#{jobs.length} #{percent}%"))
+  for each in jobs
+    each.listen (percent) -> print("#{each.name} looped #{percent}%")
+  pair := Pair(Job('c'))
+  pair.child.listen (percent) -> print("#{pair.child.name} deep #{percent}%")
+  note() for note in board.notes
+  handler 80 for handler in jobs[0].on_progress
+  handler 90 for handler in pair.child.on_progress
+  board.notes.truncate 0
+  jobs[0].on_progress = []
+  pair.child.on_progress = []
+more()
+
+# A top-level value is not captured, so a literal that reads it holds nothing.
+top := Job('top')
+top.listen (percent) -> print("#{top.name} #{percent}%")
+handler 70 for handler in top.on_progress
+
+# What is no cycle is not warned about: a literal that captures a weak local, or a var, which may
+# hold another object by the time the literal runs, or that captures another object.
+run := ->
+  first := Job('first')
+  weak seen := first
+  first.listen (percent) -> print("#{seen?.name ? '-'} #{percent}%")
+  var current = Job('current')
+  current.listen (percent) -> print("#{current.name} #{percent}%")
+  other := Job('other')
+  first.listen (percent) -> print("#{other.name} #{percent}%")
+  handler 10 for handler in first.on_progress
+  current = other
+  handler 20 for handler in current.on_progress
+  current.on_progress = []
+run()

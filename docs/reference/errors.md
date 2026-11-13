@@ -189,9 +189,13 @@ A computed field of a class whose initializer reads a `var` field produces a war
 
 A function literal that captures `@`, stored where `@` holds it, produces a warning: the object and the literal then hold each other, and neither is ever freed (see [weak references](objects.md#weak-references)). The warning suggests a [weak function literal](functions.md#weak-function-literals), `weak -> ...`, which captures `@` weakly.
 
+So does one that captures a local's object, stored where that object holds it, as `job.on_done = -> print job.name`; that warning suggests capturing a weak local of it instead (see [weak references](objects.md#weak-references)), or, as a weak local holds only an object of a class, taking the literal out of it by hand once done with it.
+
 What is seen:
 
-- **The capture.** The literal captures `@` itself, or a `const` that holds `@`, as `me := @`, not a weak one. A `var` that holds `@` may change, and is not seen.
-- **The place.** A field reached from `@`, as `@on_press` or `@child.f`, or an item of an array or a map so reached, set by assignment or by `push`, through `!` too. Not one reached through a weak field, which holds its object without keeping it.
-- **The value.** The literal is the value stored, or a value that `?` or `then`/`else` gives, or an item, a field or a constructor argument of it.
-- Only a literal written in place is seen. One held by a local first, as `g := -> @n` before `@f = g`, or given to a method, is not, and neither is a capture of a const of such a const.
+- **The capture.** The literal captures `@` itself, or a `const` that holds `@`, as `me := @`, or a local's object: that of a `const`, a parameter or a loop variable, not a weak one. A `var` may change, and is not seen. A top-level value is not captured, so a literal that reads it holds nothing.
+- **The place.** A field reached from `@` or from that local, as `@on_press`, `@child.f` or `job.on_done`, or an item of an array or a map so reached, through `!` too. Not one reached through a weak field, which holds its object without keeping it.
+- **The storing.** An assignment, a `push`, or a call of a method of the object that the place is, which keeps its argument: one that stores it where its own object holds it, as these rules tell, or passes it on to such a method of an object it holds, in any order of declaration. `@bus.subscribe(-> @count += 1)` is warned about if `subscribe` keeps its argument.
+  - Only the methods of a class or struct that is not generic, themselves not generic, are followed; not those of an extend or an interface value.
+- **The value.** The literal is the value stored, or a value that `?` or `then`/`else` gives, or an item, a field or a constructor argument of it. A method keeps its parameter only if it stores or passes on the parameter itself.
+- Only a literal written in place is seen. One held by a local first, as `g := -> @n` before `@f = g`, is not, and neither is a capture of a const of such a const, nor a place reached from a local that holds what `@` holds, as `plus := @widget.add(Widget())` before `plus.events.on(-> @count += 1)`.

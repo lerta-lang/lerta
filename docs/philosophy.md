@@ -63,7 +63,7 @@ Planned rules are in [the roadmap](roadmap/runtime.md#safety).
 Both are close, and much of Lerta is in them already. Lerta differs in what it leaves out.
 
 - **Nim** has the syntax and the memory management: its ARC is Lerta's reference counting. Lerta differs:
-  - Nim's default, ORC, also collects cycles, which Lerta does not for now ([roadmap](roadmap/runtime.md#memory-management)).
+  - Nim's default, ORC, also collects cycles, which Lerta does not ([roadmap](roadmap/runtime.md#memory-management)).
   - Nim has several ways to write one thing: identifiers that differ only in `_` or in the case of letters after the first are one name; a call can be written `f(a, b)`, `a.f(b)` or `f a, b`; routines come in seven kinds; and templates and macros are central.
   - Nil safety is a rule in Lerta; in Nim, `not nil` is experimental.
   - Nim's syntax looks like Python's, but its conventions come from Pascal and its own: `$x` makes a string, `&` joins strings, and a routine returns the implicit `result`.

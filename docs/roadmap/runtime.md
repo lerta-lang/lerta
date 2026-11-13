@@ -49,11 +49,17 @@ What is implemented, `throw` of `Error` values and `try`/`catch`/`finally`, is i
 
 ## Memory management
 
-For now, cycles stay uncollected ([objects](../reference/objects.md#reference-counting)). The debug runtime reports the objects that only cycles hold, by their types ([the reference](../reference/compiler.md#build)), which is left to catch the cycles across libraries. The plan is to make cycles hard to write:
+Cycles stay uncollected ([objects](../reference/objects.md#reference-counting)). The debug runtime reports the objects that only cycles hold, by their types ([the reference](../reference/compiler.md#build)), which is left to catch what the warnings miss. The plan is to make cycles hard to write:
 
-- The warning of a literal that captures `@` and is stored where `@` holds it ([errors](../reference/errors.md#cycles)) extends, with input and output, to a literal given to a method that keeps its argument where its object holds it, as `@button.listen(-> @count += 1)` does if `listen` stores it.
-  - A method's parameters that reach a field or a collection are found once, as the method is checked.
-  - Callbacks kept by C functions need a way to say so.
+- The warning of a literal stored where what it captures holds it ([errors](../reference/errors.md#cycles)) extends:
+  - to callbacks kept by C functions, which need a way to say so;
+  - to the methods of extends and generic methods.
+- Perhaps also a warning of `@` stored in a field of an object that `@` holds, as a child's `parent`, if it can be told without many false ones.
+- **Why not collect them.** Three event-driven programs of 100 to 150 lines, written for it without care for cycles (a tree of widgets with listeners, a chat server over std:http, a queue of jobs with retries and subscribers), leaked everything through 13 cycles. Each was broken by one `weak` or by capturing another value:
+  - 10 were literals given to a method that keeps them, of which the warning now catches 7; the other 3 were given to a method of a local's object that `@` held, as `plus.events.on(-> @model.set(1))`;
+  - 1 was a literal stored in a field of `@`, 1 a captured local's object, both caught, and 1 a child's `parent`;
+  - long-lived links, as between a server and its sessions, were broken by their own `close`.
+  - A collector would cost time at run time and make the time of a `deinit` uncertain, for no case that these needed.
 
 ### Reference count operations
 
@@ -128,5 +134,4 @@ The size classes of the allocator ([internals](../internals/memory.md#allocation
 
 - Whether stack overflow should be an exception that can be caught, instead of a panic. That needs the remaining stack checked at function entry instead of [the guard page](../internals/execution.md#stack-overflow), as on the targets without one, such as [microcontrollers](#platforms). Catching it then works like any throw, since the handler runs after unwinding.
 - Value semantics for arrays (copy-on-write), or detection of modification during iteration.
-- Whether the runtime should collect cycles (as Nim's ORC does by trial deletion). It is decided by the leak check's report of cycles on a few event-driven programs, of the size of `examples/editor.lerta` or larger, written for it. Decide before the APIs that keep callbacks are designed, as they set their shape, rather than after async/await is complete.
 - How to pass values to workers (candidates: deep copy only + sharing immutable `Binary` / run-time moves like JS transfer).

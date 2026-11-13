@@ -1,0 +1,114 @@
+# A function literal that captures @, given to a method that keeps its argument where its object
+# holds it, is warned about when that object is held by @: a method that stores the argument in a
+# field of its own, or in an array or a map so held, keeps it, and so does one that passes it on to
+# such a method of what it holds, in any order of declaration. Each cycle here is broken by hand
+# before the object goes, so nothing leaks.
+class Hub
+  emitter := Emitter()
+  forward := (handler: () -> Int) -> @emitter.on(handler)
+  release := -> @emitter.release()
+
+class Emitter
+  var handlers: (() -> Int)[] = []
+  var last: (() -> Int)? = nil
+  var named = Map<String, () -> Int>()
+  var actions: (() -> void)[] = []
+  on := (handler: () -> Int) -> @handlers.push(handler)
+  set := (handler: () -> Int) -> @last = handler
+  name := (key: String, handler: () -> Int) -> @named[key] = handler
+  act := (action: () -> void) -> @actions.push(action)
+  release := ->
+    @handlers = []
+    @last = nil
+    @named = Map()
+    @actions = []
+
+# A method that keeps its argument only through another's, declared after it.
+class Ring
+  next := Ring2()
+  ping := (count: Int, f: () -> Int) -> @next.pong(f)
+  release := -> @next.held = nil
+
+class Ring2
+  var held: (() -> Int)? = nil
+  pong := (f: () -> Int) -> @held = f
+
+# Methods that pass their argument to each other keep it only if one of them stores it.
+class Ping
+  var pong: Pong? = nil
+  var held: (() -> Int)? = nil
+  hit := (f: () -> Int, store: Bool): void ->
+    if store
+      @held = f
+    else
+      @pong!.hit(f, true)
+
+class Pong
+  ping := Ping()
+  hit := (f: () -> Int, store: Bool): void -> @ping.hit(f, store)
+
+class Idle
+  pong := Idle2()
+  hit := (f: () -> Int) -> @pong.hit(f)
+
+class Idle2
+  hit := (f: () -> Int) -> print(f())
+
+class Widget
+  emitter := Emitter()
+  hub := Hub()
+  ring := Ring()
+  pong := Pong()
+  idle := Idle()
+  count := 1
+  init := ->
+    @emitter.on -> @count + 1
+    @emitter.set -> @count + 2
+    @emitter.name 'three', -> @count + 3
+    @hub.forward -> @count + 4
+    @ring.ping 5, -> @count + 5
+    @pong.hit -> @count + 6, true
+    @idle.hit -> @count + 7
+    # A literal held by a local first is not seen.
+    twice := -> @count + 8
+    @emitter.on twice
+  release := ->
+    @emitter.release()
+    @hub.release()
+    @ring.release()
+    @pong.ping.held = nil
+
+widget := Widget()
+print widget.emitter.handlers[0]() + widget.emitter.last!() + widget.hub.emitter.handlers[0]()
+widget.release()
+
+# What is no cycle is not warned about: a weak literal, a literal given to a method that does not
+# keep it, or to one of an object that @ does not hold, and an argument that the method keeps
+# elsewhere than in its own object.
+class Sink
+  var other: Emitter? = nil
+  call := (f: () -> Int) -> f()
+  hand := (target: Emitter, f: () -> Int) -> target.on(f)
+
+class Quiet
+  emitter := Emitter()
+  sink := Sink()
+  count := 1
+  init := ->
+    @emitter.act weak -> print(@count)
+    print @sink.call(-> @count)
+    @sink.hand Emitter(), -> @count
+    @hide -> @count
+    local := Emitter()
+    local.on -> @count
+  lend := (other: Emitter) -> other.on(-> @count)
+  # A parameter that a local hides is not kept.
+  hide := (handler: () -> Int) ->
+    if handler() > 0
+      handler := -> 0
+      @emitter.on handler
+  release := -> @emitter.release()
+
+quiet := Quiet()
+quiet.lend Emitter()
+quiet.release()

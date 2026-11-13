@@ -48,6 +48,30 @@ export struct ExternType
   type: Type
   module_name: String
 
+# The arguments that methods keep where their objects hold them, which a function literal that
+# captures what holds such an object makes a cycle through. A method may keep one by passing it to
+# a method checked later, so the cycles are told once every body is checked (see cycles).
+export class KeptArguments
+  # The parameters that methods keep, each as the method and its place.
+  kept: Set<(FunctionLiteral, Int)> = Set()
+  # The parameters that methods pass to methods of the objects they hold.
+  passed: PassedArgument[] = []
+  # The function literals given to methods of objects that what they capture holds.
+  calls: KeptCall[] = []
+
+export struct PassedArgument
+  from: FunctionLiteral
+  param: Int
+  to: FunctionLiteral
+  place: Int
+
+export struct KeptCall
+  literal: FunctionLiteral
+  message: String
+  method: FunctionLiteral
+  place: Int
+  module_index: Int
+
 # A warning or an error: a warning is reported without stopping the compilation, and an error ends
 # the checking of the part of the program it is found in (see check_part).
 export struct Diagnostic
@@ -325,6 +349,7 @@ export class ProgramWide
   inferable_parameters: Map<Identifier, Bool> = Map()
   # The plans of the methods that types get by their parts, each at its id (see PartsPlan).
   parts_plans: PartsPlan[] = []
+  kept_arguments := KeptArguments()
 
 # The type of the object that `@` refers to: in a method, the method of an extend, or the
 # initializer of a field, which sees the constructor arguments and the fields initialized before
