@@ -761,6 +761,7 @@ type Expr = Num | Add | Mul
 - In `x as T?` and `x as T!`: a named type or an array of one, as `x as Int[]!`.
 - In the patterns of a `case`: a named type.
 - In each, also a type alias of a union of some of the members: `x is T` then tells whether `x` holds one of them.
+- In `x is T`, also such a union written in place, as `x is A | B`, which is `x is AB` of `type AB = A | B`; `x is not A | B` tells whether `x` holds neither.
 - For a narrowed local, any member of the type it was declared with.
 
 #### Interface values
