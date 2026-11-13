@@ -2,8 +2,7 @@
 # cannot change from one or from `@`.
 import Expression, Identifier, Member, This from '../ast'
 import field_type_by_name, is_fixed_field from './fields'
-import local_reference, lookup from './name'
-import TopLevelValue from './references'
+import lookup from './name'
 import Local, PathView from './scopes'
 import Body from './shared'
 import Type from '../types'
@@ -32,24 +31,17 @@ export narrowable := (body: Body, value: Expression): Narrowable? ->
 
 # A local that cannot be emptied as a weak one, nor be assigned where it is read: one that a
 # function literal or a method assigns may be assigned by it at any call (see
-# names_literals_assign), and a `var` of a module's top level is narrowed only in the top-level
-# code: no other module sees it, but top-level code may run between a function's test and its use,
-# while the function awaits.
+# names_literals_assign).
 narrowable_local := (body: Body, name: Identifier) ->
   local := lookup(body, name.name) ? return nil
   origin := local.original()
   return nil if origin.weak or origin.assigned_by_literal
-  return nil if origin.mutable and body.sees_top_level and is_module_value(body, name.name, origin)
   local
 
 # A path of fields starts from a local that cannot be reassigned, whose paths no assignment ends.
 path_root := (body: Body, name: Identifier) ->
   local := narrowable_local(body, name) ? return nil
   not local.original().mutable then local
-
-is_module_value := (body: Body, name: String, origin: Local) ->
-  return true if origin == body.shared.top_level.locals[name]
-  local_reference(body, name, origin) is TopLevelValue
 
 # The path of fields that a member reads, if each of them cannot change.
 field_path := (body: Body, value: Expression): FieldPath? ->
