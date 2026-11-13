@@ -30,14 +30,16 @@ export narrowable := (body: Body, value: Expression) ->
   current := body.facts.types[value] ? return nil
   Narrowable current, subject: path, declared: path.declared
 
-# A local that cannot be emptied as a weak one, nor be assigned where it is read: a `var` of a
-# module's top level may be assigned by any function, and one that a function literal assigns by
-# the literal (see names_literals_assign).
+# A local that cannot be emptied as a weak one, nor be assigned where it is read: one that a
+# function literal or a method assigns may be assigned by it at any call (see
+# names_literals_assign), and a `var` of a module's top level is narrowed only in the top-level
+# code: no other module sees it, but top-level code may run between a function's test and its use,
+# while the function awaits.
 narrowable_local := (body: Body, name: Identifier) ->
   local := lookup(body, name.name) ? return nil
   origin := local.original()
   return nil if origin.weak or origin.assigned_by_literal
-  return nil if origin.mutable and is_module_value(body, name.name, origin)
+  return nil if origin.mutable and body.sees_top_level and is_module_value(body, name.name, origin)
   local
 
 # A path of fields starts from a local that cannot be reassigned, whose paths no assignment ends.

@@ -1,13 +1,15 @@
-# The names that code assigns, matched without their scopes: those that the function literals of a
-# body assign, for narrowing, and those that expressions assign anywhere, for borrowing in codegen.
+# The names that code assigns, matched without their scopes: those that the function literals and
+# methods of a body assign, for narrowing, and those that expressions assign anywhere, for
+# borrowing in codegen.
 import
-  Assignment, Binding, Case, Condition, Declaration, Expression, For, FunctionLiteral, Identifier,
-  If, operands_of, Statement, Try, While
+  Assignment, Binding, Case, Condition, Declaration, Expression, Extend, For, FunctionLiteral,
+  Identifier, If, operands_of, Statement, Try, TypeDeclaration, While
 from '../ast'
 
-# The names that the function literals in a body assign, found before the body is checked, so that
-# a `var` of one of them is not narrowed anywhere (see narrowable_local): a literal may run at any
-# point after it is written, even inside a call made where an earlier test narrows the `var`.
+# The names that the function literals and methods in a body assign, found before the body is
+# checked, so that a `var` of one of them is not narrowed anywhere (see narrowable_local): a literal
+# may run at any point after it is written, even inside a call made where an earlier test narrows
+# the `var`.
 # A literal's own `var` of an outer `var`'s name stops the outer one being narrowed too.
 export names_literals_assign := (statements: Statement[]) ->
   names: Set<String>
@@ -41,6 +43,10 @@ visit_statement := (names: Set<String>, statement: Statement, collects: Bool) ->
       visit names, statement.iterable, collects
       visit_statements names, statement.body, collects
     when Expression then visit(names, statement, collects)
+    # The methods of a class, a struct or an extend may assign a top-level `var`.
+    when TypeDeclaration, Extend
+      for member in statement.members
+        visit names, value, collects if value := member.value
     else pass
 
 visit_condition := (names: Set<String>, condition: Condition, collects: Bool) ->
