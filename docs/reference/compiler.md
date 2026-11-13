@@ -308,6 +308,7 @@ The rewrites below depend on the checking of a program that holds the file.
 | [Chars added themselves](#chars-added-themselves) | [Char concatenations](style.md#char-concatenations) |
 | [Found tests written with `any`](#found-tests-written-with-any) | [Found tests](style.md#found-tests) |
 | [Membership tests written with `in`](#membership-tests-written-with-in) | [Membership tests](style.md#membership-tests), [Negated in tests](style.md#negated-in-tests) |
+| [Membership lists written with `in`](#membership-lists-written-with-in) | [Membership lists](style.md#membership-lists) |
 | [Range tests written with `in`](#range-tests-written-with-in) | [Range tests](style.md#range-tests) |
 | [Ranges written with fewer parts](#ranges-written-with-fewer-parts) | [Ranges](style.md#ranges) |
 | [Emptiness tests written with `is_empty`](#emptiness-tests-written-with-is_empty) | [Emptiness tests](style.md#emptiness-tests) |
@@ -396,6 +397,11 @@ Besides:
 - It writes `xs.contains(x)`, a call of `contains` of one argument, as `x in xs`, and `not xs.contains(x)` as `x not in xs`.
 - Only where the object and the argument are names, `@`, fields of them or literals, which run no code, and the call gives a `Bool`.
 - Not in an interpolation, which is kept as written.
+
+#### Membership lists written with `in`
+
+- It writes a run of two or more tests of one value joined by `or`, `x == A or x == B`, as `x in [A, B]`, and by `and`, `x != A and x != B`, as `x not in [A, B]`, in a chain of `or`s or of `and`s, which may hold other tests before or after them.
+- Only where `x` is a name, `@` or a field of them, which runs no code, of an integer, a `Char`, a `Bool`, an enum or a `String`, and each item is a literal, a member of an enum or a constant: `in` then evaluates `x` once and makes no array, and the items run no code that `or` would have skipped.
 
 #### Range tests written with `in`
 

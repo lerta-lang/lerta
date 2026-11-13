@@ -319,7 +319,7 @@ first_line := (socket: Socket, request: Outgoing, writes: Bool) ->
 
 read_any_head := (reader: Reader, line: String) ->
   (version, rest) := line.split_once(' ') ? throw malformed()
-  throw malformed() if version != 'HTTP/1.1' and version != 'HTTP/1.0'
+  throw malformed() unless version in ['HTTP/1.1', 'HTTP/1.0']
   (code, _reason) := split_or_whole(rest, ' ')
   throw malformed() if code.binary.length != 3 or not code.is_digits()
   status := code.parse_int()!
@@ -366,7 +366,7 @@ struct Framing
 # A response to HEAD, and one of 204 or 304, has no body, whatever its fields tell.
 framing := (head: Head, method: String): Framing ->
   { status, headers } := head
-  return { left: 0 } if method == 'HEAD' or status == 204 or status == 304
+  return { left: 0 } if method == 'HEAD' or status in [204, 304]
   if coding := headers.get('transfer-encoding')
     throw IOError("a transfer coding not supported: #{coding}") if coding.to_lower() != 'chunked'
     return { left: 0, chunked: true }
@@ -420,7 +420,7 @@ redirected := (request: Outgoing, response: Response): Outgoing? ->
   if target.authority != request.target.authority
     headers.remove name for name in CREDENTIALS
   see_other := status == 303 and request.method != 'HEAD'
-  moved_post := (status == 301 or status == 302) and request.method == 'POST'
+  moved_post := status in [301, 302] and request.method == 'POST'
   as_get := see_other or moved_post
   unless as_get
     # A body that is a Reader has been read as it was sent.

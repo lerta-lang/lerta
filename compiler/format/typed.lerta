@@ -3,13 +3,14 @@
 # annotations.lerta.
 import
   Assignment, BinaryOperation, Call, Case, CaseArm, Cast, Expression, FunctionLiteral, Identifier,
-  Import, ImportName, Index, Member, NamedValue, NilLiteral, Range, Statement, StringLiteral, This
+  Import, ImportName, Index, Member, NamedValue, NilLiteral, Position, Range, Statement,
+  StringLiteral, This, UnaryOperation
 from '../ast'
 import is_file from 'std:io'
 import check_program from '../checker/modules'
 import ImportedName, ModuleAlias from '../checker/imports'
 import CollectionMaker from '../checker/references'
-import NodeFacts, ProgramWide from '../checker/shared'
+import is_fixed, is_plainly_compared, NodeFacts, ProgramWide from '../checker/shared'
 import CompileError from '../errors'
 import
   copied_source, counted_end, range_test as comparisons_of_range, runs_no_code, runs_of_alike_arms
@@ -21,8 +22,8 @@ from '../types'
 import CLOSING_BRACKETS, OPENING_BRACKETS from '../lexer/tokens'
 import
   CHAR_CONCATENATIONS, DEFAULT_COMPARISONS, EMPTINESS_TESTS, EXPECTED_TYPES, FOUND_TESTS,
-  ITERABLE_ARGUMENTS, MEMBERSHIP_TESTS, RANGE_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES, SPREADS,
-  SHORTHAND_ARGUMENTS, UNUSED_IMPORTS, VALUES_ALONE
+  ITERABLE_ARGUMENTS, MEMBERSHIP_LISTS, MEMBERSHIP_TESTS, RANGE_TESTS, REDUNDANT_CASTS,
+  SHARED_ARM_BODIES, SPREADS, SHORTHAND_ARGUMENTS, UNUSED_IMPORTS, VALUES_ALONE
 from './rules'
 import dump_ast_without_positions from '../dumps'
 import EntryModule, load_modules, module_key from '../loader'
@@ -39,6 +40,9 @@ export struct Typed
   unused_imports: Set<Identifier>
   # The names that the module imports, or that alias its imported modules.
   imported: Set<String>
+  # The junctions inside a chain of `or`s or of `and`s, which its root, met first, stands for (see
+  # membership_lists).
+  inner_junctions: Set<BinaryOperation> = Set()
 
 # Nil where the program does not check, whose types are not known: its typed rewrites wait.
 export typed_program := (path: String, source: String, statements: Statement[]) ->
@@ -101,6 +105,7 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
         range_test(tokens, value, facts)
         value.operator == '+' then char_concatenation(tokens, value.left, value.right, facts)
         found_test(tokens, value, facts)
+        membership_lists(tokens, value, typed)...
       ]
     when Case then shared_arm_bodies(tokens, value, typed.facts)
     when Call
@@ -496,6 +501,84 @@ found_test := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
     { from: tokens.end(close), to: tokens.end(nil_at), text: '' }
   tokens.edit_at FOUND_TESTS, member.name.position, changes
 
+# `x in [A, B]` for `x == A or x == B`, and `x not in [A, B]` for `x != A and x != B`, of each run
+# of two or more such tests of one `x` in a chain of `or`s or of `and`s (see Membership lists),
+# which makes no array then (see compared_items). Found from the root of the chain's tree, its last
+# junction, which is met before the others and marks them.
+membership_lists := (tokens: Tokens, test: BinaryOperation, typed: Typed): Edit?[] ->
+  junction := test.operator
+  return [] if junction not in ['or', 'and'] or test in typed.inner_junctions
+  terms: Expression[]
+  var node: Expression = test
+  while node is BinaryOperation and node.operator == junction
+    typed.inner_junctions.add node
+    terms.insert 0, node.right
+    node = node.left
+  terms.insert 0, node
+  comparison := junction == 'or' then '==' else '!='
+  edits: Edit?[]
+  var start = 0
+  while start < terms.length
+    var end = start
+    if tested := tested_word(terms[start], comparison, typed.facts)
+      while end + 1 < terms.length and tests_same(terms[end + 1], tested, comparison, typed.facts)
+        end += 1
+    edits.push membership_list(tokens, terms[start..=end], junction) if end > start
+    start = end + 1
+  edits
+
+# The `x` of `x == A`, of the comparison, where `x` runs no code and is of a type that `==` compares
+# by itself, and `A` is a literal, a member of an enum or a constant (see compared_items).
+tested_word := (term: Expression, comparison: String, facts: NodeFacts) ->
+  test := term as BinaryOperation ? return nil
+  return nil if test.operator != comparison or not runs_no_code(test.left)
+  type := facts.types[test.left] ? return nil
+  is_plainly_compared(type) and is_fixed(facts, test.right) then test.left
+
+tests_same := (term: Expression, tested: Expression, comparison: String, facts: NodeFacts) ->
+  other := tested_word(term, comparison, facts) ? return false
+  dump_ast_without_positions([other]) == dump_ast_without_positions([tested])
+
+membership_list := (tokens: Tokens, terms: Expression[], junction: String) ->
+  tests := [term as BinaryOperation! for term in terms]
+  first := tokens.at(first_position(tests[0].left)) ? return nil
+  last := last_token(tokens, tests.last()!.right) ? return nil
+  return nil unless is_balanced(tokens, first, last)
+  tested := text_of(tokens, tests[0].left) ? return nil
+  items: String[]
+  for test in tests
+    item := text_of(tokens, test.right) ? return nil
+    items.push item
+  operator := junction == 'and' then 'not in' else 'in'
+  text := "#{tested} #{operator} [#{items.join(', ')}]"
+  change := Change(text, from: tokens.start(first), to: tokens.end(last))
+  tokens.edit_at MEMBERSHIP_LISTS, tests[0].position, [change]
+
+# The text of a name, `@`, a literal, a path of fields from one or a constant, `-1` or `K + 1`, as
+# written; nil where parentheses hold part of it, which the text would leave unbalanced.
+text_of := (tokens: Tokens, value: Expression) ->
+  first := tokens.at(first_position(value)) ? return nil
+  last := last_token(tokens, value) ? return nil
+  is_balanced(tokens, first, last) then tokens.slice(tokens.start(first), tokens.end(last))
+
+last_token := (tokens: Tokens, value: Expression) ->
+  at := tokens.at(last_position(value)) ? return nil
+  # `-1` is one literal of two tokens, found by the first.
+  tokens.is_kind(at, '-') then at + 1 else at
+
+first_position := (value: Expression): Position ->
+  case value
+    when Member then first_position(value.object)
+    when BinaryOperation then first_position(value.left)
+    else value.position
+
+last_position := (value: Expression): Position ->
+  case value
+    when Member then value.name.position
+    when UnaryOperation then last_position(value.operand)
+    when BinaryOperation then last_position(value.right)
+    else value.position
+
 # `x in a..=b` for `x >= a and x <= b`, and `x not in a..=b` for `x < a or x > b`, of a number or a
 # Char (see Range tests), only reported.
 range_test := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
@@ -579,5 +662,5 @@ cast_end := (tokens: Tokens, at: Int) ->
 has_is_empty := (type: Type?) ->
   case type
     when ArrayType, MapType then true
-    when SimpleType then type.kind == 'String' or type.kind == 'Binary'
+    when SimpleType then type.kind in ['String', 'Binary']
     else false

@@ -2,8 +2,9 @@
 # others may read, and the state of the checking of one body. Objects refer to the modules, and to
 # what each module declares, by index, so that no two of them refer to each other.
 import
-  ArrayLiteral, BinaryOperation, Call, Cast, Exportable, Expression, FunctionLiteral, Identifier,
-  Index, Member, NamedType, Node, Position, StringLiteral
+  ArrayLiteral, binary_literal_bytes, BinaryOperation, BooleanLiteral, Call, Cast, Exportable,
+  Expression, FunctionLiteral, Identifier, Index, IntegerLiteral, Member, NamedType, Node, Position,
+  StringLiteral
 from '../ast'
 import DiagnosticKind from '../errors'
 import Token from '../lexer/tokens'
@@ -25,7 +26,9 @@ import FieldInfo, ObjectInfo from './object_types'
 import Local, Scopes from './scopes'
 import TopLevelValues from './top_level_values'
 import AliasEntry, Resolver from './type_names'
-import EnumType, InterfaceType, ObjectType, Type from '../types'
+import
+  ArrayType, EnumType, format_type, INTEGER_KINDS, InterfaceType, is_one_of_kinds, ObjectType, Type
+from '../types'
 
 # What each function literal that is not a top-level function captures from around it: the names
 # and the types they have there, which may be narrowed.
@@ -172,6 +175,29 @@ export enum_value_of := (facts: NodeFacts, expression: Expression) ->
     when Member then (facts.members[expression] as EnumValue?)?.index
     when StringLiteral then facts.enum_literals[expression]
     else nil
+
+# The items of `x in [A, B]` where each is a literal, a member of an enum or a constant, which runs
+# no code, and the array's item type is `x`'s, an integer, a Char, a Bool, an enum or a String,
+# which `==` compares by itself, throwing nothing: the test is then `x == A or x == B`, which makes
+# no array (see generate_in_items).
+export compared_items := (facts: NodeFacts, test: BinaryOperation): Expression[]? ->
+  return nil if test.operator != 'in'
+  literal := test.right as ArrayLiteral ? return nil
+  items := literal.elements
+  return nil if items.is_empty() or not items.all((item) -> is_fixed(facts, item))
+  array := facts.types[literal] as ArrayType ? return nil
+  item_type := facts.types[test.left] ? return nil
+  same := format_type(item_type) == format_type(array.element)
+  same and is_plainly_compared(array.element) then items
+
+export is_fixed := (facts: NodeFacts, item: Expression) ->
+  is_literal := item is IntegerLiteral | BooleanLiteral | StringLiteral
+  # `b'x'`, which is `'x'.binary`.
+  is_byte := binary_literal_bytes(item) != nil
+  is_literal or is_byte or enum_value_of(facts, item) != nil or facts.constants[item] != nil
+
+export is_plainly_compared := (type: Type) ->
+  type is EnumType or is_one_of_kinds(type, [INTEGER_KINDS..., 'Char', 'Bool', 'String'])
 
 # An instance as a call refers to it, without holding it: an instance's own calls, of itself or of
 # one that calls it back, would hold it in a cycle, which would never be released.

@@ -232,6 +232,10 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 
 - Write `x in xs`, not `xs.contains(x)`, where neither runs code, as `x in xs` evaluates `x` first.
 
+### Membership lists
+
+- Write `x in [A, B]`, not `x == A or x == B`, and `x not in [A, B]`, not `x != A and x != B`, where `x` runs no code and the items are literals, members of enums or constants, of an integer, a `Char`, a `Bool`, an enum or a `String`.
+
 ### Range tests
 
 - Write `x in a..=b`, not `x >= a and x <= b`, and `x in a..b`, not `x >= a and x < b`, where `x` and `b` run no code.

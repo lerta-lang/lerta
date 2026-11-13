@@ -245,8 +245,7 @@ optimized_runtime_check := ->
     return ["#{disassembler} failed: #{code.stderr_text()}"] if code.status != 0
     lines := code.stdout_text().split("\n")
     # objdump shows a call as `call   1234 <lerta_retain>`, otool as `bl\t_lerta_retain`.
-    is_call_opcode := (word: String) ->
-      word.starts_with('call') or word == 'jmp' or word == 'bl' or word == 'b'
+    is_call_opcode := (word: String) -> word.starts_with('call') or word in ['jmp', 'bl', 'b']
     names_retain := (word: String) ->
       parts := word.split('lerta_retain')
       parts[1..].any((after) ->
@@ -322,6 +321,20 @@ dump_joined_literals_check := ->
       'a text too long for a line of its own, which is split over lines, with an escape\09' +
         'and joined by the compiler'
     reasons.push 'no joined literal' unless joined_text in ir
+    reasons
+
+LISTED := "#{root_dir}/tests/in/listed.lerta"
+
+# A test of a list of literals and members of enums makes no array.
+dump_listed_check := ->
+  Check name: 'lerta dump-llvm makes no array for a test of a list of literals', run: ->
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', LISTED])
+    reasons := expect_status(0, dumped.result.status)
+    body := function_body(dumped.result.stdout_text().split("\n"), 'listed') ? return [
+      reasons...
+      'no function listed'
+    ]
+    reasons.push 'an array in listed' if body.any((line) -> '@lerta_array_' in line)
     reasons
 
 UNCHECKED_METHODS := "#{root_dir}/tests/operator/unchecked_methods.lerta"
@@ -828,6 +841,7 @@ export checks: Check[] = [
   dump_symbols_check()
   dump_seldom_check()
   dump_joined_literals_check()
+  dump_listed_check()
   dump_unchecked_methods_check()
   dump_filled_length_check()
   dump_hidden_exception_check()

@@ -4,6 +4,7 @@ import
   is_nil_test, is_order_operator, Member, NilLiteral, Range, This, UnaryOperation, Unwrap
 from '../ast'
 import ScopedLocal from '../checker/references'
+import compared_items from '../checker/shared'
 import compares_by_contents, own_equality from '../checker/equality'
 import is_numeric_operator, operator_of_method from '../checker/operator'
 import apply_integer_operator from './checked_int'
@@ -16,7 +17,7 @@ import emit_own_compare, GREATER, LESS from './comparison_methods'
 import emit_equals_by_contents, emit_value_equals from './equality'
 import Generator, with_deferred_checks from './generator'
 import emit_branch, IrBuilder from './ir_builder'
-import emit_release, emit_retain, ir_type from './lerta_ir'
+import emit_release, emit_release_value, emit_retain, emit_retain_value, ir_type from './lerta_ir'
 import emit_is_nil, emit_is_present, emit_unwrap from './optional'
 import emit_concat, emit_equals, emit_extend, emit_string_equals from './string'
 import throw_if, UNWRAPPED_NIL from './runtime_errors'
@@ -54,13 +55,14 @@ export apply_operator_method := (
 # type_of_operator_call).
 export generate_binary := (g: Generator, binary: BinaryOperation) ->
   return generate(g, call) if call := g.facts.operator_calls[binary]
+  return generate_in_items(g, binary, items) if items := compared_items(g.facts, binary)
   return generate_in_test(g, call) if call := g.facts.in_tests[binary]
   range := binary.right
   return generate_range_test(g, binary, range) if range is Range
   if call := g.facts.order_calls[binary]
     return emit_order_test(g.ir, binary.operator, generate(g, call))
   operator := binary.operator
-  return generate_logical(g, binary) if operator == 'and' or operator == 'or'
+  return generate_logical(g, binary) if operator in ['and', 'or']
   return generate_nil_test(g, binary) if is_nil_test(binary)
   # The root of a tree of float arithmetic alone checks its result, which its operands leave
   # unchecked.
@@ -85,6 +87,24 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
   unchecked := not g.defers_float_checks and binary in safe and not reads_unchecked
   apply := -> apply_binary(g, operator, left, right, operand_type)
   with_deferred_checks g, g.defers_float_checks or unchecked, apply
+
+# `x in [A, B]` of items that run no code (see compared_items) as `x == A or x == B`, which makes no
+# array: `x` once, and each item only where none before it is equal, which no item could tell.
+generate_in_items := (g: Generator, binary: BinaryOperation, items: Expression[]) ->
+  type := type_at_use(g, binary.left)
+  value := generate(g, binary.left)
+  equal := equal_to_any(g, value, items, type)
+  emit_release_value g.ir, value, type
+  equal
+
+# Each comparison releases its operands, as that of `==` does, so `x`, of a String, is retained for
+# each.
+equal_to_any := (g: Generator, value: String, items: Expression[], type: Type): String ->
+  emit_retain_value g.ir, value, type
+  equal := apply_binary(g, '==', value, generate(g, items[0]), type)
+  return equal if items.length == 1
+  rest := -> equal_to_any(g, value, items[1..], type)
+  emit_branch g.ir, 'i1', g.ir.negate(equal), rest, 'true'
 
 # `x in a..=b`, of a type that compares by itself (see type_of_range_test), as `a <= x and x <= b`
 # with `x` evaluated once, and the ends after it, as written.
