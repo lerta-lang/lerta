@@ -165,7 +165,7 @@ The least and the greatest [Int](types.md#int): `-9223372036854775808` and `9223
 | `Neg<Out>` | `neg: () -> Out` | prefix `-` |
 
 - The numbers have the methods of the operators that apply to them. They apply the operators, throwing as they do: `3.add(4)` is 7.
-- `String` and `Binary` have `add`. So `<T: Add<T, T>>` takes an `Int` or a `String` as well as a type that declares `add`.
+- `String`, `Binary` and arrays have `add`. So `<T: Add<T, T>>` takes an `Int`, a `String` or an array as well as a type that declares `add`.
 
 ## Methods of the builtin types
 
@@ -267,7 +267,7 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `sorted_by<K: Comparable>(key: (T) -> K): T[]`
 - `sort(compare: (T, T) -> Ordering = (a, b) -> a.compare(b))`
 - `sort_by<K: Comparable>(key: (T) -> K)`
-- `append(items: T[])`
+- `append(items: T[])`, `add(other: T[]): T[]`
 - `reversed(): T[]`, and `reverse()`, in place
 - `insert(at: Int, item: T)`, at a place in `0..=length`, moving the items from there on one place later
 - `remove_at(at: Int): T`, the item there, moving the items after it one place earlier

@@ -488,6 +488,7 @@ print xs[0] + xs.length
 | `xs.push(item)` | Appends an item. |
 | `xs.pop()` | Removes and returns the last item; throws `pop from an empty array` if empty. |
 | `xs.append(ys)` | Pushes the items that `ys` has when it is called, in order, so `xs.append(xs)` doubles `xs`. |
+| `xs + ys` | A new array of the items of `xs`, then of `ys`. `xs += ys` assigns it to `xs`, so another name for the old array sees no change, and a loop of `+=` copies each time, O(n²) in all, where `append` is O(n). |
 | `xs.truncate(n)` | Removes the items after the first `n`; a negative `n` throws a `ValueError`. |
 | `xs.split_off(n)` | Removes the items from `n` on and returns them, in order; throws `slice out of range` unless `0 <= n <= xs.length`. |
 | `xs.contains(x)` | Whether an item is `==` to `x`. |
