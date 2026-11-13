@@ -47,8 +47,10 @@ static uint8_t *item_at(const LertaArray *array, int64_t index) {
 // bytes. An optional item, wider than a word, is given by its address, which the generated code
 // reads it through (see compiler/codegen/array.lerta).
 int64_t lerta_word_item(const LertaArray *array, int64_t index) {
-  LertaItemKind kind = array->item_kind;
-  const uint8_t *item = item_at(array, index);
+  return lerta_item_word(array->item_kind, item_at(array, index));
+}
+
+int64_t lerta_item_word(LertaItemKind kind, const void *item) {
   if (kind == LERTA_OPTIONAL_ITEMS) return (int64_t)(intptr_t)item;
   int64_t word;
   if (!(kind & LERTA_INTEGER_ITEMS)) {

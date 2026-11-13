@@ -4,8 +4,8 @@ import Position from '../ast'
 import field_type, info_of from './object_types'
 import ProgramWide from './shared'
 import
-  ArrayType, EnumType, is_identity_type, is_number, is_one_of_kinds, ObjectType, OptionalType,
-  RecordType, SimpleType, TupleType, Type, TypeKind, TypeParameterType, UnionType
+  ArrayType, EnumType, is_identity_type, is_number, is_one_of_kinds, is_set, MapType, ObjectType,
+  OptionalType, RecordType, SimpleType, TupleType, Type, TypeKind, TypeParameterType, UnionType
 from '../types'
 
 export enum OwnEquality
@@ -29,7 +29,7 @@ export has_own_hash := (program: ProgramWide, type: ObjectType) ->
 export compares_by_contents := (program: ProgramWide, type: Type): Bool ->
   case type
     when ObjectType then type.is_struct or own_equality(program, type) != nil
-    when RecordType, TupleType, ArrayType then true
+    when RecordType, TupleType, ArrayType, MapType then true
     when UnionType
       not is_identity_type(type) or
         type.members.any((member) -> compares_by_contents(program, member))
@@ -75,6 +75,8 @@ equatable := (
     when RecordType then all([field.type for field in type.fields])
     when TupleType then all(type.items)
     when ArrayType then all([type.element])
+    # A map or a set compares, but hashes by no order of its entries, so it is no key.
+    when MapType then not hashes and all(is_set(type) then [type.key] else [type.key, type.value])
     when OptionalType then all([type.inner])
     when UnionType then all(type.members)
     when TypeParameterType then compares(type)

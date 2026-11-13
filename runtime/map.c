@@ -187,6 +187,20 @@ struct LertaMapCursor {
   int64_t end;
 };
 
+bool lerta_map_equals(const LertaMap *a, const LertaMap *b, LertaEquals values) {
+  if (a->length != b->length) return false;
+  for (int64_t i = 0; i < a->entry_count; i++) {
+    LertaMapEntry *entry = entry_at(a, i);
+    if (!entry->live) continue;
+    void *other = lerta_map_find(b, entry->key);
+    if (!other) return false;
+    if (!values) continue;
+    int64_t value = lerta_item_word(a->value_kind, value_of(entry));
+    if (!values(value, lerta_item_word(b->value_kind, other))) return false;
+  }
+  return true;
+}
+
 static inline void visit_cursor(void *object, LertaVisitor visitor) {
   visitor(((LertaMapCursor *)object)->map);
 }

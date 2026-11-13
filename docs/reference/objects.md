@@ -148,7 +148,7 @@ The interface that a class or struct declares counts as such a written type, whe
 #### Structs
 
 - Structs compare by content: two are equal when they are of the same type and each field is equal by `==`. A field of a class compares by identity.
-- Anonymous structs and arrays compare so too, as do unions that hold them: equal when of the same member type and equal as it.
+- Anonymous structs, arrays, [maps and sets](types.md#equality) compare so too, as do unions that hold them: equal when of the same member type and equal as it.
 - A type with a part that `==` does not compare, such as a function, cannot be compared.
 - Such values can be `Map` keys, hashed by content. A key's arrays must not change while it is in a map, or the key is no longer found.
 - A value that holds itself through an array is equal to itself at once, but it cannot be hashed or compared with another such value: neither ends, and the program stops with a stack overflow.

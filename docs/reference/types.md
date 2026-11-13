@@ -513,7 +513,7 @@ print ages['ann'] ? 0
 ```
 
 - `Map<K, V>` maps keys of type `K` to values of type `V`. Like arrays, maps are mutable and shared.
-- `K` is any type of values that `==` compares, but not an optional one: classes by identity; structs, anonymous structs, tuples and arrays by their contents; a class or struct with its own equality, only with its own `hash` (see [equality](objects.md#equality-and-order)).
+- `K` is any type of values that `==` compares, but not an optional one: classes by identity; structs, anonymous structs, tuples and arrays by their contents; a class or struct with its own equality, only with its own `hash` (see [equality](objects.md#equality-and-order)). Maps and sets compare but are not keys, as they hash by no order.
 - `V` is any type with values, but not an optional one.
 
 ### Construction
@@ -549,12 +549,16 @@ print ages['ann'] ? 0
 |---|---|
 | `m.contains(k)`, `k in m` | Whether `k` is there. |
 | `m.remove(k)` | Removes `k` if it is there; tells whether it was. |
-| `m.entries()` | An `Iter<(K, V)>` of the keys and their values, as [tuples](#tuples): `for (key, value) in m.entries()`. |
+| `m.entries()`, `m.iter()` | An `Iter<(K, V)>` of the keys and their values, as [tuples](#tuples); `for (key, value) in m` goes through it, as a map is [Iterable](builtins.md#iterable). |
 | `m.keys()` | An `Iter<K>` of the keys; `m.keys().to_array()` gives them as an array. |
 | `m.values()` | An `Iter<V>` of the values. |
 
 - `entries`, `keys` and `values` go in the order the keys were first added; a key removed and added again counts as new.
 - They give the entries there when the Iter is made: one removed before the Iter reaches it is skipped, and one added meanwhile is not given, even under a key that was there before.
+
+### Equality
+
+- `a == b` tells whether two maps have the same keys, in any order, each with values equal by `==`, and two [sets](#set) whether they have the same items; `!=` the opposite. Maps whose values `==` does not compare cannot be compared.
 
 ## Set
 
@@ -566,7 +570,7 @@ print 4 in primes
 ```
 
 - `Set<T>` holds distinct items of type `T`, which take the rules of a [map](#map)'s keys.
-- It is a map without values: it cannot be compared with `==`, nor be a map key or a set item, as a map cannot.
+- It is a map without values: `a == b` tells whether two sets have the same items, in any order, and it cannot be a map key or a set item, as a map cannot.
 - It has no indexing, no literal, and none of a map's other methods, nor those of an extend of `Map<K, V>`.
 
 ### Construction

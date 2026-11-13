@@ -242,6 +242,9 @@ void *lerta_map_find(const LertaMap *map, int64_t key);
 // holds the key, retained, and the caller writes the value there, which it retains.
 void *lerta_map_place(LertaMap *map, int64_t key);
 bool lerta_map_remove(LertaMap *map, int64_t key);
+// Whether two maps of the same type hold the same keys, in any order, with values equal by
+// `values`, which is NULL for sets.
+bool lerta_map_equals(const LertaMap *a, const LertaMap *b, LertaEquals values);
 
 // next writes the key, and the value unless `value` is NULL, both owned, and moves on.
 typedef struct LertaMapCursor LertaMapCursor;
