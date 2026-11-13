@@ -181,13 +181,14 @@ comprehension_operands := (comprehension: Comprehension) ->
 map_key := (key: Expression) ->
   Operand expression: key, level: WHOLE_LEVEL, last: true, clarified: key is Identifier
 
-patterns_of := (case_value: Case) ->
-  patterns: Operand[]
-  for arm in case_value.arms
-    patterns.push { expression: pattern, level: OR, last: false } for pattern in arm.patterns
-  patterns
+patterns_of := (case_value: Case): Operand[] ->
+  [
+    { expression: pattern, level: OR, last: false }
+    for arm in case_value.arms
+    for pattern in arm.patterns
+  ]
 
-is_number := (expression: Expression) -> expression is IntegerLiteral or expression is FloatLiteral
+is_number := (expression: Expression) -> expression is IntegerLiteral | FloatLiteral
 
 # `not (x is not T)` and `-(1)` keep theirs, which `not x is not T` and `-1` would read otherwise.
 unary_operand := (unary: UnaryOperation): Operand ->
@@ -217,7 +218,7 @@ binary_operands := (binary: BinaryOperation, last: Bool) ->
 # An end that is an operation is clarified (see Ranges).
 range_ends := (range: Range, last: Bool) ->
   end_of := (value: Expression, flags: { last: Bool }) ->
-    is_operation := value is BinaryOperation or value is UnaryOperation
+    is_operation := value is BinaryOperation | UnaryOperation
     Operand expression: value, level: ADDITIVE, last: flags.last, clarified: is_operation
   ends: Operand[]
   ends.push end_of(start, last: false) if start := range.start
