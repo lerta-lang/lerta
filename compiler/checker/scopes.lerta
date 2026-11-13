@@ -74,11 +74,21 @@ export class Scopes
         hidden[name] = origin if current != origin and origin.mutable
 
   # The local is assigned: its narrowed views end, in every scope.
-  forget_views := (local: Local) ->
+  forget_views := (local: Local) -> @forget_views_where((name, view) -> view.original() == local)
+
+  # The body waits: code outside it may run and assign the `var`s declared outside it, whose
+  # narrowed views end, in every scope.
+  forget_outer_var_views := ->
+    @forget_views_where (name, view) -> @is_outer_var(name, view.original())
+
+  forget_views_where := (ends: (String, Local) -> Bool) ->
     for scope in @scopes
       overlays := scope.overlays
-      names := [name for (name, view) in overlays when view.original() == local]
+      names := [name for (name, view) in overlays when ends(name, view)]
       overlays.remove name for name in names
+
+  is_outer_var := (name: String, local: Local) ->
+    local.mutable and @scopes.all((scope) -> scope.locals[name] != local)
 
   narrow_path := (key: String, view: PathView) -> @scopes.last()!.paths[key] = view
 

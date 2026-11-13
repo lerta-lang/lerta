@@ -103,7 +103,9 @@ export narrowings_of := (body: Body, condition: Condition): ConditionNarrowings 
 # Both operands narrow where `a and b` holds, or where `a or b` does not.
 narrowings_of_logical := (body: Body, logical: BinaryOperation) ->
   value := logical.operator == 'and'
-  first := narrowings_where(narrowings_of(body, logical.left), value)
+  var first = narrowings_where(narrowings_of(body, logical.left), value)
+  if logical in body.awaiting_right_operands
+    first = first.filter((narrowing) -> not is_outer_var(body, narrowing)).to_array()
   var second: Narrowing[] = []
   with_narrowings body, first, ->
     second = narrowings_where(narrowings_of(body, logical.right), value)
@@ -117,7 +119,13 @@ narrowings_only_where := (narrowings: Narrowing[], value: Bool): ConditionNarrow
 # `a or b`, where a does not.
 export where_right_operand := (body: Body, logical: BinaryOperation, check: () -> void) ->
   left := narrowings_of(body, logical.left)
+  awaits := body.awaits
   with_narrowings body, narrowings_where(left, logical.operator == 'and'), check
+  body.awaiting_right_operands.add logical if body.awaits > awaits
+
+is_outer_var := (body: Body, narrowing: Narrowing) ->
+  subject := narrowing.subject as Local ? return false
+  body.scopes.is_outer_var subject.identifier.name, subject.original()
 
 # Runs `check` with the narrowings, in a scope of their own.
 with_narrowings := (body: Body, narrowings: Narrowing[], check: () -> void) ->

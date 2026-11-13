@@ -123,6 +123,7 @@ A `var` is narrowed only where nothing may have assigned it since the test:
 - An assignment to it ends its narrowing from there on, in every enclosing branch.
 - A loop's condition and body do not see a test of it made outside the loop, as a round may assign it before the next. A test inside narrows it there.
 - A function literal sees it as declared, as the literal may run after an assignment.
+- In a function literal or a function, an `await` ends the narrowing of one declared outside it, as the code outside may run and assign it while the function waits. One it declares itself stays narrowed.
 - One that a function literal or a method assigns is not narrowed anywhere, as it may run inside any call. Take its value with `if v := x` instead. Names are matched without their scopes here, so a literal's own `var x` stops an outer `x` being narrowed too.
 
 The value of an assignment is read before it, where the `var` is still narrowed, while the target takes the declared type: `x = nil` is allowed where `x` is narrowed, and `x += 1` takes the declared type too.
