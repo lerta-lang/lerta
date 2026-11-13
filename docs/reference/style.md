@@ -116,6 +116,7 @@ None:
 - An operation that does not fit on its line, but whose first operand and operator do, breaks after each operator of its chain, the operations of its level on its left (`a +`, `b +`, `c`). The operands after the first go on lines of their own, one level deeper.
 - A value after `=`, `:=` or `key:` in a block that does not fit on its line goes on the next line, one level deeper, if it fits there. Otherwise it breaks on its line if its first line fits there, and else on the next line.
 - A union of a `type` written on more than one line below `=` keeps those lines, one level deeper, as the author grouped its members on them.
+  - A line of it that does not fit breaks before the first member that does not fit on it, which starts a line of its own; so does a union on the line of `=` that fits on no line, which goes on the lines below `=`.
 - These stay on one line:
   - an operation that is an operand of another outside brackets;
   - one in parentheses, whose `)` would end its last line;

@@ -3,11 +3,11 @@
 import Position from '../ast'
 import
   BRANCHES, CALLS_WITHOUT_PARENTHESES, JOINED_LITERALS, LONG_LISTS, MULTI_LINE_LITERALS,
-  POSTFIX_FORMS, StyleRule
+  POSTFIX_FORMS, StyleRule, UNION_LINES
 from './rules'
 import Change from './edits'
-import Breaker from './lines'
-import ArmShape, BodyShape, ListShape, PostfixShape, Spaces from './shapes'
+import Breaker, WIDTH from './lines'
+import ArmShape, BodyShape, ListShape, PostfixShape, Spaces, UnionShape from './shapes'
 
 extend Breaker
   # The statement keeps its gaps as written, as a rewrite of its tokens lays it out: the edit of the
@@ -80,6 +80,31 @@ extend Breaker
   # the layout decides may not have moved yet.
   line_start := (last: Int, next: Int, columns: Int) ->
     Change from: @tokens.end(last), to: @tokens.start(next), text: "\n" + ' '.repeat(columns)
+
+  # A union whose line does not fit, with the comment that ends it, breaks before the first member
+  # that does not fit on it, on the lines below `=`, one level deeper than the `type`, as it keeps
+  # them once they are lines: a rewrite, as the `|` before that member goes. A member that alone
+  # does not fit is left to be shortened by hand.
+  union := (union: UnionShape) ->
+    { members } := union
+    line_column := 2 * (@line_depth(@start) + 1) + 1
+    starts := (i: Int) -> i == 0 or members[i] in @line_starts
+    last_of := (i: Int) ->
+      return union.last if i == members.length - 1
+      starts(i + 1) then members[i + 1] - 1 else members[i + 1] - 2
+    var end = 0
+    for member at i in members
+      width := @end_column(last_of(i)) - @column_of(member)
+      end = starts(i) then line_column + width else end + 3 + width
+      fits := end - 1 <= WIDTH and @fits_comment(last_of(i), end)
+      continue if starts(i) or fits
+      columns := @source_indentation(@start) + 2
+      changes: Change[]
+      unless members[0] in @line_starts
+        changes.push @line_start(members[0] - 1, members[0], columns)
+      changes.push @line_start(member - 2, member, columns)
+      @rewrite UNION_LINES, changes
+      return
 
   # The columns that the source indents the line that holds the code token by.
   source_indentation := (index: Int) ->

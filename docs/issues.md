@@ -13,7 +13,3 @@ The checks of the CLI suite are in `test/cli/*.lerta`, which `test/cli.lerta` ga
 ## The main run loop stays off for CoreFoundation loaded after the first wait
 
 `uses_run_loop` (`runtime/loop.c`) looks for CoreFoundation once, at the program's first wait (see [the main run loop](internals/iteration.md#the-main-run-loop)). A program that waits, then loads a framework with `dlopen` and has it post a block to the main dispatch queue, never runs the block. Fix: look again at later waits while it is not found, if that costs a waiting program little.
-
-## fmt does not break a long line of union members below =
-
-`lerta fmt` keeps each line of a union written on the lines below `=` (see `union_lines` in `compiler/format/walk_statements.lerta`), and reports one over 100 columns as too long to break, though the parser takes the members on any lines. Fix: start a line before the first member that does not fit on its line.

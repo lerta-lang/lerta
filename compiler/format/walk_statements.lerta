@@ -13,7 +13,7 @@ import
 from './forms'
 import
   ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, ChainShape, CodeGap, ImportShape,
-  LineStart, ListShape, PostfixShape, Shape, StatementShape, ValueKind, ValueShape
+  LineStart, ListShape, PostfixShape, Shape, StatementShape, UnionShape, ValueKind, ValueShape
 from './shapes'
 import NONE, ONE, spelling_of, unhandled, Unhandled, Walker from './walk'
 import './walk_expressions'
@@ -327,13 +327,16 @@ extend Walker
     { type } := node
     grouped := type is FunctionTypeName or (type is UnionTypeName and type.optional)
     return @type(type, ONE) if grouped
-    if union := type as UnionTypeName?
-      return @union_lines(union) if @is_on_lines(union)
+    union := type as UnionTypeName?
+    return @union_lines(union) if union and @is_on_lines(union)
     kind: ValueKind = @comment_follows(after) then BELOW_COMMENT else OTHER
     first := @at
     outer := @shapes
     @shapes = []
-    @type type, ONE
+    if union
+      @union_line union
+    else
+      @type type, ONE
     shape := ValueShape(first, kind, last: @at - 1, shapes: @shapes)
     @shapes = outer
     @shapes.push shape
@@ -347,10 +350,22 @@ extend Walker
   # The members of a union on the lines below `=`, one level deeper, as they are written on them,
   # with `|` between those on a line.
   union_lines := (union: UnionTypeName) ->
+    members: Int[]
     for member at i in union.members
       starts := @at in @line_starts
       @take '|', ONE if i > 0 and not starts
+      members.push @at
       @type member, starts then LineStart(@depth + 1) else ONE
+    @shapes.push UnionShape(members, last: @at - 1)
+
+  # The members of a union on the line of `=`, with `|` between them.
+  union_line := (union: UnionTypeName) ->
+    members: Int[]
+    for member at i in union.members
+      @take '|', ONE if i > 0
+      members.push @at
+      @type member, ONE
+    @shapes.push UnionShape(members, last: @at - 1)
 
   # `extern`, its symbol, `as` and its name if it has one, and its type.
   extern_declaration := (node: Extern, before: CodeGap) ->
