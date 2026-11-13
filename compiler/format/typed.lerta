@@ -12,12 +12,13 @@ import ImportedName, ModuleAlias from '../checker/imports'
 import CollectionMaker from '../checker/references'
 import is_fixed, is_plainly_compared, NodeFacts, ProgramWide from '../checker/shared'
 import CompileError from '../errors'
+import arm_bodies from '../checker/statement'
 import
   copied_source, counted_end, range_test as comparisons_of_range, runs_no_code, runs_of_alike_arms
 from './expressions'
 import
-  ArrayType, bool_type, char_type, INTEGER_KINDS, is_one_of_kinds, IterType, MapType, NUMBER_KINDS,
-  SimpleType, string_type, Type
+  ArrayType, bool_type, char_type, FunctionType, INTEGER_KINDS, is_one_of_kinds, IterType, MapType,
+  NUMBER_KINDS, PromiseType, SimpleType, string_type, Type
 from '../types'
 import CLOSING_BRACKETS, OPENING_BRACKETS from '../lexer/tokens'
 import
@@ -93,6 +94,32 @@ typed_of := (program: ProgramWide, index: Int): Typed ->
   imported := Set([each.name.name for each in all_imported])
   { program, imported, facts: shared.facts, unused_imports }
 
+# The calls whose values the functions give as their results, in the last statements of their
+# bodies or of the arms of those, which keep their parentheses (see Calls without parentheses);
+# not those of a function of no value, whose last statement's value is dropped.
+export result_calls := (typed: Typed): Set<Call> ->
+  { facts } := typed
+  found: Set<Call>
+  for (literal, results) in facts.results
+    known := facts.types[literal] ? continue
+    type := known as FunctionType ? continue
+    continue if literal.yields or gives_no_value(literal, type.result, facts)
+    add_result_calls found, result for result in results
+  found
+
+gives_no_value := (literal: FunctionLiteral, result: Type, facts: NodeFacts) ->
+  awaited := literal.awaits or literal in facts.settling
+  promised := awaited then (result as PromiseType?)?.value
+  value := promised ? result
+  is_one_of_kinds(value, ['void', 'never'])
+
+add_result_calls := (found: Set<Call>, value: Expression): void ->
+  if value is Call
+    found.add value
+    return
+  for arm in arm_bodies(value) ? []
+    add_result_calls found, last if last := arm.last() as Expression?
+
 export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[] ->
   case value
     when Cast then [redundant_cast(tokens, value, typed.facts)]
@@ -151,7 +178,7 @@ unused_imports := (tokens: Tokens, statement: Import, unused: Set<Identifier>) -
   last_line := tokens.code[spans.last()!.last].end_line
   if spans.last()!.unused and tokens.comments.any((comment) -> comment.line == last_line)
     return tokens.report(UNUSED_IMPORTS, tokens.start(first_unused.first))
-  tokens.edit_at UNUSED_IMPORTS, tokens.start(first_unused.first), left_out_names(tokens, spans)
+  tokens.edit_at(UNUSED_IMPORTS, tokens.start(first_unused.first), left_out_names(tokens, spans))
 
 # The tokens of a name of an import, from its name through its alias.
 struct Span
@@ -183,14 +210,14 @@ unqualified := (tokens: Tokens, member: Member, facts: NodeFacts) ->
   name := tokens.at(member.name.position) ? return nil
   return nil unless tokens.is_kind(name - 1, '.')
   change := Change(from: tokens.start(first), to: tokens.start(name), text: '')
-  tokens.edit_at EXPECTED_TYPES, member.position, [change]
+  tokens.edit_at(EXPECTED_TYPES, member.position, [change])
 
 # `{ x: 1 }` for `S(x: 1)` where S is expected (see Expected types). A construction without
 # parentheses is only reported (see record_changes).
 recorded := (tokens: Tokens, call: Call, facts: NodeFacts) ->
   return nil unless call in facts.recordable
   changes := record_changes(tokens, call) ? return tokens.report(EXPECTED_TYPES, call.position)
-  tokens.edit_at EXPECTED_TYPES, call.position, changes
+  tokens.edit_at(EXPECTED_TYPES, call.position, changes)
 
 # The arguments of the construction as they are written, between braces for the parentheses, or
 # for the callee and after the arguments of one without them; nil for one of type arguments.
@@ -272,7 +299,7 @@ alone := (tokens: Tokens, named: NamedValue) ->
   name_at := tokens.at(named.name.position) ? return nil
   value_at := tokens.at(named.value.position) ? return nil
   return nil if value_at != name_at + 2 or not tokens.is_kind(value_at, IDENTIFIER)
-  Change from: tokens.start(name_at), to: tokens.end(value_at), text: named.name.name
+  Change(from: tokens.start(name_at), to: tokens.end(value_at), text: named.name.name)
 
 # `T(v)` for `T(name: v)`, a construction of only the one argument that it must give (see Values
 # alone); not a record, `{ name: v }`, which constructs a struct too, nor a copy of the field of
@@ -285,7 +312,7 @@ value_alone := (tokens: Tokens, call: Call, facts: NodeFacts) ->
   value_at := tokens.at(named.value.position) ? return nil
   return nil if not tokens.is_kind(name_at - 1, '(') or not tokens.is_kind(name_at + 1, ':')
   change := Change(from: tokens.start(name_at), to: tokens.start(value_at), text: '')
-  tokens.edit_at VALUES_ALONE, named.name.position, [change]
+  tokens.edit_at(VALUES_ALONE, named.name.position, [change])
 
 # `xs.sorted()` for `xs.sorted((a, b) -> a.compare(b))` of an array, and so for `sort` (see Default
 # comparisons).
@@ -301,20 +328,20 @@ default_comparison := (tokens: Tokens, call: Call, facts: NodeFacts) ->
   within :=
     without_parentheses then arguments_after(tokens, name) else arguments_within(tokens, name + 1)
   change := within ? return nil
-  tokens.edit_at DEFAULT_COMPARISONS, call.args[0].position, [change]
+  tokens.edit_at(DEFAULT_COMPARISONS, call.args[0].position, [change])
 
 # `()` for the arguments of a call without parentheses, which run from its name at `name` to the end
 # of its statement, as such a call starts one.
 arguments_after := (tokens: Tokens, name: Int) ->
   indentation := tokens.line_indentation(tokens.code[name].line) ? 0
   last := statement_last(tokens, name, indentation)
-  Change from: tokens.end(name), to: tokens.end(last), text: '()'
+  Change(from: tokens.end(name), to: tokens.end(last), text: '()')
 
 # Nothing for the arguments within the parentheses that open at `open`.
 arguments_within := (tokens: Tokens, open: Int) ->
   return nil unless tokens.is_kind(open, '(')
   close := tokens.matching(open) ? return nil
-  Change from: tokens.end(open), to: tokens.start(close), text: ''
+  Change(from: tokens.end(open), to: tokens.start(close), text: '')
 
 # Whether the value is `(a, b) -> a.compare(b)`, the comparison that `sorted` takes by default.
 is_natural_order := (value: Expression) ->
@@ -343,7 +370,7 @@ iterable_argument := (tokens: Tokens, call: Call, facts: NodeFacts) ->
   is_written := tokens.is_kind(name - 1, '.') and tokens.is_kind(name + 1, '(')
   return nil if not is_written or not tokens.is_kind(name + 2, ')')
   change := Change(from: tokens.start(name - 1), to: tokens.end(name + 2), text: '')
-  tokens.edit_at ITERABLE_ARGUMENTS, member.name.position, [change]
+  tokens.edit_at(ITERABLE_ARGUMENTS, member.name.position, [change])
 
 is_iterable := (type: Type?) -> type is ArrayType | IterType | MapType
 
@@ -361,7 +388,7 @@ emptiness_test := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
   negation := operator == '==' then '' else 'not '
   text := "#{negation}#{tokens.slice(tokens.start(first), tokens.end(last))}.is_empty()"
   at := tokens.start(start)
-  tokens.edit_at EMPTINESS_TESTS, at, [{ from: at, to: tokens.end(end), text }]
+  tokens.edit_at(EMPTINESS_TESTS, at, [{ from: at, to: tokens.end(end), text }])
 
 # The value that a comparison tests the emptiness of, the tokens from `first` through `last`, and
 # those of the comparison, from `start` through `end`.
@@ -452,9 +479,11 @@ membership_test := (tokens: Tokens, call: Call, facts: NodeFacts) ->
   close := tokens.matching(open) ? return nil
   collection := tokens.slice(tokens.start(first), tokens.end(last))
   text := "(#{tokens.slice(tokens.start(open + 1), tokens.end(close - 1))} in #{collection})"
-  tokens.edit_at MEMBERSHIP_TESTS, member.name.position, [
-    { from: tokens.start(first), to: tokens.end(close), text }
-  ]
+  tokens.edit_at(
+    MEMBERSHIP_TESTS
+    member.name.position
+    [{ from: tokens.start(first), to: tokens.end(close), text }]
+  )
 
 # `x in a..=b` for `x in a..(b + 1)` where b is an integer (see Ranges).
 tested_range := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
@@ -476,7 +505,7 @@ char_concatenation := (tokens: Tokens, left: Expression, right: Expression, fact
   is_written := tokens.is_kind(name - 1, '.') and tokens.is_kind(name + 1, '(')
   return nil if not is_written or not tokens.is_kind(name + 2, ')')
   change := Change(from: tokens.start(name - 1), to: tokens.end(name + 2), text: '')
-  tokens.edit_at CHAR_CONCATENATIONS, member.name.position, [change]
+  tokens.edit_at(CHAR_CONCATENATIONS, member.name.position, [change])
 
 # `xs.any(f)` for `xs.find(f) != nil`, and `not xs.any(f)` for `xs.find(f) == nil` (see Found
 # tests), of an array, an Iter or a map, whose items cannot be optional for `find`, as nil would be
@@ -499,7 +528,7 @@ found_test := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
     { from: tokens.start(first), to: tokens.start(first), text: negated then 'not ' else '' }
     tokens.replaced(name, 'any')
     { from: tokens.end(close), to: tokens.end(nil_at), text: '' }
-  tokens.edit_at FOUND_TESTS, member.name.position, changes
+  tokens.edit_at(FOUND_TESTS, member.name.position, changes)
 
 # `x in [A, B]` for `x == A or x == B`, and `x not in [A, B]` for `x != A and x != B`, of each run
 # of two or more such tests of one `x` in a chain of `or`s or of `and`s (see Membership lists),
@@ -585,7 +614,7 @@ range_test := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
   comparison := comparisons_of_range(test) ? return nil
   type := facts.types[comparison.value] ? return nil
   return nil unless is_one_of_kinds(type, [NUMBER_KINDS..., 'Char'])
-  tokens.report RANGE_TESTS, comparison.value.position
+  tokens.report(RANGE_TESTS, comparison.value.position)
 
 # One arm for arms next to each other with one body (see Shared arm bodies), only reported: but not
 # where a comment is among them, which would have no place in one, nor where a body may read the
@@ -626,7 +655,7 @@ holds_comment := (tokens: Tokens, run: CaseArm[]) ->
   next += 1 while continues(next)
   last :=
     next < tokens.code.length then tokens.code[next].line - 1 else tokens.code.last()!.end_line
-  tokens.comments.any (comment) -> comment.line in line..=last
+  tokens.comments.any((comment) -> comment.line in line..=last)
 
 # A spread of the value whose fields a construction copies, where it gives every argument, of the
 # type constructed (see Spreads), only reported.
@@ -649,7 +678,7 @@ redundant_cast := (tokens: Tokens, cast: Cast, facts: NodeFacts) ->
   return nil unless tokens.is_word(as_at, 'as')
   bang := cast_end(tokens, type_at) ? return nil
   change := Change(from: tokens.end(as_at - 1), to: tokens.end(bang), text: '')
-  tokens.edit_at REDUNDANT_CASTS, cast.position, [change]
+  tokens.edit_at(REDUNDANT_CASTS, cast.position, [change])
 
 # The `!` after the type of a cast that starts at `at`; a type holds none.
 cast_end := (tokens: Tokens, at: Int) ->

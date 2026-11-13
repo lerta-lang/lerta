@@ -3,7 +3,7 @@
 # reports where the source differs from that by the rule of the rewrite or the decision, and writes
 # the tokens with the gaps decided.
 import scan from 'std:scanner'
-import Position, Statement from '../ast'
+import Call, Position, Statement from '../ast'
 import dump_ast_without_positions from '../dumps'
 import CompileError from '../errors'
 import lex, Lexed from '../lexer/tokens'
@@ -25,7 +25,7 @@ import CodeGap, LineStart, Spaces, StatementShape from './shapes'
 import Gap, literal_lines, source_tokens, SourceTokens, TextToken from './text'
 import Tokens from './tokens'
 import declared_types from './annotations'
-import typed_program, Typed from './typed'
+import result_calls, typed_program, Typed from './typed'
 import walk, Walked from './walk'
 
 # A place where the source differs from the style, at its position in the source.
@@ -75,8 +75,8 @@ export format_source := (source: String, path: String) ->
 # That of the source parsed, not off throughout, with its program checked (see typed_programs).
 export format_parsed := (parsed: Parsed, path: String, typed: Typed?) ->
   { source } := parsed
-  laid := laid_out(parsed)
   first := rewrites_with(parsed, typed)
+  laid := laid_out(parsed, typed)
   # The types left out must keep the types of the program, or they all stay (see rewritten_text).
   with_types := await rewritten_text(parsed, laid, first, path, true)
   text := with_types ? (await rewritten_text(parsed, laid, first, path, false))!
@@ -94,7 +94,7 @@ export format_parsed := (parsed: Parsed, path: String, typed: Typed?) ->
   long := long_lines(source, text.text, Set([laid.kept..., by_hand...]))
   found := distinct([rewritten..., layout..., laid.stranded..., long...])
   sorted := found.sorted((a, b) -> a.at.compare(b.at))
-  Formatted text: text.text, findings: sorted
+  Formatted(text: text.text, findings: sorted)
 
 # The lines of the source that the formatted text holds, but for their indentation and the spaces
 # that end them, over WIDTH columns there: of a comment, a string or a name that the formatter
@@ -128,7 +128,7 @@ distinct := (findings: Finding[]) ->
 
 export parsed_source := (source: String, path: String) ->
   lexed := lex(source, path)
-  Parsed source, lexed, statements: parse(lexed.tokens, path), text: source_tokens(source, lexed)
+  Parsed(source, lexed, statements: parse(lexed.tokens, path), text: source_tokens(source, lexed))
 
 # The edits of the rewrites of a tree, and its checked program, whose facts are found by its nodes:
 # each round parses anew.
@@ -137,25 +137,29 @@ struct Rewrites
   typed: Typed?
 
 rewrites := (parsed: Parsed, path: String) ->
-  rewrites_with parsed, await typed_program(path, parsed.source, parsed.statements)
+  rewrites_with(parsed, await typed_program(path, parsed.source, parsed.statements))
 
 rewrites_with := (parsed: Parsed, typed: Typed?) ->
   { source, lexed, statements, text } := parsed
-  Rewrites
+  Rewrites(
     typed
     edits: rewrites_of(statements, source, text, lexed, kept_lines(source, lexed), typed)
+  )
 
-laid_out := (parsed: Parsed) ->
+# Where the program checks, the calls whose values are results keep their parentheses; where it
+# does not, no call is known to be one.
+laid_out := (parsed: Parsed, typed: Typed?) ->
   { source, lexed, statements, text } := parsed
   kept := kept_lines(source, lexed)
-  walked := walk(statements, text, kept)
+  results := typed then result_calls(typed) else Set<Call>()
+  walked := walk(statements, text, kept, results)
   # The walk skips the statements kept as they are written, which the lines leave alone.
   tokens := Tokens(source, text, comments: lexed.comments, kept: Set())
   edits := break_lines(walked, text, tokens)
   { decisions, texts } := lay_out(text, walked)
   stranded := [stranded_finding(text, index) for index in walked.stranded]
   found := [findings(text.gaps, decisions)..., token_findings(text.tokens, texts)...]
-  LaidOut
+  LaidOut(
     stranded
     edits
     text: render(texts, decisions)
@@ -163,6 +167,7 @@ laid_out := (parsed: Parsed) ->
     statements: walked.statements
     skipped: walked.skipped
     kept: Set([kept.kept..., kept.marked...])
+  )
 
 # The part of the innermost statement that holds an edit, from its start up to the end of the line
 # `last`, where the edit ends, which leaves out the blocks below its head.
@@ -223,8 +228,8 @@ rewritten_text := (
   # Whether the last round changed nothing, so that `last_rewrites` are those of `current`.
   var settled = false
   for round in 0..MAX_ROUNDS
-    laid := round == 0 then first_laid else laid_out(current)
     last_rewrites = await rewrites(current, path) if round > 0
+    laid := round == 0 then first_laid else laid_out(current, last_rewrites.typed)
     edits := [last_rewrites.edits..., laid.edits...]
     is_chosen := (edit: Edit) ->
       edit.rule != SEMICOLONS and (types or edit.rule != TYPE_ANNOTATIONS)
@@ -272,7 +277,7 @@ checked_layout := (text: String, source: Parsed, path: String) ->
 
 written_program := (text: String, path: String, what: String) ->
   try
-    parsed_source text, path
+    parsed_source(text, path)
   catch error: CompileError
     throw changed(path, "#{what} would not parse: #{error.message}")
 
@@ -282,10 +287,10 @@ check_same := (written: Parsed, expected: Parsed, path: String, what: String) ->
   throw changed(path, "#{what} would change the program") unless same
 
 changed := (path: String, message: String) ->
-  ChangedProgram "#{path}: #{message}, which is a fault of the formatter"
+  ChangedProgram("#{path}: #{message}, which is a fault of the formatter")
 
 stranded_finding := (text: SourceTokens, index: Int) ->
-  Finding at: text.ending_comments[index]!.start, rule: STRANDED_COMMENTS
+  Finding(at: text.ending_comments[index]!.start, rule: STRANDED_COMMENTS)
 
 lay_out := (text: SourceTokens, walked: Walked) ->
   layout := Layout(text, code_gaps: walked.gaps, skipped: walked.skipped)
@@ -346,7 +351,7 @@ class Layout
         else
           @depth = code_gap.depth
         @shift = 2 * @depth - token.line_indentation
-        line_feed gap, 2 * @depth, code_gap.rule
+        line_feed(gap, 2 * @depth, code_gap.rule)
 
   # A gap that the walk does not decide keeps its source text, spaces at the ends of lines too,
   # unreported, as the walk vouches only for the statements that it handles; but the indentation
@@ -388,7 +393,7 @@ line_feed := (gap: Gap, columns: Int, break_rule: StyleRule) ->
       when not gap.text.starts_with("\n") then LAYOUT
       when feeds > 2 then BLANK_LINES
       else LAYOUT
-  Decision text, rule
+  Decision(text, rule)
 
 line_feeds := (text: String) -> text.split("\n").length - 1
 

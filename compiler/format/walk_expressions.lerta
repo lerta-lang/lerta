@@ -120,7 +120,7 @@ extend Walker
   types := (open: TokenKind, before: CodeGap, types: TypeName[], close: TokenKind) ->
     @take open, before
     @list types.length, NONE, (i, gap) -> @type(types[i], gap), false
-    @take close, NONE
+    @take(close, NONE)
 
   record_type_field := (field: RecordTypeField, before: CodeGap) ->
     @take IDENTIFIER, before
@@ -301,9 +301,9 @@ extend Walker
   number := (text: String, kind: TokenKind, before: CodeGap) ->
     if text.starts_with('-')
       @take '-', before
-      @take kind, NONE
+      @take(kind, NONE)
     else
-      @take kind, before
+      @take(kind, before)
 
   # `[element for x in xs when guard]`, with a `for` more for each nested comprehension, or the same
   # in parentheses, an Iter (see ComprehensionShape).
@@ -351,7 +351,7 @@ extend Walker
     open := @take(braced then '{' else '(', before)
     count := 1 + [i for i in open..@closing_bracket(open) when @code[i].kind == ','].length
     @list count, inside, (_, gap) -> @take(IDENTIFIER, gap), false
-    @take braced then '}' else ')', inside
+    @take(braced then '}' else ')', inside)
 
   # `x as T?` or `x as T!`, or the `x as T` of `x as T ? y`, whose `?`, after a space, is the
   # fallback's.
@@ -383,7 +383,7 @@ extend Walker
       # Inside parentheses, as of `(a.b().c())`, where a member line would be an item.
       @chain_in_group = true if @open_groups > 0
       @take '.', NONE
-    @take IDENTIFIER, NONE
+    @take(IDENTIFIER, NONE)
 
   # `<T, U>`, where there are type arguments, on one line, as the grammar takes no line end between
   # them.
@@ -411,11 +411,16 @@ extend Walker
       function_last: values.last() is FunctionLiteral
     if @at_kind('(') and not @code[@at].spaced
       @bracketed '(', NONE, ')', NONE, items
-      args := @shapes.pop() as ListShape!
-      unbracketable := is_block_call(node) and starts_command(node) and @unbracketable(args)
-      @shapes.push ListShape(args..., unbracketable)
     else
       @unbracketed items
+    shape := @shapes.pop() as ListShape!
+    takes_parentheses := node in @results
+    unbracketable := shape.bracketed and
+      not takes_parentheses and
+      is_block_call(node) and
+      starts_command(node) and
+      @unbracketable(shape)
+    @shapes.push ListShape(shape..., unbracketable, takes_parentheses)
 
   # Whether no comment is among the arguments in parentheses, none but the last spans lines, and
   # the first is not `- x`, which would be a subtraction from the callee without them.
@@ -635,9 +640,9 @@ extend Walker
     if operator in ['<<', '>>']
       half := operator == '<<' then '<' else '>'
       @take_spelled half, before
-      @take_spelled half, NONE
+      @take_spelled(half, NONE)
     else
-      @take_spelled operator, before
+      @take_spelled(operator, before)
 
 # The comprehension and those nested in it, each the element of the one before, in the order of
 # their `for`s.

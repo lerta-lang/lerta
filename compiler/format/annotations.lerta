@@ -129,7 +129,7 @@ left_out_type := (
     type_at := tokens.at(type.position) ? return nil
     arguments := tokens.slice(tokens.start(type_at + 1), tokens.end(assign - 1))
     changes.push { from: tokens.end(callee), to: tokens.end(callee), text: arguments }
-  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(name_at + 1), changes
+  tokens.edit_at(TYPE_ANNOTATIONS, tokens.start(name_at + 1), changes)
 
 # A `Map(...)` or a `Set(...)` without type arguments, with the type written for it.
 struct Collection
@@ -147,7 +147,7 @@ collection_call := (written: TypeName?, value: Expression, flags: { keeps_empty:
   return nil if callee.name != type.name or callee.name not in ['Map', 'Set']
   is_empty := call.args.is_empty() and call.named_args.is_empty()
   return nil if is_empty and not flags.keeps_empty
-  Collection call, type
+  Collection(call, type)
 
 # `(x) -> x` for `(x: Int): Int -> x`, and `-> 1` for `(): Int -> 1`, where the checking shows the
 # types inferable (see Type annotations), but those of a function that stays as written (see
@@ -182,7 +182,7 @@ left_out_parameter := (
   last := tokens.is_kind(bound - 1, ',') then bound - 2 else bound - 1
   return nil if names_import(tokens, name_at + 2, last + 1, typed)
   change := Change(from: tokens.end(name_at), to: tokens.end(last), text: '')
-  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(name_at + 1), [change]
+  tokens.edit_at(TYPE_ANNOTATIONS, tokens.start(name_at + 1), [change])
 
 # The token that ends the type of the parameter: the `=` of its default, the name of the next or the
 # `)` of the list.
@@ -208,7 +208,7 @@ left_out_return := (
   bare := function.params.is_empty()
   from := bare then tokens.start(open) else tokens.end(close)
   change := Change(from, to: tokens.start(arrow), text: bare then '' else ' ')
-  tokens.edit_at TYPE_ANNOTATIONS, tokens.start(close + 1), [change]
+  tokens.edit_at(TYPE_ANNOTATIONS, tokens.start(close + 1), [change])
 
 # The `->` after a type that holds none outside its brackets, from `from`.
 arrow_after := (tokens: Tokens, from: Int) ->
@@ -249,4 +249,4 @@ left_out_field_type := (tokens: Tokens, member: MemberDeclaration, typed: Typed)
   return nil if member.is_weak()
   # A field keeps its empty value (see Empty initial values).
   collection := collection_call(type, given, keeps_empty: true)
-  left_out_type tokens, member.name, given, member.is_mutable(), typed, collection
+  left_out_type(tokens, member.name, given, member.is_mutable(), typed, collection)

@@ -18,7 +18,7 @@ fmt := (cwd: String, args: String[]) -> await run_file(compiler, ['fmt', args...
 
 # A case of tests/<cases>, which `lerta <command>` formats.
 case_check := (cases: String, command: String, name: String) ->
-  Check name: "tests/#{cases}/#{name}", run: ->
+  Check(name: "tests/#{cases}/#{name}", run: ->
     cases_dir := "#{root_dir}/tests/#{cases}"
     dir := "#{work_dir}/#{cases}/#{name}"
     make_dir dir
@@ -43,6 +43,7 @@ case_check := (cases: String, command: String, name: String) ->
       )...
       expect_run(rechecked, remaining, remaining_status, 'report on the formatted file')...
     ]
+  )
 
 # A directory of files, made fresh for a check. Making each file's directory makes `dir` too, but
 # it is made first for a tree of no files.
@@ -78,8 +79,8 @@ expect_unchanged := (path: String, time: Float): String[] ->
 
 unformatted := "print(1)\n"
 # What `lerta fmt` reports on it.
-calls_report := 'call without parentheses at the start of a statement, with them after `then` or ' +
-  '`->` (Calls without parentheses)'
+calls_report := "call without parentheses at a statement's start, with them for a result, `then` " +
+  'or `->` (Calls without parentheses)'
 
 type_report := (at: String) ->
   "#{at}: leave out the type that can be inferred, or move it to the type arguments of its value " +
@@ -87,13 +88,13 @@ type_report := (at: String) ->
 
 command_checks: Check[] =
   { name: 'lerta fmt without a path is a usage error', run: ->
-    expect_status 2, (await fmt(work_dir, [])).status
+    expect_status(2, (await fmt(work_dir, [])).status)
   }
   { name: 'lerta fmt reports a path that names nothing, and goes on with the others', run: ->
     dir := await tree('missing', { 'a.lerta': unformatted })
     result := await fmt(dir, ['missing.lerta', 'a.lerta'])
     expected := "'missing.lerta' is not a file or a directory\na.lerta:1:6: #{calls_report}\n"
-    expect_run result, expected, 1
+    expect_run(result, expected, 1)
   }
   {
     name: 'lerta fmt takes the .lerta files of a directory, in order, but not in . directories'
@@ -110,7 +111,7 @@ command_checks: Check[] =
       )
       result := await fmt(dir, ['src/'])
       paths := ['src/a.lerta', 'src/b.lerta', 'src/inner/c.lerta']
-      expect_run result, ["#{path}:1:6: #{calls_report}\n" for path in paths].join(), 1
+      expect_run(result, ["#{path}:1:6: #{calls_report}\n" for path in paths].join(), 1)
   }
   {
     name: 'lerta fmt leaves a file that is off throughout, and takes a file of a directory given ' +
@@ -119,7 +120,7 @@ command_checks: Check[] =
       off := "# fmt: off\n#{unformatted}"
       dir := await tree('off', { 'src/a.lerta': unformatted, 'src/off.lerta': off })
       result := await fmt(dir, ['src', 'src/a.lerta'])
-      expect_run result, "src/a.lerta:1:6: #{calls_report}\n", 1
+      expect_run(result, "src/a.lerta:1:6: #{calls_report}\n", 1)
   }
   { name: 'lerta fmt reports a file that is not valid UTF-8, in the order of the paths', run: ->
     dir := await tree('utf8', { 'a.lerta': unformatted, 'c.lerta': unformatted })
@@ -130,7 +131,7 @@ command_checks: Check[] =
       "a.lerta:1:6: #{calls_report}\n"
       "bad.lerta: the file is not valid UTF-8\n"
       "c.lerta:1:6: #{calls_report}\n"
-    expect_run result, reports.join(), 1
+    expect_run(result, reports.join(), 1)
   }
   {
     name: 'lerta fmt leaves out the types of the files that a program holds, checked once, or ' +
@@ -187,7 +188,7 @@ command_checks: Check[] =
         report('std/internal/json_writer.lerta', writer)
         report('std/builtins/text.lerta', text)
         type_report('std/extra.lerta:1:2')
-      expect_run result, expected.join(), 1
+      expect_run(result, expected.join(), 1)
   }
   {
     name: 'lerta fmt takes a file given twice once, files that import each other, and keeps the ' +
@@ -210,7 +211,7 @@ command_checks: Check[] =
         type_report('b.lerta:2:15')
         "c.lerta:1:1: '(' is never closed\n"
         "e.lerta:2:1: '(' is never closed\n"
-      expect_run result, expected.join(), 1
+      expect_run(result, expected.join(), 1)
   }
   {
     name: 'lerta fmt --fix leaves out the types of the files of one program, but one that alone ' +
@@ -300,7 +301,7 @@ command_checks: Check[] =
         }
       )
       result := await fmt(dir, ['a.lerta', 'b.lerta', 'c.lerta', 'e.lerta'])
-      expect_run result, type_report('b.lerta:2:15') + type_report('c.lerta:1:15'), 1
+      expect_run(result, type_report('b.lerta:2:15') + type_report('c.lerta:1:15'), 1)
   }
   {
     name: 'lerta fmt --fix writes only the files that change, and fails on one that does not parse'
@@ -353,7 +354,7 @@ command_checks: Check[] =
       'a.lerta': "import b from './b'\nx: Int = 'a'\nprint b()\n"
       'b.lerta': "export b := (): Int -> 1\n"
     dir := await tree('alone', files)
-    expect_run await fmt(dir, ['a.lerta', 'b.lerta']), type_report('b.lerta:1:15'), 1
+    expect_run(await fmt(dir, ['a.lerta', 'b.lerta']), type_report('b.lerta:1:15'), 1)
   }
 
 case_checks := (cases: String, command: String) ->
@@ -369,4 +370,4 @@ export suite := ->
   title := 'format checks'
   all_checks := [case_checks('format', 'fmt')..., command_checks...]
   checks := select(title, all_checks) ? return nil
-  SuiteChecks title, checks
+  SuiteChecks(title, checks)

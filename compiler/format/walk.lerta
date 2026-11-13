@@ -6,7 +6,7 @@
 # constructs of the statements that it walks that may break a line (see shapes.lerta), whose gaps
 # it decides flat, for lines.lerta to break. Its methods for each construct are in
 # walk_statements.lerta, walk_expressions.lerta and walk_lists.lerta.
-import BinaryOperation, Statement from '../ast'
+import BinaryOperation, Call, Statement from '../ast'
 import Token, TokenKind from '../lexer/tokens'
 import INSIDE_BRACES, SPACING from './rules'
 import KeptLines from './kept'
@@ -34,13 +34,13 @@ export struct Walked
   without_commas: Set<Int>
   statements: StatementShape[]
 
-export walk := (statements: Statement[], text: SourceTokens, kept: KeptLines) ->
+export walk := (statements: Statement[], text: SourceTokens, kept: KeptLines, results: Set<Call>) ->
   { code, line_starts, ending_comments, own_line_comments } := text
-  walker := Walker(text, code, line_starts, ending_comments, own_line_comments, kept)
+  walker := Walker(text, code, line_starts, ending_comments, own_line_comments, kept, results)
   block := walker.block(statements, 0, nil)
   walker.resume_at walker.code.length
   { gaps, stranded, skipped, closers, without_commas } := walker
-  Walked gaps, stranded, skipped, block, closers, without_commas, statements: walker.walked
+  Walked(gaps, stranded, skipped, block, closers, without_commas, statements: walker.walked)
 
 # A construct that the walk does not handle yet, whose statement it skips.
 export struct Unhandled: Error
@@ -65,6 +65,9 @@ export class Walker
   # The columns of the comments on lines of their own before code tokens (see SourceTokens).
   own_line_comments: Map<Int, Int[]>
   kept: KeptLines
+  # The calls whose values are results, which keep their parentheses (see result_calls); none where
+  # the program does not check.
+  results: Set<Call>
   var stranded: Int[] = []
   skipped := Set<Int>()
   # The gaps of the statement being walked, which those of the block that holds it take once it is
@@ -113,13 +116,14 @@ export class Walker
   var node_breaks = true
 
   save := ->
-    WalkState
+    WalkState(
       shapes: @shapes
       closing: @closing
       closing_block: @closing_block
       breaks_operations: @breaks_operations
       in_brackets: @in_brackets
       on_own_line: @on_own_line
+    )
 
   restore := (state: WalkState) ->
     @shapes = state.shapes
@@ -169,7 +173,7 @@ export class Walker
   take := (kind: TokenKind, before: CodeGap) -> @take_if((token) -> token.kind == kind, before)
 
   take_spelled := (spelling: String, before: CodeGap) ->
-    @take_if (token) -> spelling_of(token) == spelling, before
+    @take_if((token) -> spelling_of(token) == spelling, before)
 
   # The index of the next code token, which must be as `expected`, consumed, with the gap before it.
   take_if := (expected: (Token) -> Bool, before: CodeGap) ->

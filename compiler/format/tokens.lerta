@@ -42,6 +42,9 @@ export class Tokens
       return open + index if depth == 0
     nil
 
+  # Where the line ends, after a comment that ends it.
+  end_of_line := (line: Int) -> Position(line, column: @source.split("\n")[line - 1].count() + 1)
+
   # The last code token on the line of the one at `first`; nil where one of them spans lines.
   line_end := (first: Int) ->
     { line } := @code[first]
@@ -66,14 +69,14 @@ export class Tokens
   # The tokens from `first` through `last` left out with the spaces after each, likewise.
   run_removed := (first: Int, last: Int) ->
     joined := @are_words(first - 1, last + 1) and @end(first - 1) == @start(first)
-    Change from: @start(first), to: @start(last + 1), text: joined then ' ' else ''
+    Change(from: @start(first), to: @start(last + 1), text: joined then ' ' else '')
 
   # The token left out with the spaces before it, likewise.
   removed_with_spaces_before := (index: Int) -> @run_removed_with_spaces_before(index, index)
 
   run_removed_with_spaces_before := (first: Int, last: Int) ->
     joined := @are_words(first - 1, last + 1) and @end(last) == @start(last + 1)
-    Change from: @end(first - 1), to: @end(last), text: joined then ' ' else ''
+    Change(from: @end(first - 1), to: @end(last), text: joined then ' ' else '')
 
   are_words := (before: Int, after: Int) ->
     return false if not before >= 0 or not after < @code.length
@@ -102,9 +105,10 @@ export class Tokens
     @is_kept(at.line, at.line) then nil else { at, rule, change: nil }
 
   holds_comment := (change: Change) ->
-    @comments.any (comment) ->
+    @comments.any((comment) ->
       at := Position(line: comment.line, column: comment.column)
       change.from.compare(at) != GREATER and at.compare(change.to) == LESS
+    )
 
   is_kept := (first: Int, last: Int) ->
     for line in first..=last

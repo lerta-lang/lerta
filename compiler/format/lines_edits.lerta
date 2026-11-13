@@ -79,7 +79,7 @@ extend Breaker
   # indented from the line of the source that holds the tokens before it, which a line start that
   # the layout decides may not have moved yet.
   line_start := (last: Int, next: Int, columns: Int) ->
-    Change from: @tokens.end(last), to: @tokens.start(next), text: "\n" + ' '.repeat(columns)
+    Change(from: @tokens.end(last), to: @tokens.start(next), text: "\n" + ' '.repeat(columns))
 
   # A union whose line does not fit, with the comment that ends it, breaks before the first member
   # that does not fit on it, on the lines below `=`, one level deeper than the `type`, as it keeps
@@ -120,10 +120,19 @@ extend Breaker
     # A member line in them would be an item in the parentheses: they take them once the layout has
     # joined it, in a later round.
     return if @has_member_line(items[0], last)
+    # Arguments in a block below the callee stay there, and they, or a function's body below its
+    # `->`, end before a `)` on a line of its own.
+    in_block := items[0] in @line_starts
+    opening_end := in_block then @tokens.end(open) else @tokens.start(items[0])
+    spans_lines := @code[last].end_line != @code[open].line
+    closing := spans_lines then "\n#{' '.repeat(@source_indentation(open))})" else ')'
+    # A `)` on a line of its own goes after the comment that ends the line before it.
+    after_comment := spans_lines and last in @ending_comments
+    closed_at := after_comment then @tokens.end_of_line(@code[last].end_line) else @tokens.end(last)
     @rewrite CALLS_WITHOUT_PARENTHESES, [
-      { from: @tokens.end(open), to: @tokens.start(items[0]), text: '(' }
+      { from: @tokens.end(open), to: opening_end, text: '(' }
       @missing_commas(items)...
-      { from: @tokens.end(last), to: @tokens.end(last), text: ')' }
+      { from: closed_at, to: closed_at, text: closing }
     ]
 
   # Whether a code token from `first` through `last` starts a member line, as `.map(f)` does.

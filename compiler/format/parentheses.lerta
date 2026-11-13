@@ -50,7 +50,7 @@ export parentheses_of := (program: Statement[], tokens: Tokens) ->
   tight: Set<Expression>
   for (expression, operand) in walk.operands
     tight.add expression if operand.level > COMPARISON
-  Parentheses tight, edits: walk.found
+  Parentheses(tight, edits: walk.found)
 
 whole := (value: Expression) -> Operand(expression: value, level: WHOLE_LEVEL, last: true)
 
@@ -112,7 +112,7 @@ dropped := (tokens: Tokens, operand: Operand) ->
   return nil if dropped_pairs == 0
   opening := tokens.run_removed(open, open + dropped_pairs - 1)
   closing := tokens.run_removed_with_spaces_before(close - dropped_pairs + 1, close)
-  tokens.edit PARENTHESES, [opening, closing]
+  tokens.edit(PARENTHESES, [opening, closing])
 
 # Whether a token that is no closing bracket nor comma follows the one at `close` on its line, as
 # the `if` of a postfix form follows the value of a `return`.
@@ -146,7 +146,7 @@ starts_with_own := (tokens: Tokens, open: Int, expression: Expression) ->
 operands_of := (operand: Operand): Operand[] ->
   { expression, last } := operand
   part := (value: Expression, level: Int, flags: { last: Bool }) ->
-    Operand level, expression: value, last: flags.last
+    Operand(level, expression: value, last: flags.last)
   case expression
     when Index then [part(expression.object, POSTFIX, last: false)]
     when Unwrap then [part(expression.operand, POSTFIX, last: false)]
@@ -179,7 +179,7 @@ comprehension_operands := (comprehension: Comprehension) ->
 
 # A key that is a name is clarified, as it would be the name of a field.
 map_key := (key: Expression) ->
-  Operand expression: key, level: WHOLE_LEVEL, last: true, clarified: key is Identifier
+  Operand(expression: key, level: WHOLE_LEVEL, last: true, clarified: key is Identifier)
 
 patterns_of := (case_value: Case): Operand[] ->
   [
@@ -219,7 +219,7 @@ binary_operands := (binary: BinaryOperation, last: Bool) ->
 range_ends := (range: Range, last: Bool) ->
   end_of := (value: Expression, flags: { last: Bool }) ->
     is_operation := value is BinaryOperation | UnaryOperation
-    Operand expression: value, level: ADDITIVE, last: flags.last, clarified: is_operation
+    Operand(expression: value, level: ADDITIVE, last: flags.last, clarified: is_operation)
   ends: Operand[]
   ends.push end_of(start, last: false) if start := range.start
   ends.push end_of(end, last: last and range.step == nil) if end := range.end

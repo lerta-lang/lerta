@@ -153,7 +153,7 @@ unneeded_pass := (tokens: Tokens, node: TypeDeclaration) ->
   (first, line) := (tokens.code[last].line, tokens.code[pass_at].line)
   return nil if tokens.comments.any((comment) -> comment.line in first..line)
   change := Change(from: tokens.end(last), to: tokens.end(pass_at), text: '')
-  tokens.edit_at LAYOUT, tokens.start(pass_at), [change]
+  tokens.edit_at(LAYOUT, tokens.start(pass_at), [change])
 
 # A report of an `if` that gives a value, of two branches of one expression each, that would fit on
 # its line as `c then a else b`, with its head (see Branches), where each part is on a line of its
@@ -186,7 +186,7 @@ two_way_value := (tokens: Tokens, value: Expression) ->
   parentheses := added_parentheses(tokens, then_body[0]) + added_parentheses(tokens, else_body[0])
   # After the head, `x :=` and a space.
   return nil if tokens.end(if_at - 1).column + written.count() + parentheses > WIDTH
-  tokens.report TWO_WAY_VALUES, tokens.start(if_at)
+  tokens.report(TWO_WAY_VALUES, tokens.start(if_at))
 
 # The column that a call without parentheses takes for them as a part of an operation: one, as its
 # `(` takes the place of the space after its callee.
@@ -238,7 +238,7 @@ binary_literal := (tokens: Tokens, member: Member) ->
   name := tokens.at(member.name.position) ? return nil
   change :=
     Change(from: tokens.start(start), to: tokens.end(name), text: 'b' + tokens.spelling(literal))
-  tokens.edit BINARY_LITERALS, [change]
+  tokens.edit(BINARY_LITERALS, [change])
 
 # `x as T ? y` for `(x as T?) ? y` (see Cast fallbacks): the parentheses and the `?` inside them
 # left out; but not where the place of the fallback, written without parentheses, binds more tightly
@@ -254,7 +254,7 @@ cast_fallback := (tokens: Tokens, coalesce: Coalesce, tight: Set<Expression>) ->
   around := close > type and tokens.is_kind(close - 1, '?')
   return nil if not around or tokens.code[open].line != tokens.code[close].line
   question := Change(from: tokens.start(close - 1), to: tokens.end(close), text: '')
-  tokens.edit CAST_FALLBACKS, [tokens.removed(open), question]
+  tokens.edit(CAST_FALLBACKS, [tokens.removed(open), question])
 
 # `c then x` for `c then x else nil` (see Else nil).
 else_nil := (tokens: Tokens, conditional: Conditional) ->
@@ -263,7 +263,7 @@ else_nil := (tokens: Tokens, conditional: Conditional) ->
   word := value - 1
   return nil unless tokens.is_kind(word, 'else')
   last := tokens.is_kind(value, '(') then (tokens.matching(value) ? return nil) else value
-  tokens.edit ELSE_NIL, [{ from: tokens.end(word - 1), to: tokens.end(last), text: '' }]
+  tokens.edit(ELSE_NIL, [{ from: tokens.end(word - 1), to: tokens.end(last), text: '' }])
 
 # `var x: T?` for `var x: T? = nil` (see Nil initial values), where `?` makes the type optional:
 # one that an alias or a union makes optional keeps its value.
@@ -275,7 +275,7 @@ nil_initial_value := (tokens: Tokens, declaration: Declaration) ->
   nil_at := tokens.at(value.position) ? return nil
   return nil if not tokens.is_kind(nil_at, 'nil') or not tokens.is_kind(nil_at - 1, '=')
   change := Change(from: tokens.end(nil_at - 2), to: tokens.end(nil_at), text: '')
-  tokens.edit NIL_INITIAL_VALUES, [change]
+  tokens.edit(NIL_INITIAL_VALUES, [change])
 
 # `x: T?` for `x: T? = default nil` of a field (see Nil initial values), which takes nil where
 # its argument is left out; but not where the `?` is not written on the type itself, as `A | B?`
@@ -288,7 +288,7 @@ nil_default := (tokens: Tokens, member: MemberDeclaration) ->
   is_written := tokens.is_kind(nil_at, 'nil') and tokens.is_word(nil_at - 1, 'default')
   return nil if not is_written or not tokens.is_kind(nil_at - 2, '=')
   change := Change(from: tokens.end(nil_at - 3), to: tokens.end(nil_at), text: '')
-  tokens.edit NIL_DEFAULTS, [change]
+  tokens.edit(NIL_DEFAULTS, [change])
 
 # `xs: T[]` for `xs: T[] = []`, and `m: Map<K, V>` for `m: Map<K, V> = Map()` or `m := Map<K, V>()`
 # of a const, or `var m = Map<K, V>()` of a `var`, and so for a Set (see Empty initial values).
@@ -302,7 +302,7 @@ empty_initial_value := (tokens: Tokens, declaration: Declaration) ->
       array := type as ArrayTypeName ? return nil
       return nil if array.optional or not value.elements.is_empty()
       return nil if not tokens.is_kind(start, '[') or not tokens.is_kind(start + 1, ']')
-      left_out tokens, start - 1, start + 1
+      left_out(tokens, start - 1, start + 1)
     when Call
       return nil unless is_empty_collection(value)
       close := empty_arguments_end(tokens, start) ? return nil
@@ -315,19 +315,19 @@ empty_initial_value := (tokens: Tokens, declaration: Declaration) ->
         same_type := value.type_args.is_empty() or value_type == tokens.joined(type_at, assign - 1)
         same_kind := named.name == (value.callee as Identifier!).name and not named.optional
         return nil if not same_kind or not same_type or not tokens.is_kind(assign, '=')
-        left_out tokens, assign, close
+        left_out(tokens, assign, close)
       else
         assign: TokenKind = declaration.mutable then '=' else ':='
         return nil if value.type_args.is_empty() or not tokens.is_kind(start - 1, assign)
         typed := ': ' + tokens.slice(tokens.start(start), tokens.end(close - 2))
         change := Change(from: tokens.end(name), to: tokens.end(close), text: typed)
-        tokens.edit EMPTY_INITIAL_VALUES, [change]
+        tokens.edit(EMPTY_INITIAL_VALUES, [change])
     else nil
 
 # The value of a declaration left out, from its `=` at `assign` up to `last`.
 left_out := (tokens: Tokens, assign: Int, last: Int) ->
   change := Change(from: tokens.end(assign - 1), to: tokens.end(last), text: '')
-  tokens.edit EMPTY_INITIAL_VALUES, [change]
+  tokens.edit(EMPTY_INITIAL_VALUES, [change])
 
 is_empty_collection := (call: Call) ->
   callee := call.callee as Identifier ? return false
@@ -356,7 +356,7 @@ without_parameters := (tokens: Tokens, function: FunctionLiteral) ->
   is_empty := tokens.is_kind(at, '(') and tokens.is_kind(at + 1, ')')
   return nil if not is_empty or not tokens.is_kind(at + 2, '->')
   change := Change(from: tokens.start(at), to: tokens.start(at + 2), text: '')
-  tokens.edit FUNCTIONS_WITHOUT_PARAMETERS, [change]
+  tokens.edit(FUNCTIONS_WITHOUT_PARAMETERS, [change])
 
 # `{ x }` for `{ x: x }` (see Shorthand).
 shorthand := (tokens: Tokens, name: Identifier, value: Expression) ->
@@ -365,7 +365,7 @@ shorthand := (tokens: Tokens, name: Identifier, value: Expression) ->
   value_at := tokens.at(value.position) ? return nil
   return nil if value_at == name_at or not tokens.is_kind(value_at, IDENTIFIER)
   change := Change(from: tokens.start(name_at), to: tokens.end(value_at), text: name.name)
-  tokens.edit SHORTHAND, [change]
+  tokens.edit(SHORTHAND, [change])
 
 # A line of its own for the statement after a `;` (see Semicolons), as deep as the line that the
 # statement before it starts.
@@ -382,7 +382,7 @@ semicolon_edit := (tokens: Tokens, lexed: Lexed, index: Int) ->
     from: { line: before.end_line, column: before.end_column }
     to: after.position()
     text: "\n" + indentation
-  tokens.edit SEMICOLONS, [change]
+  tokens.edit(SEMICOLONS, [change])
 
 ends_line := (token: Token) -> is_layout(token) and token.text != ';'
 

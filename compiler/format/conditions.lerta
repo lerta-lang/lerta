@@ -36,7 +36,7 @@ export condition_edit := (
     claimed.add inner
     return tokens.edit(DOUBLE_NEGATIONS, [opposite, not_removed(tokens, not_at)])
   inverse := inverse_equality(tokens, written) ? return nil
-  tokens.edit DOUBLE_NEGATIONS, [opposite, inverse]
+  tokens.edit(DOUBLE_NEGATIONS, [opposite, inverse])
 
 # `if x` for `if not not x`, `if a == b` for `if not (a != b)`, or `unless x` for `if not x`.
 positive_condition := (
@@ -54,7 +54,7 @@ positive_condition := (
     return tokens.edit(DOUBLE_NEGATIONS, [without_not, inverse])
   return nil unless takes_negation
   opposite := tokens.code[word].kind == 'if' then 'unless' else 'until'
-  tokens.edit NEGATED_CONDITIONS, [tokens.replaced(word, opposite), without_not]
+  tokens.edit(NEGATED_CONDITIONS, [tokens.replaced(word, opposite), without_not])
 
 # `a == b` for `a != b`, and `x != nil` for `x == nil`, as the opposite of a test.
 inverse_equality := (tokens: Tokens, test: Expression) ->
@@ -67,7 +67,7 @@ inverse_equality := (tokens: Tokens, test: Expression) ->
   right := tokens.at(equality.right.position) ? return nil
   operator := right - 1
   return nil if not inverse or tokens.spelling(operator) != equality.operator
-  tokens.replaced operator, inverse
+  tokens.replaced(operator, inverse)
 
 # `x` for `not not x` in a value (see Negated conditions), and `x is T` for `not x is not T`; the
 # parentheses that held the inner negation are left to Parentheses.
@@ -75,7 +75,7 @@ export double_negation := (tokens: Tokens, negation: UnaryOperation) ->
   inner := negation.operand as UnaryOperation ? return nil
   outer_not := not_of(tokens, negation) ? return nil
   inner_not := not_of(tokens, inner) ? return nil
-  tokens.edit VALUE_DOUBLE_NEGATIONS, [tokens.removed(outer_not), not_removed(tokens, inner_not)]
+  tokens.edit(VALUE_DOUBLE_NEGATIONS, [tokens.removed(outer_not), not_removed(tokens, inner_not)])
 
 # `x is not T` for `not (x is T)`, and `x not in xs` for `not (x in xs)`, without the parentheses
 # around the test.
@@ -93,7 +93,7 @@ export negated_test := (tokens: Tokens, negation: UnaryOperation) ->
   return nil if tokens.code[open].line != tokens.code[close].line
   # `not (` goes as one, as the words around it are apart.
   opening := Change(from: tokens.start(not_at), to: tokens.start(open + 1), text: '')
-  tokens.edit rule, [opening, written, tokens.removed_with_spaces_before(close)]
+  tokens.edit(rule, [opening, written, tokens.removed_with_spaces_before(close)])
 
 # The `)` of parentheses at `open` around the token at `inside`.
 closing_around := (tokens: Tokens, open: Int, inside: Int) ->
