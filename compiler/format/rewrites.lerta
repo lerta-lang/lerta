@@ -8,7 +8,7 @@ import
   TypeDeclaration, UnaryOperation, UnionTypeName
 from '../ast'
 import TextPart from '../lexer/string_literal'
-import Lexed, Token from '../lexer/tokens'
+import Lexed, Token, TokenKind from '../lexer/tokens'
 import bool_type from '../types'
 import Place, places_of from './places'
 import cast_of from './precedence'
@@ -284,10 +284,10 @@ nil_default := (tokens: Tokens, member: MemberDeclaration) ->
   change := Change(from: tokens.end(nil_at - 3), to: tokens.end(nil_at), text: '')
   tokens.edit NIL_DEFAULTS, [change]
 
-# `xs: T[]` for `xs: T[] = []`, and `m: Map<K, V>` for `m: Map<K, V> = Map()` or `m := Map<K, V>()`,
-# of a const, and so for a Set (see Empty initial values).
+# `xs: T[]` for `xs: T[] = []`, and `m: Map<K, V>` for `m: Map<K, V> = Map()` or `m := Map<K, V>()`
+# of a const, or `var m = Map<K, V>()` of a `var`, and so for a Set (see Empty initial values).
 empty_initial_value := (tokens: Tokens, declaration: Declaration) ->
-  return nil if declaration.mutable or declaration.weak
+  return nil if declaration.weak
   { type, value } := declaration
   start := tokens.at(value.position) ? return nil
   name := tokens.at(declaration.name.position) ? return nil
@@ -311,7 +311,8 @@ empty_initial_value := (tokens: Tokens, declaration: Declaration) ->
         return nil if not same_kind or not same_type or not tokens.is_kind(assign, '=')
         left_out tokens, assign, close
       else
-        return nil if value.type_args.is_empty() or not tokens.is_kind(start - 1, ':=')
+        assign: TokenKind = declaration.mutable then '=' else ':='
+        return nil if value.type_args.is_empty() or not tokens.is_kind(start - 1, assign)
         typed := ': ' + tokens.slice(tokens.start(start), tokens.end(close - 2))
         change := Change(from: tokens.end(name), to: tokens.end(close), text: typed)
         tokens.edit EMPTY_INITIAL_VALUES, [change]
