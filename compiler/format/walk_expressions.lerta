@@ -2,10 +2,10 @@
 import
   ArrayLiteral, ArrayTypeName, Await, BinaryOperation, Binding, BooleanLiteral, Call, Case, Cast,
   Coalesce, Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, FunctionTypeName,
-  Identifier, If, Index, IntegerLiteral, Interpolation, IsTest, Jump, MapLiteral, Member, NamedType,
-  NamedValue, NilLiteral, Parameter, Range, RecordLiteral, RecordTypeField, RecordTypeName, Return,
-  Statement, StringLiteral, This, Throw, Try, TupleLiteral, TupleTypeName, TypeName, UnaryOperation,
-  UnionTypeName, Unwrap, Yield
+  Identifier, If, Index, IntegerLiteral, Interpolation, is_nested, IsTest, Jump, MapLiteral, Member,
+  NamedType, NamedValue, NilLiteral, Parameter, Range, RecordLiteral, RecordTypeField,
+  RecordTypeName, Return, Statement, StringLiteral, This, Throw, Try, TupleLiteral, TupleTypeName,
+  TypeName, UnaryOperation, UnionTypeName, Unwrap, Yield
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import FUNCTION_BODIES from './rules'
@@ -305,8 +305,8 @@ extend Walker
     else
       @take kind, before
 
-  # `[element for x in xs when guard]`, or the same in parentheses, an Iter (see
-  # ComprehensionShape).
+  # `[element for x in xs when guard]`, with a `for` more for each nested comprehension, or the same
+  # in parentheses, an Iter (see ComprehensionShape).
   comprehension := (node: Comprehension, before: CodeGap) ->
     lazy := node.lazy != nil
     open := @take(lazy then '(' else '[', before)
@@ -316,14 +316,16 @@ extend Walker
     @on_own_line = false
     @breaks_operations = true
     parts := [@at]
-    @expression node.element, NONE
-    parts.push @take('for', ONE)
-    @loop_names node.variable, node.index
-    @take_spelled 'in', ONE
-    @expression node.iterable, ONE
-    if guard := node.guard
-      parts.push @take_spelled('when', ONE)
-      @expression guard, ONE
+    chain := nested_chain(node)
+    @expression chain.last()!.element, NONE
+    for each in chain
+      parts.push @take('for', ONE)
+      @loop_names each.variable, each.index
+      @take_spelled 'in', ONE
+      @expression each.iterable, ONE
+      if guard := each.guard
+        parts.push @take_spelled('when', ONE)
+        @expression guard, ONE
     close := @take(lazy then ')' else ']', NONE)
     shape := ComprehensionShape(open, close, parts, shapes: @shapes)
     @restore outer
@@ -632,3 +634,10 @@ extend Walker
       @take_spelled half, NONE
     else
       @take_spelled operator, before
+
+# The comprehension and those nested in it, each the element of the one before, in the order of
+# their `for`s.
+nested_chain := (comprehension: Comprehension) ->
+  chain := [comprehension]
+  chain.push chain.last()!.element as Comprehension! while is_nested(chain.last()!.element)
+  chain

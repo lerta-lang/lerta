@@ -207,10 +207,11 @@ for i in 0..3
 - `[<element> for <name> in <iterable>]` makes a new array of the element's value for each item.
 - `when <condition>` keeps only the items for which it holds: `[name + '!' for name in names when name]`. The condition narrows the loop variable in the element as an `if` would.
 - The loop variable is only seen in the comprehension.
+- More `for`s, each with its own `when`, nest a loop in the one before, as `for` blocks would: `[f(x, y) for x in xs when x > 0 for y in g(x)]` goes through `g(x)` for each `x` that holds, and makes one array of all their elements, not an array of arrays. Each loop sees the variables of those before it.
 
 ### Lazy comprehensions
 
-- `(<element> for <name> in <iterable> when <condition>)`, in parentheses, is an [`Iter`](types.md#iter) of the same values, which evaluates nothing until it is consumed.
+- `(<element> for <name> in <iterable> when <condition>)`, in parentheses, is an [`Iter`](types.md#iter) of the same values, which evaluates nothing until it is consumed. It takes one `for` so far.
 - Each time it gives an item, it evaluates the condition for the iterable's next items until one holds, then the element for that item.
 - The iterable itself is evaluated where the comprehension is. An `Iter` iterable starts its traversal there.
 - The element and the condition see the names around them as a [function literal](functions.md#function-literals) does: a `const`'s value then, and a `var` itself.

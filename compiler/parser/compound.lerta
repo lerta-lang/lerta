@@ -9,8 +9,8 @@ from '../ast'
 import CLOSING_BRACKETS, OPENING_BRACKETS, TokenKind from '../lexer/tokens'
 import at_block from './block_literal'
 import
-  at_spread, parse_expression, parse_identifier, parse_loop_header, parse_or, SPREAD_FOLLOWERS,
-  take_apart_item
+  at_spread, LoopHeader, parse_expression, parse_identifier, parse_loop_header, parse_or,
+  SPREAD_FOLLOWERS, take_apart_item
 from './expression'
 import at_declaration, parse_block, parse_line_statement, parse_simple_statement from './statement'
 import TokenStream from './token_stream'
@@ -128,20 +128,47 @@ export parse_parenthesized := (tokens: TokenStream, position: Position) ->
     first
   tokens.inside parse_contents
 
-# `for x in xs when guard]`, after the element, or `... guard)` for an Iter.
+# `for x in xs when guard]`, after the element, or `... guard)` for an Iter. Each further `for`
+# nests a comprehension in the element of the one before.
 parse_comprehension := (
   tokens: TokenStream, element: Expression, position: Position, close: TokenKind
 ): Expression ->
-  header := parse_loop_header(tokens)
+  headers := [parse_loop_header(tokens)]
+  tokens.continue_line_before 'for'
+  while tokens.peek().kind == 'for'
+    headers.push parse_loop_header(tokens)
+    tokens.continue_line_before 'for'
   tokens.expect_close close
-  { variable, index, iterable, guard } := header
   is_lazy := close == ')'
+  if is_lazy and headers.length > 1
+    tokens.fail headers[1].variable.position, 'an Iter comprehension takes one `for` so far'
+  var nested = element
+  for header at i in headers.reversed()
+    outermost := i == headers.length - 1
+    at := outermost then position else header.variable.position
+    nested = comprehension_of(tokens, header, nested, at, is_lazy, not outermost)
+  nested
+
+comprehension_of := (
+  tokens: TokenStream, header: LoopHeader, element: Expression, position: Position, is_lazy: Bool,
+  nested: Bool
+) ->
+  { variable, index, iterable, guard } := header
   if is_lazy and index != nil
     tokens.fail index.position, 'an Iter comprehension takes no index so far'
   # Each place that reads the parts declares them anew, as each is its own function or scope.
   bindings := -> take_apart_item(header)
   lazy := is_lazy then lazy_functions(element, variable, guard, bindings)
-  Comprehension element, variable, iterable, guard, lazy, position, index, bindings: bindings()
+  Comprehension
+    element
+    variable
+    iterable
+    guard
+    lazy
+    position
+    index
+    nested
+    bindings: bindings()
 
 export parse_map_literal := (tokens: TokenStream, position: Position) ->
   tokens.inside -> parse_map_contents(tokens, position)

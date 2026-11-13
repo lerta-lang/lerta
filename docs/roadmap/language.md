@@ -52,7 +52,7 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
   | `chunks(n)`, `windows(n)` | Arrays of `n` items in a row: each item in one chunk, or in every window that holds it |
 
   - `flatten` needs an extend whose type parameter appears only in the bound of another, as `T` in `extend<T, I: Iterable<T>> Iterable<I>`, which the language does not allow yet ([extend](../reference/objects.md#extend)).
-- **Nested comprehensions.** A comprehension may have several `for`s, the later nested in the earlier: `[f(x, y) for x in xs for y in ys]`.
+- **Nested lazy comprehensions.** A lazy comprehension may have several `for`s, as an array comprehension does: `(f(x, y) for x in xs for y in ys)`.
 - **`contains` and `all` through `@any`.** `contains` of an array and `all` of an Iterable are to be written through `@any`, rather than as loops of their own, once that costs nothing. A literal given to a method generated in place is generated in place where the method calls it ([internals](../internals/iteration.md#inlined-methods)), yet, over an array of 64 `Int`s:
   - `contains` as `@any((each) -> each == item)` ran 14% more instructions: LLVM works out the result after the loop, from the index, at an extra move per item.
   - `all` as `not @any((x) -> not test(x))` ran 81% more: the literal captures `test`, which then counts as escaping (`escaping_locals`), so the function given to `all` is a closure on the heap, called through its pointer. A parameter captured only by literals that are themselves generated in place would have to count as only called.
