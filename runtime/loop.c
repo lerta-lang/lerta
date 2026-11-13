@@ -6,6 +6,7 @@
 
 #ifdef __APPLE__
 #include <dlfcn.h>
+#include <mach-o/dyld.h>
 
 #include <CoreFoundation/CoreFoundation.h>
 
@@ -51,16 +52,21 @@ static bool load_run_loop(void *library) {
   return true;
 }
 
-// Only a program that links CoreFoundation, as Apple's frameworks do, can use the main run loop.
-// Checked at the first wait, by which time the linked frameworks are loaded.
+// Only a program that has CoreFoundation loaded, as Apple's frameworks load it, can use the main
+// run loop. Checked at the first wait, by which time the linked frameworks are loaded, and again at
+// a later wait once more images are loaded, as by dlopen, until it is found: counting them takes a
+// nanosecond, while looking for it takes tens of microseconds.
 static bool uses_run_loop(void) {
-  static enum { UNKNOWN, NO, YES } uses = UNKNOWN;
-  if (uses == UNKNOWN) {
-    void *library =
-        dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", RTLD_NOLOAD);
-    uses = library && load_run_loop(library) ? YES : NO;
-  }
-  return uses == YES;
+  static bool uses = false;
+  static uint32_t images_checked = 0;
+  if (uses) return true;
+  uint32_t images = _dyld_image_count();
+  if (images == images_checked) return false;
+  images_checked = images;
+  void *library =
+      dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", RTLD_NOLOAD);
+  uses = library && load_run_loop(library);
+  return uses;
 }
 
 // Waits on the main run loop, running what is due on it meanwhile, until libuv's descriptor is

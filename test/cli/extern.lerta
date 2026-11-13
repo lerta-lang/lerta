@@ -93,6 +93,18 @@ main_run_loop_check := (optimization: String[]) ->
     ran := await run_command(compiler, args, dir)
     [compare_text('stdout', "3\n", ran.stdout_text())..., expect_success('run', ran)...]
 
+# A program that loads CoreFoundation only after its first wait has the main run loop run a block
+# during a later one.
+late_run_loop_check := (optimization: String[]) ->
+  name := "lerta run #{optimization.join(' ')} runs the main run loop once it loads CoreFoundation"
+  Check name, run: ->
+    return nil unless platform == 'macos'
+    dir := new_cli_dir("extern-late-run-loop#{optimization.join('_')}")
+    source := "#{source_dir}/late_run_loop.lerta"
+    args := ['run', source, "#{source_dir}/late_run_loop.c", optimization...]
+    ran := await run_command(compiler, args, dir)
+    [compare_text('stdout', "1\n", ran.stdout_text())..., expect_success('run', ran)...]
+
 objective_c_off_macos_check := ->
   Check name: 'lerta build rejects an Objective-C file for a target other than macOS', run: ->
     objective_c := "#{source_dir}/twice.m"
@@ -158,6 +170,7 @@ checks.push objective_c_check(flags) for flags in optimizations
 for extension in ['.c', '.m']
   checks.push header_check(extension, flags) for flags in optimizations
 checks.push main_run_loop_check(flags) for flags in optimizations
+checks.push late_run_loop_check(flags) for flags in optimizations
 checks.push split_linker_flags_check()
 checks.push objective_c_without_framework_check()
 checks.push objective_c_off_macos_check()

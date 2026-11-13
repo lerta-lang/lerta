@@ -169,7 +169,8 @@ Fusion generates the loop's source in place (`compiler/codegen/fusion.lerta`), s
 
 - On macOS, a program that has CoreFoundation loaded, as the frameworks that a linked `.m` file uses load it, waits in the main thread's run loop instead of in libuv, so that what Apple's APIs leave to that run loop runs on the main thread while the program waits: blocks on the main dispatch queue, timers, delegates and notifications.
   - libuv's descriptor, its kqueue, is a source of the run loop, which waits until it is ready or libuv's next timer is due; libuv then runs once without waiting.
-  - Why not always: linking CoreFoundation costs each program about as much at its start as the rest of it, so the runtime calls it through `dlsym`, once it finds it loaded at the first wait.
+  - Why not always: linking CoreFoundation costs each program about as much at its start as the rest of it, so the runtime calls it through `dlsym`, once it finds it loaded.
+  - It looks at the first wait, and again at a later one where more libraries are loaded than at the last look, as by `dlopen`, until it finds it: counting them takes a nanosecond, while looking takes tens of microseconds.
 - The program still ends when libuv has nothing left to wait for, whatever the run loop has left.
 
 ### Cancel
