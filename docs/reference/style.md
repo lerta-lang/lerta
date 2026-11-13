@@ -208,6 +208,14 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 - Write `not xs.is_empty()`, not `xs.length > 0` or `xs.length != 0`.
 - For a `String`, write `s.is_empty()`, not `s == ''`.
 
+### Char concatenations
+
+- Add a `Char` to a `String` itself: `text += c`, not `text += c.to_string()`.
+
+### Found tests
+
+- Write `xs.any(f)`, not `xs.find(f) != nil`, and `not xs.any(f)`, not `xs.find(f) == nil`.
+
 ### Default comparisons
 
 - Write `xs.sorted()`, not `xs.sorted((a, b) -> a.compare(b))`, and so for `sort`.
@@ -223,6 +231,7 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 ### Range tests
 
 - Write `x in a..=b`, not `x >= a and x <= b`, and `x in a..b`, not `x >= a and x < b`, where `x` and `b` run no code.
+- Write `x not in a..=b`, not `x < a or x > b`, and `x not in a..b`, not `x < a or x >= b`, likewise.
 
 ### Negated is tests
 

@@ -2,8 +2,8 @@
 # so the facts that it records of them are found by those nodes; those of the types written are in
 # annotations.lerta.
 import
-  BinaryOperation, Call, Case, CaseArm, Cast, Expression, Identifier, Import, ImportName, Index,
-  FunctionLiteral, Member, NamedValue, Range, Statement, StringLiteral, This
+  Assignment, BinaryOperation, Call, Case, CaseArm, Cast, Expression, FunctionLiteral, Identifier,
+  Import, ImportName, Index, Member, NamedValue, NilLiteral, Range, Statement, StringLiteral, This
 from '../ast'
 import is_file from 'std:io'
 import check_program from '../checker/modules'
@@ -15,14 +15,14 @@ import
   copied_source, counted_end, range_test as comparisons_of_range, runs_no_code, runs_of_alike_arms
 from './expressions'
 import
-  ArrayType, bool_type, INTEGER_KINDS, is_one_of_kinds, IterType, MapType, NUMBER_KINDS, SimpleType,
-  Type
+  ArrayType, bool_type, char_type, INTEGER_KINDS, is_one_of_kinds, IterType, MapType, NUMBER_KINDS,
+  SimpleType, string_type, Type
 from '../types'
 import CLOSING_BRACKETS, OPENING_BRACKETS from '../lexer/tokens'
 import
-  DEFAULT_COMPARISONS, EMPTINESS_TESTS, EXPECTED_TYPES, ITERABLE_ARGUMENTS, MEMBERSHIP_TESTS,
-  RANGE_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES, SPREADS, SHORTHAND_ARGUMENTS, UNUSED_IMPORTS,
-  VALUES_ALONE
+  CHAR_CONCATENATIONS, DEFAULT_COMPARISONS, EMPTINESS_TESTS, EXPECTED_TYPES, FOUND_TESTS,
+  ITERABLE_ARGUMENTS, MEMBERSHIP_TESTS, RANGE_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES, SPREADS,
+  SHORTHAND_ARGUMENTS, UNUSED_IMPORTS, VALUES_ALONE
 from './rules'
 import dump_ast_without_positions from '../dumps'
 import EntryModule, load_modules, module_key from '../loader'
@@ -99,6 +99,8 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
         emptiness_test(tokens, value, facts)
         tested_range(tokens, value, facts)
         range_test(tokens, value, facts)
+        value.operator == '+' then char_concatenation(tokens, value.left, value.right, facts)
+        found_test(tokens, value, facts)
       ]
     when Case then shared_arm_bodies(tokens, value, typed.facts)
     when Call
@@ -117,6 +119,9 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
 export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Typed): Edit?[] ->
   case statement
     when Import then [unused_imports(tokens, statement, typed.unused_imports)]
+    when Assignment
+      { operator, target, value } := statement
+      [operator == '+=' then char_concatenation(tokens, target, value, typed.facts)]
     else []
 
 # The import without the names that are never used (see Unused names); only reported where it gives
@@ -454,7 +459,45 @@ tested_range := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
   type := facts.types[counted] ? return nil
   is_one_of_kinds(type, INTEGER_KINDS) then counted_range(tokens, range)
 
-# `x in a..=b` for `x >= a and x <= b` of a number or a Char (see Range tests), only reported.
+# `s + c` for `s + c.to_string()` of a String `s` and a Char `c`, and so for `+=` (see Char
+# concatenations): `+` of a String appends a Char.
+char_concatenation := (tokens: Tokens, left: Expression, right: Expression, facts: NodeFacts) ->
+  return nil if facts.types[left] != string_type
+  call := right as Call ? return nil
+  member := call.callee as Member ? return nil
+  is_call := member.name.name == 'to_string' and call.args.is_empty() and call.named_args.is_empty()
+  return nil if not is_call or facts.types[member.object] != char_type
+  name := tokens.at(member.name.position) ? return nil
+  is_written := tokens.is_kind(name - 1, '.') and tokens.is_kind(name + 1, '(')
+  return nil if not is_written or not tokens.is_kind(name + 2, ')')
+  change := Change(from: tokens.start(name - 1), to: tokens.end(name + 2), text: '')
+  tokens.edit_at CHAR_CONCATENATIONS, member.name.position, [change]
+
+# `xs.any(f)` for `xs.find(f) != nil`, and `not xs.any(f)` for `xs.find(f) == nil` (see Found
+# tests), of an array, an Iter or a map, whose items cannot be optional for `find`, as nil would be
+# ambiguous then.
+found_test := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
+  return nil if test.operator not in ['==', '!='] or test.right is not NilLiteral
+  call := test.left as Call ? return nil
+  member := call.callee as Member ? return nil
+  has_one := call.args.length == 1 and call.named_args.is_empty() and call.type_args.is_empty()
+  return nil if member.name.name != 'find' or not has_one
+  return nil unless is_iterable(facts.types[member.object])
+  first := tokens.at(member.object.position) ? return nil
+  name := tokens.at(member.name.position) ? return nil
+  nil_at := tokens.at(test.right.position) ? return nil
+  close := nil_at - 2
+  return nil if not tokens.is_kind(name + 1, '(') or tokens.matching(name + 1) != close
+  return nil unless is_balanced(tokens, first, close)
+  negated := test.operator == '=='
+  changes: Change[] =
+    { from: tokens.start(first), to: tokens.start(first), text: negated then 'not ' else '' }
+    tokens.replaced(name, 'any')
+    { from: tokens.end(close), to: tokens.end(nil_at), text: '' }
+  tokens.edit_at FOUND_TESTS, member.name.position, changes
+
+# `x in a..=b` for `x >= a and x <= b`, and `x not in a..=b` for `x < a or x > b`, of a number or a
+# Char (see Range tests), only reported.
 range_test := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
   comparison := comparisons_of_range(test) ? return nil
   type := facts.types[comparison.value] ? return nil

@@ -305,6 +305,8 @@ The rewrites below depend on the checking of a program that holds the file.
 | [Values written alone](#values-written-alone) | [Values alone](style.md#values-alone) |
 | [Default comparisons left out](#default-comparisons-left-out) | [Default comparisons](style.md#default-comparisons) |
 | [Arrays of Iterables left out](#arrays-of-iterables-left-out) | [Iterable arguments](style.md#iterable-arguments) |
+| [Chars added themselves](#chars-added-themselves) | [Char concatenations](style.md#char-concatenations) |
+| [Found tests written with `any`](#found-tests-written-with-any) | [Found tests](style.md#found-tests) |
 | [Membership tests written with `in`](#membership-tests-written-with-in) | [Membership tests](style.md#membership-tests), [Negated in tests](style.md#negated-in-tests) |
 | [Range tests written with `in`](#range-tests-written-with-in) | [Range tests](style.md#range-tests) |
 | [Ranges written with fewer parts](#ranges-written-with-fewer-parts) | [Ranges](style.md#ranges) |
@@ -381,6 +383,14 @@ Besides:
 
 - It writes `Set(xs.to_array())` as `Set(xs)`, and so for `Map()`, where `xs` is an array, an Iter, a map or a set, as they take any Iterable.
 
+#### Chars added themselves
+
+- It writes `s + c.to_string()` of a `String` `s` and a `Char` `c` as `s + c`, and `s += c.to_string()` as `s += c`, as `+` of a `String` appends a `Char`.
+
+#### Found tests written with `any`
+
+- It writes `xs.find(f) != nil` as `xs.any(f)`, and `xs.find(f) == nil` as `not xs.any(f)`, where `xs` is an array, an Iter or a map, whose items `find` takes only where they are not optional, so its nil is only that of none found.
+
 #### Membership tests written with `in`
 
 - It writes `xs.contains(x)`, a call of `contains` of one argument, as `x in xs`, and `not xs.contains(x)` as `x not in xs`.
@@ -390,7 +400,8 @@ Besides:
 #### Range tests written with `in`
 
 - It reports two comparisons joined by `and` that test a value against a start and an end, `x >= a and x <= b` or `a <= x and x < b`, the second either way round, which may be written `x in a..=b` or `x in a..b`, after the `and`s before them in a chain. They are only reported.
-- Only where the value, written the same in both, and the end are names, `@`, fields of them or literals, which run no code, as `and` evaluates the end only where the first holds, and the value is a number or a `Char`.
+- So for two joined by `or` that test it outside, `x < a or x > b` or `x < a or x >= b`, which may be written `x not in a..=b` or `x not in a..b`, after the `or`s before them.
+- Only where the value, written the same in both, and the end are names, `@`, fields of them or literals, which run no code, as `and` evaluates the end only where the first holds, and `or` only where it fails, and the value is a number or a `Char`.
 - Not in the places that [membership tests](#membership-tests-written-with-in) are not written in.
 
 #### Ranges written with fewer parts

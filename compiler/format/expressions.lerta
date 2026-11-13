@@ -16,7 +16,8 @@ export runs_no_code := (expression: Expression): Bool ->
     else binary_literal_bytes(expression) != nil
 
 # Two comparisons of one value joined by `and`, `x >= a and x <= b` or `a <= x and x < b`, which may
-# end a chain of `and`s, as the tree of `p and x >= a and x <= b` is `(p and x >= a) and x <= b`.
+# end a chain of `and`s, as the tree of `p and x >= a and x <= b` is `(p and x >= a) and x <= b`; or
+# joined by `or`, `x < a or x > b`, which test that it is outside, and so for a chain of `or`s.
 export struct RangeComparison
   # The `and` of the `and`s before the comparisons and the first, if any, which keeps the `and`s
   # where a rewrite inside them places theirs.
@@ -30,31 +31,35 @@ export struct RangeComparison
   at: Position
 
 # Of a value that runs no code, written the same in both comparisons, and an end that runs none,
-# which `and` evaluates only after the first comparison holds, as `in` does not.
+# which `and` evaluates only after the first comparison holds, and `or` only after it fails, as `in`
+# does not.
 export range_test := (expression: Expression): RangeComparison? ->
   test := expression as BinaryOperation ? return nil
-  return nil if test.operator != 'and'
+  return nil unless test.operator in ['and', 'or']
+  outside := test.operator == 'or'
   upper := test.right as BinaryOperation ? return nil
   chain := test.left as BinaryOperation ? return nil
-  is_chain := chain.operator == 'and'
+  is_chain := chain.operator == test.operator
   lower := (is_chain then chain.right else chain) as BinaryOperation ? return nil
-  value := lower_value(lower) ? return nil
+  value := lower_value(lower, outside) ? return nil
   return nil unless runs_no_code(value)
-  (inclusive, written_value, end) :=
-    case upper.operator
-      when '<=', '<' then (upper.operator == '<=', upper.left, upper.right)
-      when '>=', '>' then (upper.operator == '>=', upper.right, upper.left)
-      else return nil
+  # `x <= b` and `b >= x` test within `..=b`, `x > b` and `b < x` outside it; `x < b` and `x >= b`
+  # likewise for `..b`.
+  value_on_left := upper.operator in (outside then ['>', '>='] else ['<=', '<'])
+  value_on_right := upper.operator in (outside then ['<', '<='] else ['>=', '>'])
+  return nil if not value_on_left and not value_on_right
+  inclusive := upper.operator in (outside then ['>', '<'] else ['<=', '>='])
+  written_value := value_on_left then upper.left else upper.right
+  end := value_on_left then upper.right else upper.left
   return nil if not runs_no_code(end) or not same(value, written_value)
-  start := lower.operator == '>=' then lower.right else lower.left
+  start := same(lower.left, value) then lower.right else lower.left
   { chain: is_chain then chain, lower, value, start, end, inclusive, at: upper.position }
 
-# The value that `x >= a` or `a <= x` compares with its start.
-lower_value := (comparison: BinaryOperation) ->
-  case comparison.operator
-    when '>=' then comparison.left
-    when '<=' then comparison.right
-    else nil
+# The value that `x >= a` or `a <= x` compares with its start, or `x < a` or `a > x` outside.
+lower_value := (comparison: BinaryOperation, outside: Bool) ->
+  { operator, left, right } := comparison
+  return left if operator == (outside then '<' else '>=')
+  operator == (outside then '>' else '<=') then right
 
 same := (a: Expression, b: Expression) ->
   dump_ast_without_positions([a]) == dump_ast_without_positions([b])
