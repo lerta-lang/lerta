@@ -2,10 +2,10 @@
 # source by the rule that asks for it (see docs/reference/style.md); those that need the types of
 # the checking, where the program checks, by typed.lerta.
 import
-  ArrayLiteral, ArrayTypeName, Assignment, Binding, Call, Coalesce, Comprehension, Condition,
-  Conditional, Declaration, Expression, For, FunctionLiteral, Identifier, If, Index, Interpolation,
-  Member, MemberDeclaration, NamedType, NilLiteral, Pass, RecordLiteral, Statement, StringLiteral,
-  TypeDeclaration, UnaryOperation, UnionTypeName
+  ArrayLiteral, ArrayTypeName, Assignment, BinaryOperation, Binding, Call, Coalesce, Comprehension,
+  Condition, Conditional, Declaration, Expression, For, FunctionLiteral, Identifier, If, Index,
+  Interpolation, Member, MemberDeclaration, NamedType, NilLiteral, Pass, RecordLiteral, Statement,
+  StringLiteral, TypeDeclaration, UnaryOperation, UnionTypeName
 from '../ast'
 import TextPart from '../lexer/string_literal'
 import Lexed, Token, TokenKind from '../lexer/tokens'
@@ -29,6 +29,7 @@ import counted_range, index_ranges from './ranges'
 import Tokens from './tokens'
 import annotating_of, annotation_edits, annotation_statement_edits from './annotations'
 import typed_edits, typed_statement_edits, Typed from './typed'
+import union_test_edits from './union_tests'
 import written_return, written_type_edits from './written_types'
 
 export rewrites_of := (
@@ -41,6 +42,8 @@ export rewrites_of := (
   add := (edit: Edit?) -> found.push(edit) if edit
   # The negations that the rewrite of a condition takes, which no other rewrites.
   claimed: Set<UnaryOperation>
+  # The junctions inside a chain of them, whose tests the rewrite of the chain takes.
+  junctions: Set<BinaryOperation>
   with_else: Set<Condition>
   places_of program, {
     before: (value, _) ->
@@ -51,7 +54,7 @@ export rewrites_of := (
   annotated := annotating_of(program, typed)
   places_of program, {
     before: (value, _: Place) ->
-      add edit for edit in edits_within(tokens, value, claimed, parentheses.tight, typed)
+      add edit for edit in edits_within(tokens, value, claimed, junctions, parentheses.tight, typed)
       if annotating := annotated
         add edit for edit in annotation_edits(tokens, value, annotating)
         add written_return(tokens, value, annotating) if value is FunctionLiteral
@@ -80,20 +83,21 @@ kept_lines := (program: Statement[], text: SourceTokens, kept: KeptLines) ->
 # Those of the expression, and of its parts that are no places (see Visit), which places_of visits
 # the places inside of.
 edits_within := (
-  tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, tight: Set<Expression>,
-  typed: Typed?
+  tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, junctions: Set<BinaryOperation>,
+  tight: Set<Expression>, typed: Typed?
 ): Edit?[] ->
-  found := expression_edits(tokens, value, claimed, tight, typed)
+  found := expression_edits(tokens, value, claimed, junctions, tight, typed)
   found.append typed_edits(tokens, value, known) if known := typed
   for part in unvisited_parts(value)
-    found.push edit for edit in edits_within(tokens, part, claimed, tight, typed)
+    found.push edit for edit in edits_within(tokens, part, claimed, junctions, tight, typed)
   found
 
 expression_edits := (
-  tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, tight: Set<Expression>,
-  typed: Typed?
+  tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, junctions: Set<BinaryOperation>,
+  tight: Set<Expression>, typed: Typed?
 ): Edit?[] ->
   case value
+    when BinaryOperation then union_test_edits(tokens, value, junctions)
     when Member then [binary_literal(tokens, value)]
     when Coalesce then [cast_fallback(tokens, value, tight)]
     when Conditional then [else_nil(tokens, value)]

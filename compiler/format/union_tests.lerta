@@ -1,0 +1,88 @@
+# `x is A | B` for `x is A or x is B`, and `x is not A | B` for `x is not A and x is not B` (see
+# Union is tests).
+import BinaryOperation, Expression, IsTest, UnaryOperation from '../ast'
+import runs_no_code from './expressions'
+import Edit from './edits'
+import UNION_IS_TESTS from './rules'
+import Tokens from './tokens'
+
+# A test of a chain of `or`s, or of `and`s for `is not`, as its tokens place it.
+struct PlacedTest
+  # The index of the first token of the subject and that of its `is`.
+  first: Int
+  word: Int
+  # The index of the first token of the type.
+  type: Int
+
+# The edits of the runs of tests of one subject next to each other in the chain of the junction,
+# which claims the junctions inside it on its left, as they are the same chain.
+export union_test_edits := (
+  tokens: Tokens, junction: BinaryOperation, claimed: Set<BinaryOperation>
+): Edit?[] ->
+  negated := junction.operator == 'and'
+  return [] if junction in claimed or not negated and junction.operator != 'or'
+  operands := operands_of(junction, claimed)
+  placed := [placed_test(tokens, operand, negated) for operand in operands]
+  [union_edit(tokens, run) for run in runs_of(tokens, placed) when run.length > 1]
+
+# The operands of the chain from left to right; `a or (b or c)` has two, the second in parentheses.
+operands_of := (junction: BinaryOperation, claimed: Set<BinaryOperation>): Expression[] ->
+  left := junction.left
+  if left is BinaryOperation and left.operator == junction.operator
+    claimed.add left
+    return [operands_of(left, claimed)..., junction.right]
+  [left, junction.right]
+
+# The test as written without parentheses, `x is T`, or `x is not T` where negated, of a subject
+# that runs no code, as the rewrite evaluates it once rather than for each test.
+placed_test := (tokens: Tokens, operand: Expression, negated: Bool): PlacedTest? ->
+  written := negated then (operand as UnaryOperation?)?.operand else operand
+  test := written as IsTest ? return nil
+  return nil unless runs_no_code(test.value)
+  first := tokens.at(test.value.position) ? return nil
+  type := tokens.at(test.type.position) ? return nil
+  word := negated then type - 2 else type - 1
+  return nil unless tokens.is_word(word, 'is')
+  return nil if negated and not tokens.is_kind(type - 1, 'not')
+  { first, word, type }
+
+# The runs of tests next to each other of one subject, each joined to the one before by the word of
+# the junction alone, without parentheses between them.
+runs_of := (tokens: Tokens, placed: PlacedTest?[]) ->
+  runs: PlacedTest[][]
+  var run: PlacedTest[]
+  for test in placed
+    if test and not run.is_empty() and follows(tokens, run.last()!, test)
+      run.push test
+      continue
+    runs.push run
+    run = test then [test] else []
+  runs.push run
+  runs
+
+follows := (tokens: Tokens, before: PlacedTest, test: PlacedTest) ->
+  is_junction := tokens.is_kind(test.first - 1, 'or') or tokens.is_kind(test.first - 1, 'and')
+  is_junction and
+    not is_wrapped(tokens, before, test) and
+    subject_of(tokens, before) == subject_of(tokens, test)
+
+# Whether the test is in parentheses, which end before the junction that the next test follows.
+is_wrapped := (tokens: Tokens, test: PlacedTest, next: PlacedTest) ->
+  open := test.first - 1
+  tokens.is_kind(open, '(') and tokens.matching(open) == next.first - 2
+
+subject_of := (tokens: Tokens, test: PlacedTest) -> tokens.joined(test.first, test.word - 1)
+
+# `x is A | B | C` for the run: what comes after the first test's type up to the last's type goes,
+# and the types of the tests between come in its place.
+union_edit := (tokens: Tokens, run: PlacedTest[]) ->
+  between := run[1..run.length - 1]
+  types := [type_text(tokens, test, run[i + 2]) for test at i in between]
+  text := " | #{[type + ' | ' for type in types].join()}"
+  from := tokens.end(run[1].first - 2)
+  at := tokens.start(run[0].first)
+  tokens.edit_at UNION_IS_TESTS, at, [{ text, from, to: tokens.start(run.last()!.type) }]
+
+# The type of the test, which ends before the junction that the next test follows.
+type_text := (tokens: Tokens, test: PlacedTest, next: PlacedTest) ->
+  tokens.slice tokens.start(test.type), tokens.end(next.first - 2)

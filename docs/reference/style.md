@@ -237,6 +237,10 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 
 - Write `x is not T`, not `not (x is T)`.
 
+### Union is tests
+
+- Write `x is A | B`, not `x is A or x is B`, and `x is not A | B`, not `x is not A and x is not B`, where `x` runs no code.
+
 ### Negated in tests
 
 - Write `x not in xs`, not `not (x in xs)`.
