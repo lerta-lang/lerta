@@ -15,14 +15,11 @@ Each read or write of an array's item checks its index against the length (`lert
 
 ### Checks in loops
 
-A loop whose bounds already keep the index in range checks it again each time.
+A loop whose bounds already keep the index in range may check it again each time.
 
-- **Cost.** `bench/sieve` indexes `Array(n, false)` by `i` of `for i in 2..n` and by `j` of `while j < n`. It takes 0.21 s with the checks and 0.187 s with every check removed by hand, as long as Go's 0.188 s, which proves them in range itself.
-- **Tried:**
-  - Telling LLVM that the length is `n` right after `Array(n, v)`, as the compiler now does (see [internals](../internals/execution.md)), drops the comparison of `j` with the length, but not the branch on it, as LLVM cannot tell that `j` is not negative (below): it took 9% of the instructions off, and 1.6% of the time on x86-64 Linux, against Go's 0.23 s.
-  - Checking the index against `n` itself, as the compiler could for an array that is only indexed and never passed or grown, took 1% off, where removing the checks took 8% (both against the same program built without ThinLTO). LLVM then drops the check of `i`, but not that of `j`: `j` starts at `i * i` and grows by `i` through checked operations, so LLVM cannot tell that it is not negative.
-- **Needed.** The compiler must know that the array's length does not change while the loop runs and that the index stays in range, as a `for`'s range shows, and a `while`'s condition does with a variable that only grows from a value in range.
+- **In the benchmarks.** None: each of them runs as many instructions with the checks as with every check removed by hand, within 0.4%. `bench/sieve` lost its difference once its inner loop became `for j in (i * i)..n by i`, whose overflow-checked steps show LLVM that `j` stays in `0..n`, and the compiler tells LLVM that the length is `n` right after `Array(n, v)` (see [internals](../internals/execution.md)).
 - **In the compiler.** Its own `dump-llvm`, built with `-O` and without the memory checks, ran 0.9% fewer instructions with every check of an array's index removed, and 3.0% fewer with those of a `Binary`'s index removed too, in about the same time.
+- **Needed.** The compiler must know that the array's length does not change while the loop runs and that the index stays in range, as a `for`'s range shows, and a `while`'s condition does with a variable that only grows from a value in range.
 - **Signed checks.** Checking a `Binary`'s index as two signed comparisons, rather than one unsigned, took 0.85% of those instructions off, as LLVM then drops the comparison with the length that a loop's condition has made. The same for an array's left the compiler as it was and made `bench/sieve` 8% slower, so an array's stays unsigned.
 
 ### Items of top-level arrays
