@@ -25,3 +25,15 @@ f := ((a, b): (Int, Int), y = a) -> y
 ```
 
 reports `the type of the parameter 'y' must be written`. The fix is to declare the names before the defaults (see parse_destructured_parameter and generate_default_entry), or to say that the name is not in scope there.
+
+## The last value of an init is not released
+
+An `init` whose last expression gives a value leaks it:
+
+```lerta
+class D
+  window: W
+  init := -> @window
+```
+
+leaks one object, as does `init := -> @root.add @window` for an `add` that returns its argument. A function or a method declared to return `void` releases it. The fix is to release the value of an `init`'s last expression, as for any value in statement position.
