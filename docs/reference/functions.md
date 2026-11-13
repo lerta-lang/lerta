@@ -12,7 +12,7 @@ greet := -> print('hello')
 ```
 
 - A function is declared as a top-level `const` whose value is a [function literal](#function-literals): `(<parameters>): <return type> -> <body>`.
-- A function literal held by a local `const` is a [function value](#function-values) instead. Unlike a top-level function, it cannot be used before its declaration, call itself or be generic.
+- A function literal held by a local `const` is a [function value](#function-values) instead. Unlike a top-level function, it cannot be used before its declaration or be generic. It sees its own name in its body, and so calls itself, where its return type is written, on it or on the declaration, which then gives its type before its body is checked.
 - Parameters are `name: Type`. With no parameters, `()` may be omitted.
 
 ### A declared function type

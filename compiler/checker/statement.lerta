@@ -64,7 +64,11 @@ export check_function_body := (
     last := statements.last() ? return
     warn_if_unreachable body, previous, last if previous := before_last.last()
     check_last_statement body, last
+  # A function literal's own name, outside its parameters and locals, which may hide it.
+  body.scopes.push()
+  body.scopes.define itself.identifier.name, itself if itself := body.self_local
   check_block body, before_last, define_params, finish
+  body.scopes.pop()
 
 # Defines `@` and the parameters in order, each default seeing those before it, checked if
 # `checks_defaults`.
@@ -251,7 +255,9 @@ export narrow_where_holds := (body: Body, condition: Expression) ->
 # A top-level function was added to the module's functions before checking started.
 check_declaration := (body: Body, declaration: Declaration) ->
   value := declaration.value
-  return if value is FunctionLiteral and body.is_top_level()
+  if value is FunctionLiteral
+    return if body.is_top_level()
+    body.facts.local_function_names[value] = declaration.name unless declaration.mutable
   type_name := declaration.type
   annotated := type_name then resolve(body.program, body.resolver, type_name)
   reject_omitted_value body, declaration, annotated

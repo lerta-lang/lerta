@@ -1,0 +1,47 @@
+# A local function whose type is written, on it or on its declaration, sees itself in its body, and
+# in the function literals in it, as its own closure: it calls itself, yields from itself, and
+# passes itself on, out of the call that makes it. A parameter or a local of its name hides it.
+run := (f: (Int) -> Int, n: Int) -> f(n)
+kept: ((Int) -> Int)[]
+
+main := ->
+  base := 10
+  fact := (n: Int): Int -> n <= 1 then base else n * fact(n - 1)
+  print fact(5)
+  count := (n: Int): Iter<Int> ->
+    return if n == 0
+    yield n
+    yield x for x in count(n - 1)
+  print count(3).to_array()
+  passed := (n: Int): Int ->
+    kept.push passed
+    later := -> passed(n - 1)
+    n == 0 then base else run((m) -> m + later(), 0)
+  print passed(2)
+  hidden := (hidden: Int): Int -> hidden + 1
+  print hidden(1)
+  shadowed := (n: Int): Int ->
+    shadowed := n * 2
+    shadowed
+  print shadowed(4)
+  fib: (Int) -> Int = (n) -> n < 2 then n else fib(n - 1) + fib(n - 2)
+  print fib(10)
+
+main()
+print kept.length
+
+print kept[0](0)
+
+# Out of the call that makes it: a closure returned, and the Iter of one that yields.
+make_down := (from: Int) ->
+  down := (n: Int): Iter<Int> ->
+    return if n < from
+    yield n
+    yield x for x in down(n - 1)
+  down from + 2
+print make_down(1).to_array()
+
+make_count := (unit: String) ->
+  times := (n: Int): String -> n == 0 then '' else unit + times(n - 1)
+  times
+print make_count('ab')(3)

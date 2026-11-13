@@ -72,6 +72,7 @@ check_literal := (
   weak_this := literal.weak
   reject_weak_outside_classes program, literal if weak_this and not is_class_object(this_type(body))
   literal_body := Body(shared, resolver, extensions, facts, context, weak_this, enclosing: body)
+  literal_body.self_local = self_local(body, literal, params, annotated)
   check_function_body literal_body, literal, params, holds
   body.facts.captures[literal] = literal_body.captures
   type := finish_function_type(context, params, body.facts)
@@ -79,6 +80,14 @@ check_literal := (
     reject_weak_result program, literal, type.result
     reject_needless_weak program, literal, literal_body.captures
   type
+
+# What a function literal declared as a local sees its name as in its body: itself, where its type
+# is written, on it or on the declaration, so that it is known before its body is checked.
+self_local := (body: Body, literal: FunctionLiteral, params: Type[], result: Type?) ->
+  name := body.facts.local_function_names[literal] ? return nil
+  written := result ? return nil
+  body.facts.sees_itself.add literal
+  Local identifier: name, used: true, type: FunctionType(params, result: written)
 
 # The type of `@` where the body is: in a method, or in a function literal written in one.
 this_type := (body: Body): Type? ->

@@ -247,6 +247,10 @@ generate_function_body := (
   ir := g.ir
   g.nan_free = nan_free_operations(g.facts, literal.body, false)
   holds := g.coroutine != nil
+  # A local function that sees itself is its own closure, outside its parameters and locals, which
+  # may hide it; the closure outlives the call, held as `(closure)` by a coroutine.
+  itself := literal in g.facts.sees_itself then g.facts.local_function_names[literal]
+  g.locals.push()[itself.name] = ValueLocal(type, operand: '%closure') if itself
   scope := g.locals.push()
   bind := (name: String, operand: String, local_type: Type) ->
     unless holds
@@ -276,6 +280,7 @@ generate_function_body := (
   emit_suspend g if literal.yields
   generate_body_returning_last g, literal.body, result
   g.locals.pop()
+  g.locals.pop() if itself
 
 # The entry that takes the first `given` arguments, borrowed, and the object of a method; computes
 # the defaults of the others in order, each seeing `@` and the parameters before it; and calls the
