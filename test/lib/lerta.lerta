@@ -5,6 +5,7 @@ import Buffer, is_file, make_dir, make_temp_dir, read_text, real_path, remove_tr
 import env, exit, Exit, platform, run from 'std:process'
 import timeout, TimeoutError from 'std:async'
 import described_build, description_path from '../../compiler/platform_description'
+import cache_dir as compiler_cache_dir from '../../compiler/runtime_cache'
 import in_slot from './report'
 
 export root_dir := real_path('.')
@@ -46,10 +47,8 @@ export read_text_or := (path: String, fallback: String) ->
 # remove_work_root); each suite works in a directory of its own in it.
 work_root := make_temp_dir()
 
-export suite_dir := (name: String) -> suite_dir_in(work_root, name)
-
-suite_dir_in := (parent: String, name: String) ->
-  path := "#{parent}/#{name}"
+export suite_dir := (name: String) ->
+  path := "#{work_root}/#{name}"
   make_dir path
   path
 
@@ -65,11 +64,12 @@ export at_import := <T>(compute: () -> Promise<T>) ->
     throw error
 
 # The compiler caches the runtimes, the modules and the objects of the links that it compiles; the
-# tests give it a cache in build/, kept from run to run, which the compilers that the tests run
-# inherit through LERTA_CACHE_DIR. Each entry in it is keyed by what it is made from, so that a
-# build of another compiler or with other flags never takes what an earlier one left. A driver
-# that the self checks run uses the cache of the run that started it, given in LERTA_TEST_CACHE_DIR.
-export cache_dir := env('LERTA_TEST_CACHE_DIR') ? suite_dir_in("#{root_dir}/build", 'test-cache')
+# tests share its default cache, which the compilers that the tests run inherit through
+# LERTA_CACHE_DIR, so that a new worktree starts with what earlier builds left. Each entry in it is
+# keyed by what it is made from, so that a build of another compiler or with other flags never
+# takes what an earlier one left. A driver that the self checks run uses the cache of the run that
+# started it, given in LERTA_TEST_CACHE_DIR.
+export cache_dir := env('LERTA_TEST_CACHE_DIR') ? real_path(compiler_cache_dir())
 
 # A run of a file to its end, whatever its exit status: `failure` tells how it ended, for messages.
 export struct FileRun
