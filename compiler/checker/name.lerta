@@ -30,14 +30,20 @@ export lookup := (body: Body, name: String) ->
 # The declaration of the top-level function written in Lerta that the callee names, if it does, as
 # type_of_identifier finds it.
 export named_function_literal := (body: Body, callee: Expression): FunctionLiteral? ->
+  (literal, _) := named_function(body, callee) ? return nil
+  literal
+
+# The same, with the module that declares it.
+export named_function := (body: Body, callee: Expression): (FunctionLiteral, Shared)? ->
   return nil unless callee is Identifier
   { program, shared } := body
   name := callee.name
   return nil if lookup(body, name) != nil
-  return entry.literal if entry := shared.functions.entries[name]
+  return (entry.literal, shared) if entry := shared.functions.entries[name]
   exported := export_named(shared, name)
   return nil unless exported is FunctionExport
-  program.shared[exported.module_index].functions.entries[exported.name]!.literal
+  declaring := program.shared[exported.module_index]
+  (declaring.functions.entries[exported.name]!.literal, declaring)
 
 export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Bool) ->
   { program, shared } := body

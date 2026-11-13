@@ -12,6 +12,7 @@ import check_part, fail, fail_already_defined, warn, warn_if_unused from './diag
 import expect_condition, expect_optional, expect_type, type_of from './expression'
 import has_function, required_params from './functions'
 import names_literals_assign from './literal_assignments'
+import named_function from './name'
 import check_for, check_while from './loop'
 import ends_with_jump, narrow, narrowings_of, narrowings_where from './narrowing'
 import ObjectInfo from './object_types'
@@ -20,6 +21,7 @@ import Local from './scopes'
 import Body, SelfContext from './shared'
 import define_top_level, top_level_value from './top_level_values'
 import names_type_or_import, resolve from './type_names'
+import is_standard_name, module_location from '../source'
 import
   format_type, FunctionType, inner_of, is_assignable, is_kind, is_one_of_kinds, IterType,
   never_type, nil_type, ObjectType, optional_type, OptionalType, PromiseType, Type, void_type
@@ -329,13 +331,25 @@ export check_discarded := (body: Body, statement: Expression, type: Type) ->
 reject_unconsumed := (body: Body, value: Expression, type: Type): void ->
   at := value.position
   fail body.program, at, 'an Iter does nothing until it is consumed' if type is IterType
-  fail body.program, at, 'a Promise must be awaited' if type is PromiseType
+  if type is PromiseType
+    fail body.program, at, "a Promise must be awaited#{awaiting_cause(body, value)}"
   return unless is_kind(type, 'void')
   arms := arm_bodies(value) ? return
   for arm in arms
     last := arm.last() as Expression?
     arm_type := last then body.facts.types[last]
     reject_unconsumed body, last!, arm_type if arm_type
+
+# Why a call gives a Promise, where it calls a function that awaits, which a change to its body may
+# have made one: where that function first awaits, unless std declares it, which is not to change.
+awaiting_cause := (body: Body, value: Expression) ->
+  call := value as Call ? return ''
+  callee := call.callee as Identifier ? return ''
+  (literal, shared) := named_function(body, callee) ? return ''
+  at := literal.await_at ? return ''
+  location := module_location(body.program.entry_path, shared.path)
+  return '' if is_standard_name(location)
+  ": '#{callee.name}' returns a Promise, as it awaits at #{location}:#{at.line}:#{at.column}"
 
 # The blocks of a statement that holds others, whose last statements give its value.
 arm_bodies := (statement: Expression): Statement[][]? ->

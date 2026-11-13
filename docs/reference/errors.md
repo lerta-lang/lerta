@@ -153,7 +153,7 @@ These apply when a value in statement position is not captured.
 | a literal, a name, an operator expression, a field or an index (`'a'`, `x`, `1 + 2`, `x == 1`, `p.x`, `xs[0]`) | error. An unused comparison often means a mistyped assignment. |
 | a function value itself (`f` after `f := () -> 1`) | error, `` function value is unused; to call it, write `f()` `` |
 | an [`Iter`](types.md#iter) (`xs.map(f)`) | error, `an Iter does nothing until it is consumed` |
-| a [`Promise`](functions.md#functions-that-await) (`fetch('a')`) | error, `a Promise must be awaited`. Give one whose work goes on unawaited to `spawn` of [std:async](std.md#stdasync). |
+| a [`Promise`](functions.md#functions-that-await) (`fetch('a')`) | error, `a Promise must be awaited`. When the call names a top-level function, of the module or imported but not from std, whose own body awaits, the message adds where it first awaits. Give one whose work goes on unawaited to `spawn` of [std:async](std.md#stdasync). |
 | a call, an `await`, or an expression with no value | allowed |
 | a `try` or a `case` | its blocks are checked as statements, as the branches of an `if` are: the last statement of each block, catch or arm is checked by these rules, and their values need no type in common |
 
