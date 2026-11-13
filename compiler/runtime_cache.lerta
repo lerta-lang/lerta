@@ -223,7 +223,7 @@ FNV_PRIME := 0x100000001B3
 
 runtime_hash := (texts_besides_sources: String[]) ->
   texts := [texts_besides_sources...]
-  for path in [RUNTIME_PATHS..., LIBUV_PATHS...]
+  for path in RUNTIME_PATHS + LIBUV_PATHS
     texts.push path
     texts.push embedded_source(path)!
   texts_hash(texts)
@@ -251,7 +251,7 @@ libuv_object_name := (source: String) -> "libuv-#{source.without_suffix('.c')!.r
 
 object_names := (build: PlatformBuild) ->
   runtime := [object_name(path) for path in c_paths(build)]
-  [runtime..., [libuv_object_name(path) for path in build.libuv_sources]...]
+  runtime + [libuv_object_name(path) for path in build.libuv_sources]
 
 cached_file_names := (build: PlatformBuild) ->
   [object_names(build)..., ATTRIBUTES_FILE, CORO_END_FILE]
@@ -267,7 +267,7 @@ compile_runtime := (kind: BuildKind, build: PlatformBuild, staging_dir: String, 
   libuv_includes := await write_libuv_sources(libuv_dir)
   # uv.h, which the runtime includes, asks nothing of its users but where it is; libuv's own flags
   # are for its sources, whose warnings are not the program's, which a build prints.
-  flags := [build_flags(kind)..., libuv_includes...]
+  flags := build_flags(kind) + libuv_includes
   runtime_job := (path: String) ->
     ['-c', flags..., join(source_dir, base_name(path)), '-o', join(staging_dir, object_name(path))]
   libuv_flags := [flags..., build.libuv_flags..., '-w']

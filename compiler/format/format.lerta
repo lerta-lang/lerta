@@ -83,7 +83,7 @@ export format_parsed := (parsed: Parsed, path: String, typed: Typed?) ->
   kept_types := text.annotations_kept
   first_rewrites :=
     [edit for edit in first.edits when not kept_types or edit.rule != TYPE_ANNOTATIONS]
-  edits := [first_rewrites..., laid.edits...]
+  edits := first_rewrites + laid.edits
   held := held_statements(parsed.text, laid, edits)
   is_held := (at: Position) -> held.any((head) -> head.holds(at))
   layout := [finding for finding in laid.findings when not is_held(finding.at)]
@@ -91,8 +91,8 @@ export format_parsed := (parsed: Parsed, path: String, typed: Typed?) ->
   # A `;` that a rewrite takes out is a gap that the layout decides too.
   # A line that a rewrite left to be done by hand may shorten is reported for that alone.
   by_hand := Set([edit.at.line for edit in edits when edit.change == nil])
-  long := long_lines(source, text.text, Set([laid.kept..., by_hand...]))
-  found := distinct([rewritten..., layout..., laid.stranded..., long...])
+  long := long_lines(source, text.text, laid.kept | by_hand)
+  found := distinct(rewritten + layout + laid.stranded + long)
   sorted := found.sorted((a, b) -> a.at.compare(b.at))
   Formatted(text: text.text, findings: sorted)
 
@@ -158,7 +158,7 @@ laid_out := (parsed: Parsed, typed: Typed?) ->
   edits := break_lines(walked, text, tokens)
   { decisions, texts } := lay_out(text, walked)
   stranded := [stranded_finding(text, index) for index in walked.stranded]
-  found := [findings(text.gaps, decisions)..., token_findings(text.tokens, texts)...]
+  found := findings(text.gaps, decisions) + token_findings(text.tokens, texts)
   LaidOut(
     stranded
     edits
@@ -166,7 +166,7 @@ laid_out := (parsed: Parsed, typed: Typed?) ->
     findings: found
     statements: walked.statements
     skipped: walked.skipped
-    kept: Set([kept.kept..., kept.marked...])
+    kept: kept.kept | kept.marked
   )
 
 # The part of the innermost statement that holds an edit, from its start up to the end of the line
@@ -230,7 +230,7 @@ rewritten_text := (
   for round in 0..MAX_ROUNDS
     last_rewrites = await rewrites(current, path) if round > 0
     laid := round == 0 then first_laid else laid_out(current, last_rewrites.typed)
-    edits := [last_rewrites.edits..., laid.edits...]
+    edits := last_rewrites.edits + laid.edits
     is_chosen := (edit: Edit) ->
       edit.rule != SEMICOLONS and (types or edit.rule != TYPE_ANNOTATIONS)
     chosen := applicable([edit for edit in edits when is_chosen(edit)])

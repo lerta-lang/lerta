@@ -59,7 +59,7 @@ tree := (name: String, files: Map<String, String>) ->
 
 # The stderr of a run of `lerta fmt`, named `what` in a failure, and its exit status, as expected.
 expect_run := (result: FileRun, stderr: String, status: Int, what = 'stderr') ->
-  [compare_text(what, stderr, result.errors)..., expect_status(status, result.status)...]
+  compare_text(what, stderr, result.errors) + expect_status(status, result.status)
 
 expect_files := (dir: String, files: Map<String, String>) ->
   reasons: String[]
@@ -230,7 +230,7 @@ command_checks: Check[] =
         'lib.lerta': "export one := -> 1\n"
         'main.lerta': "import stdout, Writer from 'std:io'\nimport one from './lib'\n" +
           "out: Writer = stdout\ntwo := one() + 1\nprint two\n"
-      [expect_run(result, '', 0)..., await expect_files(dir, expected)...]
+      expect_run(result, '', 0) + await expect_files(dir, expected)
   }
   {
     name: 'lerta fmt --fix writes the members of enums alone, through the checks of the calls ' +
@@ -285,7 +285,7 @@ command_checks: Check[] =
         "./#{file}:#{file == 'unused.lerta' then 1 else 2}:1: leave out the names that are " +
           "never used, or write `import 'module'` for its code alone (Unused names)\n"
       reports := [unused(file) for file in ['counted.lerta', 'named.lerta', 'unused.lerta']]
-      [expect_run(result, reports.join(), 1)..., await expect_files(dir, expected)...]
+      expect_run(result, reports.join(), 1) + await expect_files(dir, expected)
   }
   {
     name: 'lerta fmt checks once the files that a program holds through others, beside a file ' +
@@ -368,6 +368,6 @@ case_checks := (cases: String, command: String) ->
 # The checks that the suite selected, if any.
 export suite := ->
   title := 'format checks'
-  all_checks := [case_checks('format', 'fmt')..., command_checks...]
+  all_checks := case_checks('format', 'fmt') + command_checks
   checks := select(title, all_checks) ? return nil
   SuiteChecks(title, checks)

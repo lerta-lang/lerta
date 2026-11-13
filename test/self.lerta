@@ -178,14 +178,14 @@ harness_check := Check
 
 # Each source of tests/harness is in harness_results, so that a test added there is checked.
 harness_listed_check := Check(name: 'every test of tests/harness has its expected result', run: ->
-  listed := [result.name for result in [top_harness_results..., posix_harness_results...]]
+  listed := [result.name for result in top_harness_results + posix_harness_results]
   sources_in := (dir: String) ->
     [
       "#{dir}/#{file.without_suffix('.lerta')!}"
       for file in list_dir("#{root_dir}/#{dir}")
       when file.ends_with('.lerta')
     ]
-  sources := [sources_in(harness_dir)..., sources_in("#{harness_dir}/posix")...]
+  sources := sources_in(harness_dir) + sources_in("#{harness_dir}/posix")
   at_once(
     ["#{source}.lerta is not in harness_results" for source in sources when source not in listed]
   )
@@ -271,7 +271,7 @@ driver_checks: Check[] =
     once := await run_driver(['format', '-k', format_case, '--list'], await new_failed_file([]))
     twice :=
       await run_driver(['format', 'format', '-k', format_case, '--list'], await new_failed_file([]))
-    [expect_status(0, twice.status)..., compare_text('stdout', once.stdout, twice.stdout)...]
+    expect_status(0, twice.status) + compare_text('stdout', once.stdout, twice.stdout)
   }
   usage_check(['-j', '0'], '--jobs takes a count above 0, not 0')
   usage_check(['cli', '--target', 'x86_64-w64-mingw32'], '--target is for the run suite alone')
@@ -304,14 +304,14 @@ driver_checks: Check[] =
       for result in harness_results
       when not result.reasons.is_empty()
     ]
-    [expect_results(expected, ran.stdout)..., expect_status(1, ran.status)...]
+    expect_results(expected, ran.stdout) + expect_status(1, ran.status)
   }
   { name: "bin/test --target takes the host's short name for the run tests", run: ->
     target := host_target_name ? return nil
     name := 'tests/harness/passes'
     ran := await run_driver(['--target', target, '-k', name], await new_failed_file([]))
     expected := [result_line(name, []), result_line("#{name} (-O)", [])]
-    [expect_results(expected, ran.stdout)..., expect_status(0, ran.status)...]
+    expect_results(expected, ran.stdout) + expect_status(0, ran.status)
   }
   {
     name: 'bin/test --failed runs the failed checks, and drops those that pass or that a suite ' +
