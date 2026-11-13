@@ -302,6 +302,9 @@ The rewrites below depend on the checking of a program that holds the file.
 | [Structs constructed with `{}`](#structs-constructed-with-) | [Expected types](style.md#expected-types) |
 | [Types written once](#types-written-once) | [Expected types](style.md#expected-types) |
 | [Named arguments written alone](#named-arguments-written-alone) | [Shorthand](style.md#shorthand) |
+| [Values written alone](#values-written-alone) | [Values alone](style.md#values-alone) |
+| [Default comparisons left out](#default-comparisons-left-out) | [Default comparisons](style.md#default-comparisons) |
+| [Arrays of Iterables left out](#arrays-of-iterables-left-out) | [Iterable arguments](style.md#iterable-arguments) |
 | [Membership tests written with `in`](#membership-tests-written-with-in) | [Membership tests](style.md#membership-tests), [Negated in tests](style.md#negated-in-tests) |
 | [Range tests written with `in`](#range-tests-written-with-in) | [Range tests](style.md#range-tests) |
 | [Ranges written with fewer parts](#ranges-written-with-fewer-parts) | [Ranges](style.md#ranges) |
@@ -364,6 +367,19 @@ Besides:
 - It writes a named argument of a construction of a class or a struct that is a variable of its name, `Point(y: 2, x: x)`, as the name alone, `Point(x, y: 2)`.
 - From the first named argument, up to one that is not written alone: one after such an argument, which would go before it, is only reported.
 - Not a named argument of a call of a function, which a name alone would pass as positional.
+
+#### Values written alone
+
+- It writes a construction of a class or a struct that gives by its name only the one argument that must be given, `ValueError(message: 'bad')`, as its value alone, `ValueError('bad')`.
+- Not where the value is a name of an argument of the type, which alone would give that argument instead, nor the same field of another value, which is a spread (see [Copies written as spreads](#copies-written-as-spreads)), nor a record, `{ message: 'bad' }`.
+
+#### Default comparisons left out
+
+- It writes `xs.sorted((a, b) -> a.compare(b))` of an array, whose comparison is that which `sorted` takes by default, as `xs.sorted()`, and so for `sort`, with or without parentheses.
+
+#### Arrays of Iterables left out
+
+- It writes `Set(xs.to_array())` as `Set(xs)`, and so for `Map()`, where `xs` is an array, an Iter, a map or a set, as they take any Iterable.
 
 #### Membership tests written with `in`
 

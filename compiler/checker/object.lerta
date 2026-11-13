@@ -85,17 +85,28 @@ export type_of_construction := (
       require_type body, value, value_type, field_type
     else
       expect_type body, value, field_type
-  for field in required_fields(info)
+  required := required_fields(info)
+  for field in required
     name := field.name.name
     fail program, call.position, "missing argument '#{name}'" unless name in given
   is_given := (field: FieldInfo) -> not is_argument(field) or field.name.name in given
   body.facts.full_constructions.add call if info.fields.all(is_given)
+  body.facts.alone_constructions.add call if may_give_alone(call, info, required)
   type
 
 # The construction that the call stands for, if it is written with a spread or a value alone.
 expanded_construction := (body: Body, call: Call, declared: ObjectType): Call? ->
   return spread if spread := spread_construction(body, call, declared)
   positional_construction body, call, declared
+
+# Whether the construction gives only the one argument that must be given, by its name, with a
+# value that a construction could give alone: not a name of one of its arguments, which would name
+# that argument instead (see positional_value).
+may_give_alone := (call: Call, info: ObjectInfo, required: FieldInfo[]) ->
+  return false if required.length != 1 or not call.args.is_empty() or call.named_args.length != 1
+  { name, value } := call.named_args[0]
+  names_argument := value is Identifier and info.field_named(value.name)
+  name.name == required[0].name.name and not names_argument
 
 # The fields without initializers that are not optional, whose arguments a construction must give.
 required_fields := (info: ObjectInfo) ->

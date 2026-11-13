@@ -3,23 +3,26 @@
 # annotations.lerta.
 import
   BinaryOperation, Call, Case, CaseArm, Cast, Expression, Identifier, Import, ImportName, Index,
-  Member, NamedValue, Range, Statement, StringLiteral, This
+  FunctionLiteral, Member, NamedValue, Range, Statement, StringLiteral, This
 from '../ast'
 import is_file from 'std:io'
 import check_program from '../checker/modules'
 import ImportedName, ModuleAlias from '../checker/imports'
+import CollectionMaker from '../checker/references'
 import NodeFacts, ProgramWide from '../checker/shared'
 import CompileError from '../errors'
 import
   copied_source, counted_end, range_test as comparisons_of_range, runs_no_code, runs_of_alike_arms
 from './expressions'
 import
-  ArrayType, bool_type, INTEGER_KINDS, is_one_of_kinds, MapType, NUMBER_KINDS, SimpleType, Type
+  ArrayType, bool_type, INTEGER_KINDS, is_one_of_kinds, IterType, MapType, NUMBER_KINDS, SimpleType,
+  Type
 from '../types'
 import CLOSING_BRACKETS, OPENING_BRACKETS from '../lexer/tokens'
 import
-  EMPTINESS_TESTS, EXPECTED_TYPES, MEMBERSHIP_TESTS, RANGE_TESTS, REDUNDANT_CASTS,
-  SHARED_ARM_BODIES, SPREADS, SHORTHAND_ARGUMENTS, UNUSED_IMPORTS
+  DEFAULT_COMPARISONS, EMPTINESS_TESTS, EXPECTED_TYPES, ITERABLE_ARGUMENTS, MEMBERSHIP_TESTS,
+  RANGE_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES, SPREADS, SHORTHAND_ARGUMENTS, UNUSED_IMPORTS,
+  VALUES_ALONE
 from './rules'
 import dump_ast_without_positions from '../dumps'
 import EntryModule, load_modules, module_key from '../loader'
@@ -105,6 +108,9 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
         membership_test(tokens, value, facts)
         shorthand_arguments(tokens, value, facts)...
         spread(tokens, value, facts)
+        value_alone(tokens, value, facts)
+        default_comparison(tokens, value, facts)
+        iterable_argument(tokens, value, facts)
       ]
     else []
 
@@ -257,6 +263,79 @@ alone := (tokens: Tokens, named: NamedValue) ->
   value_at := tokens.at(named.value.position) ? return nil
   return nil if value_at != name_at + 2 or not tokens.is_kind(value_at, IDENTIFIER)
   Change from: tokens.start(name_at), to: tokens.end(value_at), text: named.name.name
+
+# `T(v)` for `T(name: v)`, a construction of only the one argument that it must give (see Values
+# alone); not a record, `{ name: v }`, which constructs a struct too, nor a copy of the field of
+# another value.
+value_alone := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  # A copy of the field of another value is a spread (see Spreads).
+  return nil if call not in facts.alone_constructions or is_copy(call, facts)
+  named := call.named_args[0]
+  name_at := tokens.at(named.name.position) ? return nil
+  value_at := tokens.at(named.value.position) ? return nil
+  return nil if not tokens.is_kind(name_at - 1, '(') or not tokens.is_kind(name_at + 1, ':')
+  change := Change(from: tokens.start(name_at), to: tokens.start(value_at), text: '')
+  tokens.edit_at VALUES_ALONE, named.name.position, [change]
+
+# `xs.sorted()` for `xs.sorted((a, b) -> a.compare(b))` of an array, and so for `sort` (see Default
+# comparisons).
+default_comparison := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  member := call.callee as Member ? return nil
+  if member.name.name not in ['sorted', 'sort'] or facts.types[member.object] is not ArrayType
+    return nil
+  return nil if call.args.length != 1 or not call.named_args.is_empty()
+  return nil unless is_natural_order(call.args[0])
+  name := tokens.at(member.name.position) ? return nil
+  comparison := tokens.at(call.args[0].position) ? return nil
+  without_parentheses := comparison == name + 1
+  within :=
+    without_parentheses then arguments_after(tokens, name) else arguments_within(tokens, name + 1)
+  change := within ? return nil
+  tokens.edit_at DEFAULT_COMPARISONS, call.args[0].position, [change]
+
+# `()` for the arguments of a call without parentheses, which run from its name at `name` to the end
+# of its statement, as such a call starts one.
+arguments_after := (tokens: Tokens, name: Int) ->
+  indentation := tokens.line_indentation(tokens.code[name].line) ? 0
+  last := statement_last(tokens, name, indentation)
+  Change from: tokens.end(name), to: tokens.end(last), text: '()'
+
+# Nothing for the arguments within the parentheses that open at `open`.
+arguments_within := (tokens: Tokens, open: Int) ->
+  return nil unless tokens.is_kind(open, '(')
+  close := tokens.matching(open) ? return nil
+  Change from: tokens.end(open), to: tokens.start(close), text: ''
+
+# Whether the value is `(a, b) -> a.compare(b)`, the comparison that `sorted` takes by default.
+is_natural_order := (value: Expression) ->
+  literal := value as FunctionLiteral ? return false
+  return false if literal.params.length != 2 or literal.body.length != 1
+  call := literal.body[0] as Call ? return false
+  member := call.callee as Member ? return false
+  object := member.object as Identifier ? return false
+  return false if call.args.length != 1 or not call.named_args.is_empty()
+  argument := call.args[0] as Identifier ? return false
+  { params } := literal
+  is_ordered := object.name == params[0].name.name and argument.name == params[1].name.name
+  member.name.name == 'compare' and is_ordered
+
+# `Set(xs)` for `Set(xs.to_array())` of an array, an Iter, a map or a set, as `Map()` and `Set()`
+# take any Iterable (see Iterable arguments).
+iterable_argument := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  callee := call.callee as Identifier ? return nil
+  maker := facts.references[callee] as CollectionMaker ? return nil
+  return nil if maker.type is not MapType or call.args.length != 1
+  argument := call.args[0] as Call ? return nil
+  member := argument.callee as Member ? return nil
+  return nil if member.name.name != 'to_array' or not argument.args.is_empty()
+  return nil unless is_iterable(facts.types[member.object])
+  name := tokens.at(member.name.position) ? return nil
+  is_written := tokens.is_kind(name - 1, '.') and tokens.is_kind(name + 1, '(')
+  return nil if not is_written or not tokens.is_kind(name + 2, ')')
+  change := Change(from: tokens.start(name - 1), to: tokens.end(name + 2), text: '')
+  tokens.edit_at ITERABLE_ARGUMENTS, member.name.position, [change]
+
+is_iterable := (type: Type?) -> type is ArrayType or type is IterType or type is MapType
 
 # `x.is_empty()` for a test of the length of x against 0, or of x against '', and `not x.is_empty()`
 # for one that x is not empty (see Emptiness tests), where std gives the type of x `is_empty`; the
@@ -426,10 +505,14 @@ holds_comment := (tokens: Tokens, run: CaseArm[]) ->
 # A spread of the value whose fields a construction copies, where it gives every argument, of the
 # type constructed (see Spreads), only reported.
 spread := (tokens: Tokens, call: Call, facts: NodeFacts) ->
-  source := copied_source(call) ? return nil
-  return nil unless call in facts.full_constructions
-  source_type := facts.types[source] ? return nil
-  source_type == facts.types[call] then tokens.report(SPREADS, call.position)
+  is_copy(call, facts) then tokens.report(SPREADS, call.position)
+
+# Whether the construction gives every argument from the fields of a value of its type.
+is_copy := (call: Call, facts: NodeFacts) ->
+  source := copied_source(call) ? return false
+  return false unless call in facts.full_constructions
+  source_type := facts.types[source] ? return false
+  source_type == facts.types[call]
 
 # `x` for `x as T!` where x is a T already (see Redundant casts). The parentheses that held the cast
 # are left to Parentheses.

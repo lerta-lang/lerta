@@ -162,6 +162,10 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 
 - When the value of a named argument or a field is a variable of the same name, write the name alone: `Point(x, y: 2)`, `{ a }`.
 
+### Values alone
+
+- Construct a value of one argument that must be given with that argument alone: `ValueError('bad')`, not `ValueError(message: 'bad')`.
+
 ### Spreads
 
 - Construct a value from another of its type with a spread, `Point(p..., x: 1)`, not by copying its fields one by one, `Point(x: 1, y: p.y, z: p.z)`.
@@ -203,6 +207,14 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 - Write `xs.is_empty()`, not `xs.length == 0`.
 - Write `not xs.is_empty()`, not `xs.length > 0` or `xs.length != 0`.
 - For a `String`, write `s.is_empty()`, not `s == ''`.
+
+### Default comparisons
+
+- Write `xs.sorted()`, not `xs.sorted((a, b) -> a.compare(b))`, and so for `sort`.
+
+### Iterable arguments
+
+- Give `Map()` and `Set()` an Iterable itself: `Set(m.keys())`, not `Set(m.keys().to_array())`.
 
 ### Membership tests
 
