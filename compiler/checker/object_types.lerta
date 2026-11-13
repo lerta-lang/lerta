@@ -2,7 +2,8 @@
 # an initializer alone are found on demand, and so are the instances of a generic class or struct
 # (see info_of).
 import
-  Expression, FunctionLiteral, Identifier, MemberDeclaration, Position, TypeDeclaration, TypeName
+  Expression, FunctionLiteral, Identifier, MemberDeclaration, NamedType, Position, TypeDeclaration,
+  TypeName
 from '../ast'
 import check_equality_methods, check_object, check_satisfies from './bodies'
 import
@@ -179,7 +180,13 @@ add_method := (
     fail program, literal.position, "#{name} takes no type parameters"
   fail program, literal.position, "#{name} cannot yield" if runs_alone and literal.yields
   fail program, literal.position, "#{name} cannot await" if runs_alone and literal.awaits
-  info.has_init = true if name == 'init'
+  if name == 'init'
+    info.has_init = true
+    # Construction takes no value from it: that of its last expression is released as a
+    # statement's is.
+    written := literal.return_type
+    fail program, literal.position, 'init gives no value' if written != nil and not is_void(written)
+    literal.return_type = NamedType(name: 'void', args: [], position: literal.position)
   if name == 'deinit' and info.declaration.is_struct
     fail program, member.position, 'a struct has no deinit'
   info.has_deinit = true if name == 'deinit'
@@ -191,6 +198,8 @@ add_method := (
   receiver := Receiver(type: info.type, type_params: info.declaration.type_params)
   generic := make_generic_function(shared, member.name, literal, receiver)
   info.generics[name] = add_generic(shared, generic)
+
+is_void := (type: TypeName) -> (type as NamedType?)?.name == 'void' and not type.optional
 
 field_of_member := (shared: Shared, info: ObjectInfo, member: MemberDeclaration) ->
   program := shared.program

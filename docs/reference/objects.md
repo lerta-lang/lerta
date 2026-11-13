@@ -49,7 +49,7 @@ The members of a type, one per line, are declared as locals are (see [declaratio
 
 - A method cannot be `var`.
 - A method may be generic: `apply := <T>(f: (Int) -> T): T -> f(@n)` (see [generic methods](#generic-methods)).
-- `init` takes no parameters and no type parameters. It runs at the end of construction.
+- `init` takes no parameters and no type parameters, and gives no value: its last expression is a statement. It runs at the end of construction.
 - `deinit`, in a class only, takes no parameters and gives no value. It runs when the object is released (see [deinit](#deinit)).
 - Why a function literal member is a method, with `@` passed at call time, rather than a field that holds a closure: closures that capture `@` would make a cycle in every object.
 
