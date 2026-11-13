@@ -27,7 +27,7 @@ export lookup := (body: Body, name: String) ->
   return outer if outer := captured(body, name)
   if body.sees_top_level
     return top_level if top_level := body.shared.top_level.locals[name]
-  value_local body.shared, name
+  value_local(body.shared, name)
 
 # The declaration of the top-level function written in Lerta that the callee names, if it does, as
 # type_of_identifier finds it.
@@ -93,7 +93,7 @@ export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Boo
   hint := is_nil_name then ': write `nil`' else unseen_self_hint(body, name)
   undefined_name := -> fail(program, position, "undefined name '#{name}'#{hint}")
   builtin := builtin_export(shared, name) ? undefined_name()
-  type_of_export body, builtin, identifier, is_callee
+  type_of_export(body, builtin, identifier, is_callee)
 
 # A local function read before its declaration: its closure is made where it is read, with what the
 # body reading it captures for it (see finish_local_functions).
@@ -110,7 +110,7 @@ unseen_self_hint := (body: Body, name: String): String ->
   if declared?.name == name
     return '; a local function sees itself only where its return type is written'
   enclosing := body.enclosing ? return ''
-  unseen_self_hint enclosing, name
+  unseen_self_hint(enclosing, name)
 
 # `name.export` of a module imported as `name`, where no local takes the name, as the name that the
 # export is imported by (see qualified_import), recorded as the member's replacement (see
@@ -167,7 +167,7 @@ export intrinsic_named := (body: Body, callee: Expression) ->
 # The export that the name is imported by, or else that of std:builtins of the name, if any.
 export_named := (shared: Shared, name: String) ->
   imported := shared.imports.names[name] ? return builtin_export(shared, name)
-  imported_export shared.program, imported
+  imported_export(shared.program, imported)
 
 # A generic function is called through generic_callee, so here it is used as a value. A value
 # whose type is not known yet is reported by type_of_identifier.
@@ -215,7 +215,7 @@ export local_reference := (body: Body, name: String, local: Local): Reference ->
   if imported and imported.local == origin
     exported := imported_export(body.program, imported) as ValueExport!
     return TopLevelValue(module_index: exported.module_index, name: exported.name)
-  ScopedLocal name
+  ScopedLocal(name)
 
 export record_reference := (body: Body, identifier: Identifier, reference: Reference) ->
   body.facts.references[identifier] = reference

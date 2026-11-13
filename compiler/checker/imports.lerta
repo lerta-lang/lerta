@@ -114,7 +114,7 @@ export reexports_of := (module: Module) ->
 # The declaration that the module exports under the name, followed through the modules that export
 # it from others; nil if the module exports no such name, or if they export it from each other.
 export export_ref := (program: ProgramWide, module_index: Int, name: String) ->
-  followed_export program, { module_index, name }, Set()
+  followed_export(program, { module_index, name }, Set())
 
 # `passed` holds the names of the modules that the export has been followed through.
 followed_export := (program: ProgramWide, ref: ExportRef, passed: Set<String>): ExportRef? ->
@@ -123,7 +123,7 @@ followed_export := (program: ProgramWide, ref: ExportRef, passed: Set<String>): 
   key := "#{ref.module_index} #{ref.name}"
   return nil unless passed.add(key)
   next := shared.reexported[ref.name] ? return nil
-  followed_export program, next, passed
+  followed_export(program, next, passed)
 
 # What the module exports under the name, besides its extends.
 export export_of := (program: ProgramWide, module_index: Int, name: String): Export ->
@@ -134,7 +134,7 @@ export export_of := (program: ProgramWide, module_index: Int, name: String): Exp
     when Declaration
       return FunctionExport(module_index, name) if statement.value is FunctionLiteral
       type := shared.facts.types[statement.name]
-      ValueExport module_index, name, type, constant: shared.top_level.locals[name]?.constant
+      ValueExport(module_index, name, type, constant: shared.top_level.locals[name]?.constant)
     # An extern's name is its own import, since add_extern rejects an import of the same name.
     # An extern's or an intrinsic's name is its own import, since add_extern and add_intrinsic
     # reject an import of the same name.
@@ -143,7 +143,7 @@ export export_of := (program: ProgramWide, module_index: Int, name: String): Exp
       source is ExportRef then panic('an extern or an intrinsic is imported') else source
     when TypeDeclaration
       type := object_type(shared, name)!
-      TypeExport type, info: program.infos[type.symbol]
+      TypeExport(type, info: program.infos[type.symbol])
     when EnumDeclaration then TypeExport(shared.enums[name]!)
     when InterfaceDeclaration then InterfaceExport(shared.interfaces[name]!)
     when TypeAlias then TypeExport(alias_type(shared, statement.name))
@@ -233,7 +233,7 @@ export has_import := (shared: Shared, name: String) ->
 # that name, which this gives (see qualified_import).
 export import_qualified_type := (shared: Shared, type_name: NamedType) ->
   (alias, name) := type_name.name.split_once('.') ? return nil
-  qualified_import shared, alias, Identifier(name, position: type_name.position)
+  qualified_import(shared, alias, Identifier(name, position: type_name.position))
 
 # The name that the export of a module imported as `alias` is imported by, `alias.export`, which
 # this imports on its first use, marking the module's import as used; nil if no module is imported
@@ -285,7 +285,7 @@ export builtin_export := (shared: Shared, name: String) ->
   program := shared.program
   builtins := shared.imports.builtins ? return nil
   ref := export_ref(program, builtins, name) ? return nil
-  export_of program, ref.module_index, ref.name
+  export_of(program, ref.module_index, ref.name)
 
 # The module that declares what std:builtins exports under the name, which std:builtins may export
 # from another module. std:builtins must export the name.

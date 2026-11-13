@@ -26,7 +26,7 @@ export render_markdown := (source: String, rewrite: (String) -> String) ->
   lines := [Line(text, number: index + 1) for text at index in source.lines()]
   html := renderer.blocks(lines, false)
   title := renderer.title ? throw MarkdownError('no heading of level 1')
-  Page title, html, links: renderer.links, warnings: renderer.warnings
+  Page(title, html, links: renderer.links, warnings: renderer.warnings)
 
 # A line of the source, the indentation of the blocks it is in taken off.
 struct Line
@@ -77,7 +77,7 @@ class Renderer
     return (@heading(line), at + 1) if text.starts_with('#')
     return @table(lines, at) if text.starts_with('|')
     return @list(lines, at) if list_marker(text)
-    @paragraph lines, at, tight
+    @paragraph(lines, at, tight)
 
   fence := (lines: Line[], at: Int) ->
     opening := lines[at]
@@ -101,7 +101,7 @@ class Renderer
   # without colors.
   unlexed := (code: String, opening: Line) ->
     @warnings.push "line #{opening.number}: the lexer rejects the code block"
-    escape_html code
+    escape_html(code)
 
   heading := (line: Line) ->
     level := line.text.binary.iter().take_while((byte) -> byte == b'#').count()
@@ -375,7 +375,7 @@ table_cells := (line: Line) ->
   cells
 
 is_delimiter_row := (cells: String[]) ->
-  cells.all (cell) -> not cell.is_empty() and cell.binary.iter().all((byte) -> byte == b'-')
+  cells.all((cell) -> not cell.is_empty() and cell.binary.iter().all((byte) -> byte == b'-'))
 
 # The text of a code span at `at`, without the spaces that pad it, and the offset after it; or nil
 # if no run of as many backticks closes it.

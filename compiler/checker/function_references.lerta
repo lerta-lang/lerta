@@ -24,7 +24,7 @@ export type_of_function_reference := (body: Body, expression: Expression, expect
       callee := copy_identifier(expression)
       call :=
         Call(callee, args: reads(names), position: callee.position, named_args: [], type_args: [])
-      type_of_calling_literal body, expression, expected, names, call
+      type_of_calling_literal(body, expression, expected, names, call)
     when Member
       object := expression.object
       return nil unless object is Identifier
@@ -35,7 +35,7 @@ export type_of_function_reference := (body: Body, expression: Expression, expect
       names := arguments(count, position)
       receiver := names[0]
       call := method_call(copy_identifier(receiver), name, reads(names[1..]), position)
-      type_of_calling_literal body, expression, expected, names, call, object
+      type_of_calling_literal(body, expression, expected, names, call, object)
     else nil
 
 # A method by its type takes its receiver as its first argument, which no function type of no
@@ -64,7 +64,7 @@ export type_of_bound_method := (body: Body, member: Member, expected: Type?) ->
   { name, position } := member.name
   names := arguments(count, position)
   call := method_call(object, name, reads(names), position)
-  type_of_calling_literal body, member, expected, names, call
+  type_of_calling_literal(body, member, expected, names, call)
 
 # Whether the expression is one of those above, which takes its type from the function type
 # expected, as a function literal does.
@@ -124,7 +124,7 @@ type_of_calling_literal := (
   param_type := (index: Int) ->
     return nil if index > 0
     type := receiver_type ? return nil
-    NamedType name: type.name, args: [], position: type.position
+    NamedType(name: type.name, args: [], position: type.position)
   params := [Parameter(name, type: param_type(index)) for name at index in names]
   literal := FunctionLiteral
     params
@@ -136,4 +136,4 @@ type_of_calling_literal := (
     await_at: nil
     weak: false
   body.facts.replacements[expression] = literal
-  type_of body, literal, expected
+  type_of(body, literal, expected)

@@ -66,23 +66,24 @@ struct FileCase
   stderr: Binary
 
 read_expected_text := (name: String, extension: String) ->
-  expand await read_text_or("#{cases_dir}/#{name}.#{extension}", '')
+  expand(await read_text_or("#{cases_dir}/#{name}.#{extension}", ''))
 
 file_case := (name: String) ->
   args := content_lines(await read_text_or_throw("#{cases_dir}/#{name}.args"))
   input := await read_optional("#{cases_dir}/#{name}.in") ? b''
   status_text := await read_text_or("#{cases_dir}/#{name}.status", '0')
   status := parse_status(status_text, "#{name}.status")
-  FileCase
+  FileCase(
     input
     status
     title: "lerta #{args.join(' ')}"
     args: [expand(arg) for arg in args]
     stdout: (await read_expected_text(name, 'out')).binary
     stderr: (await read_expected_text(name, 'err')).binary
+  )
 
 file_check := (test: FileCase) ->
-  Check name: test.title, run: ->
+  Check(name: test.title, run: ->
     { result, left, left_in_temp } := await run_in_new_dir(compiler, test.args, test.input)
     [
       expect_status(test.status, result.status)...
@@ -91,6 +92,7 @@ file_check := (test: FileCase) ->
       expect_left('files left', [], left)...
       expect_left('files left in the temporary directory', [], left_in_temp)...
     ]
+  )
 
 status_checks := ->
   contents := await read_text_or_throw("#{cases_dir}/status.txt")
@@ -149,4 +151,4 @@ export suite := ->
       await build_runtimes("#{cli_work_dir}/runtimes", runtime_flags)
     catch error
       runtime_setup_errors = ["building the CLI runtime cache failed: #{error.message}"]
-  SuiteChecks title, checks, ready: set_up()
+  SuiteChecks(title, checks, ready: set_up())

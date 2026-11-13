@@ -40,7 +40,7 @@ execute := (
   errors := Buffer(limit: OUTPUT_LIMIT)
   ran := run(program, args..., cwd: cwd, stdin: stdin, stdout: output, stderr: errors, env: env)
   ended := await exit_in_time(program, ran)
-  Outcome status: ended.code, stdout: shown_text(output.binary), stderr: shown_text(errors.binary)
+  Outcome(status: ended.code, stdout: shown_text(output.binary), stderr: shown_text(errors.binary))
 
 clang := (args: String[], cwd: String = work_dir) ->
   outcome := await execute('clang', args, cwd)
@@ -115,20 +115,26 @@ expect_clean := (outcome: Outcome) ->
   [compare_text('stderr', '', outcome.stderr)..., expect_status(0, outcome.status)...]
 
 clean_check := (name: String, source: String, optimize: Bool, macros: String[] = []) ->
-  Check name, run: -> expect_clean(await build_and_run(source, optimize, macros))
+  Check(name, run: -> expect_clean(await build_and_run(source, optimize, macros)))
 
 # A debug program that must stop with the message.
 stop_check := (name: String, source: String, message: String, macros: String[] = []) ->
-  Check name, run: ->
+  Check(name, run: ->
     outcome := await build_and_run(source, false, macros)
     [
       compare_text('stderr', "#{message}\n", outcome.stderr)...
       reason_unless(outcome.status != 0, 'expected the program to stop, but it exited with 0')...
     ]
+  )
 
 use_after_drop := (use: String) ->
   message := "#{use} of a dropped object"
-  stop_check "the debug runtime stops a #{message}", 'use_after_drop', message, ["USE=lerta_#{use}"]
+  stop_check(
+    "the debug runtime stops a #{message}"
+    'use_after_drop'
+    message
+    ["USE=lerta_#{use}"]
+  )
 
 kind_name := (optimize: Bool) -> optimize then 'optimized' else 'debug'
 
@@ -173,7 +179,7 @@ long_temp_dir_check := posix_check
   ->
     dir := make_temp_dir()
     try
-      expect_clean await execute(await build('long_temp_dir', false), [], dir)
+      expect_clean(await execute(await build('long_temp_dir', false), [], dir))
     finally
       await remove_tree(dir)
 
@@ -334,7 +340,7 @@ checks: Check[] = [
     executable := await build('read_non_blocking', false)
     script := '{ sleep 0.3; printf hi; } | "$0"'
     outcome := await timeout(execute('sh', ['-c', script, executable]), HANG_SECONDS)
-    expect_status 0, outcome.status
+    expect_status(0, outcome.status)
   )
   posix_check("libuv's uv_spawn leaves a handle that it fails to spawn to uv_close", ->
     executable := await build('spawn_fails', false)
@@ -355,7 +361,7 @@ checks: Check[] = [
     expected := "first\r\nsecond\r\nthird\r\n"
     reason :=
       "expected the terminal to end with #{encode_json(expected)}, got #{encode_json(shown)}"
-    reason_unless shown.ends_with(expected), reason
+    reason_unless(shown.ends_with(expected), reason)
   )
 ]
 
@@ -363,4 +369,4 @@ checks: Check[] = [
 export suite := ->
   title := 'runtime checks'
   selected := select(title, checks) ? return nil
-  SuiteChecks title, checks: selected, ready: set_up_runtime()
+  SuiteChecks(title, checks: selected, ready: set_up_runtime())

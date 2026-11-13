@@ -14,7 +14,7 @@ no_build_flags: String[]
 no_reasons: String[]
 
 build_and_run := (flags: String[]) ->
-  Check name: "lerta build examples/hello.lerta #{flags.join(' ')} and run it", run: ->
+  Check(name: "lerta build examples/hello.lerta #{flags.join(' ')} and run it", run: ->
     built := await run_in_new_dir(
       compiler
       [
@@ -29,9 +29,10 @@ build_and_run := (flags: String[]) ->
     executable := "#{cli_work_dir}/hello-#{flags.join('_')}#{host_executable_suffix}"
     ran := await run_command(executable, [], built.cwd)
     [compare_output('stdout', hello_output, ran.stdout)..., expect_success('run', ran)...]
+  )
 
 default_output_check := ->
-  Check name: 'lerta build examples/hello.lerta writes hello to the current directory', run: ->
+  Check(name: 'lerta build examples/hello.lerta writes hello to the current directory', run: ->
     built := await run_in_new_dir(compiler, ['build', hello])
     succeed 'build', built.result
     executable := "#{built.cwd}/hello#{host_executable_suffix}"
@@ -42,9 +43,10 @@ default_output_check := ->
       compare_output('stdout', hello_output, ran.stdout)...
       expect_success('run', ran)...
     ]
+  )
 
 leading_dash_check := ->
-  Check name: 'lerta build accepts source and output names that start with a dash', run: ->
+  Check(name: 'lerta build accepts source and output names that start with a dash', run: ->
     (cwd, temp) := new_cli_dirs()
     await write_file("#{cwd}/-hi.lerta", await read_file(hello))
     built := await run_in_dir(compiler, ['build', './-hi.lerta', '-o', '-hi'], cwd, temp)
@@ -57,6 +59,7 @@ leading_dash_check := ->
       compare_output('stdout', hello_output, ran.stdout)...
       expect_success('run', ran)...
     ]
+  )
 
 # Each output names, by another path, a file that the build reads.
 struct InputCase
@@ -91,7 +94,7 @@ make_inputs := (cwd: String) ->
   make_link "#{cwd}/hello.lerta", "#{cwd}/link.lerta"
 
 input_check := (test: InputCase) ->
-  Check name: "lerta build rejects an output that is #{test.what}", run: ->
+  Check(name: "lerta build rejects an output that is #{test.what}", run: ->
     (cwd, temp) := new_cli_dirs()
     await make_inputs(cwd)
     before := await read_file("#{cwd}/#{test.input}")
@@ -105,6 +108,7 @@ input_check := (test: InputCase) ->
       )...
       compare_output(test.input, before, await read_file("#{cwd}/#{test.input}"))...
     ]
+  )
 
 input_checks := [input_check(test) for test in input_cases]
 
@@ -113,7 +117,7 @@ input_checks := [input_check(test) for test in input_cases]
 # directory.
 symlink_output_check := ->
   # Wine makes symbolic links but does not follow them (see std:io in the reference).
-  posix_check 'lerta build writes an output whose path goes through a symbolic link', ->
+  posix_check('lerta build writes an output whose path goes through a symbolic link', ->
     (cwd, temp) := new_cli_dirs()
     make_dir "#{cwd}/under"
     make_dir "#{cwd}/under/below"
@@ -128,6 +132,7 @@ symlink_output_check := ->
       compare_output('stdout', hello_output, ran.stdout)...
       expect_success('run', ran)...
     ]
+  )
 
 # An output whose directory is not there is clang's to report: the path worked out as text may name
 # another directory that is there, by a `..` after a symbolic link or after a name that is not there
@@ -135,7 +140,7 @@ symlink_output_check := ->
 # that names a directory is clang's to report too, rather than the file its name as text would be.
 missing_output_directory_check := ->
   # Wine makes symbolic links but does not follow them (see std:io in the reference).
-  posix_check 'lerta build reports an output directory that only the path as text has', ->
+  posix_check('lerta build reports an output directory that only the path as text has', ->
     (cwd, temp) := new_cli_dirs()
     make_dir "#{cwd}/under"
     make_dir "#{cwd}/under/below"
@@ -156,13 +161,14 @@ missing_output_directory_check := ->
         expect_left("files left in beside for #{output}", [], list_dir("#{cwd}/beside"))
       reasons.append expect_left("temporary files left for #{output}", [], built.left_in_temp)
     reasons
+  )
 
 # A `..` after a name that is not there names no file for the system, so an output written there as
 # text would be an input of the build that reject_input_as_output does not see.
 missing_input_output_check := ->
   # Windows works a `..` out as text (see real_path in std:io in the reference), so the output
   # does name the input there, which only reject_input_as_output could tell.
-  posix_check 'lerta build does not write an input that only the output path as text names', ->
+  posix_check('lerta build does not write an input that only the output path as text names', ->
     (cwd, temp) := new_cli_dirs()
     source := "#{cwd}/hi.lerta"
     await write_file(source, await read_file(hello))
@@ -175,11 +181,12 @@ missing_input_output_check := ->
       expect_left('files left', ['hi.lerta'], built.left)...
       expect_left('files left in the temporary directory', [], built.left_in_temp)...
     ]
+  )
 
 # The build resolves its temporary directory, which the link runs in, so one given by a relative
 # path names the same directory for the compiler and for clang.
 relative_temp_check := ->
-  Check name: 'lerta build takes a temporary directory given by a relative path', run: ->
+  Check(name: 'lerta build takes a temporary directory given by a relative path', run: ->
     cwd := new_cli_dir('relative-temp')
     temp := "#{cwd}/temp"
     make_dir temp
@@ -192,9 +199,10 @@ relative_temp_check := ->
       compare_output('stdout', hello_output, ran.stdout)...
       expect_success('run', ran)...
     ]
+  )
 
 no_clang_check := ->
-  Check name: 'lerta build removes temporary files when clang cannot be started', run: ->
+  Check(name: 'lerta build removes temporary files when clang cannot be started', run: ->
     cache := new_cli_dir('no-clang-cache')
     env := { 'LERTA_CACHE_DIR': cache, 'PATH': cli_work_dir }
     built := await run_in_new_dir(compiler, ['build', hello, '-o', 'hello'], b'', env)
@@ -204,9 +212,10 @@ no_clang_check := ->
       expect_left('files left in the temporary directory', [], built.left_in_temp)...
       expect_left('files left in the cache', [], list_dir(cache))...
     ]
+  )
 
 failed_target_check := ->
-  Check name: 'lerta build removes temporary files when clang rejects a target', run: ->
+  Check(name: 'lerta build removes temporary files when clang rejects a target', run: ->
     cache := new_cli_dir('failed-target-cache')
     env := { 'LERTA_CACHE_DIR': cache }
     built := await run_in_new_dir(
@@ -221,9 +230,10 @@ failed_target_check := ->
       expect_left('files left in the temporary directory', [], built.left_in_temp)...
       expect_left('files left in the cache', [], list_dir(cache))...
     ]
+  )
 
 optimized_runtime_check := ->
-  Check name: 'lerta build -O inlines the runtime into the program', run: ->
+  Check(name: 'lerta build -O inlines the runtime into the program', run: ->
     source := "#{root_dir}/tests/string/split.lerta"
     built := await run_in_new_dir(
       compiler
@@ -262,9 +272,10 @@ optimized_runtime_check := ->
       ['lerta_retain is not inlined']
     else
       no_reasons
+  )
 
 dump_llvm_check := ->
-  Check name: 'lerta dump-llvm prints the IR and leaves no file', run: ->
+  Check(name: 'lerta dump-llvm prints the IR and leaves no file', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', hello])
     ir := dumped.result.stdout_text()
     ir_reasons: String[]
@@ -276,11 +287,12 @@ dump_llvm_check := ->
       expect_left('files left', [], dumped.left)...
       expect_left('files left in the temporary directory', [], dumped.left_in_temp)...
     ]
+  )
 
 # A branch to a throw carries the weights of one seldom taken: to an unwinding after a call, to an
 # overflow's throw and to the throw of an Iter resumed while it runs, of a program with each.
 dump_seldom_check := ->
-  Check name: 'lerta dump-llvm weighs the branches to a throw as seldom', run: ->
+  Check(name: 'lerta dump-llvm weighs the branches to a throw as seldom', run: ->
     sources := ["#{root_dir}/bench/fib/main.lerta", "#{root_dir}/tests/yield/basic.lerta"]
     reasons: String[]
     lines: String[]
@@ -296,6 +308,7 @@ dump_seldom_check := ->
       reasons.push "no branch to #{target}" if branches.is_empty()
       reasons.append ["no weights: #{line}" for line in branches when weights not in line]
     reasons
+  )
 
 # The lines of the body of the program's function with the name, among the lines of the IR, or nil
 # where the module defines no such function; a thunk that passes it as a value is not it.
@@ -311,7 +324,7 @@ JOINED_LITERALS := "#{root_dir}/tests/string/joined_literals.lerta"
 
 # Literals joined by `+` are one String in the IR, which the runtime does not join.
 dump_joined_literals_check := ->
-  Check name: 'lerta dump-llvm joins String literals joined by +', run: ->
+  Check(name: 'lerta dump-llvm joins String literals joined by +', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', JOINED_LITERALS])
     ir := dumped.result.stdout_text()
     reasons := expect_status(0, dumped.result.status)
@@ -322,12 +335,13 @@ dump_joined_literals_check := ->
         'and joined by the compiler'
     reasons.push 'no joined literal' unless joined_text in ir
     reasons
+  )
 
 LISTED := "#{root_dir}/tests/in/listed.lerta"
 
 # A test of a list of literals and members of enums makes no array.
 dump_listed_check := ->
-  Check name: 'lerta dump-llvm makes no array for a test of a list of literals', run: ->
+  Check(name: 'lerta dump-llvm makes no array for a test of a list of literals', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', LISTED])
     reasons := expect_status(0, dumped.result.status)
     body := function_body(dumped.result.stdout_text().split("\n"), 'listed') ? return [
@@ -336,6 +350,7 @@ dump_listed_check := ->
     ]
     reasons.push 'an array in listed' if body.any((line) -> '@lerta_array_' in line)
     reasons
+  )
 
 UNCHECKED_METHODS := "#{root_dir}/tests/operator/unchecked_methods.lerta"
 
@@ -343,7 +358,7 @@ UNCHECKED_METHODS := "#{root_dir}/tests/operator/unchecked_methods.lerta"
 # function of the program that calls one alone reads the pending exception, but those that call
 # the operator of a String or a Binary.
 dump_unchecked_methods_check := ->
-  Check name: 'lerta dump-llvm checks for no exception after a builtin that leaves none', run: ->
+  Check(name: 'lerta dump-llvm checks for no exception after a builtin that leaves none', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', UNCHECKED_METHODS])
     lines := dumped.result.stdout_text().split("\n")
     unchecked :=
@@ -362,7 +377,7 @@ dump_unchecked_methods_check := ->
       'float_quotient'
     checked := ['joined', 'bytes_joined']
     reads_exception := (body: String[]) ->
-      body.any (line) -> 'load ptr, ptr @lerta_exception' in line
+      body.any((line) -> 'load ptr, ptr @lerta_exception' in line)
     reasons := expect_status(0, dumped.result.status)
     for name in [unchecked..., checked...]
       body := function_body(lines, name)
@@ -373,21 +388,23 @@ dump_unchecked_methods_check := ->
       if reads_exception(body) != expected
         reasons.push "#{name} #{expected then 'does not read' else 'reads'} the pending exception"
     reasons
+  )
 
 # The pending exception is declared hidden, as the runtime declares it, so that the checks read it
 # directly rather than through the table of addresses (see runtime/lerta.h).
 dump_hidden_exception_check := ->
-  Check name: 'lerta dump-llvm declares the pending exception hidden', run: ->
+  Check(name: 'lerta dump-llvm declares the pending exception hidden', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', UNCHECKED_METHODS])
     reasons := expect_status(0, dumped.result.status)
     declaration := '@lerta_exception = external hidden global'
     reasons.push 'no hidden declaration' unless declaration in dumped.result.stdout_text()
     reasons
+  )
 
 # The array that Array(n, v) makes is assumed to have the length n, but only after the check for
 # the exception that a negative n throws.
 dump_filled_length_check := ->
-  Check name: 'lerta dump-llvm assumes the length of Array(n, v) once it has not thrown', run: ->
+  Check(name: 'lerta dump-llvm assumes the length of Array(n, v) once it has not thrown', run: ->
     source := "#{root_dir}/tests/array/filled_bound.lerta"
     dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
     reasons := expect_status(0, dumped.result.status)
@@ -400,11 +417,12 @@ dump_filled_length_check := ->
     in_order := filled in 0..checked and checked < assumed
     reasons.push 'no assumption after the check' unless in_order
     reasons
+  )
 
 # The float operations that the ranges of Floats show give no NaN check for none, and those that a
 # rule of the ranges almost applies to still check (see tests/float/ranges.lerta).
 dump_float_ranges_check := ->
-  Check name: 'lerta dump-llvm checks no NaN where the ranges of Floats give none', run: ->
+  Check(name: 'lerta dump-llvm checks no NaN where the ranges of Floats give none', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', "#{root_dir}/tests/float/ranges.lerta"])
     lines := dumped.result.stdout_text().split("\n")
     unchecked :=
@@ -461,11 +479,12 @@ dump_float_ranges_check := ->
     count := spread.filter((line) -> ' = fcmp uno ' in line).count()
     reasons.push "spread checks for NaN #{count} times, not once" if count != 1
     reasons
+  )
 
 # The writes of Float fields that follow one another in grow are a batch, which one branch checks
 # for NaN before it stores them, and takes them one by one only where one is NaN.
 dump_batched_writes_check := ->
-  Check name: 'lerta dump-llvm checks a batch of writes of Float fields at once', run: ->
+  Check(name: 'lerta dump-llvm checks a batch of writes of Float fields at once', run: ->
     source := "#{root_dir}/tests/float/nan_in_batched_writes_trace.lerta"
     dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
     reasons := expect_status(0, dumped.result.status)
@@ -474,10 +493,11 @@ dump_batched_writes_check := ->
     batches := body.filter((line) -> line.starts_with('nan.one.by.one.')).count()
     reasons.push "grow has #{batches} batches, not one" if batches != 1
     reasons
+  )
 
 # `x -= e`, where e is a tree, checks for NaN once, at the subtraction, of a local and of a field.
 dump_compound_tree_check := ->
-  Check name: 'lerta dump-llvm checks a compound assignment of a tree for NaN once', run: ->
+  Check(name: 'lerta dump-llvm checks a compound assignment of a tree for NaN once', run: ->
     source := "#{root_dir}/tests/float/nan_in_compound_tree_trace.lerta"
     dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
     reasons := expect_status(0, dumped.result.status)
@@ -486,6 +506,7 @@ dump_compound_tree_check := ->
     count := body.filter((line) -> ' = fcmp uno ' in line).count()
     reasons.push "shrink checks for NaN #{count} times, not twice" if count != 2
     reasons
+  )
 
 REMADE_IN_LOOPS := "#{root_dir}/tests/iter/remade_in_loops.lerta"
 
@@ -494,7 +515,7 @@ REMADE_IN_LOOPS := "#{root_dir}/tests/iter/remade_in_loops.lerta"
 # the stack, made on each round of a loop at one place, is laundered each time, and its captures
 # written as fixed.
 dump_fixed_captures_check := ->
-  Check name: 'lerta dump-llvm reads the captures of a closure as fixed', run: ->
+  Check(name: 'lerta dump-llvm reads the captures of a closure as fixed', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', REMADE_IN_LOOPS])
     reasons := expect_status(0, dumped.result.status)
     lines := dumped.result.stdout_text().split("\n")
@@ -506,19 +527,20 @@ dump_fixed_captures_check := ->
     body := function_body(lines, 'rounds') ? return [reasons..., 'no function rounds']
     stack := [line.trim().split(' = ')[0] for line in body when ' = alloca {' in line]
     is_laundered := (place: String) ->
-      body.any (line) -> "@llvm.launder.invariant.group.p0(ptr #{place})" in line
+      body.any((line) -> "@llvm.launder.invariant.group.p0(ptr #{place})" in line)
     reasons.push 'no stack closure laundered' unless stack.any(is_laundered)
     is_fixed_store := (line: String) ->
       line.trim().starts_with('store i64 ') and '!invariant.group' in line
     reasons.push 'no capture written as fixed' if body.filter(is_fixed_store).count() < 2
     reasons
+  )
 
 ITEM_WRITES := "#{root_dir}/tests/array/item_writes.lerta"
 
 # Each load and store of an item of an array or a value of a map, of each size, names the alias tag
 # of the items, whose nodes the module defines once each.
 dump_item_tag_check := ->
-  Check name: 'lerta dump-llvm tags the loads and stores of items', run: ->
+  Check(name: 'lerta dump-llvm tags the loads and stores of items', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', ITEM_WRITES])
     lines := dumped.result.stdout_text().split("\n")
     tagged := alias_tag_of(lines, 'lerta item') ? return ['the tag of items is not defined once']
@@ -535,6 +557,7 @@ dump_item_tag_check := ->
       expect_status(0, dumped.result.status)...
       ["no #{access} with the tag" for access in accesses when not is_tagged(access)]...
     ]
+  )
 
 # What an access with the alias tag of the type of the name ends with, among the lines of the IR,
 # or nil unless the module defines the type's node and the tag's once each.
@@ -552,7 +575,7 @@ FIELD_WRITES := "#{root_dir}/tests/float/field_writes.lerta"
 # top-level values and their flags, and the read of the pending exception each name their own
 # alias tag, and an Int field names none.
 dump_field_tag_check := ->
-  Check name: 'lerta dump-llvm tags fields, top-level values and the exception', run: ->
+  Check(name: 'lerta dump-llvm tags fields, top-level values and the exception', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', FIELD_WRITES])
     lines := dumped.result.stdout_text().split("\n")
     body := function_body(lines, 'move') ? return ['no function move']
@@ -572,7 +595,7 @@ dump_field_tag_check := ->
       { access: "load i1, #{value('total')}.set\"", tagged: top_level }
       { access: 'load ptr, ptr @lerta_exception', tagged: pointer }
     is_tagged := (access: String, tagged: String) ->
-      body.any (line) -> access in line and line.ends_with(tagged)
+      body.any((line) -> access in line and line.ends_with(tagged))
     reasons := expect_status(0, dumped.result.status)
     for expected in accesses
       unless is_tagged(expected.access, expected.tagged)
@@ -587,6 +610,7 @@ dump_field_tag_check := ->
       id and body.find((line) -> line.ends_with(" = load i64, ptr #{id.split(' = ')[0].trim()}"))
     reasons.push 'no load of the Int field without a tag' unless id_load
     reasons
+  )
 
 # The root node of the alias analysis that clang gives the runtime's C, without its number, so that
 # the items' type is in the same tree as the C types of the runtime.
@@ -600,10 +624,11 @@ clang_tbaa_root := (cwd: String) ->
 
 # The alias tag's nodes and those of the debug information share the module's numbers.
 item_tag_source_lines_check := ->
-  Check name: 'lerta run --source-lines -O runs a program with tagged items', run: ->
+  Check(name: 'lerta run --source-lines -O runs a program with tagged items', run: ->
     ran := await run_command(compiler, ['run', ITEM_WRITES, '--source-lines', '-O'], cli_work_dir)
     expected := await read_file(ITEM_WRITES.without_suffix('.lerta')! + '.out')
     [expect_status(0, ran.status)..., compare_output('stdout', expected, ran.stdout)...]
+  )
 
 # The programs of test/cli/escaped_path, which import a module whose path has characters that
 # symbols escape, and which Windows has in no file name: test/cli/escaped_path/lib/escaped.lerta,
@@ -620,34 +645,37 @@ copy_escaped_path := (dir: String) ->
 
 escaped_run_check := (program: String, flags: String[]) ->
   title := ['lerta run', flags..., "test/cli/escaped_path/#{program}.lerta"].join(' ')
-  posix_check "#{title} imports an escaped path", ->
+  posix_check("#{title} imports an escaped path", ->
     dir := new_cli_dir("escaped-run-#{program.replace('/', '-')}#{flags.join()}")
     await copy_escaped_path(dir)
     ran := await run_command(compiler, ['run', flags..., "#{program}.lerta"], dir)
     expected := await read_file("#{root_dir}/test/cli/escaped_path/#{program}.out")
     [expect_status(0, ran.status)..., compare_output('stdout', expected, ran.stdout)...]
+  )
 
 # The intrinsic value `platform` is the system that the program is built for, which the host's is.
 platform_check := ->
-  Check name: 'lerta run gives platform the system of the build', run: ->
+  Check(name: 'lerta run gives platform the system of the build', run: ->
     code := "import platform from 'std:process'; print platform"
     ran := await run_command(compiler, ['run', '-'], cli_work_dir, code.binary)
     [
       expect_status(0, ran.status)...
       compare_text('stdout', "#{host_platform}\n", ran.stdout_text())...
     ]
+  )
 
 # dump-llvm builds for no target, as the seed is built on every system, so its code reads the system
 # where it runs.
 platform_dump_check := ->
-  Check name: 'lerta dump-llvm reads platform where the code runs', run: ->
+  Check(name: 'lerta dump-llvm reads platform where the code runs', run: ->
     source := "#{root_dir}/tests/process/posix/platform.lerta"
     ran := await run_command(compiler, ['dump-llvm', source], cli_work_dir)
     reads := '@lerta_platform_member(' in ran.stdout_text()
     [expect_status(0, ran.status)..., (reads then [] else ['no call of lerta_platform_member'])...]
+  )
 
 dump_symbols_check := ->
-  posix_check 'lerta dump-llvm escapes module paths in symbol names', ->
+  posix_check('lerta dump-llvm escapes module paths in symbol names', ->
     (dir, temp) := new_cli_dirs()
     await copy_escaped_path(dir)
     copied := list_dir(dir)
@@ -667,11 +695,12 @@ dump_symbols_check := ->
       expect_left('files left', copied, dumped.left)...
       expect_left('files left in the temporary directory', [], dumped.left_in_temp)...
     ]
+  )
 
 # Calls of a generic whose extends in effect differ only in what its bounds do not use share one
 # instance.
 dump_shared_instance_check := ->
-  Check name: 'lerta dump-llvm makes one instance of calls with the same witnesses', run: ->
+  Check(name: 'lerta dump-llvm makes one instance of calls with the same witnesses', run: ->
     source := "#{root_dir}/tests/generics/shared_instance.lerta"
     dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
     is_instance := (line: String) -> line.starts_with('define ') and 'shown<Int>' in line
@@ -680,12 +709,14 @@ dump_shared_instance_check := ->
     reasons := expect_status(0, dumped.result.status)
     reasons.push "#{count} instances of shown<Int>" if count != 1
     reasons
+  )
 
 source_lines_check := ->
-  Check name: 'lerta run --source-lines runs a program', run: ->
+  Check(name: 'lerta run --source-lines runs a program', run: ->
     source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
     ran := await run_command(compiler, ['run', source, '--source-lines'], cli_work_dir)
     [expect_status(0, ran.status)..., compare_output('stdout', b"2\n7\n", ran.stdout)...]
+  )
 
 # macOS keeps the debug information beside the executable, in its dSYM bundle.
 debug_file_of := (executable: String) ->
@@ -729,7 +760,7 @@ line_table_rows := (path: String) ->
   nil
 
 source_lines_build_check := (flags: String[]) ->
-  Check
+  Check(
     name: "lerta build --source-lines #{flags.join(' ')} gives the program line tables of its " +
       'source'
     run: ->
@@ -757,9 +788,10 @@ source_lines_build_check := (flags: String[]) ->
           (rows.is_empty() then ['the line table has no rows'] else no_reasons)...
         ])...
       ]
+  )
 
 no_source_lines_check := ->
-  Check name: 'lerta build without --source-lines omits debug information', run: ->
+  Check(name: 'lerta build without --source-lines omits debug information', run: ->
     source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
     built :=
       await run_in_new_dir(compiler, ['build', source, '-o', "lines#{host_executable_suffix}"])
@@ -769,9 +801,10 @@ no_source_lines_check := ->
     has_debug := await has_debug_info(output)
     return ['debug information without --source-lines'] if has_debug
     no_reasons
+  )
 
 no_trace_check := ->
-  Check name: 'lerta build --no-trace prints an uncaught exception without its trace', run: ->
+  Check(name: 'lerta build --no-trace prints an uncaught exception without its trace', run: ->
     source := "#{root_dir}/tests/trace/rethrow.lerta"
     executable := "#{cli_work_dir}/rethrow#{host_executable_suffix}"
     built := await run_in_new_dir(compiler, ['build', source, '-o', executable, '-O', '--no-trace'])
@@ -785,6 +818,7 @@ no_trace_check := ->
         'the program holds the names of traces'
       ] else no_reasons)...
     ]
+  )
 
 lipo_archs := (path: String) ->
   listed := await run_command('lipo', ['-archs', path], cli_work_dir)
@@ -792,7 +826,7 @@ lipo_archs := (path: String) ->
 
 # Rosetta, which would run the x86_64 slice on arm64, may be missing, so only the host's slice runs.
 universal_check := (flags: String[]) ->
-  Check name: "lerta build --target macos-universal #{flags.join(' ')}", run: ->
+  Check(name: "lerta build --target macos-universal #{flags.join(' ')}", run: ->
     source := "#{root_dir}/tests/trace/lib/source_lines.lerta"
     built := await run_in_new_dir(
       compiler
@@ -812,6 +846,7 @@ universal_check := (flags: String[]) ->
         "the debug information's architectures: #{debug_archs}"
       ])...
     ]
+  )
 
 export checks: Check[] = [
   [build_and_run(flags) for flags in runtime_flags]...

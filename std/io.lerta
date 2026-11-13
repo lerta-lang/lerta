@@ -64,7 +64,7 @@ export open := (path: String, mode: OpenMode) ->
     when WRITE
       pointer := lerta_open_file(path)
       throw IOError("#{failure}#{path}") if pointer == 0
-      File writer: FileWriter(pointer, path)
+      File(FileWriter(pointer, path))
 
 # As much as stdout's buffer holds before a write waits (see runtime/output.c).
 FILE_BUFFER_SIZE := 65536
@@ -139,11 +139,11 @@ kind_at := (path: String) -> stat(path)?.kind
 export real_path := (path: String) ->
   failure := "cannot resolve path: #{path}"
   require_names 'cannot resolve path: ', path
-  path_text lerta_resolve_path(path) ? throw IOError(failure), failure
+  path_text(lerta_resolve_path(path) ? throw IOError(failure), failure)
 
 export make_temp_dir := ->
   failure := 'cannot make a temporary directory'
-  path_text lerta_make_temp_dir() ? throw IOError(failure), failure
+  path_text(lerta_make_temp_dir() ? throw IOError(failure), failure)
 
 # A path that the system gives, which a String holds only if it is UTF-8.
 path_text := (bytes: Binary, failure: String) ->
@@ -226,7 +226,7 @@ export stat := (path: String) ->
   # In the order of the kinds that the runtime gives.
   kinds := [FileKind.FILE, DIR, OTHER]
   modified_time := fields[2].to_float() / 1000000000.0
-  FileStatus modified_time, kind: kinds[fields[0]], size: fields[1]
+  FileStatus(modified_time, kind: kinds[fields[0]], size: fields[1])
 
 extern lerta_stream_write: (Int, Binary) -> Promise
 extern lerta_stream_flush: (Int) -> Promise
@@ -301,7 +301,7 @@ export struct Pipe
   reader := reader_of_pipe(@writer)
 
 reader_of_pipe := (writer: PipeWriter) ->
-  Reader read_chunk: -> await writer.take(), on_close: -> writer.unread()
+  Reader(read_chunk: -> await writer.take(), on_close: -> writer.unread())
 
 class PipeWriter
   # Once set, the Pipe is a system pipe, and the rest is not used.
@@ -616,7 +616,7 @@ export class Reader
         @start = end + 1
         return ended_line_text(@taken_out())
     return nil if @taken.is_empty()
-    utf8_line @taken_out()
+    utf8_line(@taken_out())
 
   # Whether there are bytes to read, past the empty chunks that come before them; false at the end.
   has_bytes := ->
@@ -645,7 +645,7 @@ export class Reader
 # A line that ended with "\n", without a "\r" before it.
 ended_line_text := (bytes: Binary) ->
   ends_with_return := bytes.last() == b"\r"
-  utf8_line ends_with_return then bytes[..(bytes.length - 1)] else bytes
+  utf8_line(ends_with_return then bytes[..(bytes.length - 1)] else bytes)
 
 utf8_line := (bytes: Binary) -> bytes.text() ? throw ValueError('a line is not valid UTF-8')
 

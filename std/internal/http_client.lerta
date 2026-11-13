@@ -106,7 +106,7 @@ export class Client
       # A body that is empty by its framing does not hold the connection until it is read.
       body.end() if left == 0 and not chunked
       read_body := Reader(read_chunk: -> await body.next(), on_close: -> body.abandon())
-      Response body: read_body, status: head.status, headers: head.headers
+      Response(body: read_body, status: head.status, headers: head.headers)
     catch error
       sending?.cancel()
       socket.close()
@@ -225,7 +225,7 @@ parse_url := (url: String) ->
   throw not_url() if '@' in authority or not authority.all(is_host_char)
   (host, port) := host_and_port(authority) ? throw not_url()
   absolute := path.starts_with('/') then path else "/#{path}"
-  Target authority, host, port, path: percent_encoded(absolute)
+  Target(authority, host, port, path: percent_encoded(absolute))
 
 # The host is written as it is in the Host field, so it takes printable ASCII alone; a name that is
 # not ASCII would need IDNA.
@@ -324,7 +324,7 @@ read_any_head := (reader: Reader, line: String) ->
   throw malformed() if code.binary.length != 3 or not code.is_digits()
   status := code.parse_int()!
   throw malformed() if status < 100
-  Head version, status, headers: await read_fields(reader)
+  Head(version, status, headers: await read_fields(reader))
 
 read_fields := (reader: Reader) ->
   headers := Headers()

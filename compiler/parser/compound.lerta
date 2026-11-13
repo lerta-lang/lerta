@@ -25,7 +25,7 @@ export at_function_literal := (tokens: TokenStream) ->
   return true if first in ['->', '<']
   return false if first != '('
   block_follows := tokens.peek_at(1).kind == NEWLINE and tokens.peek_at(2).kind == INDENT
-  looks_like_parameters tokens, block_follows then 3 else 1
+  looks_like_parameters(tokens, block_follows then 3 else 1)
 
 export at_weak_function_literal := (tokens: TokenStream) ->
   return false unless tokens.at_word('weak')
@@ -53,7 +53,7 @@ export parse_function_literal := (tokens: TokenStream, weak = false) ->
   type_params := parse_type_parameters(tokens)
   parse_params := (): Parameter[] ->
     return [] unless tokens.accept('(')
-    tokens.parse_list ')', -> parse_parameter(tokens)
+    tokens.parse_list(')', -> parse_parameter(tokens))
   # A default is computed before the body runs (see generate_default_entry), so it cannot wait.
   parsed_params := tokens.in_function(parse_params)
   params := parsed_params.body
@@ -77,7 +77,7 @@ export parse_function_literal := (tokens: TokenStream, weak = false) ->
   yields := marks.yields
   position := token.position()
   await_at := marks.await_at
-  FunctionLiteral type_params, params, return_type, body, yields, await_at, position, weak
+  FunctionLiteral(type_params, params, return_type, body, yields, await_at, position, weak)
 
 # `name[: Type][ = default]`, or `name: Type...`.
 parse_parameter := (tokens: TokenStream): Parameter ->
@@ -101,8 +101,8 @@ export parse_array_literal := (tokens: TokenStream, position: Position) ->
         tokens.fail first.position, 'a spread cannot be the element of a comprehension'
       return parse_comprehension(tokens, first, position, ']')
     elements := tokens.parse_list_rest(']', -> parse_element(tokens), [first])
-    ArrayLiteral elements, position
-  tokens.inside parse_contents
+    ArrayLiteral(elements, position)
+  tokens.inside(parse_contents)
 
 # An item, which a spread `xs...` may be (see spread_of_value).
 export parse_element := (tokens: TokenStream) -> spread_of(tokens, parse_expression(tokens))
@@ -111,7 +111,7 @@ export parse_element := (tokens: TokenStream) -> spread_of(tokens, parse_express
 export spread_of := (tokens: TokenStream, value: Expression) ->
   return value unless at_spread(tokens)
   tokens.next()
-  spread_of_value value
+  spread_of_value(value)
 
 # `(a)`, a tuple, `(a, b)`, or `(f(x) for x in xs when g(x))`, an Iter comprehension.
 export parse_parenthesized := (tokens: TokenStream, position: Position) ->
@@ -126,7 +126,7 @@ export parse_parenthesized := (tokens: TokenStream, position: Position) ->
     # Diagnostics about the group point at its opening parenthesis.
     first.position = position
     first
-  tokens.inside parse_contents
+  tokens.inside(parse_contents)
 
 # `for x in xs when guard]`, after the element, or `... guard)` for an Iter. Each further `for`
 # nests a comprehension in the element of the one before.
@@ -159,7 +159,7 @@ comprehension_of := (
   # Each place that reads the parts declares them anew, as each is its own function or scope.
   bindings := -> take_apart_item(header)
   lazy := is_lazy then lazy_functions(element, variable, guard, bindings)
-  Comprehension
+  Comprehension(
     element
     variable
     iterable
@@ -169,16 +169,17 @@ comprehension_of := (
     index
     nested
     bindings: bindings()
+  )
 
 export parse_map_literal := (tokens: TokenStream, position: Position) ->
-  tokens.inside -> parse_map_contents(tokens, position)
+  tokens.inside(-> parse_map_contents(tokens, position))
 
 # `{}` is an anonymous struct of no fields; the empty map is `Map()`.
 parse_map_contents := (tokens: TokenStream, position: Position): Expression ->
   if at_record_field(tokens) or item_ends_with_spread(tokens) or tokens.peek().kind == '}'
     return parse_record_literal(tokens, position)
   entries := tokens.parse_list_rest<MapEntry>('}', -> parse_map_entry(tokens), [])
-  MapLiteral entries, position
+  MapLiteral(entries, position)
 
 parse_map_entry := (tokens: TokenStream) ->
   if at_record_field(tokens)
@@ -188,7 +189,7 @@ parse_map_entry := (tokens: TokenStream) ->
     tokens.fail token.position(), message
   key := parse_expression(tokens)
   tokens.expect ':'
-  MapEntry key, value: parse_expression(tokens)
+  MapEntry(key, value: parse_expression(tokens))
 
 # A name followed by `:`, `,`, `}` or the end of its line starts a field of an anonymous struct; a
 # map's keys are other expressions.
@@ -219,7 +220,7 @@ export item_ends_with_spread := (tokens: TokenStream) ->
 # `{ x: 1, y }`; a field without a value takes that of the name. A spread comes first, alone.
 parse_record_literal := (tokens: TokenStream, position: Position) ->
   items := tokens.parse_list_rest<RecordItem>('}', -> parse_record_item(tokens), [])
-  record_of tokens, items, position
+  record_of(tokens, items, position)
 
 type RecordItem = NamedValue | Comprehension
 
@@ -233,7 +234,7 @@ export record_of := (tokens: TokenStream, items: RecordItem[], position: Positio
   fields := [item for item in items when item is NamedValue]
   first := items.first()
   spread := first is Comprehension then first
-  RecordLiteral fields, position, spread
+  RecordLiteral(fields, position, spread)
 
 parse_record_field := (tokens: TokenStream) ->
   unless at_record_field(tokens)
@@ -242,7 +243,7 @@ parse_record_field := (tokens: TokenStream) ->
   name := parse_identifier(tokens)
   has_value := tokens.accept(':')
   value: Expression = has_value then parse_expression(tokens) else copy_identifier(name)
-  NamedValue name, value
+  NamedValue(name, value)
 
 # With a subject, the `else` arm may be left out; whether it may is checked later.
 export parse_case := (tokens: TokenStream, position: Position) ->
@@ -256,7 +257,7 @@ export parse_case := (tokens: TokenStream, position: Position) ->
   tokens.expect 'else', "'when' or 'else'" if has_else
   otherwise := has_else then parse_arm_body(tokens, 'else')
   tokens.expect DEDENT, 'end of block'
-  Case subject, arms, otherwise, position
+  Case(subject, arms, otherwise, position)
 
 # `try` and an indented block, then `catch` clauses and a `finally` clause, each with its block.
 export parse_try := (tokens: TokenStream, position: Position) ->
@@ -267,13 +268,13 @@ export parse_try := (tokens: TokenStream, position: Position) ->
   finally_body := has_finally then parse_block(tokens)
   if catches.is_empty() and finally_body == nil
     tokens.fail_expecting tokens.peek(), "'catch' or 'finally'"
-  Try body, catches, finally_body, position
+  Try(body, catches, finally_body, position)
 
 parse_catch := (tokens: TokenStream) ->
   position := tokens.next().position()
   name := parse_identifier(tokens)
   type := parse_type_annotation(tokens)
-  Catch name, type, position, body: parse_block(tokens)
+  Catch(name, type, position, body: parse_block(tokens))
 
 parse_case_arm := (tokens: TokenStream, has_subject: Bool): CaseArm ->
   tokens.expect_word 'when'
@@ -307,7 +308,7 @@ parse_arm_body := (tokens: TokenStream, arm: TokenKind): Statement[] ->
     return [statement]
   next := tokens.peek()
   tokens.fail_expecting next, "'then' or end of line" if next.kind != NEWLINE
-  parse_block tokens
+  parse_block(tokens)
 
 # `pass` alone, a body that does nothing: an arm's, or a function literal's on its line, where the
 # line or the brackets end after it. It is not a keyword: there it means nothing else, as a name
@@ -315,7 +316,7 @@ parse_arm_body := (tokens: TokenStream, arm: TokenKind): Statement[] ->
 export parse_pass := (tokens: TokenStream): Statement? ->
   ends := tokens.peek_at(1).kind in PASS_FOLLOWERS
   return nil if not tokens.at_word('pass') or not ends
-  Pass tokens.next().position()
+  Pass(tokens.next().position())
 
 PASS_FOLLOWERS: TokenKind[] = [NEWLINE, ',', 'else', CLOSING_BRACKETS...]
 
@@ -336,7 +337,7 @@ export accept_pass_block := (tokens: TokenStream) ->
 parse_inline_arm := (tokens: TokenStream) ->
   message := 'a declaration in an arm must be in an indented block'
   tokens.fail_here message if at_declaration(tokens)
-  parse_line_statement tokens
+  parse_line_statement(tokens)
 
 # The guard and the element of an Iter comprehension as functions of the loop variable (see
 # Comprehension). The guard's function tests its condition as an `if` would:
@@ -347,7 +348,7 @@ lazy_functions := (
   function_of := (value: Expression) ->
     params := [Parameter(copy_identifier(variable))]
     body := [bindings()..., value]
-    FunctionLiteral
+    FunctionLiteral(
       params
       body
       type_params: []
@@ -355,11 +356,12 @@ lazy_functions := (
       yields: false
       await_at: nil
       weak: false
+    )
   guard_function := guard then function_of(as_test(guard))
-  LazyFunctions guard: guard_function, element: function_of(element)
+  LazyFunctions(guard: guard_function, element: function_of(element))
 
 as_test := (guard: Expression) ->
   position := guard.position
   then_value := BooleanLiteral(position, value: true)
   else_value := BooleanLiteral(position, value: false)
-  Conditional then_value, else_value, position, condition: guard
+  Conditional(then_value, else_value, position, condition: guard)

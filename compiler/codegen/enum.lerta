@@ -7,17 +7,17 @@ import EnumMember, EnumType, optional_type from '../types'
 
 # The member's text, an immortal String, read from the enum's member texts.
 export emit_member_name := (ir: IrBuilder, value: String, type: EnumType) ->
-  emit_text_at ir, value, type, member_texts(ir, type)
+  emit_text_at(ir, value, type, member_texts(ir, type))
 
 # The member as it is declared, an immortal String: its name, or the literal that gives its text,
 # `'('`.
 export emit_member_literal := (ir: IrBuilder, value: String, type: EnumType) ->
-  emit_text_at ir, value, type, member_literals(ir, type)
+  emit_text_at(ir, value, type, member_literals(ir, type))
 
 emit_text_at := (ir: IrBuilder, value: String, type: EnumType, texts: String) ->
   array_type := member_texts_type(type)
   pointer := ir.assign("getelementptr #{array_type}, ptr #{texts}, i64 0, i64 #{value}")
-  ir.load 'ptr', pointer
+  ir.load('ptr', pointer)
 
 # `parse<E>(text)` of std:enums: the member whose text is the String, or nil.
 export emit_parse := (ir: IrBuilder, text: String, type: EnumType) ->
@@ -28,28 +28,28 @@ export emit_parse := (ir: IrBuilder, text: String, type: EnumType) ->
   optional := optional_type(type)
   result_type := ir_type(optional)
   found := "#{result_type} #{emit_wrap(ir, index, type)}"
-  ir.assign "select i1 #{is_found}, #{found}, #{result_type} #{nil_constant(optional)}"
+  ir.assign("select i1 #{is_found}, #{found}, #{result_type} #{nil_constant(optional)}")
 
 # std's `platform` in a build for no target, which reads the system where the code runs: the member
 # whose text is the system's name.
 export emit_platform_member := (ir: IrBuilder, type: EnumType) ->
   args := "ptr #{member_texts(ir, type)}, i64 #{type.members.length}"
-  call_runtime ir, 'i64 @lerta_platform_member(ptr, i64)', args
+  call_runtime(ir, 'i64 @lerta_platform_member(ptr, i64)', args)
 
 member_texts_type := (type: EnumType) -> "[#{type.members.length} x ptr]"
 
 # Constant arrays of the members' texts and of the members as declared, in their order.
 member_texts := (ir: IrBuilder, type: EnumType) ->
-  text_table ir, type, 'enum_names', (member) -> member.text
+  text_table(ir, type, 'enum_names', (member) -> member.text)
 
 member_literals := (ir: IrBuilder, type: EnumType) ->
   literal_of := (member: EnumMember) ->
     member.is_name then member.text else member.text.to_literal()
-  text_table ir, type, 'enum_literals', literal_of
+  text_table(ir, type, 'enum_literals', literal_of)
 
 text_table := (ir: IrBuilder, type: EnumType, kind: String, text_of: (EnumMember) -> String) ->
   define := (name: String, module: IrModule) ->
     texts := ["ptr #{string_constant(ir, text_of(member))}" for member in type.members]
     value := "[#{texts.join(', ')}]"
     module.define_global name, "private unnamed_addr constant #{member_texts_type(type)} #{value}"
-  ir.module.named "#{kind} #{type.symbol}", "@lerta.#{kind}", define
+  ir.module.named("#{kind} #{type.symbol}", "@lerta.#{kind}", define)

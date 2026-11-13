@@ -26,7 +26,7 @@ export parse_type_alias := (tokens: TokenStream) ->
   position := tokens.next().position()
   name := parse_identifier(tokens)
   tokens.expect '='
-  TypeAlias name, position, type: parse_aliased_type(tokens)
+  TypeAlias(name, position, type: parse_aliased_type(tokens))
 
 # `export` before a `const` (a function or a value) or a type, or before the names of a module or
 # the module alone; the checker tells whether it is at the top level.
@@ -53,14 +53,14 @@ export parse_extern := (tokens: TokenStream) ->
   has_name := tokens.accept_word('as')
   name := has_name then parse_identifier(tokens) else symbol
   tokens.expect ':'
-  Extern symbol, name, position, type: parse_type_name(tokens)
+  Extern(symbol, name, position, type: parse_type_name(tokens))
 
 # `intrinsic name`, or `intrinsic name: Type`.
 export parse_intrinsic := (tokens: TokenStream) ->
   position := tokens.next().position()
   name := parse_identifier(tokens)
   type := tokens.accept(':') then parse_type_name(tokens)
-  Intrinsic position, name, type
+  Intrinsic(position, name, type)
 
 at_reexport := (tokens: TokenStream) ->
   case tokens.peek().kind
@@ -93,7 +93,7 @@ parse_import_after := (tokens: TokenStream, position: Position) ->
   ends_line := tokens.peek().kind == NEWLINE
   names := ends_line then parse_name_block(tokens) else parse_name_line(tokens)
   tokens.expect_word 'from'
-  Import names, position, module: parse_module_name(tokens)
+  Import(names, position, module: parse_module_name(tokens))
 
 # The names on the line, separated by commas; `from` follows the last one, which no comma does.
 parse_name_line := (tokens: TokenStream) ->
@@ -141,7 +141,7 @@ export parse_type_declaration := (tokens: TokenStream) ->
   members: MemberDeclaration[] = has_body and not is_empty then parse_members(tokens) else []
   is_struct := token.kind == 'struct'
   position := token.position()
-  TypeDeclaration name, type_params, members, is_struct, position, satisfies
+  TypeDeclaration(name, type_params, members, is_struct, position, satisfies)
 
 # `interface Name`, or `interface Name<T>`, followed by an indented block of members, one per line,
 # written as a class's; the checker tells which an interface can have, and whether it can have
@@ -151,11 +151,12 @@ export parse_interface := (tokens: TokenStream) ->
   name := parse_identifier(tokens)
   type_params := parse_type_parameters(tokens)
   has_members := tokens.peek_at(1).kind == INDENT
-  InterfaceDeclaration
+  InterfaceDeclaration(
     name
     type_params
     position
     members: has_members then parse_members(tokens) else []
+  )
 
 # `enum Name` followed by an indented block of its members, one per line.
 export parse_enum := (tokens: TokenStream) ->
@@ -164,7 +165,7 @@ export parse_enum := (tokens: TokenStream) ->
   has_members := tokens.peek().kind != NEWLINE or tokens.peek_at(1).kind == INDENT
   tokens.fail position, 'an enum needs at least one member' unless has_members
   members := tokens.parse_lines('indented members', -> parse_enum_member(tokens))
-  EnumDeclaration name, members, position
+  EnumDeclaration(name, members, position)
 
 # A name, or a string literal, whose text must be known without running the program.
 parse_enum_member := (tokens: TokenStream): Identifier | StringLiteral ->
@@ -173,7 +174,7 @@ parse_enum_member := (tokens: TokenStream): Identifier | StringLiteral ->
   case token.kind
     when STRING
       tokens.next()
-      StringLiteral position, value: token.text
+      StringLiteral(position, value: token.text)
     when INTERPOLATED then tokens.fail(position, 'an enum member cannot be interpolated')
     else parse_identifier(tokens)
 
@@ -183,10 +184,10 @@ export parse_extend := (tokens: TokenStream) ->
   position := tokens.next().position()
   type_params := parse_type_parameters(tokens)
   type := parse_type_name(tokens)
-  Extend type_params, type, position, members: parse_members(tokens)
+  Extend(type_params, type, position, members: parse_members(tokens))
 
 parse_members := (tokens: TokenStream) ->
-  tokens.parse_lines 'indented members', -> parse_member(tokens)
+  tokens.parse_lines('indented members', -> parse_member(tokens))
 
 parse_member_modifier := (tokens: TokenStream) ->
   token := tokens.peek()
@@ -230,7 +231,7 @@ parse_member := (tokens: TokenStream) ->
   has_default := has_value and at_default(tokens)
   tokens.next() if has_default
   value := has_value then parse_value(tokens)
-  MemberDeclaration name, modifier, type, value, has_default, throws, position: token.position()
+  MemberDeclaration(name, modifier, type, value, has_default, throws, position: token.position())
 
 # `default` marks a default when an operand follows it, as the argument of a call without
 # parentheses would.

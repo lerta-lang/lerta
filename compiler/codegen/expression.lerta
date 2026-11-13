@@ -80,7 +80,7 @@ export generate := (g: Generator, expression: Expression) ->
   value := emit_interface_value(g, operand, itab)
   converted := inner_of(target)
   return value unless converted is IterType
-  emit_adapter_iter g.ir, value, itab.target, converted.item
+  emit_adapter_iter(g.ir, value, itab.target, converted.item)
 
 # The type of the operand that `generate` returns: the type the expression is converted to, if
 # it is.
@@ -106,13 +106,13 @@ generate_call_ending_if_never := (g: Generator, call: Call) ->
   operand
 
 generate_value := (g: Generator, expression: Expression) ->
-  located_value g, expression.position, -> generate_node(g, replaced(g, expression))
+  located_value(g, expression.position, -> generate_node(g, replaced(g, expression)))
 
 # What the checker replaced the expression with, through each replacement in turn, or the
 # expression itself (see NodeFacts.replacements).
 export replaced := (g: Generator, expression: Expression): Expression ->
   replacement := g.facts.replacements[expression] ? return expression
-  replaced g, replacement
+  replaced(g, replacement)
 
 generate_node := (g: Generator, expression: Expression): String ->
   return constant_operand(g.ir, constant) if constant := g.facts.constants[expression]
@@ -129,19 +129,19 @@ generate_node := (g: Generator, expression: Expression): String ->
     when Cast then generate_cast(g, expression)
     when This
       object := g.locals.lookup('@')!
-      read_local g, object, object.type
+      read_local(g, object, object.type)
     when Unwrap then generate_unwrap(g, expression)
     when Coalesce then generate_coalesce(g, expression)
     when StringLiteral
       return "#{index}" if index := g.facts.enum_literals[expression]
       return "#{expression.value.iter().next().to_int()}" if is_kind(type_of(g, expression), 'Char')
-      string_constant g.ir, expression.value
+      string_constant(g.ir, expression.value)
     when Interpolation
       is_byte := is_kind(type_of(g, expression), 'Byte')
       return "#{binary_literal_bytes(expression)![0]}" if is_byte
-      generate_interpolation g, expression
+      generate_interpolation(g, expression)
     when BooleanLiteral, FloatLiteral, IntegerLiteral
-      scalar_literal expression, type_of(g, expression)
+      scalar_literal(expression, type_of(g, expression))
     when Call then generate_call_in_tree(g, expression)
     when UnaryOperation then generate_unary(g, expression)
     when BinaryOperation then generate_binary(g, expression)
@@ -159,11 +159,11 @@ generate_node := (g: Generator, expression: Expression): String ->
       emit := (operands: String[]) ->
         values: Map<String, String>
         values[field.name.name] = operand for (field, operand) in fields.zip(operands)
-        emit_record g.ir, type_of(g, expression), values
-      holding_all g, [field.value for field in fields], emit
+        emit_record(g.ir, type_of(g, expression), values)
+      holding_all(g, [field.value for field in fields], emit)
     when TupleLiteral
       emit := (operands: String[]) -> emit_values(g.ir, type_of(g, expression), operands)
-      holding_all g, expression.items, emit
+      holding_all(g, expression.items, emit)
     when TupleItem
       tuple := generate(g, expression.tuple)
       item := emit_value_at(g.ir, tuple, type_of(g, expression.tuple), expression.index)
@@ -263,7 +263,7 @@ emit_member_test := (g: Generator, object: String, value: Expression, type_name:
     return value_type is OptionalType then emit_is_present(g.ir, object, value_type) else 'true'
   test_of := (each: String) -> emit_type_test(g.ir, each, type)
   return test_of(object) unless value_type is OptionalType
-  emit_present_test g.ir, object, value_type, test_of
+  emit_present_test(g.ir, object, value_type, test_of)
 
 # A field's value, of a class, a struct or an anonymous struct; the object is released if it is
 # owned, and the value retained.
@@ -295,7 +295,7 @@ export held_field := (g: Generator, object: String, type: ObjectType, name: Stri
   info := info_of(g.code.program, type)
   pointer := emit_field_pointer(g.ir, object, info, name)
   field_type := field_named(info, name).type!
-  g.ir.load ir_type(field_type), pointer, field_tag(g.ir, field_type)
+  g.ir.load(ir_type(field_type), pointer, field_tag(g.ir, field_type))
 
 # A field of a class, a struct or an anonymous struct, or one that every member of a union has,
 # of the object, which is released if it is owned.
@@ -309,7 +309,7 @@ export read_any_field := (
 ) ->
   return read_field(g, object, object_type, name, is_owned) unless object_type is UnionType
   of_member := (type: Type) -> read_field(g, object, type, name, is_owned)
-  emit_member_dispatch g.ir, object, object_type.members, ir_type(field_type), of_member
+  emit_member_dispatch(g.ir, object, object_type.members, ir_type(field_type), of_member)
 
 # The object that a weak `T!` field's box holds, borrowed; it throws if the object is gone.
 weak_object := (g: Generator, box: String) ->
@@ -337,7 +337,7 @@ generate_property := (g: Generator, member: Member) ->
       when EnumValue then panic('an enum value is read before its object')
   # A field narrowed where it is read (see checker narrowable FieldPath).
   field_type := declared_field_type(g, object_type, name) ? return value
-  emit_narrowed_owned g.ir, value, field_type, type
+  emit_narrowed_owned(g.ir, value, field_type, type)
 
 export declared_field_type := (g: Generator, object_type: Type, name: String) ->
   case object_type
@@ -383,13 +383,13 @@ generate_interpolation := (g: Generator, interpolation: Interpolation) ->
     push_temporary g, operand, string_type
     parts.push operand
   pop_temporaries g, depth
-  emit_concat g.ir, parts
+  emit_concat(g.ir, parts)
 
 # The text of the value, or a Binary as it is, which only a Binary literal takes (see
 # check_interpolated).
 generate_interpolated := (g: Generator, part: Call) ->
   return generate(g, part) unless is_kind(type_of(g, part), 'Binary')
-  generate g, (part.callee as Member!).object
+  generate(g, (part.callee as Member!).object)
 
 # Generates the expressions in order, each held while the later ones are evaluated, which may
 # throw, and gives their operands to `use`; they are let go of after it. Unlike `holding`, it
@@ -417,7 +417,7 @@ generate_identifier := (g: Generator, identifier: Identifier) ->
   case reference
     when EnumValue then "#{reference.index}"
     when FunctionReference
-      emit_function_closure g.ir, function_reference_symbol(g, reference), type
+      emit_function_closure(g.ir, function_reference_symbol(g, reference), type)
     when ScopedLocal, TopLevelValue then read_local(g, local_of(g, identifier), type)
     when LocalFunction then generate_closure(g, reference.literal)
     # A C function can only be called, and generate_named_call generates the callee of a
@@ -460,7 +460,7 @@ export read_borrowed := (g: Generator, local: CodegenLocal, type: Type) ->
   # A weak local's object, which may be gone, is never narrowed.
   value := local.weak then emit_weak_object(ir, held) else held
   check_where_read g, local, value
-  emit_narrowed ir, value, local.type, type
+  emit_narrowed(ir, value, local.type, type)
 
 # Checks the local for NaN if it holds a float not checked yet, as a read of it would.
 export emit_deferred_check := (g: Generator, local: CodegenLocal) ->
@@ -479,14 +479,14 @@ check_where_read := (g: Generator, local: CodegenLocal, value: String) ->
 # where it is called, as their values leave the tree; the trees in them are their own, whose roots
 # leave the tree's way of checking as it was.
 generate_call_in_tree := (g: Generator, call: Call) ->
-  with_deferred_checks g, false, -> generate_call_ending_if_never(g, call)
+  with_deferred_checks(g, false, -> generate_call_ending_if_never(g, call))
 
 # What the local holds, borrowed: its value, or a weak local's box.
 export held_value := (g: Generator, local: CodegenLocal) ->
   case local
     when SlotLocal
       pointer := slot_pointer(g, local)
-      g.ir.load ir_type(local.type), pointer, slot_tag(g.ir, local)
+      g.ir.load(ir_type(local.type), pointer, slot_tag(g.ir, local))
     when ValueLocal then local.operand
 
 # The value of the declared type as the narrower one where it is narrowed: without nil, or as one
@@ -502,7 +502,7 @@ export emit_narrowed := (ir: IrBuilder, value: String, declared: Type, type: Typ
   # A union value is a pointer, null for nil, whether optional or not.
   return emit_unbox(ir, value, type) unless type is OptionalType
   member := -> emit_wrap(ir, emit_unbox(ir, value, type.inner), type.inner)
-  emit_branch ir, ir_type(type), ir.is_not_null(value), member, nil_constant(type)
+  emit_branch(ir, ir_type(type), ir.is_not_null(value), member, nil_constant(type))
 
 # As emit_narrowed, of a value that is owned and given over.
 emit_narrowed_owned := (ir: IrBuilder, value: String, declared: Type, type: Type) ->
@@ -520,7 +520,7 @@ export is_boxed_narrowing := (declared: Type, type: Type) ->
 emit_box_value := (ir: IrBuilder, value: String, type: Type) ->
   return emit_box(ir, value, type) unless type is OptionalType
   box := -> emit_box(ir, emit_unwrap(ir, value, type), type.inner)
-  emit_branch ir, 'ptr', emit_is_present(ir, value, type), box, 'null'
+  emit_branch(ir, 'ptr', emit_is_present(ir, value, type), box, 'null')
 
 # The Error becomes the exception (see exceptions).
 # An AssertionError of the message, a String, which its constructor takes owned.
@@ -530,11 +530,11 @@ generate_assertion_throw := (g: Generator, message: Expression) ->
   text := generate(g, message)
   constructor := constructor_symbol(itab.type as ObjectType!)
   error := g.ir.assign("call ptr #{constructor}(ptr #{text})")
-  emit_throw_error g, emit_interface_value(g, error, itab), false
+  emit_throw_error(g, emit_interface_value(g, error, itab), false)
 
 generate_throw := (g: Generator, throw_expression: Throw) ->
   message := throw_expression.message
   return generate_assertion_throw(g, message) if throw_expression.assertion
   local := message is Identifier then local_of(g, message)
   rethrows := local is SlotLocal and local.caught
-  emit_throw_error g, generate(g, message), rethrows
+  emit_throw_error(g, generate(g, message), rethrows)

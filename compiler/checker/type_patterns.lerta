@@ -25,7 +25,7 @@ map_parts := (type: Type, replace: (Type) -> Type): Type ->
     when OptionalType then optional_type(replace(type.inner))
     when RecordType
       replace_field := (field: RecordField) -> RecordField(field..., type: replace(field.type))
-      record_type [replace_field(field) for field in type.fields]
+      record_type([replace_field(field) for field in type.fields])
     when TupleType then TupleType([replace(item) for item in type.items])
     when UnionType then union_type([replace(member) for member in type.members])
     when InterfaceType
@@ -36,19 +36,19 @@ map_parts := (type: Type, replace: (Type) -> Type): Type ->
       args := [replace(arg) for arg in type.args]
       ObjectType(type..., args)
     when FunctionType
-      FunctionType params: [replace(param) for param in type.params], result: replace(type.result)
+      FunctionType(params: [replace(param) for param in type.params], result: replace(type.result))
     else type
 
 # The type with the type parameters that `bindings` has replaced by their types.
 export substitute := (type: Type, bindings: Map<String, Type>): Type ->
   return bindings[type.name] ? type if type is TypeParameterType and not type.standing
-  map_parts type, (part) -> substitute(part, bindings)
+  map_parts(type, (part) -> substitute(part, bindings))
 
 # The type with the type parameters standing for themselves that `bindings` has replaced by their
 # types, as the type of a generic function from its definition, for the type arguments of a call.
 export substitute_standing := (type: Type, bindings: Map<String, Type>): Type ->
   return bindings[type.name] ? type if type is TypeParameterType and type.standing
-  map_parts type, (part) -> substitute_standing(part, bindings)
+  map_parts(type, (part) -> substitute_standing(part, bindings))
 
 # Whether the type has type parameters, as `T[]` has, which make it a pattern of other types.
 export is_pattern := (type: Type): Bool -> is_variable(type) or parts_of(type).any(is_pattern)

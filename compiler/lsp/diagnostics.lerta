@@ -51,7 +51,7 @@ export check_file := (path: String, encoding: PositionEncoding) ->
     by_path[located.location, default: []].push(diagnostic)
   await add(each, ERROR) for each in found.errors
   await add(each, WARNING) for each in found.warnings
-  Checked by_path, program: found.program
+  Checked(by_path, program: found.program)
 
 # What the check of a program found: the errors and the warnings, the program as far as it is
 # checked, if its modules could be loaded, and the locations of its modules that are not standard.
@@ -89,15 +89,16 @@ found_in := (path: String) ->
   # An error of loading, which ends it before the checker starts, is kept.
   errors = [each for each in errors when each.location not in unparsed] if checked
   errors.append parse_errors
-  Found
+  Found(
     locations
     errors
     warnings: [each for each in warnings when each.location not in unparsed]
     program: checked
+  )
 
 diagnostic_of := (located: Located, severity: Int, encoding: PositionEncoding) ->
   at := await position(located, encoding)
-  LspDiagnostic severity, range: { start: at, end: at }, source: 'lerta', message: located.message
+  LspDiagnostic(severity, range: { start: at, end: at }, source: 'lerta', message: located.message)
 
 # The position of the diagnostic, whose column counts code points: in UTF-16 units, those before
 # it on its line count 2 each above U+FFFF.
@@ -110,14 +111,14 @@ export lsp_position := (location: String, at: Position, encoding: PositionEncodi
   line := at.line - 1
   before := at.column - 1
   return LspPosition(line, character: before) if encoding == UTF32
-  LspPosition line, character: characters(await line_text(location, line), encoding, before)
+  LspPosition(line, character: characters(await line_text(location, line), encoding, before))
 
 # The range of the name in the file at the location, as the LSP takes it.
 export name_range := (location: String, name: Identifier, encoding: PositionEncoding) ->
   { line, column } := name.position
   start := await lsp_position(location, name.position, encoding)
   end := await lsp_position(location, { line, column: column + name.name.count() }, encoding)
-  LspRange start, end
+  LspRange(start, end)
 
 # The position that the LSP gives in the file at the location, of lines and columns from 1 and
 # columns in code points.
@@ -130,7 +131,7 @@ export source_position := (location: String, at: LspPosition, encoding: Position
     break if units >= at.character
     units += units_of(code, UTF16)
     counted += 1
-  Position line: at.line + 1, column: counted + 1
+  Position(line: at.line + 1, column: counted + 1)
 
 line_text := (location: String, line: Int) ->
   lines := (await read_source(location)).split("\n")

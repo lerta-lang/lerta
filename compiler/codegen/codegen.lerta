@@ -57,7 +57,7 @@ export generate := (
     [define_top_level_globals(ir_modules[i], module, program.shared[i]) for module at i in modules]
   module_code := (i: Int, ir_module: IrModule) ->
     shared := program.shared[i]
-    ModuleCode
+    ModuleCode(
       program
       globals
       ir_module
@@ -67,11 +67,12 @@ export generate := (
       optimized
       system
       module: modules[i]
+    )
   generate_module module_code(i, ir_modules[i]) for _ at i in modules
   linked := separate then ir_modules else [one]
   on_demand := instances_on_demand(program, module_code)
   define_on_demand ir_module, on_demand for ir_module in linked
-  link_modules linked
+  link_modules(linked)
 
 # The module's top-level code, functions, instances of generic functions, classes and structs,
 # and methods of extends.
@@ -86,7 +87,7 @@ generate_module := (code: ModuleCode) ->
   entry_index := program.modules.length - 1
   top_level_code := (index: Int) ->
     symbol := module_init_symbol(module_symbol_name(program, index))
-    TopLevelCode symbol, awaits: program.shared[index].top_level_awaits
+    TopLevelCode(symbol, awaits: program.shared[index].top_level_awaits)
   if module.index == entry_index
     emit_register_raise main if program.builtins != nil
     runs_first := [top_level_code(i) for i in 0..entry_index]

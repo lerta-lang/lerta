@@ -50,7 +50,7 @@ parse_program := (tokens: Token[], path: String, in_blocks: Bool) ->
   errors: Located[]
   stream.block_errors = errors if in_blocks
   parse_line_or_skip stream, statements, errors while stream.peek().kind != EOF
-  Parsed statements, errors
+  Parsed(statements, errors)
 
 # Statements, one per line, up to the token that ends the block.
 parse_statements := (tokens: TokenStream, end: TokenKind) ->
@@ -178,7 +178,7 @@ export parse_simple_statement := (tokens: TokenStream): Statement ->
   return parse_block_arguments(tokens, expression) if at_block_arguments(tokens, expression)
   return expression if is_command_call
   operator := operator_at(tokens, ASSIGNMENT_OPERATORS, '=') ? return expression
-  parse_assignment tokens, expression, operator
+  parse_assignment(tokens, expression, operator)
 
 # The operand of `return`, `throw` or `yield` has taken the member lines after it already, and a
 # jump has no value to continue.
@@ -223,9 +223,9 @@ wrap_in_postfix_condition := (tokens: TokenStream, statement: Statement): Statem
   condition := parse_condition_after(tokens, kind)
   position := statement.position
   if kind in ['if', 'unless']
-    If condition, position, then_body: [statement], else_body: []
+    If(condition, position, then_body: [statement], else_body: [])
   else
-    While condition, position, body: [statement]
+    While(condition, position, body: [statement])
 
 wrap_in_for := (tokens: TokenStream, statement: Statement) ->
   header := parse_loop_header(tokens)
@@ -237,7 +237,7 @@ wrap_in_for := (tokens: TokenStream, statement: Statement) ->
     else
       statement
   body := [take_apart_item(header)..., guarded]
-  For variable, iterable, body, position, index
+  For(variable, iterable, body, position, index)
 
 # `[weak] name := value` or `[weak] name: Type = value`, or `var` before a name, which takes `=`.
 parse_declaration := (tokens: TokenStream) ->
@@ -265,7 +265,7 @@ parse_declaration := (tokens: TokenStream) ->
   operator: TokenKind = mutable or type then '=' else ':='
   tokens.expect operator
   value := parse_value(tokens)
-  Declaration name, type, value, mutable, position, weak
+  Declaration(name, type, value, mutable, position, weak)
 
 # `[]`, or `Map<K, V>()` or `Set<T>()`, for a const or a `var` of the type that is written without a
 # value.
@@ -275,7 +275,7 @@ empty_value := (type: TypeName): Expression? ->
   named := type as NamedType ? return nil
   return nil if named.optional or named.name not in ['Map', 'Set']
   callee := Identifier(position: at, name: named.name)
-  Call callee, position: at, args: [], named_args: [], type_args: named.args, makes_builtin: true
+  Call(callee, position: at, args: [], named_args: [], type_args: named.args, makes_builtin: true)
 
 # `{ a, b } := value`, as the declarations it stands for.
 export parse_destructuring_statement := (tokens: TokenStream) ->
@@ -303,9 +303,9 @@ parse_destructuring := (tokens: TokenStream) ->
   holder := Identifier(position, name: "destructured.#{position.line}.#{position.column}")
   field_of := (name: Identifier) ->
     object := copy_identifier(holder)
-    Member object, name: copy_identifier(name), position: name.position
+    Member(object, name: copy_identifier(name), position: name.position)
   declare := (name: Identifier): Statement ->
-    Declaration mutable, name, value: field_of(name), position: name.position
+    Declaration(mutable, name, value: field_of(name), position: name.position)
   declarations := [declare(name) for name in names]
   [holding(holder, value), declarations...]
 
@@ -313,16 +313,16 @@ parse_destructuring := (tokens: TokenStream) ->
 # declaration.
 parse_held_value := (tokens: TokenStream, operator: TokenKind) ->
   tokens.expect operator
-  parse_value tokens
+  parse_value(tokens)
 
 holding := (holder: Identifier, value: Expression): Statement ->
-  Declaration value, mutable: false, name: holder, position: holder.position
+  Declaration(value, mutable: false, name: holder, position: holder.position)
 
 parse_assignment := (tokens: TokenStream, target: Expression, operator: String) ->
   message := 'only a name, an indexed item or a field can be assigned to'
   assigned := assignment_target(target) ? tokens.fail(target.position, message)
   value := parse_value(tokens)
-  Assignment value, operator, target: assigned, position: target.position
+  Assignment(value, operator, target: assigned, position: target.position)
 
 assignment_target := (expression: Expression): AssignmentTarget? ->
   case expression
@@ -379,7 +379,7 @@ parse_command_call := (tokens: TokenStream) ->
     tokens.deepen()
     callee = Member(position, object: callee, name: parse_identifier(tokens))
   tokens.nesting = nesting
-  call_of callee, parse_arguments(tokens), []
+  call_of(callee, parse_arguments(tokens), [])
 
 # `for` and its loop header (see LoopHeader), followed by an indented block.
 parse_for := (tokens: TokenStream) ->
@@ -390,7 +390,7 @@ parse_for := (tokens: TokenStream) ->
     message := "a for loop with a block has no 'when'; write an if in the block"
     tokens.fail guard.position, message
   body := [take_apart_item(header)..., parse_block(tokens)...]
-  For variable, iterable, position, index, body
+  For(variable, iterable, position, index, body)
 
 # A condition, or `name := value`, which holds when the value is not nil.
 parse_condition := (tokens: TokenStream): Condition ->
@@ -398,7 +398,7 @@ parse_condition := (tokens: TokenStream): Condition ->
   return parse_expression(tokens) unless at_binding(tokens)
   name := parse_identifier(tokens)
   tokens.next()
-  Binding name, value: parse_expression(tokens), position: token.position()
+  Binding(name, value: parse_expression(tokens), position: token.position())
 
 at_binding := (tokens: TokenStream) ->
   tokens.peek().kind == IDENTIFIER and tokens.peek_at(1).kind == ':='
@@ -406,19 +406,19 @@ at_binding := (tokens: TokenStream) ->
 # The condition after the keyword of an `if` or a `while`; that of `unless` or `until` is `not`
 # of what follows it, which binds no name, as the name would hold where the condition does not.
 parse_condition_after := (tokens: TokenStream, kind: TokenKind) ->
-  condition_of parse_written_condition(tokens, kind), kind
+  condition_of(parse_written_condition(tokens, kind), kind)
 
 # The condition as written after the keyword, which binds no name after `unless` or `until`.
 parse_written_condition := (tokens: TokenStream, kind: TokenKind): Condition ->
   return parse_condition(tokens) if kind in ['if', 'while']
   tokens.fail_here "'#{kind}' cannot bind a name" if at_binding(tokens)
-  parse_expression tokens
+  parse_expression(tokens)
 
 condition_of := (written: Condition, kind: TokenKind) ->
   return written if kind in ['if', 'while']
   # No name is bound after `unless` or `until` (see parse_written_condition).
   assert written is Expression
-  UnaryOperation operand: written, operator: 'not', position: written.position
+  UnaryOperation(operand: written, operator: 'not', position: written.position)
 
 # The condition after the keyword of a statement with a block, and the block. `if c then a else b`
 # takes `c then a else b` for the condition of a block that is missing, which the error says.
@@ -436,7 +436,7 @@ parse_head_and_block := (tokens: TokenStream, keyword: Token) ->
 parse_while := (tokens: TokenStream) ->
   token := tokens.next()
   (condition, body) := parse_head_and_block(tokens, token)
-  While condition, body, position: token.position()
+  While(condition, body, position: token.position())
 
 # `unless`, which takes no `else`: `if` reads better with one.
 parse_unless := (tokens: TokenStream) ->
@@ -444,7 +444,7 @@ parse_unless := (tokens: TokenStream) ->
   position := keyword.position()
   (condition, then_body) := parse_head_and_block(tokens, keyword)
   tokens.fail_here "an 'unless' cannot have an 'else'" if tokens.peek().kind == 'else'
-  If condition, then_body, position, else_body: []
+  If(condition, then_body, position, else_body: [])
 
 # `if` with an optional `else` block; `else if` chains further.
 export parse_if := (tokens: TokenStream): If ->
@@ -459,4 +459,4 @@ export parse_if := (tokens: TokenStream): If ->
       [tokens.nested(-> parse_if(tokens))]
     else
       parse_block tokens
-  If condition, then_body, else_body, position
+  If(condition, then_body, else_body, position)

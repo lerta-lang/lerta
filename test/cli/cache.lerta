@@ -138,7 +138,7 @@ build_and_run := (cache: String, flags: String[], source: String) ->
   succeed 'the built program', ran
 
 cached_runtime_check := (flags: String[], kind: String, source: String) ->
-  Check name: "lerta build #{flags.join(' ')} caches and reuses the #{kind} runtime", run: ->
+  Check(name: "lerta build #{flags.join(' ')} caches and reuses the #{kind} runtime", run: ->
     cache := new_cli_dir("cache-#{kind}")
     await build_and_run(cache, flags, source)
     entries := runtimes_in(cache)
@@ -168,9 +168,10 @@ cached_runtime_check := (flags: String[], kind: String, source: String) ->
       )...
       reason_unless(runtimes_in(cache).length == 1, 'the second build changed the cache')...
     ]
+  )
 
 incomplete_runtime_check := (flags: String[], kind: String) ->
-  Check name: "lerta build reports an incomplete cached #{kind} runtime", run: ->
+  Check(name: "lerta build reports an incomplete cached #{kind} runtime", run: ->
     cache := new_cli_dir("cache-incomplete-#{kind}")
     first := await build_in_cache(cache, flags)
     succeed 'build', first.result
@@ -187,9 +188,10 @@ incomplete_runtime_check := (flags: String[], kind: String) ->
         second.result.stderr_text()
       )...
     ]
+  )
 
 invalid_target_check := ->
-  Check name: 'lerta build rejects unsupported and path-like runtime targets', run: ->
+  Check(name: 'lerta build rejects unsupported and path-like runtime targets', run: ->
     beside_cache := new_cli_dir('cache-invalid-path')
     path_target := await build_in_cache("#{beside_cache}/inner", ['--target', '../outside'])
     windows_path_cache := new_cli_dir('cache-invalid-windows-path')
@@ -214,9 +216,10 @@ invalid_target_check := ->
       )...
       expect_left('files left in the cache', [], list_dir(unsupported_cache))...
     ]
+  )
 
 host_target_check := ->
-  Check name: 'lerta build for the host triple reuses the runtime built without a target', run: ->
+  Check(name: 'lerta build for the host triple reuses the runtime built without a target', run: ->
     cache := new_cli_dir('cache-host-target')
     no_flags: String[]
     for flags in [no_flags, ['--target', host_triple]]
@@ -237,9 +240,10 @@ host_target_check := ->
         'the host short name took the runtime of the host triple'
       )...
     ]
+  )
 
 cache_location_check := ->
-  posix_check 'lerta build uses XDG_CACHE_HOME and then HOME for its runtime cache', ->
+  posix_check('lerta build uses XDG_CACHE_HOME and then HOME for its runtime cache', ->
     xdg := new_cli_dir('cache-xdg-home')
     xdg_env := { 'LERTA_CACHE_DIR': '', 'XDG_CACHE_HOME': xdg }
     xdg_build := await run_in_new_dir(compiler, ['build', hello, '-o', 'hello'], b'', xdg_env)
@@ -261,6 +265,7 @@ cache_location_check := ->
         'debug'
       )...
     ]
+  )
 
 one_cached_runtime := (what: String, built: CliRun, cache: String, kind: String) ->
   reasons := expect_success(what, built)
@@ -274,7 +279,7 @@ one_cached_runtime := (what: String, built: CliRun, cache: String, kind: String)
 # directory the build runs in must still be the one the linker writes its ThinLTO cache into, and
 # what it optimized must be found again by a build in another temporary directory.
 relative_cache_check := ->
-  Check name: 'lerta build -O takes a cache directory given by a relative path', run: ->
+  Check(name: 'lerta build -O takes a cache directory given by a relative path', run: ->
     (cwd, temp) := new_cli_dirs()
     env := { 'LERTA_CACHE_DIR': 'cache' }
     build_in := (in_temp: String) ->
@@ -297,9 +302,10 @@ relative_cache_check := ->
         'the build in another temporary directory optimized again'
       )...
     ]
+  )
 
 no_cache_location_check := ->
-  Check name: 'lerta build reports when no cache location is available', run: ->
+  Check(name: 'lerta build reports when no cache location is available', run: ->
     cwd := new_cli_dir('cache-no-location')
     ran := await run_command(
       compiler
@@ -318,9 +324,10 @@ no_cache_location_check := ->
         ran.stderr_text()
       )...
     ]
+  )
 
 cache_creation_failure_check := ->
-  Check name: 'lerta build reports when its cache directory cannot be made', run: ->
+  Check(name: 'lerta build reports when its cache directory cannot be made', run: ->
     file := "#{new_cli_dir('cache-blocker')}/file"
     await write_file(file, b'')
     blocked := "#{file}/cache"
@@ -334,9 +341,10 @@ cache_creation_failure_check := ->
         ran.result.stderr_text()
       )...
     ]
+  )
 
 concurrent_builds_check := ->
-  Check name: 'lerta builds started together leave one complete runtime in the cache', run: ->
+  Check(name: 'lerta builds started together leave one complete runtime in the cache', run: ->
     cache := new_cli_dir('cache-concurrent')
     env := { 'LERTA_CACHE_DIR': cache }
     builds := [
@@ -354,9 +362,10 @@ concurrent_builds_check := ->
       await complete_runtime(cache, name)...
       reason_unless(staging.is_empty(), "the builds left staging files: #{staging}")...
     ]
+  )
 
 own_modules_check := ->
-  Check name: "lerta build keeps no object of the program's own modules", run: ->
+  Check(name: "lerta build keeps no object of the program's own modules", run: ->
     cache := new_cli_dir('cache-own-modules')
     succeed 'build', (await build_in_cache(cache, [])).result
     name := runtimes_in(cache)[0]
@@ -370,18 +379,20 @@ own_modules_check := ->
       expect_success('build of another program', built.result)...
       reason_unless(module_objects(cache, name) == modules, 'the build kept its own module')...
     ]
+  )
 
 empty_runtime_directory_check := ->
-  Check name: 'lerta build fills an empty directory named for the runtime', run: ->
+  Check(name: 'lerta build fills an empty directory named for the runtime', run: ->
     cache := new_cli_dir('cache-empty-runtime')
     name := await debug_runtime_name()
     make_dir "#{cache}/#{name}"
     built := await build_in_cache(cache, [])
     succeed 'build', built.result
     await complete_runtime(cache, name)
+  )
 
 occupied_runtime_directory_check := ->
-  Check name: 'lerta build reports a runtime cache directory with other files', run: ->
+  Check(name: 'lerta build reports a runtime cache directory with other files', run: ->
     cache := new_cli_dir('cache-occupied-runtime')
     name := await debug_runtime_name()
     dir := join(cache, name)
@@ -396,9 +407,10 @@ occupied_runtime_directory_check := ->
         built.result.stderr_text()
       )...
     ]
+  )
 
 abandoned_staging_check := ->
-  Check name: 'lerta build removes staging directories of killed builds', run: ->
+  Check(name: 'lerta build removes staging directories of killed builds', run: ->
     cache := new_cli_dir('cache-abandoned-staging')
     name := await debug_runtime_name()
     staging := (suffix: String) -> "#{name}.staging-#{suffix}"
@@ -420,9 +432,10 @@ abandoned_staging_check := ->
       await complete_runtime(cache, name)...
       expect_left('cache contents', expected, list_dir(cache))...
     ]
+  )
 
 unremovable_staging_check := ->
-  posix_check 'lerta build continues when a stale staging directory cannot be removed', ->
+  posix_check('lerta build continues when a stale staging directory cannot be removed', ->
     uid := await run_command('id', ['-u'], cli_work_dir)
     return ["id -u failed: #{uid.stderr_text()}"] if uid.status != 0
     return nil if uid.stdout_text().split("\n")[0] == '0'
@@ -447,12 +460,13 @@ unremovable_staging_check := ->
       reason_unless(is_dir(locked), 'the unremovable staging directory was removed')...
       await complete_runtime(cache, name)...
     ]
+  )
 
 # The link of an optimized build gives each linker the limit of LLVM's devirtualization, as that
 # linker takes an option of LLVM's, and the cache is named after it, as docs/reference/compiler.md
 # gives it.
 lto_link_flags_check := ->
-  Check name: 'the link gives each linker the devirtualization limit', run: ->
+  Check(name: 'the link gives each linker the devirtualization limit', run: ->
     expected :=
       { system: 'macos', flag: '-Wl,-mllvm,-max-devirt-iterations=8' }
       { system: 'windows', flag: '-Wl,-mllvm,-max-devirt-iterations=8' }
@@ -461,21 +475,24 @@ lto_link_flags_check := ->
     reasons := ["no #{system} flag for the limit" for system in missing]
     reasons.push "the ThinLTO cache is #{LTO_CACHE}" if LTO_CACHE != 'thinlto-devirt-8'
     reasons
+  )
 
 # The hash in a runtime's name is FNV-1a of 64 bits, its top bit written too, with the end of each
 # text counted.
 texts_hash_check := ->
-  Check name: 'a runtime is named by a 64-bit hash of its texts', run: ->
+  Check(name: 'a runtime is named by a 64-bit hash of its texts', run: ->
     hashes := [texts_hash([]), texts_hash(['a']), texts_hash(['ab', 'c']), texts_hash(['a', 'bc'])]
-    compare_text
+    compare_text(
       'hashes'
       'CBF29CE484222325 089BC907B544C769 20BA9B3025A8B421 A0A3542C19B900AB'
       hashes.join(' ')
+    )
+  )
 
 # `lerta clean` removes what builds keep in the cache, by their names, and leaves anything else
 # there; without a cache directory, it removes nothing and makes none.
 clean_check := ->
-  Check name: 'lerta clean removes the runtimes, the headers and the ThinLTO caches only', run: ->
+  Check(name: 'lerta clean removes the runtimes, the headers and the ThinLTO caches only', run: ->
     cache := new_cli_dir('cache-clean')
     made :=
       LTO_CACHE
@@ -504,12 +521,13 @@ clean_check := ->
       reason_unless(none.result.stdout.is_empty(), 'clean without a cache printed something')...
       reason_unless(not is_dir(missing), 'clean made the cache directory')...
     ]
+  )
 
 # `lerta cflags` writes the runtime's header into the cache, once, and prints the flag that finds
 # it, by an absolute path even for a cache given by a relative one, with which clang compiles a C
 # file that includes it.
 cflags_check := ->
-  Check name: 'lerta cflags writes lerta.h into the cache and prints its directory', run: ->
+  Check(name: 'lerta cflags writes lerta.h into the cache and prints its directory', run: ->
     dir := new_cli_dir('cflags')
     env := { 'LERTA_CACHE_DIR': 'cache' }
     first := await run_command(compiler, ['cflags'], dir, b'', env)
@@ -535,6 +553,7 @@ cflags_check := ->
       compare_text('second stdout', first.stdout_text(), second.stdout_text())...
       expect_success('clang', compiled)...
     ]
+  )
 
 export checks :=
   cflags_check()

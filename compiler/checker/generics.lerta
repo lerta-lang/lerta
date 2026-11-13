@@ -92,7 +92,7 @@ export make_generic_function := (
   params := parameter_types(program, generic_resolver, literal)
   return_type := literal.return_type
   result := return_type then resolve_result(program, generic_resolver, return_type)
-  GenericFunction
+  GenericFunction(
     name
     literal
     receiver
@@ -102,6 +102,7 @@ export make_generic_function := (
     result
     definition: make_definition(program, resolver, name, literal, receiver, type_params)
     module_index: shared.index
+  )
 
 # The definition's types name the type parameters standing for themselves, with their bounds.
 make_definition := (
@@ -114,17 +115,17 @@ make_definition := (
   for (param, bound) in type_params.zip(bounds_of(program, standing_resolver, type_params))
     bounds[param.name.name] = bound if bound
   this_type := receiver then substitute(receiver.type, standing)
-  Definition entry: FunctionEntry(name, literal, this_type), resolver: {
-    standing_resolver...
-    bounds
-  }
+  Definition(
+    entry: FunctionEntry(name, literal, this_type)
+    resolver: { standing_resolver..., bounds }
+  )
 
 # The interface types that bound the type parameters, which a bound may name, as in
 # `X: Iterable<T>`; the resolver has them stand for themselves.
 export bounds_of := (program: ProgramWide, resolver: Resolver, type_params: TypeParameter[]) ->
   bound_of := (param: TypeParameter) ->
     bound := param.bound ? return nil
-    bound_interface program, resolver, bound
+    bound_interface(program, resolver, bound)
   [bound_of(param) for param in type_params]
 
 export reject_bad_type_parameters := (

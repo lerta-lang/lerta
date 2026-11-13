@@ -43,7 +43,7 @@ export cached_runtime := (kind: BuildKind, temp_dir: String) ->
   runtime := ->
     function_attributes := await read_text_or_throw(join(dir, ATTRIBUTES_FILE))
     coro_end_type := await read_text_or_throw(join(dir, CORO_END_FILE))
-    CachedRuntime dir, objects, function_attributes, coro_end_type, libraries: build.libraries
+    CachedRuntime(dir, objects, function_attributes, coro_end_type, libraries: build.libraries)
   return await runtime() if is_complete(files)
   if files.any(is_file)
     # Another build may have renamed its runtime into place meanwhile, which puts all the files
@@ -91,7 +91,7 @@ remove_abandoned_staging := (cache: String, name: String) ->
 # module's object depends on as the runtime's do. Only standard modules are kept, whose IR seldom
 # changes, so that the directory does not grow with each change of a program.
 export cached_module_object := (runtime: CachedRuntime, ir: String[]) ->
-  join runtime.dir, "#{MODULE_PREFIX}#{texts_hash(ir)}.o"
+  join(runtime.dir, "#{MODULE_PREFIX}#{texts_hash(ir)}.o")
 
 MODULE_PREFIX := 'module-'
 
@@ -125,7 +125,7 @@ export cached_include_dir := ->
     await remove_tree(staging_path)
     failed := CompileError("cannot write the runtime's header into the cache: #{path}")
     throw failed unless is_file(path)
-  real_path dir
+  real_path(dir)
 
 # What `clang --version` prints, or nil if clang fails.
 clang_version_text := ->
@@ -226,7 +226,7 @@ runtime_hash := (texts_besides_sources: String[]) ->
   for path in [RUNTIME_PATHS..., LIBUV_PATHS...]
     texts.push path
     texts.push embedded_source(path)!
-  texts_hash texts
+  texts_hash(texts)
 
 # The texts' hash as 16 hex digits, wide enough that two keys do not take one runtime by chance.
 # Each text ends with a byte that no UTF-8 text holds, so that the texts' bounds count.
@@ -300,7 +300,7 @@ clang_probe_ir := (flags: String[], temp_dir: String) ->
 function_attributes := (ir: String) ->
   words := attribute_group_of_function(ir).split(' ')
   is_target_attribute := (word: String) ->
-    TARGET_ATTRIBUTES.any (name) -> word.starts_with("\"#{name}\"=")
+    TARGET_ATTRIBUTES.any((name) -> word.starts_with("\"#{name}\"="))
   [word for word in words when is_target_attribute(word)].join(' ')
 
 # The attributes of the group that the IR's one function has, as in `define void @f() #0 {`.

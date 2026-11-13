@@ -45,7 +45,7 @@ export define_kind := (
     next_body := IrBuilder(module)
     next next_body, kind
     next_body.finish "private #{ir_type(item)} #{symbol_of(kind, 'next')}(ptr %iter)"
-  IterKind state, layout: ir.module.named("iter #{key}", '%lerta.iter', define)
+  IterKind(state, layout: ir.module.named("iter #{key}", '%lerta.iter', define))
 
 # Throws an IterError unless the condition holds, which `check` then finds.
 emit_throw_unless := (ir: IrBuilder, condition: String, check: () -> void) ->
@@ -69,12 +69,12 @@ export emit_iter := (ir: IrBuilder, kind: IterKind, state_values: String[]) ->
   iter
 
 state_pointer := (ir: IrBuilder, kind: IterKind, index: Int) ->
-  emit_heap_field_pointer ir, kind.layout, '%iter', PROTOCOL.length + index
+  emit_heap_field_pointer(ir, kind.layout, '%iter', PROTOCOL.length + index)
 
 export load_state := (ir: IrBuilder, kind: IterKind, index: Int) ->
   field := kind.state[index]
   pointer := state_pointer(ir, kind, index)
-  ir.load field.ir_type, pointer, access_tag(ir, field)
+  ir.load(field.ir_type, pointer, access_tag(ir, field))
 
 export store_state := (ir: IrBuilder, kind: IterKind, index: Int, value: String) ->
   field := kind.state[index]
@@ -83,19 +83,19 @@ export store_state := (ir: IrBuilder, kind: IterKind, index: Int, value: String)
   ir.store field.ir_type, value, pointer
 
 protocol_field := (ir: IrBuilder, iter: String, index: Int) ->
-  emit_heap_field_pointer ir, PROTOCOL_LAYOUT, iter, index
+  emit_heap_field_pointer(ir, PROTOCOL_LAYOUT, iter, index)
 
 # Whether the Iter, which is borrowed, has a next item.
 export emit_has_next := (ir: IrBuilder, iter: String) ->
   pointer := protocol_field(ir, iter, HAS_NEXT_FIELD)
   code := ir.load('ptr', pointer, access_tag(ir, CODE))
-  ir.assign "call i1 #{code}(ptr #{iter})"
+  ir.assign("call i1 #{code}(ptr #{iter})")
 
 # The next item, owned, of a borrowed Iter whose has_next is true.
 export emit_next := (ir: IrBuilder, iter: String, item: Type) ->
   pointer := protocol_field(ir, iter, NEXT_FIELD)
   code := ir.load('ptr', pointer, access_tag(ir, CODE))
-  ir.assign "call #{ir_type(item)} #{code}(ptr #{iter})"
+  ir.assign("call #{ir_type(item)} #{code}(ptr #{iter})")
 
 # The next item, owned, of a borrowed Iter, which code outside the Iters asks for without knowing
 # that there is one: past the end, it throws.
@@ -104,7 +104,7 @@ export emit_checked_next := (ir: IrBuilder, iter: String, item: Type, check: () 
   more := emit_has_next(ir, iter)
   check()
   emit_throw_unless ir, more, check
-  emit_next ir, iter, item
+  emit_next(ir, iter, item)
 
 # Starts a traversal, which throws if the Iter has started one.
 export emit_iter_start := (ir: IrBuilder, iter: String) ->

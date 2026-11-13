@@ -14,14 +14,14 @@ import is_kind, is_reference_type, OptionalType, Type from '../types'
 # The value as a word.
 export to_item := (ir: IrBuilder, operand: String, type: Type) ->
   scalar := scalar_of(type) ? return ir.assign("ptrtoint ptr #{operand} to i64")
-  widened_to_word ir, operand, scalar
+  widened_to_word(ir, operand, scalar)
 
 # The value of a word, or of the address of an optional item that the runtime gives as its word.
 export from_item := (ir: IrBuilder, item: String, type: Type) ->
   if is_optional_value(type)
     return ir.load(ir_type(type), ir.assign("inttoptr i64 #{item} to ptr"), item_tag(ir))
   scalar := scalar_of(type) ? return ir.assign("inttoptr i64 #{item} to ptr")
-  narrowed_from_word ir, item, scalar
+  narrowed_from_word(ir, item, scalar)
 
 # A value narrower than a word, an integer, a Bool or a Float32's bits, is held at its own size: the
 # value of LertaItemKind in runtime/lerta.h of its bytes, LERTA_INTEGER_ITEMS, and
@@ -94,7 +94,7 @@ export emit_item_slot := (ir: IrBuilder, type: Type) -> ir.alloca(item_room_type
 
 # The value of the item at the pointer.
 export emit_load_item := (ir: IrBuilder, pointer: String, type: Type) ->
-  from_held_item ir, ir.load(item_ir_type(type), pointer, item_tag(ir)), type
+  from_held_item(ir, ir.load(item_ir_type(type), pointer, item_tag(ir)), type)
 
 # The item at the address of an index in range. Neither the runtime nor the generated code writes
 # null into the items below an array's length, so an item of a reference type without nil is not
@@ -105,7 +105,7 @@ load_indexed_item := (ir: IrBuilder, address: String, type: Type) ->
   item
 
 export emit_array_new := (ir: IrBuilder, element: Type) ->
-  call_runtime ir, 'ptr @lerta_array_create(i32)', "i32 #{item_kind(element)}"
+  call_runtime(ir, 'ptr @lerta_array_create(i32)', "i32 #{item_kind(element)}")
 
 # An array of `length` copies of the value, which the array retains and the caller still owns;
 # a negative length throws.
@@ -113,7 +113,7 @@ export emit_array_filled := (ir: IrBuilder, length: String, value: String, eleme
   item := emit_item_slot(ir, element)
   emit_store_item ir, item, value, element
   args := "i32 #{item_kind(element)}, i64 #{length}, ptr #{item}"
-  call_runtime ir, 'ptr @lerta_array_filled(i32, i64, ptr)', args
+  call_runtime(ir, 'ptr @lerta_array_filled(i32, i64, ptr)', args)
 
 # Tells LLVM that the array that Array(n, v) made has the length n, so that a loop whose bound is n
 # needs no comparison with the length of its own to check an index.
@@ -123,14 +123,18 @@ export emit_assume_length := (ir: IrBuilder, array: String, length: String) ->
 # A new array of the items from `start` up to `end`, which it retains; a range out of the array's
 # throws.
 export emit_array_slice := (ir: IrBuilder, array: String, start: String, end: String) ->
-  call_runtime ir, 'ptr @lerta_array_slice(ptr, i64, i64)', "ptr #{array}, i64 #{start}, i64 #{end}"
+  call_runtime(
+    ir
+    'ptr @lerta_array_slice(ptr, i64, i64)'
+    "ptr #{array}, i64 #{start}, i64 #{end}"
+  )
 
 export emit_length := (ir: IrBuilder, array: String) ->
-  call_runtime ir, 'i64 @lerta_array_length(ptr)', "ptr #{array}"
+  call_runtime(ir, 'i64 @lerta_array_length(ptr)', "ptr #{array}")
 
 # The item is owned. An index out of range throws, and gives poison.
 export emit_get := (ir: IrBuilder, array: String, index: String, element: Type) ->
-  emit_get_from ir, emit_checked_items(ir, array, index), index, element
+  emit_get_from(ir, emit_checked_items(ir, array, index), index, element)
 
 # The item, owned or else borrowed, of items that emit_checked_items gives, or poison where it gives
 # none.
@@ -145,12 +149,12 @@ export emit_get_from := (
     item := load_indexed_item(ir, emit_item_address(ir, items, index, element), element)
     emit_retain_value ir, item, element if owned
     item
-  emit_branch ir, ir_type(element), emit_is_in_range(ir, items), read, 'poison'
+  emit_branch(ir, ir_type(element), emit_is_in_range(ir, items), read, 'poison')
 
 # The item at an index in range, which stays owned by the array.
 export emit_borrowed_item := (ir: IrBuilder, array: String, index: String, element: Type) ->
   items := emit_checked_items(ir, array, index)
-  load_indexed_item ir, emit_item_address(ir, items, index, element), element
+  load_indexed_item(ir, emit_item_address(ir, items, index, element), element)
 
 # Sets the item in items that emit_checked_items gives, unless it gives none. The array retains the
 # item, which stays owned by the caller; the new item is retained before the old one is released,
@@ -167,7 +171,7 @@ export emit_set_in := (ir: IrBuilder, items: String, index: String, value: Strin
 # The items of the array, which are read and written in place, or null, after the runtime has
 # thrown, when the index is out of range.
 export emit_checked_items := (ir: IrBuilder, array: String, index: String) ->
-  call_runtime ir, 'ptr @lerta_array_checked_items(ptr, i64)', "ptr #{array}, i64 #{index}"
+  call_runtime(ir, 'ptr @lerta_array_checked_items(ptr, i64)', "ptr #{array}, i64 #{index}")
 
 # Whether emit_checked_items gave no items, having thrown.
 export emit_is_out_of_range := (ir: IrBuilder, items: String) -> ir.is_null(items)
@@ -179,7 +183,7 @@ export emit_store_item := (ir: IrBuilder, address: String, value: String, elemen
   ir.store item_ir_type(element), held, address, item_tag(ir)
 
 emit_item_address := (ir: IrBuilder, items: String, index: String, element: Type) ->
-  ir.assign "getelementptr #{item_room_type(element)}, ptr #{items}, i64 #{index}"
+  ir.assign("getelementptr #{item_room_type(element)}, ptr #{items}, i64 #{index}")
 
 # The array retains the item, which stays owned by the caller.
 export emit_push := (ir: IrBuilder, array: String, value: String, element: Type) ->
@@ -192,4 +196,4 @@ export emit_push := (ir: IrBuilder, array: String, value: String, element: Type)
 export emit_pop := (ir: IrBuilder, array: String, element: Type) ->
   pointer := emit_item_slot(ir, element)
   call_void_runtime ir, 'void @lerta_array_take_last(ptr, ptr)', "ptr #{array}, ptr #{pointer}"
-  emit_load_item ir, pointer, element
+  emit_load_item(ir, pointer, element)

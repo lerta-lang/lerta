@@ -46,22 +46,22 @@ export emit_map_new := (ir: IrBuilder, program: ProgramWide, type: MapType) ->
   hash := functions?.hash ? 'null'
   equals := functions?.equals ? 'null'
   args := "i32 #{kind}, i32 #{item_kind(type.value)}, ptr #{hash}, ptr #{equals}"
-  call_runtime ir, 'ptr @lerta_map_create(i32, i32, ptr, ptr)', args
+  call_runtime(ir, 'ptr @lerta_map_create(i32, i32, ptr, ptr)', args)
 
 export emit_map_length := (ir: IrBuilder, map: String) ->
-  call_runtime ir, 'i64 @lerta_map_length(ptr)', "ptr #{map}"
+  call_runtime(ir, 'i64 @lerta_map_length(ptr)', "ptr #{map}")
 
 # The place of the key's value in the map, which is read and written there as the value's type, as
 # an array's items are, or null for a key that the map does not hold.
 export emit_find := (ir: IrBuilder, map: String, key: String, type: MapType) ->
   args := "ptr #{map}, i64 #{key_word(ir, key, type.key)}"
-  call_runtime ir, 'ptr @lerta_map_find(ptr, i64)', args
+  call_runtime(ir, 'ptr @lerta_map_find(ptr, i64)', args)
 
 # The place of the key's value, with zeros for a key that the map then holds, retained; the caller
 # writes the value there, retained.
 export emit_place := (ir: IrBuilder, map: String, key: String, type: MapType) ->
   args := "ptr #{map}, i64 #{key_word(ir, key, type.key)}"
-  call_runtime ir, 'ptr @lerta_map_place(ptr, i64)', args
+  call_runtime(ir, 'ptr @lerta_map_place(ptr, i64)', args)
 
 # The value as a V?, owned; a missing reference, or interface value, reads as zeros, which are
 # nil.
@@ -73,7 +73,7 @@ export emit_map_get := (ir: IrBuilder, map: String, key: String, type: MapType) 
   return value if is_nil_by_null(optional)
   optional_ir := ir_type(optional)
   flagged := ir.assign("insertvalue #{optional_ir} undef, i1 #{found}, 0")
-  ir.assign "insertvalue #{optional_ir} #{flagged}, #{ir_type(type.value)} #{value}, 1"
+  ir.assign("insertvalue #{optional_ir} #{flagged}, #{ir_type(type.value)} #{value}, 1")
 
 # The value at the place that emit_find gave, owned, where `found` tells that it gave one; zeros
 # elsewhere.
@@ -82,7 +82,7 @@ export emit_held_at := (ir: IrBuilder, place: String, found: String, type: MapTy
     held := emit_load_item(ir, place, type.value)
     emit_retain_value ir, held, type.value
     held
-  emit_branch ir, ir_type(type.value), found, read, 'zeroinitializer'
+  emit_branch(ir, ir_type(type.value), found, read, 'zeroinitializer')
 
 # The map retains the key and the value, which stay owned by the caller. The new value is retained
 # before the old one is released, in case they are the same object.
@@ -100,27 +100,27 @@ export emit_set_at := (ir: IrBuilder, place: String, value: String, type: MapTyp
 # Whether the key was there.
 export emit_map_remove := (ir: IrBuilder, map: String, key: String, type: MapType) ->
   args := "ptr #{map}, i64 #{key_word(ir, key, type.key)}"
-  call_runtime ir, 'i1 @lerta_map_remove(ptr, i64)', args
+  call_runtime(ir, 'i1 @lerta_map_remove(ptr, i64)', args)
 
 export emit_map_keys := (ir: IrBuilder, map: String, type: MapType) ->
-  emit_cursor_iter ir, map, type, true
+  emit_cursor_iter(ir, map, type, true)
 
 export emit_map_iter := (ir: IrBuilder, map: String, type: MapType) ->
-  emit_cursor_iter ir, map, type, false
+  emit_cursor_iter(ir, map, type, false)
 
 # A set is a map whose values take no bytes, which the place of an item holds.
 export emit_set_contains := (ir: IrBuilder, set: String, item: String, type: MapType) ->
-  ir.is_not_null emit_find(ir, set, item, type)
+  ir.is_not_null(emit_find(ir, set, item, type))
 
 # Whether the item is new to the set, which it then holds: whether the write made the set longer,
 # which takes one lookup of the item.
 export emit_set_add := (ir: IrBuilder, set: String, item: String, type: MapType) ->
   before := emit_map_length(ir, set)
   emit_place ir, set, item, type
-  ir.assign "icmp ne i64 #{before}, #{emit_map_length(ir, set)}"
+  ir.assign("icmp ne i64 #{before}, #{emit_map_length(ir, set)}")
 
 export emit_set_iter := (ir: IrBuilder, set: String, type: MapType) ->
-  emit_cursor_iter ir, set, type, true
+  emit_cursor_iter(ir, set, type, true)
 
 # The entries of a borrowed map, which the Iter traverses by a cursor (LertaMapCursor in
 # runtime/lerta.h): the keys alone, as a set gives its items, or as tuples of a key and a value.
@@ -143,4 +143,4 @@ emit_cursor_iter := (ir: IrBuilder, map: String, type: MapType, keys_only: Bool)
   state := [fixed({ ir_type: 'ptr', owned: REFERENCE })]
   traversed := keys_only then 'keys' else 'entries'
   kind := define_kind(ir, "map #{traversed} #{type_key(type)}", state, item, has_next, next)
-  emit_iter ir, kind, [call_runtime(ir, 'ptr @lerta_map_cursor(ptr)', "ptr #{map}")]
+  emit_iter(ir, kind, [call_runtime(ir, 'ptr @lerta_map_cursor(ptr)', "ptr #{map}")])

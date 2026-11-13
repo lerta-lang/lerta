@@ -62,10 +62,10 @@ export dump_ast_without_positions := (program: Statement[]) -> write_dump(progra
 export type Annotate = (Node) -> String
 
 export dump_annotated := (program: Statement[], annotate: Annotate) ->
-  write_dump program, annotate, true
+  write_dump(program, annotate, true)
 
 export dump_annotated_without_positions := (program: Statement[], annotate: Annotate) ->
-  write_dump program, annotate, false
+  write_dump(program, annotate, false)
 
 write_dump := (program: Statement[], annotate: Annotate, positions: Bool) ->
   lines: String[]
@@ -120,7 +120,7 @@ scalar_text := (writer: Writer, scalar: Scalar) ->
   writer.positions then scalar.text else scalar.positionless ? scalar.text
 
 node := (kind: String, of: Node, fields: Field[]) ->
-  Group fields, head: { kind, position: of.position, node: of }
+  Group(fields, head: { kind, position: of.position, node: of })
 
 # A group without a kind writes its position as fields.
 position_fields := (position: Position) ->
@@ -210,12 +210,12 @@ dump_node := (node: Node) ->
     when ArrayTypeName then dump_array_type(node)
 
 dump_string := (literal: StringLiteral) ->
-  node 'string', literal, [field('value', text(literal.value))]
+  node('string', literal, [field('value', text(literal.value))])
 
 dump_interpolation := (interpolation: Interpolation) ->
   parts := List([dump_interpolation_part(part) for part in interpolation.parts])
   kind := interpolation.binary then 'binary' else 'interpolation'
-  node kind, interpolation, [field('parts', parts)]
+  node(kind, interpolation, [field('parts', parts)])
 
 dump_interpolation_part := (part: InterpolationPart): Item ->
   case part
@@ -223,20 +223,20 @@ dump_interpolation_part := (part: InterpolationPart): Item ->
     when Call then dump_call(part)
 
 dump_boolean := (literal: BooleanLiteral) ->
-  node 'boolean', literal, [field('value', flag(literal.value))]
+  node('boolean', literal, [field('value', flag(literal.value))])
 
 dump_nil := (literal: NilLiteral) -> node('nil', literal, [])
 
 dump_integer := (literal: IntegerLiteral) ->
   integer := literal.value
   value := integer then number(integer) else text(literal.text)
-  node 'integer', literal, [field('value', value)]
+  node('integer', literal, [field('value', value)])
 
 dump_float := (literal: FloatLiteral) ->
-  node 'float', literal, [field('value', text(literal.text))]
+  node('float', literal, [field('value', text(literal.text))])
 
 dump_identifier := (identifier: Identifier) ->
-  node 'identifier', identifier, [field('name', name_text(identifier))]
+  node('identifier', identifier, [field('name', name_text(identifier))])
 
 # A name that the parser makes of the identifier's position, as `_tuple.3.5`, `destructured.3.5` or
 # `?3:5`, ends with it, which a written name cannot.
@@ -245,355 +245,464 @@ name_text := (identifier: Identifier) ->
   { line, column } := position
   made := ["#{line}.#{column}", "#{line}:#{column}"].find(name.ends_with)
   positionless := made then quote(name.without_suffix(made)!)
-  Scalar positionless, text: quote(name)
+  Scalar(positionless, text: quote(name))
 
 dump_array := (array: ArrayLiteral): Group ->
-  node 'array', array, [field('elements', expressions(array.elements))]
+  node('array', array, [field('elements', expressions(array.elements))])
 
 dump_comprehension := (comprehension: Comprehension): Group ->
-  node 'comprehension', comprehension, [
-    field('bindings', statements(comprehension.bindings))
-    field('element', dump_node(comprehension.element))
-    field('guard', optional_node(comprehension.guard))
-    field('iterable', dump_node(comprehension.iterable))
-    field('lazy', dump_lazy(comprehension.lazy))
-    field('variable', dump_node(comprehension.variable))
-    field('index', optional_node(comprehension.index))
-  ]
+  node(
+    'comprehension'
+    comprehension
+    [
+      field('bindings', statements(comprehension.bindings))
+      field('element', dump_node(comprehension.element))
+      field('guard', optional_node(comprehension.guard))
+      field('iterable', dump_node(comprehension.iterable))
+      field('lazy', dump_lazy(comprehension.lazy))
+      field('variable', dump_node(comprehension.variable))
+      field('index', optional_node(comprehension.index))
+    ]
+  )
 
 dump_lazy := (lazy: LazyFunctions?): Value ->
   return NONE if lazy == nil
-  group [field('element', dump_node(lazy.element)), field('guard', optional_node(lazy.guard))]
+  group([field('element', dump_node(lazy.element)), field('guard', optional_node(lazy.guard))])
 
 dump_map := (map: MapLiteral) ->
   entries := List([dump_map_entry(entry) for entry in map.entries])
-  node 'map', map, [field('entries', entries)]
+  node('map', map, [field('entries', entries)])
 
 dump_map_entry := (entry: MapEntry): Group ->
-  group [field('key', dump_node(entry.key)), field('value', dump_node(entry.value))]
+  group([field('key', dump_node(entry.key)), field('value', dump_node(entry.value))])
 
 dump_record := (record: RecordLiteral) ->
   spread := field('spread', optional_node(record.spread))
-  node 'record', record, [spread, field('fields', named_values(record.fields))]
+  node('record', record, [spread, field('fields', named_values(record.fields))])
 
 dump_tuple := (tuple: TupleLiteral): Group ->
-  node 'tuple', tuple, [field('items', expressions(tuple.items))]
+  node('tuple', tuple, [field('items', expressions(tuple.items))])
 
 dump_tuple_item := (item: TupleItem): Group ->
-  node 'tuple_item', item, [
-    field('count', number(item.count))
-    field('index', number(item.index))
-    field('tuple', dump_node(item.tuple))
-  ]
+  node(
+    'tuple_item'
+    item
+    [
+      field('count', number(item.count))
+      field('index', number(item.index))
+      field('tuple', dump_node(item.tuple))
+    ]
+  )
 
 named_values := (values: NamedValue[]) -> List([dump_named_value(value) for value in values])
 
 dump_named_value := (value: NamedValue): Group ->
-  group [field('name', dump_node(value.name)), field('value', dump_node(value.value))]
+  group([field('name', dump_node(value.name)), field('value', dump_node(value.value))])
 
 dump_conditional := (conditional: Conditional): Group ->
-  node 'conditional', conditional, [
-    field('condition', dump_node(conditional.condition))
-    field('else_value', dump_node(conditional.else_value))
-    field('then_value', dump_node(conditional.then_value))
-    # How it was written, as a position is: `else nil` and no `else` are the same program.
-    { name: 'without_else', value: flag(conditional.without_else), is_position: true }
-  ]
+  node(
+    'conditional'
+    conditional
+    [
+      field('condition', dump_node(conditional.condition))
+      field('else_value', dump_node(conditional.else_value))
+      field('then_value', dump_node(conditional.then_value))
+      # How it was written, as a position is: `else nil` and no `else` are the same program.
+      { name: 'without_else', value: flag(conditional.without_else), is_position: true }
+    ]
+  )
 
 dump_index := (index: Index): Group ->
-  node 'index', index, [
-    field('default_value', optional_node(index.default_value))
-    field('index', dump_node(index.index))
-    field('object', dump_node(index.object))
-  ]
+  node(
+    'index'
+    index
+    [
+      field('default_value', optional_node(index.default_value))
+      field('index', dump_node(index.index))
+      field('object', dump_node(index.object))
+    ]
+  )
 
 dump_call := (call: Call): Group ->
-  node 'call', call, [
-    field('args', expressions(call.args))
-    field('callee', dump_node(call.callee))
-    # How it was written, as a position is: `m: Map<K, V>` and `m: Map<K, V> = Map()` are the same
-    # program where no local takes the name Map.
-    { name: 'makes_builtin', value: flag(call.makes_builtin), is_position: true }
-    field('named_args', named_values(call.named_args))
-    field('type_args', types(call.type_args))
-  ]
+  node(
+    'call'
+    call
+    [
+      field('args', expressions(call.args))
+      field('callee', dump_node(call.callee))
+      # How it was written, as a position is: `m: Map<K, V>` and `m: Map<K, V> = Map()` are the same
+      # program where no local takes the name Map.
+      { name: 'makes_builtin', value: flag(call.makes_builtin), is_position: true }
+      field('named_args', named_values(call.named_args))
+      field('type_args', types(call.type_args))
+    ]
+  )
 
 dump_this := (this: This) -> node('this', this, [])
 
 dump_member := (member: Member): Group ->
-  node 'member', member, [
-    field('name', dump_node(member.name))
-    field('object', dump_node(member.object))
-  ]
+  node(
+    'member'
+    member
+    [field('name', dump_node(member.name)), field('object', dump_node(member.object))]
+  )
 
 dump_unary := (unary: UnaryOperation): Group ->
-  node 'unary', unary, [
-    field('operand', dump_node(unary.operand))
-    field('operator', text(unary.operator))
-  ]
+  node(
+    'unary'
+    unary
+    [field('operand', dump_node(unary.operand)), field('operator', text(unary.operator))]
+  )
 
 dump_binary := (binary: BinaryOperation): Group ->
-  node 'binary', binary, [
-    field('left', dump_node(binary.left))
-    field('operator', text(binary.operator))
-    field('right', dump_node(binary.right))
-  ]
+  node(
+    'binary'
+    binary
+    [
+      field('left', dump_node(binary.left))
+      field('operator', text(binary.operator))
+      field('right', dump_node(binary.right))
+    ]
+  )
 
 dump_unwrap := (unwrap: Unwrap): Group ->
-  node 'unwrap', unwrap, [field('operand', dump_node(unwrap.operand))]
+  node('unwrap', unwrap, [field('operand', dump_node(unwrap.operand))])
 
 dump_coalesce := (coalesce: Coalesce): Group ->
-  node 'coalesce', coalesce, [
-    field('fallback', dump_node(coalesce.fallback))
-    field('value', dump_node(coalesce.value))
-  ]
+  node(
+    'coalesce'
+    coalesce
+    [field('fallback', dump_node(coalesce.fallback)), field('value', dump_node(coalesce.value))]
+  )
 
 dump_throw := (expression: Throw): Group ->
-  node 'throw', expression, [field('message', dump_node(expression.message))]
+  node('throw', expression, [field('message', dump_node(expression.message))])
 
 dump_yield := (expression: Yield): Group ->
-  node 'yield', expression, [field('value', dump_node(expression.value))]
+  node('yield', expression, [field('value', dump_node(expression.value))])
 
 dump_await := (expression: Await): Group ->
-  node 'await', expression, [field('operand', dump_node(expression.operand))]
+  node('await', expression, [field('operand', dump_node(expression.operand))])
 
 dump_jump := (jump: Jump) -> node(jump.kind.to_string(), jump, [])
 
 dump_pass := (statement: Pass) -> node('pass', statement, [])
 
 dump_return := (expression: Return) ->
-  node 'return', expression, [field('value', optional_node(expression.value))]
+  node('return', expression, [field('value', optional_node(expression.value))])
 
 dump_range := (range: Range) ->
-  node 'range', range, [
-    field('end', optional_node(range.end))
-    field('inclusive', flag(range.inclusive))
-    field('reversed', flag(range.reversed))
-    field('start', optional_node(range.start))
-    field('step', optional_node(range.step))
-  ]
+  node(
+    'range'
+    range
+    [
+      field('end', optional_node(range.end))
+      field('inclusive', flag(range.inclusive))
+      field('reversed', flag(range.reversed))
+      field('start', optional_node(range.start))
+      field('step', optional_node(range.step))
+    ]
+  )
 
 dump_case := (expression: Case) ->
-  node 'case', expression, [
-    field('arms', List([dump_case_arm(arm) for arm in expression.arms]))
-    field('otherwise', optional_statements(expression.otherwise))
-    field('subject', optional_node(expression.subject))
-  ]
+  node(
+    'case'
+    expression
+    [
+      field('arms', List([dump_case_arm(arm) for arm in expression.arms]))
+      field('otherwise', optional_statements(expression.otherwise))
+      field('subject', optional_node(expression.subject))
+    ]
+  )
 
 dump_case_arm := (arm: CaseArm): Group ->
-  group [field('body', statements(arm.body)), field('patterns', expressions(arm.patterns))]
+  group([field('body', statements(arm.body)), field('patterns', expressions(arm.patterns))])
 
 dump_try := (expression: Try): Group ->
-  node 'try', expression, [
-    field('body', statements(expression.body))
-    field('catches', List([dump_catch(each) for each in expression.catches]))
-    field('finally_body', optional_statements(expression.finally_body))
-  ]
+  node(
+    'try'
+    expression
+    [
+      field('body', statements(expression.body))
+      field('catches', List([dump_catch(each) for each in expression.catches]))
+      field('finally_body', optional_statements(expression.finally_body))
+    ]
+  )
 
 # A catch clause has a position but no kind, so its position is written as fields.
 dump_catch := (clause: Catch) ->
-  group [
-    field('body', statements(clause.body))
-    position_fields(clause.position)...
-    field('name', dump_node(clause.name))
-    field('type', optional_node(clause.type))
-  ]
+  group(
+    [
+      field('body', statements(clause.body))
+      position_fields(clause.position)...
+      field('name', dump_node(clause.name))
+      field('type', optional_node(clause.type))
+    ]
+  )
 
 dump_is := (test: IsTest): Group ->
-  node 'is', test, [field('type', dump_node(test.type)), field('value', dump_node(test.value))]
+  node('is', test, [field('type', dump_node(test.type)), field('value', dump_node(test.value))])
 
 dump_cast := (cast: Cast): Group ->
   fields := [field('type', dump_node(cast.type)), field('value', dump_node(cast.value))]
-  node cast.throws then 'as!' else 'as?', cast, fields
+  node(cast.throws then 'as!' else 'as?', cast, fields)
 
 dump_function := (function: FunctionLiteral): Group ->
-  node 'function', function, [
-    field('awaits', flag(function.awaits))
-    field('body', statements(function.body))
-    field('params', List([dump_parameter(param) for param in function.params]))
-    field('return_type', optional_node(function.return_type))
-    field('type_params', type_parameters(function.type_params))
-    field('weak', flag(function.weak))
-    field('yields', flag(function.yields))
-  ]
+  node(
+    'function'
+    function
+    [
+      field('awaits', flag(function.awaits))
+      field('body', statements(function.body))
+      field('params', List([dump_parameter(param) for param in function.params]))
+      field('return_type', optional_node(function.return_type))
+      field('type_params', type_parameters(function.type_params))
+      field('weak', flag(function.weak))
+      field('yields', flag(function.yields))
+    ]
+  )
 
 dump_parameter := (param: Parameter) ->
-  group [
-    field('default', optional_node(param.default))
-    field('name', dump_node(param.name))
-    field('type', optional_node(param.type))
-    field('variadic', flag(param.variadic))
-  ]
+  group(
+    [
+      field('default', optional_node(param.default))
+      field('name', dump_node(param.name))
+      field('type', optional_node(param.type))
+      field('variadic', flag(param.variadic))
+    ]
+  )
 
 type_parameters := (params: TypeParameter[]) ->
-  List [dump_type_parameter(param) for param in params]
+  List([dump_type_parameter(param) for param in params])
 
 dump_type_parameter := (param: TypeParameter) ->
-  group [field('bound', optional_node(param.bound)), field('name', dump_node(param.name))]
+  group([field('bound', optional_node(param.bound)), field('name', dump_node(param.name))])
 
 dump_import := (statement: Import) ->
-  node 'import', statement, [
-    field('alias', optional_node(statement.alias))
-    field('exported', flag(statement.exported))
-    field('module', text(statement.module))
-    field('names', List([dump_import_name(name) for name in statement.names]))
-  ]
+  node(
+    'import'
+    statement
+    [
+      field('alias', optional_node(statement.alias))
+      field('exported', flag(statement.exported))
+      field('module', text(statement.module))
+      field('names', List([dump_import_name(name) for name in statement.names]))
+    ]
+  )
 
 dump_import_name := (name: ImportName): Group ->
-  group [field('alias', optional_node(name.alias)), field('name', dump_node(name.name))]
+  group([field('alias', optional_node(name.alias)), field('name', dump_node(name.name))])
 
 dump_type_declaration := (declaration: TypeDeclaration): Group ->
-  node 'type_declaration', declaration, [
-    field('exported', flag(declaration.exported))
-    field('is_struct', flag(declaration.is_struct))
-    field('members', members(declaration.members))
-    field('name', dump_node(declaration.name))
-    field('satisfies', optional_node(declaration.satisfies))
-    field('type_params', type_parameters(declaration.type_params))
-  ]
+  node(
+    'type_declaration'
+    declaration
+    [
+      field('exported', flag(declaration.exported))
+      field('is_struct', flag(declaration.is_struct))
+      field('members', members(declaration.members))
+      field('name', dump_node(declaration.name))
+      field('satisfies', optional_node(declaration.satisfies))
+      field('type_params', type_parameters(declaration.type_params))
+    ]
+  )
 
 members := (values: MemberDeclaration[]) ->
-  List [dump_member_declaration(member) for member in values]
+  List([dump_member_declaration(member) for member in values])
 
 # A member has a position but no kind, so its position is written as fields.
 dump_member_declaration := (member: MemberDeclaration) ->
-  group [
-    position_fields(member.position)...
-    field('has_default', flag(member.has_default))
-    field('modifier', optional_text(member.modifier?.to_string()))
-    field('name', dump_node(member.name))
-    field('throws', flag(member.throws))
-    field('type', optional_node(member.type))
-    field('value', optional_node(member.value))
-  ]
+  group(
+    [
+      position_fields(member.position)...
+      field('has_default', flag(member.has_default))
+      field('modifier', optional_text(member.modifier?.to_string()))
+      field('name', dump_node(member.name))
+      field('throws', flag(member.throws))
+      field('type', optional_node(member.type))
+      field('value', optional_node(member.value))
+    ]
+  )
 
 dump_enum := (declaration: EnumDeclaration): Group ->
-  node 'enum', declaration, [
-    field('exported', flag(declaration.exported))
-    field('members', List([dump_node(member) for member in declaration.members]))
-    field('name', dump_node(declaration.name))
-  ]
+  node(
+    'enum'
+    declaration
+    [
+      field('exported', flag(declaration.exported))
+      field('members', List([dump_node(member) for member in declaration.members]))
+      field('name', dump_node(declaration.name))
+    ]
+  )
 
 dump_interface := (declaration: InterfaceDeclaration): Group ->
-  node 'interface', declaration, [
-    field('exported', flag(declaration.exported))
-    field('members', members(declaration.members))
-    field('name', dump_node(declaration.name))
-    field('type_params', type_parameters(declaration.type_params))
-  ]
+  node(
+    'interface'
+    declaration
+    [
+      field('exported', flag(declaration.exported))
+      field('members', members(declaration.members))
+      field('name', dump_node(declaration.name))
+      field('type_params', type_parameters(declaration.type_params))
+    ]
+  )
 
 dump_type_alias := (alias: TypeAlias): Group ->
-  node 'type_alias', alias, [
-    field('exported', flag(alias.exported))
-    field('name', dump_node(alias.name))
-    field('type', dump_node(alias.type))
-  ]
+  node(
+    'type_alias'
+    alias
+    [
+      field('exported', flag(alias.exported))
+      field('name', dump_node(alias.name))
+      field('type', dump_node(alias.type))
+    ]
+  )
 
 dump_extern := (declaration: Extern): Group ->
-  node 'extern', declaration, [
-    field('exported', flag(declaration.exported))
-    field('name', dump_node(declaration.name))
-    field('symbol', dump_node(declaration.symbol))
-    field('type', dump_node(declaration.type))
-  ]
+  node(
+    'extern'
+    declaration
+    [
+      field('exported', flag(declaration.exported))
+      field('name', dump_node(declaration.name))
+      field('symbol', dump_node(declaration.symbol))
+      field('type', dump_node(declaration.type))
+    ]
+  )
 
 dump_intrinsic := (declaration: Intrinsic): Group ->
-  node 'intrinsic', declaration, [
-    field('exported', flag(declaration.exported))
-    field('name', dump_node(declaration.name))
-    field('type', optional_node(declaration.type))
-  ]
+  node(
+    'intrinsic'
+    declaration
+    [
+      field('exported', flag(declaration.exported))
+      field('name', dump_node(declaration.name))
+      field('type', optional_node(declaration.type))
+    ]
+  )
 
 dump_extend := (declaration: Extend): Group ->
-  node 'extend', declaration, [
-    field('members', members(declaration.members))
-    field('type', dump_node(declaration.type))
-    field('type_params', type_parameters(declaration.type_params))
-  ]
+  node(
+    'extend'
+    declaration
+    [
+      field('members', members(declaration.members))
+      field('type', dump_node(declaration.type))
+      field('type_params', type_parameters(declaration.type_params))
+    ]
+  )
 
 dump_declaration := (declaration: Declaration): Group ->
-  node 'declaration', declaration, [
-    field('exported', flag(declaration.exported))
-    field('mutable', flag(declaration.mutable))
-    field('name', dump_node(declaration.name))
-    # How it was written, as a position is: `var x: T?` and `var x: T? = nil` are the same program.
-    { name: 'omits_value', value: flag(declaration.omits_value), is_position: true }
-    field('type', optional_node(declaration.type))
-    field('value', dump_node(declaration.value))
-    field('weak', flag(declaration.weak))
-  ]
+  node(
+    'declaration'
+    declaration
+    [
+      field('exported', flag(declaration.exported))
+      field('mutable', flag(declaration.mutable))
+      field('name', dump_node(declaration.name))
+      # How it was written, as a position is: `var x: T?` and `var x: T? = nil` are one program.
+      { name: 'omits_value', value: flag(declaration.omits_value), is_position: true }
+      field('type', optional_node(declaration.type))
+      field('value', dump_node(declaration.value))
+      field('weak', flag(declaration.weak))
+    ]
+  )
 
 dump_assignment := (assignment: Assignment): Group ->
-  node 'assignment', assignment, [
-    field('operator', text(assignment.operator))
-    field('target', dump_node(assignment.target))
-    field('value', dump_node(assignment.value))
-  ]
+  node(
+    'assignment'
+    assignment
+    [
+      field('operator', text(assignment.operator))
+      field('target', dump_node(assignment.target))
+      field('value', dump_node(assignment.value))
+    ]
+  )
 
 dump_if := (statement: If): Group ->
-  node 'if', statement, [
-    field('condition', dump_node(statement.condition))
-    field('else_body', statements(statement.else_body))
-    field('nil_safe', flag(statement.nil_safe))
-    field('then_body', statements(statement.then_body))
-  ]
+  node(
+    'if'
+    statement
+    [
+      field('condition', dump_node(statement.condition))
+      field('else_body', statements(statement.else_body))
+      field('nil_safe', flag(statement.nil_safe))
+      field('then_body', statements(statement.then_body))
+    ]
+  )
 
 dump_while := (statement: While): Group ->
-  node 'while', statement, [
-    field('body', statements(statement.body))
-    field('condition', dump_node(statement.condition))
-  ]
+  node(
+    'while'
+    statement
+    [field('body', statements(statement.body)), field('condition', dump_node(statement.condition))]
+  )
 
 dump_for := (statement: For): Group ->
-  node 'for', statement, [
-    field('body', statements(statement.body))
-    field('iterable', dump_node(statement.iterable))
-    field('variable', dump_node(statement.variable))
-    field('index', optional_node(statement.index))
-  ]
+  node(
+    'for'
+    statement
+    [
+      field('body', statements(statement.body))
+      field('iterable', dump_node(statement.iterable))
+      field('variable', dump_node(statement.variable))
+      field('index', optional_node(statement.index))
+    ]
+  )
 
 dump_binding := (binding: Binding): Group ->
-  node 'binding', binding, [
-    field('name', dump_node(binding.name))
-    field('value', dump_node(binding.value))
-  ]
+  node(
+    'binding'
+    binding
+    [field('name', dump_node(binding.name)), field('value', dump_node(binding.value))]
+  )
 
 dump_named_type := (type: NamedType): Group ->
-  node 'type_name', type, [
-    field('args', types(type.args))
-    field('name', text(type.name))
-    field('optional', flag(type.optional))
-  ]
+  node(
+    'type_name'
+    type
+    [
+      field('args', types(type.args))
+      field('name', text(type.name))
+      field('optional', flag(type.optional))
+    ]
+  )
 
 dump_union_type := (type: UnionTypeName): Group ->
   member_list := List([dump_node(member) for member in type.members])
-  node 'union_type', type, [field('members', member_list), field('optional', flag(type.optional))]
+  node('union_type', type, [field('members', member_list), field('optional', flag(type.optional))])
 
 dump_function_type := (type: FunctionTypeName): Group ->
-  node 'function_type', type, [
-    field('optional', flag(type.optional))
-    field('params', types(type.params))
-    field('result', dump_node(type.result))
-  ]
+  node(
+    'function_type'
+    type
+    [
+      field('optional', flag(type.optional))
+      field('params', types(type.params))
+      field('result', dump_node(type.result))
+    ]
+  )
 
 dump_record_type := (type: RecordTypeName) ->
   fields := List([dump_record_type_field(each) for each in type.fields])
-  node 'record_type', type, [field('fields', fields), field('optional', flag(type.optional))]
+  node('record_type', type, [field('fields', fields), field('optional', flag(type.optional))])
 
 dump_tuple_type := (type: TupleTypeName): Group ->
-  node 'tuple_type', type, [
-    field('items', types(type.items))
-    field('optional', flag(type.optional))
-  ]
+  node(
+    'tuple_type'
+    type
+    [field('items', types(type.items)), field('optional', flag(type.optional))]
+  )
 
 dump_array_type := (type: ArrayTypeName): Group ->
-  node 'array_type', type, [
-    field('element', dump_node(type.element))
-    field('optional', flag(type.optional))
-  ]
+  node(
+    'array_type'
+    type
+    [field('element', dump_node(type.element)), field('optional', flag(type.optional))]
+  )
 
 dump_record_type_field := (type_field: RecordTypeField): Group ->
-  group [field('name', dump_node(type_field.name)), field('type', dump_node(type_field.type))]
+  group([field('name', dump_node(type_field.name)), field('type', dump_node(type_field.type))])
 
 # The tokens, one per line, for `dump-tokens`.
 

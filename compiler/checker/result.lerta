@@ -25,7 +25,7 @@ export function_context := (program: ProgramWide, literal: FunctionLiteral, anno
     if annotated and annotated is not PromiseType
       fail_here 'a function that awaits returns a Promise, as in `(): Promise<Int> ->`'
     return FunctionContext(literal, yields, awaits, annotated: (annotated as PromiseType?)?.value)
-  FunctionContext literal, annotated, yields, awaits
+  FunctionContext(literal, annotated, yields, awaits)
 
 export check_last_statement := (body: Body, statement: Statement) ->
   context := body.context!
@@ -152,7 +152,7 @@ export type_of_await := (body: Body, await_expression: Await) ->
   body.scopes.forget_outer_var_views()
   return type.value if type is PromiseType
   return type if is_kind(type, 'never')
-  fail program, operand.position, "expected a Promise, got #{format_type(type)}"
+  fail(program, operand.position, "expected a Promise, got #{format_type(type)}")
 
 # A yielded value must fit the item type, as a return value fits the return type.
 export check_yield := (body: Body, yield_expression: Yield) ->
@@ -172,7 +172,7 @@ type_of_result := (body: Body, value: Expression) ->
   promise := undecided_promise(context)
   annotated := promise then promise.value else context.annotated
   hint := annotated then (not is_kind(annotated, 'void') then annotated)
-  type_of body, value, hint
+  type_of(body, value, hint)
 
 # The type of a function once its body is checked: its return type is the written one, or the one
 # its results give, to which they are converted; that of a function that yields is an Iter of its
@@ -196,7 +196,7 @@ export finish_function_type := (context: FunctionContext, params: Type[], facts:
         facts.settling.add context.literal
         PromiseType result
       else result
-  FunctionType params, result: wrapped
+  FunctionType(params, result: wrapped)
 
 # A function of an item leaves rejecting results of only nil to its caller, which tells what would
 # hold its results (see check_value_type).

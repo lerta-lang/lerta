@@ -20,12 +20,12 @@ export type_of_case := (body: Body, case_expression: Case, expected: Type?) ->
   narrowings := check_patterns(body, case_expression)
   { arms } := case_expression
   arm_branch := (i: Int) ->
-    Branch statements: arms[i].body, enter: -> narrow(body, narrowings.arms[i])
+    Branch(statements: arms[i].body, enter: -> narrow(body, narrowings.arms[i]))
   branches := [arm_branch(i) for i in 0..arms.length]
   if otherwise := case_expression.otherwise
     branches.push { statements: otherwise, enter: -> narrow(body, narrowings.otherwise) }
   unify_arms := (values: BranchValue[]) -> unify_values(body, values, case_expression, 'case arms')
-  type_of_branches body, branches, expected, unify_arms
+  type_of_branches(body, branches, expected, unify_arms)
 
 export type_of_if := (body: Body, if_expression: If, expected: Type?): Type ->
   { then_body, else_body } := if_expression
@@ -40,7 +40,7 @@ export type_of_if := (body: Body, if_expression: If, expected: Type?): Type ->
   nil_safe := "'?.', whose chain gives no value"
   description := if_expression.nil_safe then nil_safe else 'the branches of if'
   unify := unify_unless_void(body, if_expression, description)
-  type_of_branches body, branches, expected, unify
+  type_of_branches(body, branches, expected, unify)
 
 # A case that is a statement gives no value: its arms are checked as statements, as a try's blocks
 # are, so that their values need no type in common. It never ends if none of its arms does.
@@ -108,5 +108,5 @@ export type_of_conditional := (body: Body, conditional: Conditional, expected: T
       fail body.program, valueless.last.position, message
     { without_else } := conditional
     description := without_else then 'then without else' else 'the values of then and else'
-    unify_values body, values, conditional, description
-  type_of_branches body, branches, expected, unify_then_else
+    unify_values(body, values, conditional, description)
+  type_of_branches(body, branches, expected, unify_then_else)

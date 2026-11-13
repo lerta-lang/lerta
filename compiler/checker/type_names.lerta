@@ -76,7 +76,7 @@ export struct Resolver
   bounds: Map<String, InterfaceType>
 
 export module_resolver := (module_index: Int) ->
-  Resolver module_index, type_parameters: Map(), bounds: Map()
+  Resolver(module_index, type_parameters: Map(), bounds: Map())
 
 export with_type_parameters := (resolver: Resolver, type_parameters: Map<String, Type>) ->
   Resolver(resolver..., type_parameters)
@@ -101,7 +101,7 @@ export named_type := (shared: Shared, name: String): Type? ->
 export has_type := (program: ProgramWide, resolver: Resolver, name: String) ->
   shared := resolver_shared(program, resolver)
   return true if is_core_type_name(name) or named_type(shared, name) != nil
-  has_alias shared, name
+  has_alias(shared, name)
 
 # Whether the name alone is a type, a class or struct of no type parameters or a builtin one of
 # no type arguments, as `Int`.
@@ -142,10 +142,10 @@ names_value := (shared: Shared, name: String) ->
   name in names or name in function_names or imports_value(shared, name)
 
 export resolve := (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
-  resolve_type program, resolver, type_name, false
+  resolve_type(program, resolver, type_name, false)
 
 export resolve_result := (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->
-  resolve_type program, resolver, type_name, true
+  resolve_type(program, resolver, type_name, true)
 
 resolve_type := (program: ProgramWide, resolver: Resolver, type_name: TypeName, is_result: Bool) ->
   return resolve_union(program, resolver, type_name) if type_name is UnionTypeName
@@ -156,7 +156,7 @@ resolve_type := (program: ProgramWide, resolver: Resolver, type_name: TypeName, 
       when TupleTypeName then resolve_tuple(program, resolver, type_name)
       when NamedType then resolve_name(program, resolver, type_name, is_result)
       when ArrayTypeName then ArrayType(resolve_element(program, resolver, type_name.element))
-  optional_if program, type, type_name.position, type_name.optional
+  optional_if(program, type, type_name.position, type_name.optional)
 
 optional_if := (program: ProgramWide, type: Type, at: Position, optional: Bool) ->
   return type unless optional
@@ -164,7 +164,7 @@ optional_if := (program: ProgramWide, type: Type, at: Position, optional: Bool) 
     fail program, at, "#{format_type(type)} cannot be optional"
   if type is OptionalType
     fail program, at, "#{format_type(type)} cannot be optional again: its nil would be ambiguous"
-  optional_type type
+  optional_type(type)
 
 resolve_record := (program: ProgramWide, resolver: Resolver, type_name: RecordTypeName): Type ->
   names: Set<String>
@@ -172,15 +172,15 @@ resolve_record := (program: ProgramWide, resolver: Resolver, type_name: RecordTy
     { name, position } := field.name
     fail program, position, "'#{name}' is already a field" unless names.add(name)
   resolve_field := (field: RecordTypeField) ->
-    RecordField name: field.name.name, type: resolve(program, resolver, field.type)
-  record_type [resolve_field(field) for field in type_name.fields]
+    RecordField(name: field.name.name, type: resolve(program, resolver, field.type))
+  record_type([resolve_field(field) for field in type_name.fields])
 
 resolve_tuple := (program: ProgramWide, resolver: Resolver, type_name: TupleTypeName): Type ->
-  TupleType [resolve(program, resolver, item) for item in type_name.items]
+  TupleType([resolve(program, resolver, item) for item in type_name.items])
 
 resolve_function := (program: ProgramWide, resolver: Resolver, type_name: FunctionTypeName): Type ->
   params := [resolve(program, resolver, param) for param in type_name.params]
-  FunctionType params, result: resolve_result(program, resolver, type_name.result)
+  FunctionType(params, result: resolve_result(program, resolver, type_name.result))
 
 # A member that is optional, as `String?` in `Int | String?`, makes the union optional: nil is one
 # of its values.
@@ -201,7 +201,7 @@ resolve_union := (program: ProgramWide, resolver: Resolver, type_name: UnionType
     type_name.position
     'a union holds one array type and one map type at most, which it tells apart so far'
   )
-  optional_if program, union, type_name.position, type_name.optional
+  optional_if(program, union, type_name.position, type_name.optional)
 
 resolve_alias := (program: ProgramWide, resolver: Resolver, name: String, at: Position) ->
   shared := resolver_shared(program, resolver)
@@ -302,4 +302,4 @@ resolve_map_value := (program: ProgramWide, resolver: Resolver, type_name: TypeN
   type
 
 resolve_element := (program: ProgramWide, resolver: Resolver, type_name: TypeName): Type ->
-  check_value_type program, resolve(program, resolver, type_name), type_name.position, 'an array'
+  check_value_type(program, resolve(program, resolver, type_name), type_name.position, 'an array')

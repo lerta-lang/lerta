@@ -33,34 +33,36 @@ framed_json := <T: Codable>(fields: T) -> frame(encode_json(fields))
 
 export did_open := (uri: String, text: String) ->
   params := { textDocument: { uri, languageId: 'lerta', version: 1, text } }
-  framed_json { jsonrpc: '2.0', method: 'textDocument/didOpen', params }
+  framed_json({ jsonrpc: '2.0', method: 'textDocument/didOpen', params })
 
 export did_change := (uri: String, text: String) -> did_change_at(uri, text, 2)
 
 export did_change_at := (uri: String, text: String, version: Int) ->
   params := { textDocument: { uri, version }, contentChanges: [{ text }] }
-  framed_json { jsonrpc: '2.0', method: 'textDocument/didChange', params }
+  framed_json({ jsonrpc: '2.0', method: 'textDocument/didChange', params })
 
 export did_close := (uri: String) ->
-  framed_json { jsonrpc: '2.0', method: 'textDocument/didClose', params: { textDocument: { uri } } }
+  framed_json(
+    { jsonrpc: '2.0', method: 'textDocument/didClose', params: { textDocument: { uri } } }
+  )
 
 export formatting_request := (uri: String, id: Int) ->
   params := { textDocument: { uri } }
-  framed_json { jsonrpc: '2.0', id, method: 'textDocument/formatting', params }
+  framed_json({ jsonrpc: '2.0', id, method: 'textDocument/formatting', params })
 
 # A request of the method about the place in the document.
 position_request := (method: String, uri: String, line: Int, character: Int, id: Int) ->
   params := { textDocument: { uri }, position: { line, character } }
-  framed_json { jsonrpc: '2.0', id, method: "textDocument/#{method}", params }
+  framed_json({ jsonrpc: '2.0', id, method: "textDocument/#{method}", params })
 
 export completion_request := (uri: String, line: Int, character: Int, id = 1) ->
-  position_request 'completion', uri, line, character, id
+  position_request('completion', uri, line, character, id)
 
 export definition_request := (uri: String, line: Int, character: Int, id: Int) ->
-  position_request 'definition', uri, line, character, id
+  position_request('definition', uri, line, character, id)
 
 export hover_request := (uri: String, line: Int, character: Int, id: Int) ->
-  position_request 'hover', uri, line, character, id
+  position_request('hover', uri, line, character, id)
 
 # The values of the expected answers, as structs, whose fields encode_json writes in the order that
 # they are declared in, which is the server's.
@@ -94,11 +96,11 @@ result_fragment := (id: Int, result: String) -> "\"id\":#{id},\"result\":#{resul
 
 export location_fragment := (id: Int, uri: String, line: Int, start: Int, end: Int) ->
   range := Range(start: { line, character: start }, end: { line, character: end })
-  result_fragment id, encode_json(Location(uri, range))
+  result_fragment(id, encode_json(Location(uri, range)))
 
 export hover_fragment := (id: Int, text: String) ->
   value := "```lerta\n#{text}\n```"
-  result_fragment id, encode_json(Hover({ value, kind: 'markdown' }))
+  result_fragment(id, encode_json(Hover({ value, kind: 'markdown' })))
 
 export initialize := '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"capabilities":{}}}'
 export finish :=
@@ -145,7 +147,7 @@ export response_ids := (output: String) ->
 export diagnostic_body := (line: Int, character: Int, severity: Int, message: String) ->
   position := Position(line, character)
   range := Range(start: position, end: position)
-  encode_json Diagnostic(range, severity, message, source: 'lerta')
+  encode_json(Diagnostic(range, severity, message, source: 'lerta'))
 
 export published_diagnostics := (uri: String, diagnostics: String[]) ->
   '{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics",' +
@@ -165,8 +167,8 @@ export exact_responses := (output: String, fragments: String[]) ->
   expected := [initialize_response('utf-16')]
   expected.append [response_from_fragment(fragment) for fragment in fragments]
   expected.push shutdown_response
-  compare_text 'responses', expected.join("\n"), response_bodies(output).join("\n")
+  compare_text('responses', expected.join("\n"), response_bodies(output).join("\n"))
 
 export exact_messages := (output: String, messages: String[]) ->
   expected := [initialize_response('utf-16'), messages..., shutdown_response]
-  compare_text 'messages', expected.join("\n"), message_bodies(output).join("\n")
+  compare_text('messages', expected.join("\n"), message_bodies(output).join("\n"))

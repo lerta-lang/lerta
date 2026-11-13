@@ -31,7 +31,7 @@ export emit_decode := (
 
 emit_read_call := (ir: IrBuilder, reader: Coder, type: Type) ->
   symbol := read_function(ir.module, reader, type)
-  ir.assign "call #{ir_type(type)} #{symbol}(ptr #{reader.operand})"
+  ir.assign("call #{ir_type(type)} #{symbol}(ptr #{reader.operand})")
 
 read_function := (module: IrModule, reader: Coder, type: Type) ->
   define := (name: String, defined: IrModule) ->
@@ -39,7 +39,7 @@ read_function := (module: IrModule, reader: Coder, type: Type) ->
     own := Coder(reader..., operand: '%reader')
     ir.emit "ret #{ir_type(type)} #{emit_read_parts(ir, own, type)}"
     ir.finish "private #{ir_type(type)} #{name}(ptr %reader)"
-  module.named "decode #{type_key(reader.type)} #{type_key(type)}", '@lerta.decode', define
+  module.named("decode #{type_key(reader.type)} #{type_key(type)}", '@lerta.decode', define)
 
 # The body of the function of a type: its parts, or the value itself for a type that others read
 # inline, which a builtin may read too.
@@ -64,12 +64,12 @@ emit_read := (ir: IrBuilder, reader: Coder, type: Type, unwind: () -> void): Str
       is_null := call_method(ir, reader, 'read_nil', bool_type, [], unwind)
       present := ir.negate(is_null)
       read_inner := -> emit_wrap(ir, emit_read(ir, reader, type.inner, unwind), type.inner)
-      emit_branch ir, ir_type(type), present, read_inner, nil_constant(type)
+      emit_branch(ir, ir_type(type), present, read_inner, nil_constant(type))
     when EnumType then emit_read_member(ir, reader, type, unwind)
     else
       if scalar := SCALARS[kind_of(type)]
         return call_method(ir, reader, scalar.read, scalar.type, [], unwind)
-      emit_read_integer ir, reader, type, unwind
+      emit_read_integer(ir, reader, type, unwind)
 
 # An integer of a type that SCALARS has not, read as an Int in the type's range.
 emit_read_integer := (ir: IrBuilder, reader: Coder, type: Type, unwind: () -> void) ->
@@ -79,7 +79,7 @@ emit_read_integer := (ir: IrBuilder, reader: Coder, type: Type, unwind: () -> vo
   expected := shared_string_constant(ir, "#{article} #{name}")
   args := ["ptr #{expected}", "i64 #{least}", "i64 #{most}"]
   word := call_method(ir, reader, 'read_integer', int_type, args, unwind)
-  narrowed_from_word ir, word, scalar_of(type)!
+  narrowed_from_word(ir, word, scalar_of(type)!)
 
 # The member that the name read names.
 emit_read_member := (ir: IrBuilder, reader: Coder, type: EnumType, unwind: () -> void) ->
@@ -93,7 +93,7 @@ emit_read_member := (ir: IrBuilder, reader: Coder, type: EnumType, unwind: () ->
   optional := optional_type(type)
   emit_when ir, emit_is_nil(ir, member, optional), fail
   emit_release ir, text
-  emit_unwrap ir, member, optional
+  emit_unwrap(ir, member, optional)
 
 # The array, which the function holds while it reads the items.
 emit_read_array := (ir: IrBuilder, reader: Coder, type: ArrayType) ->
@@ -174,7 +174,7 @@ emit_for_each_key := (
   var key = ''
   more := ->
     key = call_method(ir, reader, method, optional_type(string_type), [], unwind)
-    ir.is_not_null key
+    ir.is_not_null(key)
   release_key := ->
     emit_release ir, key
     unwind()
@@ -192,7 +192,7 @@ emit_read_tuple := (ir: IrBuilder, reader: Coder, type: TupleType) ->
     call_void_method ir, reader, 'next_tuple_item', [count], unwind
     items.push emit_read(ir, reader, item_type, unwind)
   call_void_method ir, reader, 'end_tuple', [count], unwind
-  emit_values ir, type, items
+  emit_values(ir, type, items)
 
 # A field read from a record's key: a field with a default, or of an optional type, may be left
 # out.
@@ -207,14 +207,14 @@ emit_read_record := (ir: IrBuilder, reader: Coder, type: RecordType) ->
   fields :=
     [FieldToRead(name: field.name, type: field.type, has_default: false) for field in type.fields]
   make := (values: FieldValues) -> emit_values(ir, type, values.values())
-  emit_read_fields ir, reader, type, fields, make
+  emit_read_fields(ir, reader, type, fields, make)
 
 # The object is constructed as a call of its constructor does it: of the fields that are its
 # arguments, each with a default followed by whether it is given (see generate_construction).
 emit_read_object := (ir: IrBuilder, reader: Coder, type: ObjectType) ->
   info := info_of(reader.program, type)
   to_read := (field: FieldInfo) ->
-    FieldToRead name: field.name.name, type: field.type!, has_default: field.has_default
+    FieldToRead(name: field.name.name, type: field.type!, has_default: field.has_default)
   fields := [to_read(field) for field in info.fields when is_argument(field)]
   make := (values: FieldValues) ->
     args: String[]
@@ -225,7 +225,7 @@ emit_read_object := (ir: IrBuilder, reader: Coder, type: ObjectType) ->
     object := ir.assign("call ptr #{constructor_symbol(type)}(#{args.join(', ')})")
     emit_check_with ir, -> emit_return_thrown(ir, type)
     object
-  emit_read_fields ir, reader, type, fields, make
+  emit_read_fields(ir, reader, type, fields, make)
 
 # The values of the fields read so far, each in a slot of its own with whether its key was given,
 # which `unwind` releases. A field left out holds nil, or zeros for a field with a default, which
@@ -272,7 +272,7 @@ emit_read_fields := (
     fail := ->
       call_void_method ir, reader, 'fail_missing_field', [name_arg(ir, field.name)], unwind
     emit_when ir, ir.negate(values.given(i)), fail
-  make values
+  make(values)
 
 # Reads the value of the key into the field whose key it is, as the decoder tells, or skips it if no
 # field has it as its key.
@@ -317,7 +317,7 @@ emit_read_union := (ir: IrBuilder, reader: Coder, type: UnionType) ->
   call_void_method ir, reader, 'fail_expected', ["ptr #{expected}"], unwind
   ir.emit 'unreachable'
   ir.start_block done
-  ir.assign "phi ptr #{incoming.join(', ')}"
+  ir.assign("phi ptr #{incoming.join(', ')}")
 
 release_and_return := (ir: IrBuilder, value: String, type: Type) ->
   emit_release ir, value

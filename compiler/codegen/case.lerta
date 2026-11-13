@@ -69,7 +69,7 @@ export generate_conditional := (g: Generator, conditional: Conditional) ->
   value_of := (value: Expression) -> -> generate_block_value(g, [value])
   incoming :=
     branch_values(g, test, value_of(conditional.then_value), value_of(conditional.else_value))
-  merge g, type_of(g, conditional), incoming
+  merge(g, type_of(g, conditional), incoming)
 
 # An `if` that gives a value merges those of its branches as then/else does; one that gives none
 # runs as a statement, which releases the values its branches discard.
@@ -80,7 +80,7 @@ export generate_if_value := (g: Generator, if_expression: If) ->
   condition := generate_condition_of(g, if_expression.condition)
   then_value := -> generate_block_value(g, if_expression.then_body, condition.define)
   else_value := -> generate_block_value(g, if_expression.else_body)
-  merge g, type_of(g, if_expression), branch_values(g, condition.test, then_value, else_value)
+  merge(g, type_of(g, if_expression), branch_values(g, condition.test, then_value, else_value))
 
 # Branches on the test to the two values, each generated in a block of its own that then jumps to
 # one end block: the incoming values of that block, which merge takes.
@@ -95,7 +95,7 @@ branch_values := (g: Generator, test: String, then_value: () -> String, else_val
     operand := value()
     from := ir.current_block
     ir.branch end_label
-    phi_incoming operand, from
+    phi_incoming(operand, from)
   incoming := [branch(then_label, then_value), branch(else_label, else_value)]
   ir.start_block end_label
   incoming
@@ -115,15 +115,15 @@ generate_test := (g: Generator, arm: CaseArm, subject_type: Type?, operand: Stri
       return emit_is_nil(g.ir, operand, type) if pattern is NilLiteral
       test_value := (value: String) -> pattern_test(g, value, type.inner, pattern)
       return emit_present_test(g.ir, operand, type, test_value)
-    pattern_test g, operand, type, pattern
-  any_of g.ir, [test_of(pattern) for pattern in arm.patterns]
+    pattern_test(g, operand, type, pattern)
+  any_of(g.ir, [test_of(pattern) for pattern in arm.patterns])
 
 # A subject of a union narrowed to one of its members is still tested for its type.
 pattern_test := (g: Generator, subject: String, type: Type, pattern: Expression) ->
   if type is UnionType | ObjectType
-    emit_type_test g.ir, subject, type_of(g, pattern)
+    emit_type_test(g.ir, subject, type_of(g, pattern))
   else
-    value_test g, subject, type, pattern
+    value_test(g, subject, type, pattern)
 
 # The subject is borrowed by the comparison, as it is tested again by the next patterns.
 value_test := (g: Generator, subject: String, type: Type, pattern: Expression) ->

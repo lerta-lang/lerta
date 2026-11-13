@@ -175,7 +175,7 @@ compile_and_run := (test: TestCase, optimize: Bool) ->
   if built.status != 0 or not others.is_empty()
     throw SetupError("the build failed (#{built.failure}):\n#{built.errors}")
   { stdout, stderr, exit } := await run_program(executable)
-  Outcome stdout, stderr, exit, warnings: lines(warnings)
+  Outcome(stdout, stderr, exit, warnings: lines(warnings))
 
 path_delimiter := platform == 'windows' then ';' else ':'
 
@@ -225,7 +225,7 @@ bench_check := (dir: String, name: String) ->
       compare_output('stderr', b'', ran.stderr)...
       (ran.exit.code == 0 then [] else ["expected the run to succeed, but #{ending(ran.exit)}"])...
     ]
-  Check name: label, run: build_and_run
+  Check(name: label, run: build_and_run)
 
 bench_checks := (): Check[] ->
   return [] if self_check_dir
@@ -243,7 +243,7 @@ site_check := (label: String, args: String[]) ->
     ran := await run_file(compiler, args, root_dir)
     return [] if ran.status == 0 and ran.errors.is_empty()
     ["#{label} failed (#{ran.failure}):\n#{ran.errors}"]
-  Check name: label, run: check
+  Check(name: label, run: check)
 
 site_checks := ->
   checks: Check[]
@@ -290,7 +290,7 @@ run_program := (path: String) ->
       stdout: output
       stderr: errors
     exit := await exit_in_time(path, ran, run_timeout_seconds())
-    ProgramRun exit, stdout: output.binary, stderr: errors.binary
+    ProgramRun(exit, stdout: output.binary, stderr: errors.binary)
   finally
     wine_prefixes.give_back prefix if prefix
 
@@ -356,7 +356,7 @@ optimized_check := (test: TestCase) ->
     if unoptimized := unoptimized_runs[test.label]
       return nil if (await unoptimized).exit == nil
     await run_test(test, true)
-  Check wait, name: "#{test.label} (-O)", run: check
+  Check(wait, name: "#{test.label} (-O)", run: check)
 
 # The checks that the suite selected, if any, of the programs built for `given`.
 export suite := (given: Target) ->
@@ -382,4 +382,4 @@ export suite := (given: Target) ->
     await build_runtimes(runtime_dir, [target.args, ['-O', target.args...]])
     await build_commands()
     wine_prefixes = await start_wine_prefixes(work_dir, jobs()) if target.wine
-  SuiteChecks title, checks, ready: set_up(), stop: -> await wine_prefixes.stop()
+  SuiteChecks(title, checks, ready: set_up(), stop: -> await wine_prefixes.stop())

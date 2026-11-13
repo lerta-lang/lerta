@@ -54,19 +54,19 @@ export parse_value := (tokens: TokenStream): Expression ->
       when at_block(tokens) then parse_block_literal(tokens)
       when tokens.peek().kind == 'if' then parse_if_value(tokens)
       else parse_call_value(tokens)
-  continue_with_members tokens, value
+  continue_with_members(tokens, value)
 
 # An expression, which is a call when it is a callee followed by its arguments in an indented block;
 # the operand of `return`, `throw` or `yield` is one too.
 export parse_call_value := (tokens: TokenStream): Expression ->
   expression := parse_expression(tokens)
   return expression unless at_block_arguments(tokens, expression)
-  parse_block_arguments tokens, expression
+  parse_block_arguments(tokens, expression)
 
 # The value of `return`, `throw` or `yield`, or an argument in a block, which takes the member
 # lines after it, as a value does, rather than leaving them to the statement.
 export parse_continued_value := (tokens: TokenStream) ->
-  continue_with_members tokens, parse_call_value(tokens)
+  continue_with_members(tokens, parse_call_value(tokens))
 
 # The value with the members that the lines after it take, those that start with `.` or `?.`, so
 # that a member applies to the whole value, however many lines it took: lines one level deeper than
@@ -115,7 +115,7 @@ parse_member_line := (tokens: TokenStream, object: Expression): Expression ->
   return parse_nil_safe(tokens, object) if tokens.peek().kind == '?'
   tokens.next()
   position := object.position
-  parse_postfix tokens, Member(position, object, name: parse_identifier(tokens))
+  parse_postfix(tokens, Member(position, object, name: parse_identifier(tokens)))
 
 # `f`, `f x` or `f(x)`, followed by an indented block of the arguments after those on the line.
 export parse_block_arguments := (tokens: TokenStream, callee: Expression) ->
@@ -141,7 +141,7 @@ parse_block_argument := (tokens: TokenStream) ->
   value := spread_of(tokens, parse_continued_value(tokens))
   message := 'an argument is named by a name, not by a key'
   tokens.fail value.position, message if tokens.peek().kind == ':'
-  Argument value
+  Argument(value)
 
 export at_block_arguments := (tokens: TokenStream, expression: Expression) ->
   is_callee := expression is Call | Identifier | Member
@@ -149,7 +149,7 @@ export at_block_arguments := (tokens: TokenStream, expression: Expression) ->
 
 export call_of := (callee: Expression, arguments: Arguments, type_args: TypeName[]) ->
   { args, named_args } := arguments
-  Call callee, args, named_args, type_args, position: callee.position
+  Call(callee, args, named_args, type_args, position: callee.position)
 
 parse_conditional := (tokens: TokenStream): Expression ->
   condition := parse_or(tokens)
@@ -159,10 +159,10 @@ parse_conditional := (tokens: TokenStream): Expression ->
   position := condition.position
   without_else := not tokens.accept('else')
   else_value: Expression = without_else then NilLiteral(position) else parse_expression(tokens)
-  Conditional condition, then_value, else_value, position, without_else
+  Conditional(condition, then_value, else_value, position, without_else)
 
 export parse_or := (tokens: TokenStream): Expression ->
-  parse_left_associative tokens, ['or'], -> parse_and(tokens)
+  parse_left_associative(tokens, ['or'], -> parse_and(tokens))
 
 parse_and := (tokens: TokenStream) -> parse_left_associative(tokens, ['and'], -> parse_not(tokens))
 
@@ -184,10 +184,11 @@ parse_not := (tokens: TokenStream): Expression ->
   token := tokens.peek()
   return parse_comparison(tokens) if token.kind != 'not'
   tokens.next()
-  UnaryOperation
+  UnaryOperation(
     operator: 'not'
     operand: tokens.nested(-> parse_not(tokens))
     position: token.position()
+  )
 
 at_comparison_start := (tokens: TokenStream) ->
   at_word := COMPARISON_WORDS.any(tokens.continues_with_word)
@@ -242,7 +243,7 @@ parse_cast := (tokens: TokenStream, value: Expression): Expression ->
   type.optional = not throws
   cast := Cast(value, type, throws, position: value.position)
   return cast unless falls_back
-  Coalesce value: cast, fallback: parse_cast_fallback(tokens), position: value.position
+  Coalesce(value: cast, fallback: parse_cast_fallback(tokens), position: value.position)
 
 # The fallback of `x as T ? y`, which may itself be one, as `a ? b ? c` is `a ? (b ? c)`.
 parse_cast_fallback := (tokens: TokenStream) ->
@@ -251,7 +252,7 @@ parse_cast_fallback := (tokens: TokenStream) ->
 
 parse_binary_comparison := (tokens: TokenStream, left: Expression): Expression ->
   operator := tokens.next().kind.to_string()
-  BinaryOperation operator, left, right: parse_coalesce(tokens), position: left.position
+  BinaryOperation(operator, left, right: parse_coalesce(tokens), position: left.position)
 
 # `a ? b ? c` is `a ? (b ? c)`.
 parse_coalesce := (tokens: TokenStream): Expression ->
@@ -259,7 +260,7 @@ parse_coalesce := (tokens: TokenStream): Expression ->
   return value if tokens.peek_continuation() != '?'
   tokens.next()
   fallback := tokens.nested(-> parse_coalesce(tokens))
-  Coalesce value, fallback, position: value.position
+  Coalesce(value, fallback, position: value.position)
 
 parse_range := (tokens: TokenStream): Expression ->
   return parse_range_without_start(tokens) if tokens.peek().kind in RANGE_OPERATORS
@@ -279,7 +280,7 @@ parse_range := (tokens: TokenStream): Expression ->
   reject_chained_range tokens
   step := tokens.accept_word('by') then parse_arithmetic(tokens, 0)
   reversed := tokens.accept_word('reversed')
-  Range start, end, inclusive, step, reversed, position: start.position
+  Range(start, end, inclusive, step, reversed, position: start.position)
 
 # `..b` or `..=b`.
 parse_range_without_start := (tokens: TokenStream) ->
@@ -287,7 +288,7 @@ parse_range_without_start := (tokens: TokenStream) ->
   operator := tokens.next()
   end := parse_arithmetic(tokens, 0)
   reject_chained_range tokens
-  Range end, start: nil, inclusive: operator.kind == '..=', position: operator.position()
+  Range(end, start: nil, inclusive: operator.kind == '..=', position: operator.position())
 
 reject_chained_range := (tokens: TokenStream) ->
   tokens.fail_here 'ranges cannot be chained' if tokens.peek_continuation() in RANGE_OPERATORS
@@ -372,13 +373,13 @@ parse_unary := (tokens: TokenStream): Expression ->
   if literal.kind == FLOAT and not literal.spaced
     tokens.next()
     return parse_postfix(tokens, FloatLiteral(position, text: "-#{literal.text}"))
-  UnaryOperation position, operator: '-', operand: tokens.nested(-> parse_unary(tokens))
+  UnaryOperation(position, operator: '-', operand: tokens.nested(-> parse_unary(tokens)))
 
 export parse_identifier := (tokens: TokenStream) ->
   token := tokens.peek()
   tokens.fail_expecting token, 'name' if token.kind != IDENTIFIER
   tokens.next()
-  Identifier name: token.text, position: token.position()
+  Identifier(name: token.text, position: token.position())
 
 parse_postfix := (tokens: TokenStream, primary: Expression): Expression ->
   nesting := tokens.nesting
@@ -434,8 +435,8 @@ parse_index := (tokens: TokenStream, object: Expression, position: Position) ->
       tokens.fail_here 'a range without an end is written `a..`'
     default_value := parse_index_default(tokens)
     tokens.expect_close ']'
-    Index position, object, index, default_value
-  tokens.inside parse_contents
+    Index(position, object, index, default_value)
+  tokens.inside(parse_contents)
 
 parse_index_default := (tokens: TokenStream): Expression? ->
   if tokens.accept(',')
@@ -444,7 +445,7 @@ parse_index_default := (tokens: TokenStream): Expression? ->
     return nil
   tokens.expect_word 'default'
   tokens.expect ':'
-  parse_expression tokens
+  parse_expression(tokens)
 
 # `at`, `in` and `when` are not keywords, so that they stay usable as names.
 export parse_loop_header := (tokens: TokenStream) ->
@@ -460,7 +461,7 @@ export parse_loop_header := (tokens: TokenStream) ->
   iterable := parse_expression(tokens)
   tokens.continue_line_before 'when'
   guard := tokens.accept_word('when') then parse_expression(tokens)
-  LoopHeader variable, index, iterable, guard, parts
+  LoopHeader(variable, index, iterable, guard, parts)
 
 # `(a, b)`, the names that a tuple is taken apart into.
 export parse_tuple_names := (tokens: TokenStream) ->
@@ -472,7 +473,7 @@ export parse_tuple_names := (tokens: TokenStream) ->
 # The name of what holds a tuple while it is taken apart: it cannot be written (`.` is not allowed
 # in names), and it starts with `_` as it may not be read, when every part is `_`.
 export tuple_holder := (position: Position) ->
-  Identifier position, name: "_tuple.#{position.line}.#{position.column}"
+  Identifier(position, name: "_tuple.#{position.line}.#{position.column}")
 
 # The declarations of the names from the items of the tuple that `holder` names; `_` discards its
 # item.
@@ -481,16 +482,16 @@ export take_apart := (holder: Identifier, names: Identifier[], mutable: Bool, of
   declaration := (name: Identifier, index: Int): Statement ->
     { position } := name
     value := TupleItem(index, count, position, tuple: copy_identifier(holder))
-    Declaration mutable, name, value, position, of_loop
+    Declaration(mutable, name, value, position, of_loop)
   [declaration(name, i) for name at i in names when name.name != '_']
 
 # The declarations of the parts of a loop's item (see LoopHeader).
 export take_apart_item := (header: LoopHeader) ->
-  take_apart header.variable, header.parts, false, true
+  take_apart(header.variable, header.parts, false, true)
 
 # The arguments after an opening parenthesis, through the closing one.
 parse_parenthesized_arguments := (tokens: TokenStream) ->
-  to_arguments tokens, tokens.parse_list(')', -> parse_argument(tokens))
+  to_arguments(tokens, tokens.parse_list(')', -> parse_argument(tokens)))
 
 # Arguments separated by commas, to the end of the line, as a call without parentheses has.
 export parse_arguments := (tokens: TokenStream) ->
@@ -501,7 +502,7 @@ export parse_arguments := (tokens: TokenStream) ->
     next := tokens.peek()
     tokens.fail_expecting next, "an item after ','" if next.kind == NEWLINE
     items.push parse_argument(tokens)
-  to_arguments tokens, items
+  to_arguments(tokens, items)
 
 struct Argument
   name: Identifier?
@@ -517,7 +518,7 @@ parse_argument := (tokens: TokenStream) ->
   return Argument(parse_element(tokens)) unless at_named_argument(tokens)
   name := parse_identifier(tokens)
   tokens.next()
-  Argument name, value: parse_value(tokens)
+  Argument(name, value: parse_value(tokens))
 
 # Named arguments come last.
 to_arguments := (tokens: TokenStream, items: Argument[]) ->
@@ -530,4 +531,4 @@ to_arguments := (tokens: TokenStream, items: Argument[]) ->
       tokens.fail item.value.position, POSITIONAL_AFTER_NAMED
     else
       args.push item.value
-  Arguments args, named_args
+  Arguments(args, named_args)

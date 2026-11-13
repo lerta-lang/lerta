@@ -44,7 +44,7 @@ export struct_construction := (
   type: ObjectType, named_args: NamedValue[], spread: Comprehension?, position: Position
 ) ->
   callee := Identifier(position, name: type.name)
-  Call callee, position, named_args, args: spread then [spread] else [], type_args: []
+  Call(callee, position, named_args, args: spread then [spread] else [], type_args: [])
 
 # The struct that the expected type is, or makes optional.
 export expected_struct := (expected: Type?) ->
@@ -56,7 +56,7 @@ export expected_struct := (expected: Type?) ->
 export type_of_expected_construction := (body: Body, call: Call, expected: Type) ->
   info := info_of(body.program, inner_of(expected) as ObjectType!)
   declared := info.generic?.type ? info.type
-  set_type body, call, type_of_construction(body, call, declared, expected)
+  set_type(body, call, type_of_construction(body, call, declared, expected))
 
 export type_of_construction := (
   body: Body, call: Call, declared: ObjectType, expected: Type?
@@ -97,7 +97,7 @@ export type_of_construction := (
 # The construction that the call stands for, if it is written with a spread or a value alone.
 expanded_construction := (body: Body, call: Call, declared: ObjectType): Call? ->
   return spread if spread := spread_construction(body, call, declared)
-  positional_construction body, call, declared
+  positional_construction(body, call, declared)
 
 # Whether the construction gives only the one argument that must be given, by its name, with a
 # value that a construction could give alone: not a name of one of its arguments, which would name
@@ -122,7 +122,7 @@ positional_construction := (body: Body, call: Call, declared: ObjectType) ->
     fail body.program, value.position, message
   name := Identifier(position: value.position, name: required[0].name.name)
   { callee, type_args, position } := call
-  Call callee, type_args, position, args: [], named_args: [{ name, value }]
+  Call(callee, type_args, position, args: [], named_args: [{ name, value }])
 
 # The one argument of a construction that is neither the name of one of its arguments (see
 # construction_arguments) nor a spread.
@@ -152,7 +152,7 @@ argument_field := (body: Body, info: ObjectInfo, arg: NamedValue) ->
 
 # The type of the field that a named argument gives, which its default alone may give.
 argument_type := (body: Body, info: ObjectInfo, arg: NamedValue) ->
-  field_type body.program, info, argument_field(body, info, arg), arg.name.position
+  field_type(body.program, info, argument_field(body, info, arg), arg.name.position)
 
 # The type that the call constructs: the declared class or struct, or an instance of a generic
 # one. Its type arguments are those written, or else those that the expected type gives, then the
@@ -208,7 +208,7 @@ export method_owner := (body: Body, object_type: Type, name: String) ->
 export object_method_type := (body: Body, object_type: Type, name: Identifier) ->
   owner := method_owner(body, object_type, name.name) ? return nil
   module_index := info_of(body.program, owner).module_index
-  function_type_of body.program, module_index, method_key(owner.name, name.name), name.position
+  function_type_of(body.program, module_index, method_key(owner.name, name.name), name.position)
 
 # `@` is a local of a method's body (see check_function_body), which a function literal in it
 # captures like any other. An initializer has no such local, so `@` can only read fields there (see
@@ -220,7 +220,7 @@ export type_of_this := (body: Body, at: Expression) ->
       'an initializer can only use `@` to read a field, as in `@name`'
     else
       "'@' can only be used in a method, a function literal in a method, or a field initializer"
-  fail body.program, at.position, message
+  fail(body.program, at.position, message)
 
 # A construction from a spread, `Point(p..., x: 1)`, as the construction of the arguments of p but
 # those written, read from p (see NodeFacts.replacements): a value of the type constructed.
@@ -241,14 +241,15 @@ spread_construction := (body: Body, call: Call, declared: ObjectType): Call? ->
   fields := info_of(body.program, object!).fields
   arguments := (field.name.name for field in fields when is_argument(field))
   copied := [read_field(source, name) for name in arguments when name not in names]
-  Call callee, type_args, position, args: rest, named_args: [copied..., named_args...]
+  Call(callee, type_args, position, args: rest, named_args: [copied..., named_args...])
 
 # A field of the value of a spread, read where it is, as the argument of that name.
 read_field := (source: Expression, name: String) ->
   { position } := source
-  NamedValue
+  NamedValue(
     name: Identifier(position, name)
     value: Member(position, object: source, name: Identifier(position, name))
+  )
 
 # The spread among the items, which must come first, alone, and be of a name, `@` or a path of
 # fields from one, which reads nothing that the reads of its fields could change.
@@ -294,7 +295,7 @@ export type_of_record := (body: Body, record: RecordLiteral, expected: Type?): T
     if is_one_of_kinds(type, ['void', 'never', 'nil'])
       fail program, value.position, "a field cannot hold a value of type #{format_type(type)}"
     { name, type }
-  record_type [type_of_field(field) for field in record.fields]
+  record_type([type_of_field(field) for field in record.fields])
 
 # An anonymous struct from a spread, `{ r..., z: 1 }`, as the anonymous struct of the fields of r
 # but those written, read from r, and those (see NodeFacts.replacements).
@@ -307,7 +308,7 @@ spread_record := (body: Body, record: RecordLiteral, spread: Comprehension) ->
     fail body.program, source.position, message
   names := Set([field.name.name for field in record.fields])
   copied := [read_field(source, field.name) for field in type.fields when field.name not in names]
-  RecordLiteral fields: [copied..., record.fields...], position: record.position
+  RecordLiteral(fields: [copied..., record.fields...], position: record.position)
 
 expected_record_fields := (expected: Type?): RecordField[] ->
   record := inner_of_expected(expected) ? return []

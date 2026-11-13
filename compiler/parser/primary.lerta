@@ -37,11 +37,11 @@ export parse_primary := (tokens: TokenStream): Expression ->
           when at_block(tokens) then parse_value(tokens)
           when ends_expression(tokens) then nil
           else parse_continued_value(tokens)
-      Return value, position
+      Return(value, position)
     when 'throw' then Throw(position, message: parse_continued_value(tokens))
     when 'yield'
       marks.yields = true if marks := tokens.innermost_function()
-      Yield position, value: parse_continued_value(tokens)
+      Yield(position, value: parse_continued_value(tokens))
     when '@' then parse_this(tokens, position)
     when 'true', 'false' then BooleanLiteral(position, value: token.kind == 'true')
     when 'case' then parse_case(tokens, position)
@@ -59,13 +59,13 @@ parse_this := (tokens: TokenStream, position: Position): Expression ->
   next := tokens.peek()
   tokens.fail next.position(), 'write @x, not @.x' if next.kind == '.'
   return object if next.kind != IDENTIFIER or next.spaced
-  Member object, position, name: parse_identifier(tokens)
+  Member(object, position, name: parse_identifier(tokens))
 
 # Whether the next token ends the expression, so that `return` there has no value.
 ends_expression := (tokens: TokenStream) -> tokens.peek_continuation() in EXPRESSION_ENDS
 
 export integer_literal := (text: String, position: Position) ->
-  IntegerLiteral position, text, value: integer_value(text)
+  IntegerLiteral(position, text, value: integer_value(text))
 
 # The value of an integer literal's text, with its minus, or nil if it is beyond Int, which the
 # checker rejects but where a Float is expected.
@@ -91,18 +91,18 @@ negated_value := (text: String) ->
 
 parse_interpolation := (tokens: TokenStream, token: Token) ->
   parts := [interpolation_part(tokens, part) for part in token.parts!]
-  Interpolation parts, binary: token.kind == BINARY, position: token.position()
+  Interpolation(parts, binary: token.kind == BINARY, position: token.position())
 
 interpolation_part := (tokens: TokenStream, part: TemplatePart): InterpolationPart ->
   case part
     when TextPart then part
     when CodePart
-      to_string_call parse_interpolated_code(tokens, part.source, part.line, part.column)
+      to_string_call(parse_interpolated_code(tokens, part.source, part.line, part.column))
 
 to_string_call := (value: Expression) ->
   position := value.position
   callee := Member(position, object: value, name: Identifier(position, name: 'to_string'))
-  Call callee, position, args: [], named_args: [], type_args: []
+  Call(callee, position, args: [], named_args: [], type_args: [])
 
 # The code belongs to the function literal around the string, which an `await` in it marks.
 parse_interpolated_code := (outer: TokenStream, source: String, line: Int, column: Int) ->

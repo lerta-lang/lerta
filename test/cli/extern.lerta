@@ -40,32 +40,35 @@ build_twice := (file: String, flags: String[], cwd: String, name: String) ->
   [compare_text('stdout', "42\n", ran.stdout_text())..., expect_success('run', ran)...]
 
 link_check := (extension: String, flags: String[]) ->
-  Check name: "lerta build <source> <file#{extension}> #{flags.join(' ')} links the file", run: ->
+  Check(name: "lerta build <source> <file#{extension}> #{flags.join(' ')} links the file", run: ->
     dir := new_cli_dir("extern-#{extension}-#{flags.join('_')}")
     file := await input_file(extension, "input-#{flags.join('_')}", dir)
     await build_twice(file, flags, dir, "twice-#{extension}-#{flags.join('_')}")
+  )
 
 # The Objective-C source needs Foundation, which `--linker-flag` links.
 objective_c_check := (optimization: String[]) ->
   flags := ['--linker-flag', '-framework,Foundation', optimization...]
   name := optimization.join('_')
-  Check name: "lerta build <source> <file.m> #{flags.join(' ')} links the file", run: ->
+  Check(name: "lerta build <source> <file.m> #{flags.join(' ')} links the file", run: ->
     return nil unless platform == 'macos'
     dir := new_cli_dir("extern-objc-#{name}")
     await build_twice("#{source_dir}/twice.m", flags, dir, "twice-objc-#{name}")
+  )
 
 # Each `--linker-flag` reaches the linker, in order: `-framework` and then its name.
 split_linker_flags_check := ->
   flags := ['--linker-flag', '-framework', '--linker-flag', 'Foundation']
-  Check name: "lerta run <source> <file.m> #{flags.join(' ')} links the file", run: ->
+  Check(name: "lerta run <source> <file.m> #{flags.join(' ')} links the file", run: ->
     return nil unless platform == 'macos'
     dir := new_cli_dir('extern-objc-split')
     ran := await run_command(compiler, ['run', source, "#{source_dir}/twice.m", flags...], dir)
     [compare_text('stdout', "42\n", ran.stdout_text())..., expect_success('run', ran)...]
+  )
 
 # Without Foundation, which only `--linker-flag` links, the link fails.
 objective_c_without_framework_check := ->
-  Check name: 'lerta build <source> <file.m> fails to link without its framework', run: ->
+  Check(name: 'lerta build <source> <file.m> fails to link without its framework', run: ->
     return nil unless platform == 'macos'
     built :=
       await run_in_new_dir(compiler, ['build', source, "#{source_dir}/twice.m", '-o', 'prog'])
@@ -75,11 +78,12 @@ objective_c_without_framework_check := ->
       expect_status(1, built.result.status)...
       reason_unless(built.result.stderr_text().contains(symbol), "no '#{symbol}' on stderr")...
     ]
+  )
 
 # What Apple's frameworks have the main run loop run, a block and a timer, runs during a sleep.
 main_run_loop_check := (optimization: String[]) ->
   name := "lerta run <source> <file.m> #{optimization.join(' ')} runs the main run loop"
-  Check name, run: ->
+  Check(name, run: ->
     return nil unless platform == 'macos'
     dir := new_cli_dir("extern-run-loop#{optimization.join('_')}")
     args := [
@@ -92,21 +96,23 @@ main_run_loop_check := (optimization: String[]) ->
     ]
     ran := await run_command(compiler, args, dir)
     [compare_text('stdout', "3\n", ran.stdout_text())..., expect_success('run', ran)...]
+  )
 
 # A program that loads CoreFoundation only after its first wait has the main run loop run a block
 # during a later one.
 late_run_loop_check := (optimization: String[]) ->
   name := "lerta run #{optimization.join(' ')} runs the main run loop once it loads CoreFoundation"
-  Check name, run: ->
+  Check(name, run: ->
     return nil unless platform == 'macos'
     dir := new_cli_dir("extern-late-run-loop#{optimization.join('_')}")
     source := "#{source_dir}/late_run_loop.lerta"
     args := ['run', source, "#{source_dir}/late_run_loop.c", optimization...]
     ran := await run_command(compiler, args, dir)
     [compare_text('stdout', "1\n", ran.stdout_text())..., expect_success('run', ran)...]
+  )
 
 objective_c_off_macos_check := ->
-  Check name: 'lerta build rejects an Objective-C file for a target other than macOS', run: ->
+  Check(name: 'lerta build rejects an Objective-C file for a target other than macOS', run: ->
     objective_c := "#{source_dir}/twice.m"
     built := await run_in_new_dir(
       compiler
@@ -117,43 +123,47 @@ objective_c_off_macos_check := ->
       expect_status(1, built.result.status)...
       reason_unless(built.result.stderr_text().contains(message), "no '#{message}' on stderr")...
     ]
+  )
 
 inputs := ['.c', '.o', '.ll', '.a']
 optimizations: String[][] = [[], ['-O']]
 relative_link_check := ->
-  Check name: 'lerta build links a file given by a relative path', run: ->
+  Check(name: 'lerta build links a file given by a relative path', run: ->
     dir := new_cli_dir('extern-relative')
     await write_file("#{dir}/twice.c", await read_file(c_source))
     await build_twice('twice.c', [], dir, 'twice-relative')
+  )
 
 # The system resolves a `..` after a name that is a symbolic link to the directory the link points
 # into, where the linked file is, as clang found it before the link ran in
 # the build's own directory.
 symlink_link_check := ->
   # Wine makes symbolic links but does not follow them (see std:io in the reference).
-  posix_check 'lerta build links a file whose path goes through a symbolic link', ->
+  posix_check('lerta build links a file whose path goes through a symbolic link', ->
     dir := new_cli_dir('extern-symlink')
     make_dir "#{dir}/under"
     make_dir "#{dir}/under/below"
     make_link 'under/below', "#{dir}/link"
     await write_file("#{dir}/under/twice.c", await read_file(c_source))
     await build_twice('link/../twice.c', [], dir, 'twice-symlink')
+  )
 
 # A `..` after a name that is not there names no file for the system, which clang reports, as it did
 # when it ran in the directory the build was started in (see real_path in std:io in the reference).
 missing_link_check := ->
   # Windows works a `..` out as text (see real_path in std:io in the reference), so it is found
   # there.
-  posix_check 'lerta build reports a linked file that only its path as text names', ->
+  posix_check('lerta build reports a linked file that only its path as text names', ->
     dir := new_cli_dir('extern-missing')
     await write_file("#{dir}/twice.c", await read_file(c_source))
     built := await run_command(compiler, ['build', source, 'missing/../twice.c', '-o', 'prog'], dir)
-    expect_status 1, built.status
+    expect_status(1, built.status)
+  )
 
 # A linked C or Objective-C file includes the runtime's header without a flag of its own.
 header_check := (extension: String, flags: String[]) ->
   name := "#{extension}#{flags.join('_')}"
-  Check name: "lerta build <source> <file#{extension}> #{flags.join(' ')} finds lerta.h", run: ->
+  Check(name: "lerta build <source> <file#{extension}> #{flags.join(' ')} finds lerta.h", run: ->
     return nil if extension == '.m' and platform != 'macos'
     dir := new_cli_dir("extern-header-#{name}")
     executable := "#{dir}/greeting#{host_executable_suffix}"
@@ -162,6 +172,7 @@ header_check := (extension: String, flags: String[]) ->
     succeed 'build', await run_command(compiler, args, dir)
     ran := await run_command(executable, [], dir)
     [compare_text('stdout', "hello\n", ran.stdout_text())..., expect_success('run', ran)...]
+  )
 
 export checks: Check[]
 for extension in inputs

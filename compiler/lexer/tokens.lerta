@@ -168,7 +168,7 @@ export lex := (source: String, path: String) ->
     brackets = scanner.depth
     layout.end_line last
   layout.finish lines.length
-  Lexed tokens, comments
+  Lexed(tokens, comments)
 
 source_lines := (source: String, path: String) ->
   texts := source.split("\n")
@@ -196,7 +196,7 @@ export tokenize_fragment := (source: String, path: String, line: Int, column: In
   tokens
 
 layout_token := (kind: TokenKind, line: Int, column: Int) ->
-  Token kind, line, column, text: '', spaced: true
+  Token(kind, line, column, text: '', spaced: true)
 
 # Lines are laid out by indentation into blocks, which INDENT, NEWLINE and DEDENT mark, inside
 # brackets too: the parser reads the lines of a block that continues a line as its continuation
@@ -379,7 +379,7 @@ multiline_token := (line: SourceLine, start: Int, literal: MultilineLiteral) ->
   plain := plain_text(literal.parts)
   kind: TokenKind = plain != nil then STRING else INTERPOLATED
   parts := plain != nil then nil else literal.parts
-  Token
+  Token(
     kind
     parts
     text: plain ? ''
@@ -388,6 +388,7 @@ multiline_token := (line: SourceLine, start: Int, literal: MultilineLiteral) ->
     column: line.column(start)
     end_line: literal.line.number
     end_column: literal.line.column(literal.end)
+  )
 
 # The text of a literal without interpolations, or nil.
 plain_text := (parts: TemplatePart[]) ->
@@ -417,7 +418,7 @@ is_float_literal := (text: String) ->
   return false if significand.length == 2 and not is_digit_run(significand[1])
   return true if parts.length == 1
   exponent := parts[1].without_prefix('-') ? parts[1].without_prefix('+') ? parts[1]
-  is_digit_run exponent
+  is_digit_run(exponent)
 
 # Digits, with separators between them.
 is_digit_run := (text: String) ->
@@ -433,4 +434,4 @@ is_integer_literal := (text: String) ->
   if digits := text.without_prefix('0x')
     return not digits.is_empty() and digits.binary.all((byte) -> byte.hex_value() != nil)
   return text == '0' if text.starts_with('0')
-  is_digit_run text
+  is_digit_run(text)

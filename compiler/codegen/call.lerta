@@ -56,7 +56,7 @@ export generate_call := (g: Generator, call: Call): String ->
     symbol := instance_symbol(g.code.program, instance)
     return call_function(g, symbol, instance.entry.type!, arguments_of(g.facts, call), nil)
   return generate_named_call(g, call, callee) if callee is Identifier
-  call_closure g, callee, arguments_of(g.facts, call)
+  call_closure(g, callee, arguments_of(g.facts, call))
 
 # A call of a name: of the builtin Map, Set or Array, one that encodes or decodes a value, a
 # constructor, a C function, a function written in Lerta, or a local or a top-level value that holds
@@ -74,13 +74,13 @@ generate_named_call := (g: Generator, call: Call, callee: Identifier) ->
     when Constructor then generate_construction(g, call, reference.type)
     when ExternReference
       emit_call := (operands: String[]) ->
-        emit_runtime_call g.ir, reference.symbol, function_type_of(callee_type()), operands
+        emit_runtime_call(g.ir, reference.symbol, function_type_of(callee_type()), operands)
       result := borrowing_all(g, args, emit_call)
       # A C function of the runtime may throw (see lerta_raise).
       emit_exception_check g
       result
     when FunctionReference
-      call_function g, function_reference_symbol(g, reference), callee_type(), args, nil
+      call_function(g, function_reference_symbol(g, reference), callee_type(), args, nil)
     when ScopedLocal, TopLevelValue then call_closure(g, callee, args)
     when LocalFunction then call_local_function(g, reference.literal, callee_type(), args)
     when EnumValue then panic('an enum value is not called')
@@ -115,7 +115,7 @@ generate_filled_array := (g: Generator, call: Call, type: ArrayType) ->
     emit_exception_check g
     emit_assume_length g.ir, array, operands[0]
     array
-  borrowing_all g, call.args, fill
+  borrowing_all(g, call.args, fill)
 
 # The encoder or decoder is the first argument, and the value written the second.
 generate_codable_conversion := (g: Generator, call: Call, conversion: CodableConversion) ->
@@ -135,8 +135,9 @@ generate_enum_query := (g: Generator, call: Call, query: EnumQuery) ->
   type := query.type as EnumType!
   case query.kind
     when PARSE
-      borrowing_all g, arguments_of(g.facts, call), (operands) ->
-        emit_parse g.ir, operands[0], type
+      borrowing_all(g, arguments_of(g.facts, call), (operands) ->
+        emit_parse(g.ir, operands[0], type)
+      )
     when MEMBERS
       array := emit_array_new(g.ir, type)
       emit_push g.ir, array, "#{index}", type for index in 0..type.members.length
@@ -165,7 +166,7 @@ generate_method_call := (g: Generator, call: Call, member: Member, source: Metho
     object := generate(g, receiver)
     check := -> emit_exception_check(g)
     call_iter := ->
-      call_builtin_method g.ir, g.code.program, source.member, object, object_type, [], check
+      call_builtin_method(g.ir, g.code.program, source.member, object, object_type, [], check)
     result := holding(g, object, object_type, call_iter)
     emit_exception_check g
     return result
@@ -174,8 +175,8 @@ generate_method_call := (g: Generator, call: Call, member: Member, source: Metho
     emit_call := (operands: String[]) ->
       args := typed_arguments(g, arguments_of(g.facts, call), operands)
       method_call := method_call_of(g, call, member, operands, args)
-      emit_method_call g, source, object, object_type, method_call
-    borrowing_all g, arguments_of(g.facts, call), emit_call
+      emit_method_call(g, source, object, object_type, method_call)
+    borrowing_all(g, arguments_of(g.facts, call), emit_call)
   result := is_owned then holding(g, object, object_type, call_method) else call_method()
   release_if_reference g, receiver, object if is_owned
   check_after_method g, source, object_type
@@ -193,7 +194,7 @@ export generate_in_test := (g: Generator, call: Call) ->
     result := borrowing_all(g, [argument, object], (operands) ->
       args := typed_arguments(g, [argument], [operands[0]])
       method_call := method_call_of(g, call, member, [operands[0]], args)
-      emit_method_call g, target.source, operands[1], object_type, method_call
+      emit_method_call(g, target.source, operands[1], object_type, method_call)
     )
     check_after_method g, target.source, object_type
     return result
@@ -202,7 +203,7 @@ export generate_in_test := (g: Generator, call: Call) ->
   result := borrowing_all(g, [argument, object], (operands) ->
     closure := read_any_field(g, operands[1], object_type, member.name.name, field_type, false)
     called := holding(g, closure, field_type, ->
-      emit_closure_call g.ir, closure, field_type, [operands[0]]
+      emit_closure_call(g.ir, closure, field_type, [operands[0]])
     )
     emit_release g.ir, closure
     called
@@ -213,13 +214,14 @@ export generate_in_test := (g: Generator, call: Call) ->
 export method_call_of := (
   g: Generator, call: Call, member: Member, operands: String[], args: String[]
 ) ->
-  MethodCall
+  MethodCall(
     operands
     args
     name: member.name.name
     type: type_of(g, member)
     instance: g.facts.instances[call]?.instance
     check: -> emit_exception_check(g)
+  )
 
 check_after_method := (g: Generator, source: MethodSource, object_type: Type) ->
   may_throw := source is not BuiltinMethod or may_leave_exception(source.member, object_type)
@@ -250,39 +252,39 @@ export emit_method_call := (
         return emit_conversion(g.ir, object, object_type, function_type_of(source.type).result)
       { program } := g.code
       { operands, check } := call
-      call_builtin_method g.ir, program, source.member, object, object_type, operands, check
+      call_builtin_method(g.ir, program, source.member, object, object_type, operands, check)
     when InterfaceMethod
-      emit_interface_call g.ir, object, source.index, source.type, call.args
+      emit_interface_call(g.ir, object, source.index, source.type, call.args)
     when OwnMethod
-      call_written_method g, own_method_symbol(g, source, call), object, object_type, call
+      call_written_method(g, own_method_symbol(g, source, call), object, object_type, call)
     when ExtensionSource
-      call_written_method g, extension_method_symbol(g, source, call), object, object_type, call
+      call_written_method(g, extension_method_symbol(g, source, call), object, object_type, call)
     when UnionMethod
       of_member := (member_type: Type) ->
         found := source.members.find((each) -> each.member == member_type)!
         value := emit_member_value(g.ir, object, member_type)
-        emit_method_call g, found.source, value, member_type, call
+        emit_method_call(g, found.source, value, member_type, call)
       result_type := ir_return_type(function_type_of(source.type).result)
       members := [each.member for each in source.members]
-      emit_member_dispatch g.ir, object, members, result_type, of_member
+      emit_member_dispatch(g.ir, object, members, result_type, of_member)
 
 # Calls a method written in Lerta by its symbol, with the object first.
 call_written_method := (
   g: Generator, symbol: String, object: String, object_type: Type, call: MethodCall
 ) ->
   receiver := "#{ir_type(object_type)} #{object}"
-  emit_function_call g, symbol, call.type, call.args, receiver
+  emit_function_call(g, symbol, call.type, call.args, receiver)
 
 # The symbol of a method written in Lerta: of a class or struct, or of an extend; or of the
 # instance of a generic method that the call calls.
 own_method_symbol := (g: Generator, source: OwnMethod, call: MethodCall) ->
   return method_symbol(source.receiver, call.name) if source.generic == nil
-  instance_symbol g.code.program, call.instance!
+  instance_symbol(g.code.program, call.instance!)
 
 extension_method_symbol := (g: Generator, source: ExtensionSource, call: MethodCall) ->
   method := source.method
   return extension_symbol(g.code.program, method) if method.generic == nil
-  instance_symbol g.code.program, call.instance!
+  instance_symbol(g.code.program, call.instance!)
 
 # Calls a function written in Lerta by its symbol, or by the entry that computes the defaults of
 # the arguments left out; a method gets `receiver`, its object as an IR argument, first.
@@ -290,7 +292,7 @@ call_function := (
   g: Generator, symbol: String, type: Type, args: Expression[], receiver: String?
 ) ->
   emit_call := (operands: String[]) ->
-    emit_function_call g, symbol, type, typed_arguments(g, args, operands), receiver
+    emit_function_call(g, symbol, type, typed_arguments(g, args, operands), receiver)
   result := borrowing_all(g, args, emit_call)
   # A method's receiver is released after the check.
   emit_exception_check g if receiver == nil
@@ -304,7 +306,7 @@ emit_function_call := (
   left_out := args.length < function_type_of(type).params.length
   target := left_out then default_entry_symbol(symbol, args.length) else symbol
   all_args := receiver then [receiver, args...] else args
-  call_user_function g.ir, target, type, all_args.join(', ')
+  call_user_function(g.ir, target, type, all_args.join(', '))
 
 # The arguments' operands with their IR types.
 typed_arguments := (g: Generator, args: Expression[], operands: String[]) ->
@@ -314,7 +316,7 @@ export call_user_function := (ir: IrBuilder, symbol: String, type: Type, args: S
   result := function_type_of(type).result
   call := "call #{ir_return_type(result)} #{symbol}(#{args})"
   return ir.assign(call) unless returns_nothing(result)
-  emit_valueless_call ir, call, result
+  emit_valueless_call(ir, call, result)
 
 # Calls a function value, a closure: a local's, a field's or any other, borrowed where it can be
 # while the arguments are evaluated and the call runs (see generate_borrowed), and otherwise owned
@@ -341,7 +343,7 @@ call_local_function := (g: Generator, literal: FunctionLiteral, type: Type, args
   on_heap := declaration in g.facts.escaping_locals
   closure := generate_closure(g, literal, not on_heap)
   call_with_arguments := ->
-    borrowing_all g, args, (operands) -> emit_closure_call(g.ir, closure, type, operands)
+    borrowing_all(g, args, (operands) -> emit_closure_call(g.ir, closure, type, operands))
   result := on_heap then holding(g, closure, type, call_with_arguments) else call_with_arguments()
   emit_release g.ir, closure if on_heap
   emit_exception_check g
@@ -371,7 +373,7 @@ generate_construction := (g: Generator, call: Call, type: ObjectType) ->
       passed := value ? (field.has_default then 'zeroinitializer' else nil_constant(field_type))
       args.push "#{ir_type(field_type)} #{passed}"
       args.push "i1 #{value != nil}" if field.has_default
-    g.ir.assign "call ptr #{constructor_symbol(info.type)}(#{args.join(', ')})"
+    g.ir.assign("call ptr #{constructor_symbol(info.type)}(#{args.join(', ')})")
   # The constructor takes the arguments over, owned.
   object := holding_all(g, [arg.value for arg in named_args], construct)
   emit_exception_check g

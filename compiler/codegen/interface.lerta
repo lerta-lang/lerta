@@ -25,7 +25,7 @@ import FunctionType, InterfaceType, Type, type_key from '../types'
 export emit_interface_value := (g: Generator, value: String, itab: Itab) ->
   ir := g.ir
   with_data := ir.assign("insertvalue #{INTERFACE_IR_TYPE} undef, ptr #{value}, 0")
-  ir.assign "insertvalue #{INTERFACE_IR_TYPE} #{with_data}, ptr #{define_itab(g, itab)}, 1"
+  ir.assign("insertvalue #{INTERFACE_IR_TYPE} #{with_data}, ptr #{define_itab(g, itab)}, 1")
 
 # Calls the member at the index through the interface value's itab, with the arguments, typed IR
 # operands, which stay owned by the caller, as the value does.
@@ -36,7 +36,7 @@ export emit_interface_call := (
   slot := ir.assign("getelementptr ptr, ptr #{itab}, i64 #{index}")
   entry := ir.load('ptr', slot)
   all_args := ["ptr #{emit_interface_data(ir, value)}", args...]
-  call_user_function ir, entry, type, all_args.join(', ')
+  call_user_function(ir, entry, type, all_args.join(', '))
 
 # The member of the interface value that is no method, which is released.
 export emit_interface_read := (
@@ -55,7 +55,7 @@ define_itab := (g: Generator, itab: Itab) ->
     array_type := "[#{entries.length} x ptr]"
     init := ["ptr #{entry}" for entry in entries].join(', ')
     g.ir.module.define_global name, "private unnamed_addr constant #{array_type} [#{init}]"
-  g.ir.module.named key, '@lerta.itab', define
+  g.ir.module.named(key, '@lerta.itab', define)
 
 # The function of the entry: the method that gives the member, if it is written in Lerta, which
 # takes its object first; otherwise a function that reads the member, defined once.
@@ -85,7 +85,7 @@ define_reader := (g: Generator, type: Type, entry: ItabEntry) ->
     reader.ir.emit return_type == 'void' then 'ret void' else "ret #{return_type} #{result}"
     params_list := ['ptr %data', typed_params(params)...]
     finish reader, "private #{return_type} #{symbol}(#{params_list.join(', ')})"
-  g.ir.module.named key, '@lerta.reader', define
+  g.ir.module.named(key, '@lerta.reader', define)
 
 # The reader's result, computed from its data, `%data`, and its parameters, `operands`.
 generate_reading := (reader: Generator, type: Type, entry: ItabEntry, operands: String[]) ->
@@ -101,9 +101,9 @@ generate_reading := (reader: Generator, type: Type, entry: ItabEntry, operands: 
       source := target.source
       return call_union_method(reader, type, name, source, operands) if source is UnionMethod
       # The other methods are written in Lerta (see entry_function).
-      call_builtin reader, type, source as BuiltinMethod!, operands
+      call_builtin(reader, type, source as BuiltinMethod!, operands)
     when InterfaceProperty, EnumValue
-      panic 'a reader reads a field, a property or a builtin method'
+      panic('a reader reads a field, a property or a builtin method')
 
 # Calls the method of the name of the member that the union, `%data`, is.
 call_union_method := (
@@ -113,7 +113,7 @@ call_union_method := (
   args := ["#{ir_type(param)} #{operands[i]}" for param at i in params]
   check := -> emit_exception_check(reader)
   call := MethodCall(name, operands, args, check, type: method.type, instance: nil)
-  emit_method_call reader, method, '%data', type, call
+  emit_method_call(reader, method, '%data', type, call)
 
 # `%data`, retained: the reader borrows its data, while reading a field or a property, or an Iter's
 # method, takes the object over.
@@ -145,4 +145,4 @@ call_builtin := (reader: Generator, type: Type, builtin: BuiltinMethod, operands
     emit_check_or_return_thrown ir, reader.result_type
     return literal
   object := takes_object(builtin.member) then take_data(ir) else '%data'
-  call_builtin_method ir, program, builtin.member, object, type, operands, check
+  call_builtin_method(ir, program, builtin.member, object, type, operands, check)

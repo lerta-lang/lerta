@@ -88,7 +88,7 @@ type_of_method := (body: Body, member: Member, receiver: Type, source: MethodSou
     field_type(body, receiver, member) ? no_method()
   method := from_source ? field()
   record_member body, member, from_source then Method(source!) else Property(FIELD)
-  set_type body, member, method
+  set_type(body, member, method)
 
 find := (body: Body, receiver: Type, name: Identifier): MethodSource? ->
   # A union whose members' methods of the name differ in type, as their equals and hash do, has
@@ -100,7 +100,7 @@ find := (body: Body, receiver: Type, name: Identifier): MethodSource? ->
   return nil if name.name == 'equals' and not compares_by_bounds(body, receiver, name.position)
   found := find_method(body.program, receiver, name.name, body.extensions)
   return found if found
-  parts_method body, receiver, name.name, name.position
+  parts_method(body, receiver, name.name, name.position)
 
 # Whether `==` compares values of the type, which may hold type parameters standing for
 # themselves, as their bounds tell.
@@ -109,7 +109,7 @@ export compares_by_bounds := (body: Body, type: Type, at: Position) ->
     return false unless parameter.standing
     has := (name: String) -> has_method(body, parameter, Identifier(name, position: at))
     has('equals') or has('compare')
-  is_equatable body.program, type, at, compares
+  is_equatable(body.program, type, at, compares)
 
 # The method that the bound of a type parameter standing for itself gives it, called as an
 # interface value's is; or the builtin equals, which a compare gives, as a class's own does.
@@ -118,11 +118,11 @@ bound_method := (body: Body, type: TypeParameterType, name: String): MethodSourc
     member_type := found.member.type
     return member_type is FunctionType then InterfaceMethod(type: member_type, index: found.index)
   return nil if name != 'equals' or not bound_member(body, type, 'compare')
-  BuiltinMethod member: EQUALS, type: FunctionType(params: [type], result: bool_type)
+  BuiltinMethod(member: EQUALS, type: FunctionType(params: [type], result: bool_type))
 
 bound_member := (body: Body, type: TypeParameterType, name: String) ->
   bound := body.resolver.bounds[type.name] ? return nil
-  interface_member body.program, bound, name, type
+  interface_member(body.program, bound, name, type)
 
 # The method of the name that every member of the union has, of one type, or nil.
 union_method := (body: Body, union: UnionType, name: Identifier): UnionMethod? ->
@@ -177,7 +177,7 @@ find_callable := (body: Body, receiver: Type, name: Identifier): MethodSource? -
     from := "from an extend of #{format_type(extended.bound!)} in #{extended.module_name}"
     gets := "has a member '#{name.name}', and gets a method of that name #{from}"
     fail body.program, name.position, "#{format_type(receiver)} #{gets}"
-  ExtensionSource extended
+  ExtensionSource(extended)
 
 # The source, which is no optional's to_literal unless a bound calls it, as where an instance of a
 # generic function has an optional type argument: written, `x.to_literal()` of an optional `x`
@@ -188,10 +188,11 @@ callable := (body: Body, receiver: Type, name: Identifier): MethodSource? ->
     receiver is OptionalType and source is BuiltinMethod and source.parts != nil
   return source if not is_optional_literal or is_instance_body(body)
   instead := "write `dbg(x)`, or `x?.to_literal() ? 'nil'`"
-  fail
+  fail(
     body.program
     name.position
     "an optional's to_literal is called only through a bound: #{instead}"
+  )
 
 # Whether the body is that of an instance, whose type parameters stand for its type arguments.
 is_instance_body := (body: Body) ->
@@ -221,7 +222,7 @@ export find_member := (body: Body, type: Type, name: Identifier, call: Call? = n
     common := common_field_type_by_name(body, type, name) ? return nil
     return { target: Property(FIELD), type: common }
   return { target: Property(FIELD), type: field } if field := field_type_by_name(body, type, name)
-  property_of body, type, name.name
+  property_of(body, type, name.name)
 
 # Whether the member names a method of its object, rather than a field or a property.
 export names_method := (body: Body, member: Member) ->
@@ -229,7 +230,7 @@ export names_method := (body: Body, member: Member) ->
   name := member.name
   has_field := field_type_by_name(body, object_type, name) != nil
   return false if has_field or property_of(body, object_type, name.name) != nil
-  has_method body, object_type, name
+  has_method(body, object_type, name)
 
 export has_method := (body: Body, type: Type, name: Identifier) ->
   find(body, type, name) != nil or find_interface_extension(body, type, name) != nil
@@ -237,7 +238,7 @@ export has_method := (body: Body, type: Type, name: Identifier) ->
 # A property of a builtin type, or of an interface value, by the name.
 property_of := (body: Body, type: Type, name: String): FoundMember? ->
   return property if property := builtin_property(type, name)
-  interface_property body, type, name
+  interface_property(body, type, name)
 
 export member_type_by_name := (
   body: Body
@@ -257,7 +258,7 @@ interface_property := (body: Body, type: Type, name: String) ->
   return nil if found == nil
   member_type := found.member.type
   return nil if member_type is FunctionType
-  FoundMember target: InterfaceProperty(found.index), type: member_type
+  FoundMember(target: InterfaceProperty(found.index), type: member_type)
 
 # Records what the member refers to, which codegen generates it by.
 export record_member := (body: Body, member: Member, target: MemberTarget) ->
@@ -299,11 +300,12 @@ export type_of_property := (body: Body, member: Member, expected: Type?): Type -
     bound := type_of_bound_method(body, member, expected)
     return bound if bound
     fail body.program, position, "a method must be called: write `#{name}()`"
-  fail_missing
+  fail_missing(
     body
     member
     object_type
     "type #{format_type(object_type)} has no property '#{name}'#{member_hint(object_type, name)}"
+  )
 
 # What a String gives for the `length` of other languages, as a property or a method: the number of
 # its code points or of its bytes, as counting the code points takes a pass.
@@ -334,4 +336,4 @@ type_of_object := (body: Body, member: Member) ->
   object := member.object
   if object is This
     return set_type(body, object, self.type) if self := body.self
-  type_of body, object
+  type_of(body, object)

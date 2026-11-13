@@ -21,7 +21,7 @@ BUILD_TOOL := "#{root_dir}/build/build#{host_executable_suffix}"
 # A run that ends with code 2 and prints `message` first, as make does for a usage error; the usage
 # message follows the errors that std:args reports.
 usage_check := (name: String, dir_name: String, args: String[], message: String) ->
-  Check name: "build/build #{name} is a usage error", run: ->
+  Check(name: "build/build #{name} is a usage error", run: ->
     ran := await run_command(BUILD_TOOL, args, new_cli_dir(dir_name))
     lines := ran.stderr_text().split("\n")
     from_args := message.starts_with('build: ')
@@ -32,24 +32,27 @@ usage_check := (name: String, dir_name: String, args: String[], message: String)
       compare_text('stderr', message, lines[0])...
       (usage_follows then [] else ['no usage message follows the error'])...
     ]
+  )
 
 # A run with `--help` that ends with code 0 and prints the usage message that starts so.
 help_check := (args: String[], usage: String) ->
-  Check name: "build/build #{args.join(' ')} prints the usage", run: ->
+  Check(name: "build/build #{args.join(' ')} prints the usage", run: ->
     ran := await run_command(BUILD_TOOL, args, new_cli_dir('build-tool-help'))
     first_line := ran.stdout_text().split("\n")[0]
     [expect_status(0, ran.status)..., compare_text('stdout', usage, first_line)...]
+  )
 
 # A run of test-targets in a directory of the settings, if any, that ends with code 2 and prints
 # `message`, before it runs any target.
 settings_check := (
   name: String, dir_name: String, settings: String?, args: String[], message: String
 ) ->
-  Check name: "build/build test-targets #{name} is an error", run: ->
+  Check(name: "build/build test-targets #{name} is an error", run: ->
     dir := new_cli_dir(dir_name)
     await write_file("#{dir}/test-targets.llit", settings) if settings
     ran := await run_command(BUILD_TOOL, ['test-targets', args...], dir)
     [expect_status(2, ran.status)..., compare_output('stderr', b"#{message}\n", ran.stderr)...]
+  )
 
 # tools/test-targets.example.llit is settings that test-targets takes: a target that it has not is
 # then the error, before anything runs.
@@ -64,12 +67,14 @@ example_check := Check
     [expect_status(2, ran.status)..., compare_output('stderr', message, ran.stderr)...]
 
 batches_check := (name: String, args: String[], limit: Int, expected: String) ->
-  Check name: "command_line_batches #{name}", run: ->
-    compare_text 'batches', expected, "#{command_line_batches(args, limit)}"
+  Check(name: "command_line_batches #{name}", run: ->
+    compare_text('batches', expected, "#{command_line_batches(args, limit)}")
+  )
 
 shared_batches_check := (name: String, args: String[], shares: Int, limit: Int, expected: String) ->
-  Check name: "shared_batches #{name}", run: ->
-    compare_text 'batches', expected, "#{shared_batches(args, shares, limit)}"
+  Check(name: "shared_batches #{name}", run: ->
+    compare_text('batches', expected, "#{shared_batches(args, shares, limit)}")
+  )
 
 missing_input_check := Check(name: 'is_stale ends the build on an input that is missing', run: ->
   dir := new_cli_dir('build-tool-missing-input')
@@ -81,7 +86,7 @@ missing_input_check := Check(name: 'is_stale ends the build on an input that is 
       'no error'
     catch error: BuildError
       error.message
-  compare_text 'error', "missing input: #{dir}/missing", message
+  compare_text('error', "missing input: #{dir}/missing", message)
 )
 
 # What the producer prints goes through the filter into the output, which it replaces.
@@ -89,20 +94,20 @@ piped_check := posix_check('piped_to_file writes what the filter prints', ->
   output := "#{new_cli_dir('build-tool-piped')}/output"
   await write_file(output, 'old')
   await piped_to_file(output, ['printf', 'a\nb\n'], ['sed', 's/b/c/'])
-  compare_output 'output', b"a\nc\n", await read_file(output)
+  compare_output('output', b"a\nc\n", await read_file(output))
 )
 
 # More than a pipe holds streams through, as nothing waits for the whole of it.
 piped_large_check := posix_check('piped_to_file streams more than a pipe holds', ->
   output := "#{new_cli_dir('build-tool-piped-large')}/output"
   await piped_to_file(output, ['sh', '-c', 'yes | head -c 1000001'], ['cat'])
-  compare_text 'length', '1000001', "#{(await read_file(output)).length}"
+  compare_text('length', '1000001', "#{(await read_file(output)).length}")
 )
 
 # Either program failing, or not starting, ends the build and leaves the output as it was, without
 # the file it was written into.
 piped_failure_check := (name: String, producer: String[], filter: String[], message: String) ->
-  posix_check "piped_to_file ends the build when #{name}", ->
+  posix_check("piped_to_file ends the build when #{name}", ->
     output := "#{new_cli_dir("build-tool-piped-#{name.replace(" ", "-")}")}/output"
     await write_file(output, 'old')
     error :=
@@ -116,6 +121,7 @@ piped_failure_check := (name: String, producer: String[], filter: String[], mess
       compare_output('output', b'old', await read_file(output))...
       compare_text('unfinished', 'false', "#{is_file("#{output}.unfinished")}")...
     ]
+  )
 
 # An output is stale once an input is newer than it, and not before. The pause outlasts the file
 # times of the file systems that the tests run on, APFS, ext4 and NTFS, though not a coarser one
@@ -130,7 +136,7 @@ order_check := Check(name: 'is_stale tells an output older than an input', run: 
   fresh := is_stale(output, [input])
   await sleep(0.05)
   await write_file(input, 'read again')
-  compare_text 'stale', 'false true', "#{fresh} #{is_stale(output, [input])}"
+  compare_text('stale', 'false true', "#{fresh} #{is_stale(output, [input])}")
 )
 
 # What the bootstrap for the target builds and runs, as one line.
@@ -460,7 +466,7 @@ export checks: Check[] =
     "[['aaa'], ['bbb'], ['c', 'd']]"
   )
   { name: 'is_stale makes an output that is missing', run: ->
-    compare_text 'stale', 'true', "#{is_stale("#{root_dir}/build/no-such-output", [])}"
+    compare_text('stale', 'true', "#{is_stale("#{root_dir}/build/no-such-output", [])}")
   }
   missing_input_check
   piped_check
@@ -499,5 +505,5 @@ export checks: Check[] =
   description_check
   description_error_check
   { name: 'sorted_once sorts the paths and keeps each once', run: ->
-    compare_text 'paths', "['a', 'b', 'c']", "#{sorted_once(['c', 'a', 'b', 'a', 'c'])}"
+    compare_text('paths', "['a', 'b', 'c']", "#{sorted_once(['c', 'a', 'b', 'a', 'c'])}")
   }

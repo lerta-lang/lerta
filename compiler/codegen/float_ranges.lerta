@@ -197,7 +197,7 @@ followed_local := (analysis: Analysis, target: Expression) ->
 
 is_float_node := (analysis: Analysis, expression: Expression) ->
   type := analysis.facts.types[expression] ? return false
-  is_kind type, 'Float'
+  is_kind(type, 'Float')
 
 # Finds the operations of an expression whose value is not used, as a statement's.
 visit := (analysis: Analysis, expression: Expression): void ->
@@ -209,7 +209,7 @@ found_of := (analysis: Analysis, expression: Expression): Found ->
     when FloatLiteral then literal_found(expression.text)
     when IntegerLiteral
       return unknown_found(analysis, expression) unless is_float_node(analysis, expression)
-      literal_found integer_float_text(expression)
+      literal_found(integer_float_text(expression))
     when Identifier
       note_read analysis, expression
       local := followed_local(analysis, expression)
@@ -226,7 +226,7 @@ found_of := (analysis: Analysis, expression: Expression): Found ->
       }
     when BinaryOperation
       return and_found(analysis, expression) if expression.operator == 'and'
-      binary_found analysis, expression
+      binary_found(analysis, expression)
     when Comprehension then comprehension_found(analysis, expression)
     when Call
       return unknown_found(analysis, expression) unless is_integer_to_float(analysis, expression)
@@ -250,7 +250,7 @@ comprehension_found := (analysis: Analysis, comprehension: Comprehension) ->
   visit analysis, guard if guard := comprehension.guard
   visit analysis, comprehension.element
   analysis.loop_depth -= 1
-  Found range: UNKNOWN, nan_free: true
+  Found(range: UNKNOWN, nan_free: true)
 
 # `n.to_float()` of an integer of any integer type, which is finite.
 is_integer_to_float := (analysis: Analysis, call: Call) ->
@@ -263,14 +263,14 @@ is_integer_to_float := (analysis: Analysis, call: Call) ->
 # the operations among its operands are found all the same.
 unknown_found := (analysis: Analysis, expression: Expression) ->
   visit analysis, operand for operand in operands_of(expression)
-  Found range: UNKNOWN, nan_free: true
+  Found(range: UNKNOWN, nan_free: true)
 
 literal_found := (text: String): Found ->
   value := text.parse_float() ? return { range: UNKNOWN, nan_free: true }
   { range: constant_range(value), nan_free: true }
 
 constant_range := (value: Float) ->
-  FloatRange nonnegative: value >= 0.0, nonpositive: value <= 0.0, bound: abs(value)
+  FloatRange(nonnegative: value >= 0.0, nonpositive: value <= 0.0, bound: abs(value))
 
 # `a and b`, whose b is evaluated only where a holds, which narrows it.
 and_found := (analysis: Analysis, binary: BinaryOperation) ->
@@ -279,7 +279,7 @@ and_found := (analysis: Analysis, binary: BinaryOperation) ->
   narrow analysis, binary.left
   visit analysis, binary.right
   restore analysis, before
-  Found range: UNKNOWN, nan_free: true
+  Found(range: UNKNOWN, nan_free: true)
 
 binary_found := (analysis: Analysis, binary: BinaryOperation): Found ->
   left := found_of(analysis, binary.left)
@@ -324,16 +324,17 @@ negation := (range: FloatRange) ->
 
 sum := (left: FloatRange, right: FloatRange) ->
   bound := finite(left) and finite(right) then left.bound + right.bound else INFINITY
-  FloatRange
+  FloatRange(
     bound
     nonnegative: left.nonnegative and right.nonnegative
     nonpositive: left.nonpositive and right.nonpositive
+  )
 
 product := (left: FloatRange, right: FloatRange) ->
   nonnegative := same_sign(left, right)
   nonpositive :=
     (left.nonnegative and right.nonpositive) or (left.nonpositive and right.nonnegative)
-  FloatRange nonnegative, nonpositive, bound: product_bound(left, right)
+  FloatRange(nonnegative, nonpositive, bound: product_bound(left, right))
 
 # The bounds multiplied, where both are finite, as an infinity times 0 has no bound.
 product_bound := (left: FloatRange, right: FloatRange) ->

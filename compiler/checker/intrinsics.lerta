@@ -93,7 +93,7 @@ export type_of_intrinsic_call := (body: Body, call: Call, name: String, expected
       else debugged(body, call, expected)
   body.facts.intrinsic_calls[call] = code
   value := code.value ? return void_type
-  type_of body, value
+  type_of(body, value)
 
 reject_named_arguments := (body: Body, call: Call, name: String) ->
   return if call.named_args.is_empty() and call.type_args.is_empty()
@@ -139,7 +139,7 @@ held_test := (held: Held, condition: Expression): Expression ->
   copied := (operand: Expression, _label: String) ->
     is_path(operand) then copied_path(operand) else operand
   type_of held.body, with_operands(condition, copied)
-  with_operands condition, (operand, label) -> held.hold(operand, label)
+  with_operands(condition, (operand, label) -> held.hold(operand, label))
 
 COMPARISONS := ['==', '!=', '<', '<=', '>', '>=', 'in']
 
@@ -230,7 +230,7 @@ debugged := (body: Body, call: Call, expected: Type?) ->
   )
   line :=
     concatenation(concatenation(text("#{quoted_call(body, call)} = ", at), shown), text("\n", at))
-  IntrinsicCode statements: [held, stderr_write(body, line)], value: named(name, at)
+  IntrinsicCode(statements: [held, stderr_write(body, line)], value: named(name, at))
 
 # `print_trace(error)`: writes the error's message, and its trace if the runtime keeps it, to stderr
 # (see lerta_print_trace in runtime/lerta.c). The C function takes the interface value, which no
@@ -238,12 +238,12 @@ debugged := (body: Body, call: Call, expected: Type?) ->
 traced := (body: Body, call: Call) ->
   fail body.program, call.position, 'print_trace takes one error' if call.args.length != 1
   error := std_interface(body.shared, 'Error', call.position).type
-  runtime_call body, 'lerta_print_trace', call.args[0], { params: [error], result: void_type }
+  runtime_call(body, 'lerta_print_trace', call.args[0], { params: [error], result: void_type })
 
 # The call of std:builtins' C function that writes the text to stderr.
 stderr_write := (body: Body, text: Expression): Statement ->
   type := body.program.extern_types['lerta_print_stderr']!.type as FunctionType!
-  runtime_call body, 'lerta_print_stderr', text, type
+  runtime_call(body, 'lerta_print_stderr', text, type)
 
 # A call of a C function of the runtime, typed here rather than checked, as a name of the program's
 # own could hide an extern's.
@@ -262,7 +262,7 @@ runtime_call := (body: Body, symbol: String, arg: Expression, type: FunctionType
 operand_text := (body: Body, shown: Shown): Expression ->
   at := shown.value.position
   literal := literal_text(body, shown.value) ? return text('', at)
-  concatenation label_text(shown.label, at), literal
+  concatenation(label_text(shown.label, at), literal)
 
 label_text := (label: String, at: Position) -> text("\n  #{label}: ", at)
 
@@ -273,7 +273,7 @@ literal_text := (body: Body, value: Expression): Expression? ->
   return nil unless is_literal(body, type, value.position)
   return member_call(value, 'to_literal') unless type is OptionalType
   # A call of an optional's to_literal would read as one on what it holds.
-  present_or value, 'nil', (inner) -> member_call(inner, 'to_literal')
+  present_or(value, 'nil', (inner) -> member_call(inner, 'to_literal'))
 
 # `if v := value then present(v) else absent`, of a name that no source can write.
 present_or := (value: Expression, absent: String, present: (Expression) -> Expression) ->
@@ -281,7 +281,7 @@ present_or := (value: Expression, absent: String, present: (Expression) -> Expre
   name := local_prefix('present', at)
   binding := Binding(value, position: at, name: named(name, at))
   then_body: Statement[] = [present(named(name, at))]
-  If then_body, position: at, condition: binding, else_body: [text(absent, at)]
+  If(then_body, position: at, condition: binding, else_body: [text(absent, at)])
 
 # The start of the names of the locals that the code made for a call at the position has, which no
 # source can write.
@@ -303,15 +303,15 @@ named := (name: String, at: Position) -> Identifier(name, position: at)
 text := (value: String, at: Position) -> StringLiteral(value, position: at)
 
 member := (object: Expression, name: String) ->
-  Member object, position: object.position, name: named(name, object.position)
+  Member(object, position: object.position, name: named(name, object.position))
 
 member_call := (object: Expression, name: String) -> call_of(member(object, name), object.position)
 
 call_of := (callee: Expression, at: Position) ->
-  Call callee, position: at, args: [], named_args: [], type_args: []
+  Call(callee, position: at, args: [], named_args: [], type_args: [])
 
 concatenation := (left: Expression, right: Expression): Expression ->
-  BinaryOperation left, right, operator: '+', position: left.position
+  BinaryOperation(left, right, operator: '+', position: left.position)
 
 # Where the call is, as diagnostics name it, and its code as written.
 quoted_call := (body: Body, call: Call) ->
@@ -336,7 +336,7 @@ code_at := (source: String, tokens: Token[], at: Position) ->
   parts := [columns(lines[at.line - 1], at.column, INT_MAX)]
   parts.push lines[line - 1] for line in (at.line + 1)..last.end_line
   parts.push columns(lines[last.end_line - 1], 1, last.end_column)
-  parts.join "\n"
+  parts.join("\n")
 
 # The place of the last token of the call whose callee is at `start`: the `)` that closes its
 # arguments if they are in parentheses, as the call may be part of an expression; else the last

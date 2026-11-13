@@ -16,7 +16,7 @@ TYPE_TOKEN_KINDS: TokenKind[] =
 # function literal's return type, `is_result`, the `->` after a type in parentheses starts the body
 # (see parse_parenthesized_type).
 export parse_type_name := (tokens: TokenStream, is_result = false): TypeName ->
-  tokens.nested -> parse_any_type(tokens, is_result)
+  tokens.nested(-> parse_any_type(tokens, is_result))
 
 parse_any_type := (tokens: TokenStream, is_result: Bool) ->
   return union_of(parse_union_members(tokens, is_result)) if tokens.peek().kind != '('
@@ -25,7 +25,7 @@ parse_any_type := (tokens: TokenStream, is_result: Bool) ->
   return first if tokens.peek().kind != '|'
   tokens.next()
   member := first as UnionMember ? fail_member(tokens, position, first)
-  union_of [member, parse_union_members(tokens, is_result)...]
+  union_of([member, parse_union_members(tokens, is_result)...])
 
 # A function type, or a union in parentheses, `(A | B)?`, whose members are written in the union
 # that holds it: `A | B? | C`.
@@ -40,16 +40,16 @@ export parse_aliased_type := (tokens: TokenStream) ->
   lines := tokens.parse_lines('indented union members', -> parse_union_members(tokens))
   members: UnionMember[]
   members.append line for line in lines
-  union_of members
+  union_of(members)
 
 # `A | B | ...`, or one member alone.
 parse_union_members := (tokens: TokenStream, is_result = false) ->
-  tokens.parse_separated '|', -> parse_union_member(tokens, is_result)
+  tokens.parse_separated('|', -> parse_union_member(tokens, is_result))
 
 # The union of the members, or the member alone.
 union_of := (members: UnionMember[]): TypeName ->
   return members[0] if members.length == 1
-  UnionTypeName members, position: members[0].position
+  UnionTypeName(members, position: members[0].position)
 
 # `(A, B) -> R`, a tuple, `(A, B)`, or a function type or a union in parentheses, `((A) -> R)?` or
 # `(A | B)?`, to make it optional. Any type in parentheses may be the items of an array:
@@ -77,7 +77,7 @@ parse_parenthesized_type := (tokens: TokenStream, is_result: Bool): TypeName ->
     return parse_array_suffix(tokens, function, position)
   if is_result
     tokens.fail position, 'a function type returned is written in parentheses: `((Int) -> Int)`'
-  tokens.fail_expecting tokens.peek(), "'->'"
+  tokens.fail_expecting(tokens.peek(), "'->'")
 
 # A type that `|` can join, as a type test tests: a named type, an anonymous struct, a tuple or an
 # array.
@@ -86,7 +86,7 @@ export parse_union_member := (tokens: TokenStream, is_result = false): UnionMemb
   member: UnionMember =
     tokens.peek().kind == '{' then parse_record_type(tokens) else parse_named_type(tokens)
   return member if tokens.peek().kind != '['
-  parse_array_type tokens, member, member.position
+  parse_array_type(tokens, member, member.position)
 
 parse_parenthesized_member := (tokens: TokenStream, is_result: Bool): UnionMember ->
   position := tokens.peek().position()
@@ -104,7 +104,7 @@ parse_array_type := (tokens: TokenStream, element: TypeName, position: Position)
   tokens.expect ']'
   array := ArrayTypeName(element, position, optional: tokens.accept('?'))
   return array if tokens.peek().kind != '['
-  tokens.nested -> parse_array_type(tokens, array, position)
+  tokens.nested(-> parse_array_type(tokens, array, position))
 
 # A named type, or an array of them, without the `?` after it, which is the cast's.
 export parse_cast_type := (tokens: TokenStream) ->
@@ -126,12 +126,12 @@ export parse_cast_type := (tokens: TokenStream) ->
 parse_record_type := (tokens: TokenStream) ->
   position := tokens.next().position()
   fields := tokens.parse_list('}', -> parse_record_type_field(tokens))
-  RecordTypeName fields, position, optional: tokens.accept('?')
+  RecordTypeName(fields, position, optional: tokens.accept('?'))
 
 parse_record_type_field := (tokens: TokenStream) ->
   name := parse_identifier(tokens)
   tokens.expect ':'
-  RecordTypeField name, type: parse_type_name(tokens)
+  RecordTypeField(name, type: parse_type_name(tokens))
 
 export parse_named_type := (tokens: TokenStream) ->
   type := parse_named_type_alone(tokens)
@@ -145,7 +145,7 @@ export parse_named_type_alone := (tokens: TokenStream) ->
   qualifies := tokens.peek().kind == '.' and tokens.peek_at(1).kind == IDENTIFIER
   full_name := qualifies then "#{name}.#{parse_qualified_rest(tokens)}" else name
   args: TypeName[] = tokens.peek().kind == '<' then parse_type_arguments(tokens) else []
-  NamedType args, position, name: full_name
+  NamedType(args, position, name: full_name)
 
 parse_qualified_rest := (tokens: TokenStream) ->
   tokens.next()
@@ -189,7 +189,7 @@ export parse_type_parameters := (tokens: TokenStream): TypeParameter[] ->
 parse_type_parameter := (tokens: TokenStream) ->
   name := parse_identifier(tokens)
   bound := tokens.accept(':') then parse_named_type(tokens)
-  TypeParameter name, bound
+  TypeParameter(name, bound)
 
 # The type of `x is T`: a member, or a union of members written in place, `x is A | B`.
 export parse_tested_type := (tokens: TokenStream) -> union_of(parse_union_members(tokens))

@@ -135,7 +135,7 @@ export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = f
     emit_retain g.ir, owned.cell unless on_stack
     operands.push owned.cell
   return emit_local_closure(g.ir, symbol, slots, operands) if on_stack
-  emit_closure g.ir, symbol, name, slots, operands
+  emit_closure(g.ir, symbol, name, slots, operands)
 
 # The code of the literal, generated once outside the loops that take functions in place; within
 # them, as many times as the code it is in is copied (see fusion).
@@ -178,7 +178,7 @@ export emit_settling_closure := (g: Generator, closure: String, source: Type, ta
     emit_return body_generator, result, value
   all_params := ['ptr %closure', typed_params(params)...]
   generate_awaiting_function body_generator, 'private ', symbol, all_params, value, generate_body
-  emit_closure g.ir, symbol, name, slots, [closure]
+  emit_closure(g.ir, symbol, name, slots, [closure])
 
 # The value a function literal captures, owned: the box of a weak local, or of `@` for a weak
 # literal, rather than its object.
@@ -406,7 +406,7 @@ store_field := (g: Generator, object: String, info: ObjectInfo, field: FieldInfo
 
 # A weak local or field holds the box of its object, which stays borrowed.
 export weak_box_of := (g: Generator, object: String, type: Type) ->
-  emit_weak_box_of g.ir, g.code.program, object, type
+  emit_weak_box_of(g.ir, g.code.program, object, type)
 
 export finish := (g: Generator, signature: String) -> g.ir.finish(signature)
 
@@ -628,7 +628,7 @@ defers_declaration := (g: Generator, declaration: Declaration) ->
 # is borrowed from may change while the body is suspended.
 holds_borrowed := (g: Generator, declaration: Declaration) ->
   return false if declaration.mutable or declaration.weak or g.coroutine != nil
-  is_borrowable_in_scope g, declaration.value
+  is_borrowable_in_scope(g, declaration.value)
 
 # The value of a local that is a const and is held as it is: the closure of a function literal
 # is local if the local never leaves the function, being only called (see escaping_locals).
@@ -636,9 +636,9 @@ generate_declared_value := (g: Generator, declaration: Declaration, is_held_as_i
   value := declaration.value
   if value is FunctionLiteral and is_held_as_is and not declaration.mutable
     return generate_closure(g, value, declaration.name not in g.facts.escaping_locals)
-  generate g, value
+  generate(g, value)
 
 export store_in_slot := (g: Generator, value: String, type: Type) ->
   pointer := g.ir.alloca(ir_type(type))
   g.ir.store ir_type(type), value, pointer
-  SlotLocal pointer, type
+  SlotLocal(pointer, type)

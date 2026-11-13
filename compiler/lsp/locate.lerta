@@ -33,7 +33,7 @@ export module_at := (program: ProgramWide, location: String) ->
 
 # The location of the module of the place, as diagnostics give it.
 export location_of := (program: ProgramWide, module_index: Int) ->
-  module_location program.entry_path, program.modules[module_index].display_path
+  module_location(program.entry_path, program.modules[module_index].display_path)
 
 # The types that the name at the position of the module's source has, one for each instance of a
 # generic body it is in, written as `name: Type`; none if no name is there.
@@ -95,7 +95,7 @@ add_type_names := (add: AddCandidate, program: ProgramWide, module_index: Int) -
     for type in types
       declaration := ->
         return Declared(module_index, name: alias) if alias
-        type_declaration program, type
+        type_declaration(program, type)
       add { type, name: written_name(type_name), declaration }
 
 # The names that the module imports from other modules, which lead to their declarations.
@@ -137,7 +137,7 @@ name_declaration := (
   reference := facts.references[name]
   case reference
     when TopLevelValue, FunctionReference
-      top_level_declaration program, reference.module_index, reference.name
+      top_level_declaration(program, reference.module_index, reference.name)
     when Constructor
       info := info_of(program, reference.type)
       { module_index: info.module_index, name: info.declaration.name }
@@ -171,7 +171,7 @@ member_declaration := (program: ProgramWide, facts: NodeFacts, member: Member) -
       case source
         when OwnMethod then declared_member(program, source.receiver, name)
         when ExtensionSource
-          Declared module_index: source.method.module_index, name: source.method.name
+          Declared(module_index: source.method.module_index, name: source.method.name)
         else nil
     when Property then target.kind == FIELD then member_of_type(program, object_type, name)
     when EnumValue then enum_member_declaration(program, facts.types[member]!, name)
@@ -229,17 +229,17 @@ interface_declaration := (program: ProgramWide, type: InterfaceType) ->
 # The type name as an identifier, which spans the name as written, as `m.Point` of a qualified one,
 # without its type arguments.
 written_name := (type_name: NamedType) ->
-  Identifier name: type_name.name, position: type_name.position
+  Identifier(name: type_name.name, position: type_name.position)
 
 # The member of the type by its name, if the type is a class or a struct.
 member_of_type := (program: ProgramWide, type: Type?, name: String) ->
   object_type := type as ObjectType ? return nil
-  declared_member program, object_type, name
+  declared_member(program, object_type, name)
 
 declared_member := (program: ProgramWide, type: ObjectType, name: String) ->
   info := info_of(program, type)
   member := info.declaration.members.find((each) -> each.name.name == name) ? return nil
-  Declared module_index: info.module_index, name: member.name
+  Declared(module_index: info.module_index, name: member.name)
 
 # Whether the source, as its lines, writes the name at its position, rather than the parser or the
 # checker making it there, as `?2:3` for the object of `x?.y` or `to_string` for an interpolation.

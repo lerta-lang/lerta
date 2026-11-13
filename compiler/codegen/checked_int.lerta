@@ -16,7 +16,7 @@ export apply_integer_operator := (
   return bitwise(g, operator, left, right, type) if operator in BITWISE_INSTRUCTIONS
   return shift(g, operator, left, right, type) if operator in ['<<', '>>']
   return division(g, operator, left, right, type) if operator in ['/', '%']
-  checked g, operator, left, right, type
+  checked(g, operator, left, right, type)
 
 ARITHMETIC_INSTRUCTIONS := { '+': 'add', '-': 'sub', '*': 'mul' }
 
@@ -35,12 +35,12 @@ checked := (g: Generator, operator: String, left: String, right: String, type: T
   result := ir.assign("call #{result_type} @#{overflow_intrinsic}(#{args})")
   overflowed := ir.assign("extractvalue #{result_type} #{result}, 1")
   throw_if g, overflowed, OVERFLOW
-  ir.assign "extractvalue #{result_type} #{result}, 0"
+  ir.assign("extractvalue #{result_type} #{result}, 0")
 
 BITWISE_INSTRUCTIONS := { '&': 'and', '|': 'or', '^': 'xor' }
 
 bitwise := (g: Generator, operator: String, left: String, right: String, type: Type) ->
-  g.ir.assign "#{BITWISE_INSTRUCTIONS[operator]!} #{ir_type(type)} #{left}, #{right}"
+  g.ir.assign("#{BITWISE_INSTRUCTIONS[operator]!} #{ir_type(type)} #{left}, #{right}")
 
 # A shift by a negative amount, or by the type's bits or more, throws: compared as unsigned, a
 # negative amount is above the bits. `<<` of a signed type throws unless shifting the result back
@@ -71,7 +71,7 @@ division := (g: Generator, operator: String, left: String, right: String, type: 
   is_min := ir.assign("icmp eq #{width} #{left}, #{integer_range(type).least}")
   is_minus_one := ir.assign("icmp eq #{width} #{right}, -1")
   throw_if g, ir.assign("and i1 #{is_min}, #{is_minus_one}"), OVERFLOW
-  ir.assign "#{is_quotient then 'sdiv' else 'srem'} #{width} #{left}, #{right}"
+  ir.assign("#{is_quotient then 'sdiv' else 'srem'} #{width} #{left}, #{right}")
 
 # `x.wrapping_add(y)` and the like: the operation without the check, modulo 2 to the type's bits.
 export emit_wrapping := (
@@ -79,7 +79,7 @@ export emit_wrapping := (
 ) -> ir.assign("#{instruction} #{ir_type(type)} #{left}, #{right}")
 
 export emit_integer_to_float := (ir: IrBuilder, value: String, type: Type) ->
-  ir.assign "#{is_signed(type) then 'sitofp' else 'uitofp'} #{ir_type(type)} #{value} to double"
+  ir.assign("#{is_signed(type) then 'sitofp' else 'uitofp'} #{ir_type(type)} #{value} to double")
 
 # `x.to_int8()` and the like, to `result`: the type, where it holds every value of the type
 # converted, or else its optional type, nil where the value does not fit.
@@ -92,7 +92,7 @@ export emit_conversion := (ir: IrBuilder, value: String, from: Type, result: Typ
       integer_conversion ir, value, from, to
   return conversion.value unless result is OptionalType
   flagged := ir.assign("insertvalue #{ir_type(result)} undef, i1 #{conversion.fits}, 0")
-  ir.assign "insertvalue #{ir_type(result)} #{flagged}, #{ir_type(to)} #{conversion.value}, 1"
+  ir.assign("insertvalue #{ir_type(result)} #{flagged}, #{ir_type(to)} #{conversion.value}, 1")
 
 # The value converted, and an i1 of whether it fits there.
 struct Conversion
@@ -111,7 +111,7 @@ integer_conversion := (ir: IrBuilder, value: String, from: Type, to: Type) ->
   signs_agree := ir.negate(negative)
   fits :=
     is_signed(from) == is_signed(to) then same else ir.assign("and i1 #{same}, #{signs_agree}")
-  Conversion fits, value: converted
+  Conversion(fits, value: converted)
 
 # A number fits in a Char where it is a Unicode scalar value: from 0 to 0x10FFFF, but for the
 # surrogates, from 0xD800 to 0xDFFF. It is compared as a word, where no value of a narrower type
@@ -122,7 +122,7 @@ char_conversion := (ir: IrBuilder, value: String, from: Type) ->
   above_surrogates := ir.assign("sub i64 #{word}, #{FIRST_SURROGATE}")
   beside_surrogates := ir.assign("icmp uge i64 #{above_surrogates}, #{SURROGATE_COUNT}")
   fits := ir.assign("and i1 #{within}, #{beside_surrogates}")
-  Conversion fits, value: resized(ir, word, int_type, char_type, false)
+  Conversion(fits, value: resized(ir, word, int_type, char_type, false))
 
 MAX_CHAR := 0x10FFFF
 FIRST_SURROGATE := 0xD800
@@ -134,4 +134,4 @@ resized := (ir: IrBuilder, value: String, from: Type, to: Type, signed: Bool) ->
   to_bits := integer_bits(to)
   return value if from_bits == to_bits
   instruction := to_bits < from_bits then 'trunc' else signed then 'sext' else 'zext'
-  ir.assign "#{instruction} #{ir_type(from)} #{value} to #{ir_type(to)}"
+  ir.assign("#{instruction} #{ir_type(from)} #{value} to #{ir_type(to)}")

@@ -63,7 +63,11 @@ run_driver := (
     stdout: output
     stderr: errors
   ended := await exit_in_time(driver, ran)
-  DriverRun status: ended.code, stdout: shown_text(output.binary), stderr: shown_text(errors.binary)
+  DriverRun(
+    status: ended.code
+    stdout: shown_text(output.binary)
+    stderr: shown_text(errors.binary)
+  )
 
 run_key := (name: String) -> "run tests\t#{name}"
 
@@ -151,11 +155,11 @@ reported_results := (stdout: String) ->
 # The driver shows the results, and keeps the failed checks, as the checks finish, in an order that
 # may change from run to run, so both are compared sorted.
 expect_results := (expected: String[], stdout: String) ->
-  compare_text 'results', lines(expected.sorted()), lines(reported_results(stdout).sorted())
+  compare_text('results', lines(expected.sorted()), lines(reported_results(stdout).sorted()))
 
 expect_failed := (failed_file: String, expected_keys: String[]) ->
   kept := (await read_text_or_throw(failed_file)).lines()
-  compare_text 'failed checks', lines(expected_keys.sorted()), lines(kept.sorted())
+  compare_text('failed checks', lines(expected_keys.sorted()), lines(kept.sorted()))
 
 harness_check := Check
   name: 'bin/test reports each test of tests/harness as it should, and keeps those that failed'
@@ -182,16 +186,18 @@ harness_listed_check := Check(name: 'every test of tests/harness has its expecte
       when file.ends_with('.lerta')
     ]
   sources := [sources_in(harness_dir)..., sources_in("#{harness_dir}/posix")...]
-  at_once
+  at_once(
     ["#{source}.lerta is not in harness_results" for source in sources when source not in listed]
+  )
 )
 
 # A check that throws CheckFailed fails with its reasons; one that throws another error, with what
 # it threw.
 thrown_check := (thrown: Error, expected: String[]) ->
-  Check name: "a check that throws #{thrown.message} fails with #{expected}", run: ->
+  Check(name: "a check that throws #{thrown.message} fails with #{expected}", run: ->
     result := await run_one({ name: 'thrower', run: -> throw thrown })
-    compare_text 'reasons', lines(expected), lines(result.reasons ? [])
+    compare_text('reasons', lines(expected), lines(result.reasons ? []))
+  )
 
 thrown_checks :=
   thrown_check(CheckFailed(['x']), ['x'])
@@ -221,7 +227,7 @@ slots_check := Check(name: 'slots are given in the order that they were asked fo
 
 # The problem is the line that the usage follows, after the program's name, as std:args writes it.
 usage_check := (args: String[], problem: String) ->
-  Check name: "bin/test #{args.join(' ')} is a usage error", run: ->
+  Check(name: "bin/test #{args.join(' ')} is a usage error", run: ->
     ran := await run_driver(args, await new_failed_file([]))
     [
       expect_status(2, ran.status)...
@@ -230,16 +236,18 @@ usage_check := (args: String[], problem: String) ->
         "no #{problem} and usage on stderr: #{ran.stderr}"
       )...
     ]
+  )
 
 # A run with `-h` or `--help` prints the usage and runs nothing.
 help_check := (args: String[]) ->
-  Check name: "bin/test #{args.join(' ')} prints the usage and runs nothing", run: ->
+  Check(name: "bin/test #{args.join(' ')} prints the usage and runs nothing", run: ->
     ran := await run_driver(args, await new_failed_file([]))
     [
       expect_status(0, ran.status)...
       reason_unless(ran.stdout.starts_with('usage: test '), "no usage on stdout: #{ran.stdout}")...
       compare_text('stderr', '', ran.stderr)...
     ]
+  )
 
 # A check of the format suite, whose one case runs fast.
 format_case := 'tests/format/eof'
@@ -392,7 +400,7 @@ driver_checks: Check[] =
 # The leak checks of tests/empty with a compiler that is a shell script of `body`, which must fail
 # them exactly when `fails`.
 leak_check := (what: String, body: String, fails: Bool) ->
-  posix_check "bin/test leaks #{fails then 'fails' else 'passes'} #{what}", ->
+  posix_check("bin/test leaks #{fails then 'fails' else 'passes'} #{what}", ->
     compiler := "#{work_dir}/compiler-#{what.replace(' ', '-')}"
     await write_file(compiler, b"#!/bin/sh\n#{body}\n")
     await run('chmod', '+x', compiler)
@@ -402,7 +410,8 @@ leak_check := (what: String, body: String, fails: Bool) ->
       false
       { 'LERTA_TEST_CHECKED_COMPILER': compiler }
     )
-    expect_status fails then 1 else 0, ran.status
+    expect_status(fails then 1 else 0, ran.status)
+  )
 
 leak_checks :=
   leak_check('on a leak', 'exit 23', true)
@@ -426,4 +435,4 @@ export suite := ->
   ) ? return nil
   # The drivers that the checks run share the cache (see cache_dir), filled first, as each would
   # compile the runtimes otherwise.
-  SuiteChecks title, checks, ready: build_runtimes(work_dir, [[], ['-O']])
+  SuiteChecks(title, checks, ready: build_runtimes(work_dir, [[], ['-O']]))

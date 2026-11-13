@@ -26,7 +26,7 @@ export emit_literal_by_parts := (g: Generator, id: Int, object: String) ->
   parts := g.code.program.literal_parts[id]
   type := ir_type(parts.type)
   symbol := literal_function(g, parts)
-  g.ir.assign "call ptr #{symbol}(#{type} #{object})"
+  g.ir.assign("call ptr #{symbol}(#{type} #{object})")
 
 literal_function := (g: Generator, parts: LiteralParts) ->
   define := (name: String, _module: IrModule) ->
@@ -35,7 +35,7 @@ literal_function := (g: Generator, parts: LiteralParts) ->
     literal := write_literal(writer, parts, '%value')
     writer.ir.emit "ret ptr #{literal}"
     finish writer, "private ptr #{name}(#{ir_type(parts.type)} %value)"
-  g.ir.module.named "literal #{parts.id}", '@lerta.literal', define
+  g.ir.module.named("literal #{parts.id}", '@lerta.literal', define)
 
 write_literal := (w: Generator, parts: LiteralParts, value: String) ->
   type := parts.type
@@ -43,23 +43,23 @@ write_literal := (w: Generator, parts: LiteralParts, value: String) ->
     when OptionalType
       present := emit_is_present(w.ir, value, type)
       inner := -> part_literal(w, parts.calls[0], emit_unwrap(w.ir, value, type), type.inner, [])
-      emit_branch w.ir, 'ptr', present, inner, string_constant(w.ir, 'nil')
+      emit_branch(w.ir, 'ptr', present, inner, string_constant(w.ir, 'nil'))
     when ObjectType
       info := info_of(w.code.program, type)
       names := [field.name.name for field in info.fields]
       read := (index: Int) -> emit_borrowed_field(w.ir, value, info, info.fields[index])
       types := [field.type! for field in info.fields]
-      join_parts w, parts, read, types, named_texts("#{type.name}(", names, ')')
+      join_parts(w, parts, read, types, named_texts("#{type.name}(", names, ')'))
     when RecordType
       names := [field.name for field in type.fields]
       read := (index: Int) -> emit_borrowed_value(w.ir, value, type, index)
       types := [field.type for field in type.fields]
       texts := names.is_empty() then ['{}'] else named_texts('{ ', names, ' }')
-      join_parts w, parts, read, types, texts
+      join_parts(w, parts, read, types, texts)
     when TupleType
       read := (index: Int) -> emit_borrowed_value(w.ir, value, type, index)
       texts := ['(', [', ' for _ in 1..type.items.length]..., ')']
-      join_parts w, parts, read, type.items, texts
+      join_parts(w, parts, read, type.items, texts)
     else panic('only an optional, a struct, a tuple or an anonymous struct gets a literal by parts')
 
 # The texts around the parts, each named: `Point(x: `, `, y: `, `)`.
@@ -76,7 +76,7 @@ join_parts := (
   for call at i in parts.calls
     pieces.push part_literal(w, call, read(i), types[i], pieces)
     pieces.push string_constant(w.ir, texts[i + 1])
-  emit_concat w.ir, pieces
+  emit_concat(w.ir, pieces)
 
 # The literal of the part, borrowed, by its to_literal; `held`, the literals made before it, are
 # released if it throws.
