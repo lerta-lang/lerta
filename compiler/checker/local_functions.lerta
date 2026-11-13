@@ -1,0 +1,102 @@
+# The local functions read before their declarations, and the captures that their readers take for
+# them.
+import Declaration, Expression, FunctionLiteral, Position, Statement from '../ast'
+import fail from './diagnostics'
+import parameter_types from './functions'
+import lookup from './name'
+import Local from './scopes'
+import Body, Capture, LocalFunctionUse from './shared'
+import resolve, resolve_result from './type_names'
+import FunctionType from '../types'
+
+# The local functions of the block whose types are written, seen from its start, so that they may
+# call each other whatever their order, and be called before their declarations.
+export predeclare_local_functions := (body: Body, statements: Statement[]) ->
+  for statement in statements
+    declaration := statement as Declaration ? continue
+    literal := declaration.value as FunctionLiteral ? continue
+    continue if declaration.mutable
+    type := written_function_type(body, declaration, literal) ? continue
+    { name } := declaration
+    scope_depth := body.scopes.depth()
+    local := Local(type, scope_depth, identifier: name, declared: true, local_function: literal)
+    local.pending = true
+    body.scopes.define name.name, local
+
+# The type of a local function, written on its literal or on its declaration, if it is.
+written_function_type := (body: Body, declaration: Declaration, literal: FunctionLiteral) ->
+  { program, resolver } := body
+  return resolve(program, resolver, written) as FunctionType? if written := declaration.type
+  return_type := literal.return_type ? return nil
+  result := resolve_result(program, resolver, return_type)
+  return nil unless literal.params.all((param) -> param.type != nil)
+  FunctionType(result, params: parameter_types(program, resolver, literal, []))
+
+# Each body that reads a local function of the block before its declaration captures what the
+# function captures, to make its closure there, and so on until no function captures more, as
+# functions that call each other capture what each other does. What it captures of the block must
+# be declared where the block makes the closure of that body, or reads the function itself.
+export finish_local_functions := (body: Body) ->
+  literals := local_functions(body)
+  uses := body.facts.local_function_uses
+  return unless literals.any((literal) -> literal in uses)
+  captures := (literal: FunctionLiteral) -> body.facts.captures[literal] ? []
+  count := -> literals.map((literal) -> captures(literal).length).sum()
+  var before = -1
+  while before != count()
+    before = count()
+    for literal in literals
+      capture_for body, use.reader, captures(literal) for use in uses[literal] ? []
+  for literal in literals
+    reject_undeclared_capture body, use, captures(literal) for use in uses[literal] ? []
+
+# The local functions of the innermost scope, whose types are written.
+local_functions := (body: Body) ->
+  literals: FunctionLiteral[]
+  for local in body.scopes.innermost_locals()
+    literals.push literal if literal := local.local_function
+  literals
+
+export forget_local_function_uses := (body: Body) ->
+  body.facts.local_function_uses.remove literal for literal in local_functions(body)
+
+# The reader captures what a local function captures. The scopes of the bodies from it out to the
+# block are gone by then, as they are checked: each body that sees itself (see self_local) gets it
+# back meanwhile, so that the lookup of its own name finds it rather than capturing the local.
+capture_for := (block: Body, reader: Body, captures: Capture[]) ->
+  readers: Body[]
+  var current = reader
+  while current != block
+    readers.push current
+    current = current.enclosing ? break
+  for each in readers
+    each.scopes.push()
+    each.scopes.define itself.identifier.name, itself if itself := each.self_local
+  lookup reader, capture.name for capture in captures
+  each.scopes.pop() for each in readers
+
+# Where the block reads a local function, or makes the closure of the function literal in it that
+# reads the function.
+made_at := (block: Body, use: LocalFunctionUse) ->
+  var reader = use.reader
+  return use.name.position if reader == block
+  reader = reader.enclosing ? return use.name.position while reader.enclosing != block
+  reader.context!.literal.position
+
+reject_undeclared_capture := (body: Body, use: LocalFunctionUse, captures: Capture[]) ->
+  at := made_at(body, use)
+  for capture in captures
+    local := body.scopes.innermost_locals().find((each) -> each.identifier.name == capture.name)
+    continue if not local or not is_after(local.identifier.position, at)
+    name := use.name.name
+    message := "'#{name}' is read before '#{capture.name}', which it captures, is declared"
+    fail body.program, use.name.position, message
+
+is_after := (a: Position, b: Position) ->
+  a.line > b.line or (a.line == b.line and a.column > b.column)
+
+# The local that predeclare_local_functions declared for the value, a function literal.
+export predeclared_function := (body: Body, value: Expression) ->
+  literal := value as FunctionLiteral ? return nil
+  local := body.scopes.innermost_locals().find((each) -> each.local_function == literal)
+  local?.pending == true then local
