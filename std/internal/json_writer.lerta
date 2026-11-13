@@ -11,89 +11,89 @@ export class JsonWriter
   # Each object being written that may hold itself, by its address, the innermost last, and the
   # count of levels when it was entered: the steps of those levels give its path.
   entered: Int[] = []
-  depths: Map<Int, Int> = Map()
+  depths := Map<Int, Int>()
   field_keys := FieldKeys(@keys)
   # The keys of each record being written in camel case, the innermost last: two fields that it
   # writes as one key, as `ab_c` and `abC`, would give the object two values of it.
   record_keys: Set<String>[] = []
 
-  write_nil := (): void -> @written += 'null'
-  write_bool := (value: Bool): void -> @written += value.to_string()
-  write_int := (value: Int): void -> @written += value.to_string()
-  write_float := (value: Float): void ->
+  write_nil := -> @written += 'null'
+  write_bool := (value: Bool) -> @written += value.to_string()
+  write_int := (value: Int) -> @written += value.to_string()
+  write_float := (value: Float) ->
     @check_finite value
     @written += value.to_string()
-  write_string := (value: String): void -> @written += quoted(value)
-  write_uint64 := (value: UInt64): void -> @written += value.to_string()
-  write_float32 := (value: Float32): void ->
+  write_string := (value: String) -> @written += quoted(value)
+  write_uint64 := (value: UInt64) -> @written += value.to_string()
+  write_float32 := (value: Float32) ->
     @check_finite value.to_float()
     @written += value.to_string()
   # As base64 (RFC 4648), whose letters need no escape.
-  write_binary := (value: Binary): void -> @written += "\"#{base64(value)}\""
+  write_binary := (value: Binary) -> @written += "\"#{base64(value)}\""
 
-  begin_array := (): void -> @begin('[')
+  begin_array := -> @begin('[')
 
   # Starts an item of the innermost array.
-  next_item := (): void -> @next("[#{@levels.last()!.count}]")
+  next_item := -> @next("[#{@levels.last()!.count}]")
 
-  end_array := (): void -> @end(']')
+  end_array := -> @end(']')
 
   # A Char is written as a string of it alone.
-  write_char := (value: Char): void -> @write_string(value.to_string())
+  write_char := (value: Char) -> @write_string(value.to_string())
 
   # An enum's member is written as a string of its name.
-  write_member := (enum_name: String, member: String): void -> @write_string(member)
+  write_member := (enum_name: String, member: String) -> @write_string(member)
 
   # A tuple is written as an array of its items.
-  begin_tuple := (count: Int): void -> @begin_array()
-  end_tuple := (): void -> @end_array()
+  begin_tuple := (count: Int) -> @begin_array()
+  end_tuple := -> @end_array()
 
   # A set is written as an array of its items.
-  begin_set := (): void -> @begin_array()
-  end_set := (): void -> @end_array()
+  begin_set := -> @begin_array()
+  end_set := -> @end_array()
 
   # A map of other keys than Strings is written as an array of its entries, each an array of its
   # key and its value.
-  begin_entries := (): void -> @begin_array()
-  next_entry := (): void ->
+  begin_entries := -> @begin_array()
+  next_entry := ->
     @next_item()
     @begin_array()
     @next_item()
-  entry_value := (): void -> @next_item()
-  end_entry := (): void -> @end_array()
-  end_entries := (): void -> @end_array()
+  entry_value := -> @next_item()
+  end_entry := -> @end_array()
+  end_entries := -> @end_array()
 
   # A map and a record are written as objects, of a key for each entry or field.
-  begin_map := (): void -> @begin_object()
-  write_key := (key: String): void -> @next_key(key)
-  end_map := (): void -> @end_object()
-  begin_record := (): void ->
-    @record_keys.push Set<String>() if @keys == JsonKeys.CAMEL_CASE
+  begin_map := -> @begin_object()
+  write_key := (key: String) -> @next_key(key)
+  end_map := -> @end_object()
+  begin_record := ->
+    @record_keys.push Set<String>() if @keys == CAMEL_CASE
     @begin_object()
 
-  write_field := (name: String): void ->
+  write_field := (name: String) ->
     key := @field_keys.key(name)
     if keys := @record_keys.last()
       @fail_twice key unless keys.add(key)
     @next_key key
 
-  end_record := (): void ->
-    @record_keys.pop() if @keys == JsonKeys.CAMEL_CASE
+  end_record := ->
+    @record_keys.pop() if @keys == CAMEL_CASE
     @end_object()
 
-  begin_object := (): void -> @begin('{')
+  begin_object := -> @begin('{')
 
   # Starts the value of the key in the innermost object.
-  next_key := (key: String): void ->
+  next_key := (key: String) ->
     @next ".#{key}"
     @written += quoted(key)
     @written += ':'
 
-  end_object := (): void -> @end('}')
+  end_object := -> @end('}')
 
   # Starts writing an object that may hold itself, by its address, which must not be written
   # already: JSON cannot hold a cycle.
-  enter := (address: Int): void ->
+  enter := (address: Int) ->
     if depth := @depths[address]
       throw JsonError(message: "#{@path_text()}: a cycle back to #{path_of(@levels[..depth])}")
     @depths[address] = @levels.length
@@ -108,7 +108,7 @@ export class JsonWriter
 
   # The record has two fields of the key, an error of the record, which the levels around its own
   # give the path of, rather than of its last value.
-  fail_twice := (key: String): never ->
+  fail_twice := (key: String) ->
     record := path_of(@levels[..(@levels.length - 1)])
     throw JsonError(message: "#{record}: two fields of the key #{quoted(key)}")
 

@@ -134,7 +134,7 @@ visit := (loader: Loader, statement: Import, from: String, location: String): Pr
   module := statement.module
   if is_standard_name(module)
     source := imported_standard_source(statement, location)
-    return loaded(loader, module) ? await load(loader, module, source, module)
+    return loaded(loader, module) ? await load_standard(loader, module, source)
   return await visit_standard_file(loader, statement, from, location) if is_standard_name(from)
   path := imported_file(statement, dir_name(from), location)
   real := real_path(path)
@@ -150,7 +150,13 @@ visit_standard_file := (
 ): Promise<Int> ->
   missing := -> import_error(statement, location, "cannot find module '#{statement.module}' in std")
   { module, source } := standard_import(from, statement.module) ? missing()
-  loaded(loader, module) ? await load(loader, module, source, module)
+  loaded(loader, module) ? await load_standard(loader, module, source)
+
+# A module of std, as `given` holds it if it does, as `lerta fmt` gives the files of std that it
+# formats, or else as the compiler carries it.
+load_standard := (loader: Loader, module: String, source: String): Promise<Int> ->
+  given := loader.given[module]
+  await load(loader, module, given?.source ? source, module, given?.program)
 
 # The place of the module of `key` if it is loaded. An import of a module whose imports are being
 # loaded closes a cycle (see close_cycle).

@@ -22,44 +22,43 @@ export class JsonReader
   read_nil := -> @read_literal('null')
 
   # A Char is written as a string of it alone.
-  read_char := (): Char ->
+  read_char := ->
     text := @read_string()
     chars := [c for c in text]
     @fail "expected a Char, found #{quoted(text)}" if chars.length != 1
     chars[0]
 
   # An enum's member is written as a string of its name.
-  read_member := (enum_name: String): String -> @read_string()
+  read_member := (enum_name: String) -> @read_string()
 
   # A tuple is written as an array of its items.
-  begin_tuple := (count: Int): void -> @begin_array()
+  begin_tuple := (count: Int) -> @begin_array()
 
   # A set is written as an array of its items.
-  begin_set := (): void -> @begin_array()
+  begin_set := -> @begin_array()
 
   # A map of other keys than Strings is written as an array of its entries, each an array of its
   # key and its value.
-  begin_entries := (): void -> @begin_array()
-  next_entry := (): Bool ->
+  begin_entries := -> @begin_array()
+  next_entry := ->
     return false unless @next_item()
     @begin_tuple 2
     @next_tuple_item 2
     true
-  entry_value := (): void -> @next_tuple_item(2)
-  end_entry := (): void -> @end_tuple(2)
-  fail_duplicate := (): never -> @fail('the same as one before')
+  entry_value := -> @next_tuple_item(2)
+  end_entry := -> @end_tuple(2)
+  fail_duplicate := -> @fail('the same as one before')
 
   # A map and a record are written as objects, of a key for each entry or field.
-  begin_map := (): void -> @begin_object()
-  read_key := (): String? -> @next_key()
-  begin_record := (): void -> @begin_object()
-  read_field := (): String? -> @next_key()
+  begin_map := -> @begin_object()
+  read_key := -> @next_key()
+  begin_record := -> @begin_object()
+  read_field := -> @next_key()
 
   # Whether the key read is that of the field, as write_field writes it.
-  is_field := (key: String, name: String): Bool -> key == @field_keys.key(name)
+  is_field := (key: String, name: String) -> key == @field_keys.key(name)
 
-  fail_missing_field := (name: String): never ->
-    @fail "missing the key #{quoted(@field_keys.key(name))}"
+  fail_missing_field := (name: String) -> @fail("missing the key #{quoted(@field_keys.key(name))}")
 
   # A number that `parse` reads as what `expected` names, as `an Int8`, or gives nil for.
   read_number := <T>(expected: String, parse: (String) -> T?): T ->
@@ -72,10 +71,10 @@ export class JsonReader
   read_integer := (expected: String, least: Int, most: Int): Int ->
     @read_number expected, (number) ->
       value := number.parse_int()
-      value != nil and least <= value and value <= most then value
+      value != nil and value in least..=most then value
 
   # Its digits are read on their own, as a UInt64 may be above the largest Int.
-  read_uint64 := (): UInt64 ->
+  read_uint64 := ->
     number := @number() ? @fail_expected('a UInt64')
     out_of_range := -> @fail("expected a UInt64, found #{number}")
     var value: UInt64 = 0
@@ -90,7 +89,7 @@ export class JsonReader
   # A number that is not finite as a Float32 is no Float32.
   read_float32 := -> @read_number('a Float32', finite_float32)
 
-  read_binary := (): Binary ->
+  read_binary := ->
     @skip_space()
     @fail_expected 'a Binary' if @peek() != b'"'
     at := @at
@@ -124,7 +123,7 @@ export class JsonReader
     text
 
   # Reads `[` of an array, whose items next_item then starts.
-  begin_array := (): void -> @begin(b'[', 'an array')
+  begin_array := -> @begin(b'[', 'an array')
 
   # Whether another item of the innermost array follows, which it then starts reading.
   next_item := ->
@@ -135,12 +134,12 @@ export class JsonReader
     true
 
   # Reads `{` of an object, whose keys next_key then gives.
-  begin_object := (): void ->
+  begin_object := ->
     @begin b'{', 'an object'
     @seen_keys.push Set<String>()
 
   # The next key of the innermost object, whose value it then starts reading, or nil at its end.
-  next_key := (): String? ->
+  next_key := ->
     unless @has_next(b'}')
       @seen_keys.pop()
       return nil
@@ -175,7 +174,7 @@ export class JsonReader
   # The kind of the value where the reader is, by the first byte that it can be told by, as one of
   # std:codable's KIND_ ones, which tells the member of a union that it is: null and an array are
   # KIND_OTHER, as no member of a union is either.
-  peek_kind := (): Int ->
+  peek_kind := ->
     @skip_space()
     byte := @peek() ? return KIND_OTHER
     case
@@ -194,7 +193,7 @@ export class JsonReader
     @fail "expected an array of #{count} items, found more" if @next_item()
 
   # The string just read names no member of the enum.
-  fail_member := (enum_name: String, text: String): never ->
+  fail_member := (enum_name: String, text: String) ->
     @fail "expected a member of #{enum_name}, found #{quoted(text)}"
 
   begin := (open: Byte, expected: String) ->
@@ -231,7 +230,7 @@ export class JsonReader
     true
 
   # Reads the escape after a backslash in a string, as the Char it gives.
-  read_escape := (): Char ->
+  read_escape := ->
     byte := @peek() ? @fail('a string that does not end')
     @at += 1
     return @read_escaped_char() if byte == b'u'
@@ -258,7 +257,7 @@ export class JsonReader
     code
 
   # The number's text where the reader is, as JSON writes numbers, or nil if none is there.
-  number := (): String? ->
+  number := ->
     @skip_space()
     bytes := @bytes
     var end = @at
@@ -284,9 +283,9 @@ export class JsonReader
 
   peek := -> @bytes.get(@at)
 
-  fail_expected := (expected: String): never -> @fail("expected #{expected}, found #{@found()}")
+  fail_expected := (expected: String) -> @fail("expected #{expected}, found #{@found()}")
 
-  fail := (message: String): never -> throw JsonError(message: "#{path_of(@levels)}: #{message}")
+  fail := (message: String) -> throw JsonError(message: "#{path_of(@levels)}: #{message}")
 
   # What is where the reader is, as an error says it.
   found := ->
@@ -327,6 +326,6 @@ MAX_UINT64 := ZERO.wrapping_sub(ONE)
 
 # The Float32 nearest to the number, or nil where it is beyond the finite ones, as JSON holds no
 # infinity.
-finite_float32 := (number: String): Float32? ->
+finite_float32 := (number: String) ->
   value := number.parse_float()?.to_float32() ? return nil
   is_finite(value.to_float()) then value

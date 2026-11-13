@@ -24,6 +24,7 @@ import
 from './rules'
 import dump_ast_without_positions from '../dumps'
 import EntryModule, load_modules, module_key from '../loader'
+import standard_module_of from '../source'
 import Change, Edit from './edits'
 import counted_range, is_zero from './ranges'
 import Tokens from './tokens'
@@ -49,18 +50,28 @@ export typed_program := (path: String, source: String, statements: Statement[]) 
 # holds some is checked once for all of them (see load_modules). None for one whose program does not
 # check, though it may check with another entry.
 export typed_programs := (paths: String[], given: Map<String, EntryModule>) ->
+  # A file of std declares what only std may, as an intrinsic, so it checks only as a standard
+  # module: it is loaded by its name, and what is found is kept by its file's key.
+  standard: Map<String, String>
+  for path in paths
+    standard[module_key(path)] = name if name := standard_module_of(path)
+  file_keys := Map([(name, key) for (key, name) in standard.entries()])
+  modules_given := Map([(standard[key] ? key, entry) for (key, entry) in given.entries()])
   found: Map<String, Typed>
   tried: Set<String>
   for path in paths
-    continue unless tried.add(module_key(path))
+    key := module_key(path)
+    continue unless tried.add(key)
+    entry_path := standard[key] ? path
     try
-      modules := await load_modules(path, given)
-      program := ProgramWide(modules, entry_path: path, finds_all_errors: false)
+      modules := await load_modules(entry_path, modules_given)
+      program := ProgramWide(modules, entry_path, finds_all_errors: false)
       check_program program
       for module in modules
-        continue unless module.key in given
-        found[module.key] = typed_of(program, module.index)
-        tried.add module.key
+        continue unless module.key in modules_given
+        file_key := file_keys[module.key] ? module.key
+        found[file_key] = typed_of(program, module.index)
+        tried.add file_key
     catch _: CompileError
       continue
   found

@@ -291,6 +291,7 @@ The rewrites below depend on the checking of a program that holds the file.
 - It reads the modules that the program imports.
 - A file given that no other file given imports is the entry module of a program, checked once for all the files given that it holds. The other files given are checked as their own.
 - If the program does not check, the types of its entry module are kept and its errors are not reported. The other files it holds are checked as the entry modules of their own programs.
+- A file of a module of std, in a directory `std/` that holds `builtins.lerta`, as the repository's, is checked as that module, `std:<name>`, which may declare what only std may, with the modules of std that are not given as the compiler carries them.
 
 #### Rewrites
 
@@ -360,7 +361,7 @@ Besides:
 
 - It writes `xs.contains(x)`, a call of `contains` of one argument, as `x in xs`, and `not xs.contains(x)` as `x not in xs`.
 - Only where the object and the argument are names, `@`, fields of them or literals, which run no code, and the call gives a `Bool`.
-- Not where it is the whole element or the whole guard of a comprehension, or in an interpolation, which are kept as written.
+- Not in an interpolation, which is kept as written.
 
 #### Range tests written with `in`
 
@@ -382,7 +383,7 @@ Besides:
   - a comparison of a `String` with `''`, `s == ''` or `s != ''`, either way round too.
 - It writes `not (x.length != 0)` as `x.is_empty()`.
 - Only where `x` is an array, a map, a set, a `Binary` or a `String`, whose `is_empty` std gives; not that of another type, nor of an optional.
-- Not where it is the whole element or the whole guard of a comprehension, or in an interpolation, which are kept as written.
+- Not in an interpolation, which is kept as written.
 
 #### Arms of one body
 

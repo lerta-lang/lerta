@@ -152,6 +152,44 @@ command_checks: Check[] =
       ]
   }
   {
+    name: 'lerta fmt checks the files of std as the standard modules they are, which declare ' +
+      'what only std may, with one another as they are given'
+    run: ->
+      empty_test := "export _is_empty := (text: String) -> text == ''\n"
+      with_test := (file: String) ->
+        await read_text_or_throw("#{root_dir}/std/#{file}") + empty_test
+      json := await with_test('json.lerta')
+      writer := await with_test('internal/json_writer.lerta')
+      text := await with_test('builtins/text.lerta')
+      dir := await tree(
+        'std_files'
+        {
+          'std/builtins.lerta': await read_text_or_throw("#{root_dir}/std/builtins.lerta")
+          'std/json.lerta': json
+          'std/internal/json_writer.lerta': writer
+          'std/builtins/text.lerta': text
+          # No module of std, so checked as a program of its own.
+          'std/extra.lerta': "x: Int = 1\nprint x\n"
+        }
+      )
+      paths :=
+        'std/json.lerta'
+        'std/internal/json_writer.lerta'
+        'std/builtins/text.lerta'
+        'std/extra.lerta'
+      result := await fmt(dir, paths)
+      report := (file: String, text: String) ->
+        line := text.lines().length
+        "#{file}:#{line}:39: write `x.is_empty()`, not a test of its length or of `== ''` " +
+          "(Emptiness tests)\n"
+      expected :=
+        report('std/json.lerta', json)
+        report('std/internal/json_writer.lerta', writer)
+        report('std/builtins/text.lerta', text)
+        type_report('std/extra.lerta:1:2')
+      expect_run result, expected.join(), 1
+  }
+  {
     name: 'lerta fmt takes a file given twice once, files that import each other, and keeps the ' +
       'types where an import does not parse'
     run: ->

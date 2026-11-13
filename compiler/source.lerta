@@ -4,7 +4,7 @@
 import is_file, read_text, real_path from 'std:io'
 import EMBEDDED_PATHS, embedded_source from '../build/embedded'
 import CompileError from './errors'
-import dir_name, join from 'std:path'
+import base_name, dir_name, join, stem from 'std:path'
 
 # The texts of the files that an editor holds, unsaved, which are read in place of the files, by
 # their keys (see text_key and compiler/lsp).
@@ -46,6 +46,22 @@ export standard_import := (from: String, relative: String) ->
   module := "#{STD_PREFIX}#{name}"
   source := embedded_source(file_of(module)) ? return nil
   { module, source }
+
+# The standard module that the file at the path is, as `std:internal/utf8` of
+# std/internal/utf8.lerta, or nil: a file of a module that the compiler carries, in a directory std/
+# that holds builtins.lerta, as the repository's. `lerta fmt` checks such a file as that module, as
+# it declares what only std may.
+export standard_module_of := (path: String) ->
+  return nil unless path.ends_with(SOURCE_EXTENSION)
+  var dir = dir_name(real_path(path))
+  var name = stem(path)
+  while base_name(dir) != 'std' or not is_file(join(dir, 'builtins.lerta'))
+    parent := dir_name(dir)
+    return nil if parent == dir
+    name = "#{base_name(dir)}/#{name}"
+    dir = parent
+  module := "#{STD_PREFIX}#{name}"
+  embedded_source(file_of(module)) then module
 
 # The names of the standard modules, from their embedded paths.
 export standard_names := ->
