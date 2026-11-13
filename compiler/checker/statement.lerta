@@ -10,7 +10,9 @@ import check_case_statement, check_try_statement from './case'
 import declared_constant from './constants'
 import check_part, fail, fail_already_defined, warn, warn_if_unused from './diagnostics'
 import expect_condition, expect_optional, expect_type, type_of from './expression'
-import has_function, parameter_types, required_params from './functions'
+import
+  described_parameter, has_function, is_taken_apart_parameter, parameter_types, required_params
+from './functions'
 import names_literals_assign from './literal_assignments'
 import lookup, named_function from './name'
 import check_for, check_while from './loop'
@@ -87,9 +89,14 @@ export define_parameters := (
     if default := declared.default
       expect_type body, default, params[i] if checks_defaults
     else if i > required
-      reason := 'as those before it have'
-      message := "the parameter '#{identifier.name}' needs a default, #{reason}"
-      fail body.program, identifier.position, message
+      described := described_parameter(identifier)
+      # One taken apart takes no default (see parse_destructured_parameter).
+      problem :=
+        if is_taken_apart_parameter(identifier)
+          'cannot follow one with a default'
+        else
+          'needs a default, as those before it have'
+      fail body.program, identifier.position, "#{described} #{problem}"
     param := Local(identifier, type: params[i])
     define_local body, param
 

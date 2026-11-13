@@ -62,12 +62,8 @@ export parameter_types := (
       program.inferable_parameters[param.name] = inferable and inferable_before
       types.push param.variadic then ArrayType(type) else type
       continue
-    { name, position } := param.name
-    # The name of one taken apart, which the parser makes, cannot be written (see
-    # destructured_holder).
-    described := '.' in name then 'a parameter taken apart' else "the parameter '#{name}'"
-    message := "the type of #{described} must be written"
-    types.push unwritten ? fail(program, position, message)
+    message := "the type of #{described_parameter(param.name)} must be written"
+    types.push unwritten ? fail(program, param.name.position, message)
   last_is_struct := ends_with_struct(resolver, literal, types)
   reject_misplaced_variadic program, literal, last_is_struct
   reject_struct_default program, literal, last_is_struct
@@ -213,3 +209,10 @@ check_entry := (program: ProgramWide, module_index: Int, entry: FunctionEntry) -
   entry.state = check_part(program, check) then CHECKED else FAILED
 
 export method_key := (type_name: String, method: String) -> "#{type_name}.#{method}"
+
+# The parameter as a message names it: one taken apart by the name that the parser makes of it,
+# which cannot be written (see destructured_holder), as it is no name in the source.
+export described_parameter := (name: Identifier) ->
+  is_taken_apart_parameter(name) then 'a parameter taken apart' else "the parameter '#{name.name}'"
+
+export is_taken_apart_parameter := (name: Identifier) -> '.' in name.name
