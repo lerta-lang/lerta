@@ -29,6 +29,7 @@ import counted_range, index_ranges from './ranges'
 import Tokens from './tokens'
 import annotating_of, annotation_edits, annotation_statement_edits from './annotations'
 import typed_edits, typed_statement_edits, Typed from './typed'
+import written_return, written_type_edits from './written_types'
 
 export rewrites_of := (
   program: Statement[], source: String, text: SourceTokens, lexed: Lexed, kept: KeptLines,
@@ -53,12 +54,14 @@ export rewrites_of := (
       add edit for edit in edits_within(tokens, value, claimed, parentheses.tight, typed)
       if annotating := annotated
         add edit for edit in annotation_edits(tokens, value, annotating)
+        add written_return(tokens, value, annotating) if value is FunctionLiteral
     statement: (statement, _) ->
       add edit for edit in statement_edits(tokens, statement)
       if known := typed
         add edit for edit in typed_statement_edits(tokens, statement, known)
       if annotating := annotated
         add edit for edit in annotation_statement_edits(tokens, statement, annotating)
+        add edit for edit in written_type_edits(tokens, statement, annotating)
   }
   add edit for edit in parentheses.edits
   add literal_edit(tokens, index) for index in 0..text.code.length

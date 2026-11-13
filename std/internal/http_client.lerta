@@ -364,15 +364,15 @@ struct Framing
   chunked := default false
 
 # A response to HEAD, and one of 204 or 304, has no body, whatever its fields tell.
-framing := (head: Head, method: String) ->
+framing := (head: Head, method: String): Framing ->
   { status, headers } := head
-  return Framing(left: 0) if method == 'HEAD' or status == 204 or status == 304
+  return { left: 0 } if method == 'HEAD' or status == 204 or status == 304
   if coding := headers.get('transfer-encoding')
     throw IOError("a transfer coding not supported: #{coding}") if coding.to_lower() != 'chunked'
-    return Framing(left: 0, chunked: true)
-  text := headers.get('content-length') ? return Framing(left: nil)
+    return { left: 0, chunked: true }
+  text := headers.get('content-length') ? return { left: nil }
   throw malformed() unless text.is_digits()
-  Framing left: text.parse_int() ? throw malformed()
+  { left: text.parse_int() ? throw malformed() }
 
 # The chunks of a body as they come, after which the connection is finished with.
 class BodyChunks
@@ -406,7 +406,7 @@ class BodyChunks
 # The request that a redirect asks for, or nil for a response that is none. A 303, and a 301 or a
 # 302 to POST, as browsers do, ask for a GET without the body. A request to another host or port
 # leaves out the credentials, which were meant for the first.
-redirected := (request: Outgoing, response: Response) ->
+redirected := (request: Outgoing, response: Response): Outgoing? ->
   { status } := response
   return nil unless status in REDIRECTS
   location := response.headers.get('location') ? return nil
@@ -424,9 +424,9 @@ redirected := (request: Outgoing, response: Response) ->
   as_get := see_other or moved_post
   unless as_get
     # A body that is a Reader has been read as it was sent.
-    return request.body is Reader then nil else Outgoing(request..., target, headers)
+    return request.body is Reader then nil else { request..., target, headers }
   headers.remove 'content-type'
-  Outgoing target, headers, method: 'GET', body: b''
+  { target, headers, method: 'GET', body: b'' }
 
 # Whether a URL starts with its scheme, which is absolute then; a `:` after a `/`, a `?` or a `#`,
 # as of `/login?next=http://a/`, is in a relative one.

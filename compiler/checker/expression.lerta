@@ -161,8 +161,8 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
       qualified_call := Call(args, named_args, type_args, position, callee: name)
       body.facts.replacements[call] = qualified_call
       type := type_of(body, qualified_call, expected)
-      { object_constructions, full_constructions } := body.facts
-      for constructions in [object_constructions, full_constructions]
+      { object_constructions, full_constructions, record_constructions } := body.facts
+      for constructions in [object_constructions, full_constructions, record_constructions]
         constructions.add call if qualified_call in constructions
       return type
   if makes_builtin(body, call, 'Map')
@@ -176,10 +176,14 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
     return type_of_generic_call(body, call, generic, expected)
   if object_type := constructed_type(body, callee)
     type := type_of_construction(body, call, object_type, expected)
-    body.facts.object_constructions.add call
+    { facts } := body
+    facts.object_constructions.add call
+    is_plain_struct := object_type.is_struct and object_type.args.is_empty()
+    if is_plain_struct and has_record_arguments(body, call, object_type)
+      facts.record_constructions.add call
     struct_type := expected_struct(expected) ? return type
     if type == struct_type and has_record_arguments(body, call, object_type)
-      body.facts.recordable.add call
+      facts.recordable.add call
     return type
   if callee is Member
     if text_call := contains_of_char(body, call, callee)

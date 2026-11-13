@@ -80,14 +80,14 @@ export parse_function_literal := (tokens: TokenStream, weak = false) ->
   FunctionLiteral type_params, params, return_type, body, yields, awaits, position, weak
 
 # `name[: Type][ = default]`, or `name: Type...`.
-parse_parameter := (tokens: TokenStream) ->
+parse_parameter := (tokens: TokenStream): Parameter ->
   name := parse_identifier(tokens)
   type := parse_type_annotation(tokens)
   if tokens.accept('...')
     if type == nil
       tokens.fail name.position, 'a variadic parameter must have a type, as in `rest: Int...`'
-    return Parameter(name, type, default: nil, variadic: true)
-  Parameter name, type, default: tokens.accept('=') then parse_expression(tokens)
+    return { name, type, default: nil, variadic: true }
+  { name, type, default: tokens.accept('=') then parse_expression(tokens) }
 
 # `[a, b, c]`; `[]` is empty. A first element followed by `for` makes a comprehension. An element
 # `xs...` gives the items of `xs` in its place.
@@ -248,15 +248,15 @@ parse_catch := (tokens: TokenStream) ->
   type := parse_type_annotation(tokens)
   Catch name, type, position, body: parse_block(tokens)
 
-parse_case_arm := (tokens: TokenStream, has_subject: Bool) ->
+parse_case_arm := (tokens: TokenStream, has_subject: Bool): CaseArm ->
   tokens.expect_word 'when'
   # A pattern stops before `then`, which begins the arm's value.
   parse_pattern := -> parse_or(tokens)
   if has_subject and at_block(tokens)
     patterns := parse_pattern_block(tokens, parse_pattern)
-    return CaseArm(patterns, body: parse_arm_body(tokens, 'else'))
+    return { patterns, body: parse_arm_body(tokens, 'else') }
   patterns := has_subject then tokens.parse_separated(',', parse_pattern) else [parse_pattern()]
-  CaseArm patterns, body: parse_arm_body(tokens, 'then')
+  { patterns, body: parse_arm_body(tokens, 'then') }
 
 # Patterns in an indented block, as the items of a literal are, and `then` at the indentation of
 # `when`, which the body follows as it follows `else`: `when` and then `'a', 'b'` and `'c'` on the

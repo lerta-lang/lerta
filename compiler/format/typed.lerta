@@ -2,9 +2,8 @@
 # so the facts that it records of them are found by those nodes; those of the types written are in
 # annotations.lerta.
 import
-  ArrayLiteral, BinaryOperation, Call, Case, CaseArm, Cast, Declaration, Expression, Identifier,
-  Import, ImportName, Index, Member, NamedValue, Range, Statement, StringLiteral, This,
-  TypeDeclaration
+  BinaryOperation, Call, Case, CaseArm, Cast, Expression, Identifier, Import, ImportName, Index,
+  Member, NamedValue, Range, Statement, StringLiteral, This
 from '../ast'
 import is_file from 'std:io'
 import check_program from '../checker/modules'
@@ -112,15 +111,6 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
 export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Typed): Edit?[] ->
   case statement
     when Import then [unused_imports(tokens, statement, typed.unused_imports)]
-    when Declaration
-      return [] if statement.type != nil
-      [typed_array(tokens, statement.name, statement.value, typed.facts)]
-    when TypeDeclaration
-      [
-        typed_array(tokens, member.name, member.value, typed.facts)
-        for member in statement.members
-        when member.type == nil
-      ]
     else []
 
 # The import without the names that are never used (see Unused names); only reported where it gives
@@ -186,12 +176,13 @@ recorded := (tokens: Tokens, call: Call, facts: NodeFacts) ->
   changes := record_changes(tokens, call) ? return tokens.report(EXPECTED_TYPES, call.position)
   tokens.edit_at EXPECTED_TYPES, call.position, changes
 
-# The arguments of the construction as they are written, between braces for the parentheses; nil
-# for one without them, its arguments in a block below it, or of type arguments.
-record_changes := (tokens: Tokens, call: Call) ->
+# The arguments of the construction as they are written, between braces for the parentheses, or
+# for the callee and after the arguments of one without them; nil for one of type arguments.
+export record_changes := (tokens: Tokens, call: Call) ->
   callee := tokens.at(call.callee.position) ? return nil
   open := after_callee(tokens, call) ? return nil
-  return nil unless tokens.is_kind(open, '(')
+  return nil if tokens.is_kind(open, '<')
+  return unparenthesized_record(tokens, callee, open) unless tokens.is_kind(open, '(')
   close := tokens.matching(open) ? return nil
   # A space inside each brace that has the arguments on its line.
   opening := tokens.code[open + 1].line == tokens.code[open].line then '{ ' else '{'
@@ -201,39 +192,42 @@ record_changes := (tokens: Tokens, call: Call) ->
     tokens.replaced(close, closing)
   ]
 
+# `{ x: 1 }` for `S x: 1`, and for `S` with the arguments in a block below it, the `}` on a line of
+# its own then. The arguments of a call without parentheses run to the end of its line, or of the
+# block below it.
+unparenthesized_record := (tokens: Tokens, callee: Int, first_argument: Int) ->
+  indentation := tokens.line_indentation(tokens.code[callee].line) ? return nil
+  last := statement_last(tokens, callee, indentation)
+  return nil if last < first_argument
+  on_one_line := tokens.code[last].end_line == tokens.code[callee].line
+  closing := on_one_line then ' }' else "\n#{' '.repeat(indentation)}}"
+  [
+    tokens.replaced(callee, '{')
+    Change(from: tokens.end(last), to: tokens.end(last), text: closing)
+  ]
+
+# The last token of the statement that starts on the line of the one at `first`, with the spaces
+# of `indentation`: before the next line, outside brackets, indented no deeper.
+statement_last := (tokens: Tokens, first: Int, indentation: Int) ->
+  var depth = 0
+  var last = first
+  while last + 1 < tokens.code.length
+    token := tokens.code[last]
+    depth += 1 if token.kind in OPENING_BRACKETS
+    depth -= 1 if token.kind in CLOSING_BRACKETS
+    next := tokens.code[last + 1]
+    starts_line := next.line > token.end_line
+    next_indentation := tokens.line_indentation(next.line) ? 0
+    break if depth <= 0 and starts_line and next_indentation <= indentation
+    last += 1
+  last
+
 # The token after the callee of the construction, its last name, as `Point` of `geo.Point`.
-after_callee := (tokens: Tokens, call: Call) ->
+export after_callee := (tokens: Tokens, call: Call) ->
   { callee } := call
   name := callee is Member then callee.name else callee
   last := tokens.at(name.position) ? return nil
   last + 1
-
-# `xs: S[] = [{ x: 1 }, s]` for `xs := [S(x: 1), s]`, of a variable or a field without a type whose
-# value is an array of S (see Expected types): the type written as the first construction names
-# S, and each construction that a record can write written so, in one edit, as without the records
-# the type would be left out again (see Type annotations). Only reported where one is written
-# without parentheses.
-typed_array := (tokens: Tokens, name: Identifier, value: Expression?, facts: NodeFacts) ->
-  array := value as ArrayLiteral ? return nil
-  constructions := facts.typed_arrays[array] ? return nil
-  name_at := tokens.at(name.position) ? return nil
-  first := constructions[0]
-  callee := tokens.at(first.callee.position) ? return nil
-  open := after_callee(tokens, first) ? return nil
-  type := ": #{tokens.slice(tokens.start(callee), tokens.start(open))}[]"
-  # `:=` goes into `: S[] =`; a `var`'s `=` stays after the type.
-  annotation :=
-    if tokens.is_kind(name_at + 1, ':=')
-      Change from: tokens.end(name_at), to: tokens.end(name_at + 1), text: "#{type} ="
-    else if tokens.is_kind(name_at + 1, '=')
-      Change from: tokens.end(name_at), to: tokens.end(name_at), text: type
-    else
-      return nil
-  changes := [annotation]
-  for call in constructions
-    record := record_changes(tokens, call) ? return tokens.report(EXPECTED_TYPES, call.position)
-    changes.push each for each in record
-  tokens.edit_at EXPECTED_TYPES, name.position, changes
 
 # `S(x, y: 1)` for `S(x: x, y: 1)` in a construction (see Shorthand): the named arguments that are
 # variables of their names, from the first, up to one that is not or whose name and value are not

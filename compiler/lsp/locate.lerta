@@ -131,18 +131,20 @@ add_reexported_names := (add: AddCandidate, program: ProgramWide, module_index: 
 
 # What the name refers to: a top-level value, a function, a class or struct, an extern, or else a
 # local, whose declaration the checker kept.
-name_declaration := (program: ProgramWide, module_index: Int, facts: NodeFacts, name: Identifier) ->
+name_declaration := (
+  program: ProgramWide, module_index: Int, facts: NodeFacts, name: Identifier
+): Declared? ->
   reference := facts.references[name]
   case reference
     when TopLevelValue, FunctionReference
       top_level_declaration program, reference.module_index, reference.name
     when Constructor
       info := info_of(program, reference.type)
-      Declared module_index: info.module_index, name: info.declaration.name
+      { module_index: info.module_index, name: info.declaration.name }
     when ExternReference then top_level_declaration(program, reference.module_index, reference.name)
     else
       local := facts.local_declarations[name] ? return nil
-      Declared module_index, name: local
+      { module_index, name: local }
 
 # A top-level value, a function, a generic function, a type or an extern of the module, by its
 # name there.
@@ -194,14 +196,14 @@ enum_name_of := (member: Member, facts: NodeFacts) ->
     else nil
 
 # The declaration of the class, struct, interface or enum that the type is.
-type_declaration := (program: ProgramWide, type: Type) ->
+type_declaration := (program: ProgramWide, type: Type): Declared? ->
   case type
     when ObjectType
       info := info_of(program, type)
-      Declared module_index: info.module_index, name: info.declaration.name
+      { module_index: info.module_index, name: info.declaration.name }
     when EnumType
       (module_index, declaration) := enum_statement(program, type) ? return nil
-      Declared module_index, name: declaration.name
+      { module_index, name: declaration.name }
     when InterfaceType then interface_declaration(program, type)
     else nil
 

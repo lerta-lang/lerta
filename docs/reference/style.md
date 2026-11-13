@@ -169,7 +169,8 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 ### Expected types
 
 - Where an enum is expected, write its member alone (`kind == INTEGER`, not `kind == TokenKind.INTEGER`; see [enums](types.md#enums)), unless a name in scope takes the member's name.
-- Where a struct is expected, construct it with `{}` (`points: Point[] = [{ x: 1 }, { x: 2 }]`, not `[Point(x: 1), Point(x: 2)]`; see [anonymous structs](types.md#anonymous-structs)). Write the type of a variable or a field whose value is an array of a struct for its constructions to be written so: `points: Point[] = [{ x: 1 }, origin()]`, not `points := [Point(x: 1), origin()]`.
+- Where a struct is expected, construct it with `{}` (`points: Point[] = [{ x: 1 }, { x: 2 }]`, not `[Point(x: 1), Point(x: 2)]`; see [anonymous structs](types.md#anonymous-structs)).
+- Write a type once where the values that give it would each name it: for a variable, a field or a function whose array items, branches or results are members of an enum or constructions of a struct, write the type, and the values as above (`color: Color = flag then RED else BLUE`, not `color := flag then Color.RED else Color.BLUE`; `(n: Int): Point -> n == 0 then { x: 0 } else { x: n }`). Not for one such value alone, but for an array of a struct, as a record is shorter than its construction (`points: Point[] = [{ x: 1 }, origin()]`).
 - Do not import an enum or a struct only to name its members or to construct it.
 
 ### Parentheses

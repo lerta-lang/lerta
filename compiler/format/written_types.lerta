@@ -1,0 +1,158 @@
+# The types written once, for the variable, the field or the function that holds the values that
+# give them, where those values each name the type (see Expected types): the members of an enum,
+# `E.A`, are then written alone, and the constructions of a struct, `S(x: 1)`, as records.
+import
+  ArrayLiteral, Call, Case, Conditional, Declaration, Expression, FunctionLiteral, Identifier, If,
+  Member, Position, Statement, Try, TypeDeclaration
+from '../ast'
+import NodeFacts from '../checker/shared'
+import Annotating from './annotations'
+import branch_values from './inferable'
+import EXPECTED_TYPES from './rules'
+import ArrayType, FunctionType, ObjectType, OptionalType, Type from '../types'
+import Change, Edit from './edits'
+import Tokens from './tokens'
+import after_callee, record_changes from './typed'
+
+export written_type_edits := (
+  tokens: Tokens, statement: Statement, annotating: Annotating
+): Edit?[] ->
+  { facts } := annotating.typed
+  case statement
+    when Declaration
+      return [] if statement.type != nil
+      [declared_type(tokens, statement.name, statement.value, facts)]
+    when TypeDeclaration
+      edits: Edit?[]
+      for member in statement.members
+        value := member.value ? continue
+        edits.push declared_type(tokens, member.name, value, facts) if member.type == nil
+      edits
+    else []
+
+# `xs: E[] = [A, B]` for `xs := [E.A, E.B]`, and `x: E = c then A else B` for
+# `x := c then E.A else E.B`, of a variable or a field without a type.
+declared_type := (tokens: Tokens, name: Identifier, value: Expression, facts: NodeFacts) ->
+  type := facts.types[value] ? return nil
+  array := type as ArrayType?
+  of_items := value is ArrayLiteral and array != nil
+  given :=
+    if of_items
+      typed_parts all_given((value as ArrayLiteral!).elements), array!.element, facts, true
+    else
+      typed_parts given_values(value), type, facts, false
+  parts := given ? return nil
+  name_at := tokens.at(name.position) ? return nil
+  part_type := type_text(tokens, parts.first, parts.type) ? return nil
+  text := of_items then "#{part_type}[]" else part_type
+  # `:=` goes into `: T =`; a `var`'s `=` stays after the type.
+  annotation: Change =
+    if tokens.is_kind(name_at + 1, ':=')
+      { from: tokens.end(name_at), to: tokens.end(name_at + 1), text: ": #{text} =" }
+    else if tokens.is_kind(name_at + 1, '=')
+      { from: tokens.end(name_at), to: tokens.end(name_at), text: ": #{text}" }
+    else
+      return nil
+  written tokens, name.position, annotation, parts.values
+
+# `(): E -> c then A else B` for `-> c then E.A else E.B`, of a function without a return type
+# that no function type is expected for (see Functions), whose results nothing expects a type of
+# then; not one that awaits or yields, whose return type is not that of its results, nor one in
+# generic code.
+export written_return := (tokens: Tokens, function: FunctionLiteral, annotating: Annotating) ->
+  { facts } := annotating.typed
+  return nil if function.return_type != nil or function.awaits or function.yields
+  { unexpected, generic } := annotating.functions
+  return nil if function not in unexpected or function in generic
+  return nil unless function.type_params.is_empty()
+  function_type := facts.types[function] as FunctionType ? return nil
+  { result } := function_type
+  last := function.body.last() as Expression?
+  results := [(facts.results[function] ? [])..., (last then [last] else [])...]
+  parts := typed_parts(all_given(results), result, facts, false) ? return nil
+  text := type_text(tokens, parts.first, parts.type) ? return nil
+  start := tokens.at(function.position) ? return nil
+  annotation: Change =
+    if tokens.is_kind(start, '(')
+      close := tokens.matching(start) ? return nil
+      { from: tokens.end(close), to: tokens.end(close), text: ": #{text}" }
+    else
+      { from: tokens.start(start), to: tokens.start(start), text: "(): #{text} " }
+  written tokens, function.position, annotation, parts.values
+
+# The values that name the type, and the first of them, which the type is written as.
+struct TypedParts
+  values: Expression[]
+  first: Expression
+  type: Type
+
+# The values that give the whole value its type: those of its branches, and of the branches in
+# them, or the value itself.
+given_values := (value: Expression): Expression[] ->
+  case value
+    when Conditional then [given_values(value.then_value)..., given_values(value.else_value)...]
+    when Case, If, Try
+      branches := branch_values(value) ? return [value]
+      all_given branches
+    else [value]
+
+all_given := (values: Expression[]) ->
+  given: Expression[]
+  for value in values
+    given.push each for each in given_values(value)
+  given
+
+# Those of `values` of the type, or of the type that it makes optional, that name it: two or more,
+# or, for `items` of an array of a struct, one or more, as a record is shorter than its
+# construction. Nil where too few do.
+typed_parts := (values: Expression[], type: Type, facts: NodeFacts, items: Bool) ->
+  inner := type is OptionalType then type.inner else type
+  names_type := (value: Expression) ->
+    case value
+      when Member then value in facts.alone_members
+      when Call then value in facts.record_constructions
+      else false
+  is_named := (value: Expression) -> facts.types[value] == inner and names_type(value)
+  in_order := values.sorted((a, b) -> a.position.compare(b.position))
+  named: Expression[]
+  for value in in_order
+    # A function's last value may be among its results too.
+    continue if not is_named(value) or named.last()?.position == value.position
+    named.push value
+  first := named.first() ? return nil
+  enough := items and inner is ObjectType then 1 else 2
+  named.length >= enough then TypedParts(first, type, values: named)
+
+# The type as the first value names it, `E` of `E.A` or `S` of `S(x: 1)`, made optional if it is.
+type_text := (tokens: Tokens, first: Expression, type: Type) ->
+  start := tokens.at(first.position) ? return nil
+  end := type_end(tokens, first) ? return nil
+  named := tokens.slice(tokens.start(start), tokens.start(end))
+  type is OptionalType then "#{named}?" else named
+
+# The `.` before the name of the member, or the `(` after the callee of the construction.
+type_end := (tokens: Tokens, value: Expression) ->
+  case value
+    when Member
+      name := tokens.at(value.name.position) ? return nil
+      name - 1
+    when Call then after_callee(tokens, value)
+    else nil
+
+# The annotation with each value written without its type, in one edit, as without them the type
+# would be left out again (see Type annotations); only reported where a construction is written
+# without parentheses.
+written := (tokens: Tokens, at: Position, annotation: Change, values: Expression[]) ->
+  changes := [annotation]
+  for value in values
+    case value
+      when Member
+        start := tokens.at(value.position) ? return nil
+        name := tokens.at(value.name.position) ? return nil
+        changes.push { from: tokens.start(start), to: tokens.start(name), text: '' }
+      when Call
+        record :=
+          record_changes(tokens, value) ? return tokens.report(EXPECTED_TYPES, value.position)
+        changes.push each for each in record
+      else return nil
+  tokens.edit_at EXPECTED_TYPES, at, changes

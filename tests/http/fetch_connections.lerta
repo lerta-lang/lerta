@@ -8,21 +8,23 @@ import RawRequest, raw_server, Reply from './lib/raw_server'
 
 ok := (body: String) -> "HTTP/1.1 200 OK\r\ncontent-length: #{body.binary.length}\r\n\r\n#{body}"
 
-reply := (request: RawRequest) ->
+reply := (request: RawRequest): Reply ->
   path := request.line.split(' ')[1]
   answer := "#{path} on #{request.connection}"
   case path
     when '/close'
-      Reply
+      {
         text: "HTTP/1.1 200 OK\r\nconnection: close\r\ncontent-length: " +
           "#{answer.binary.length}\r\n\r\n#{answer}"
         close: true
+      }
     when '/old'
-      Reply
+      {
         text: "HTTP/1.0 200 OK\r\ncontent-length: #{answer.binary.length}\r\n\r\n#{answer}"
         close: true
+      }
     # Closed although the response keeps it alive, as by a server whose idle timeout has passed.
-    when '/drop' then Reply(text: ok(answer), close: true)
+    when '/drop' then { text: ok(answer), close: true }
     when '/head' then Reply("HTTP/1.1 200 OK\r\ncontent-length: 5\r\n\r\n")
     when '/no-content' then Reply("HTTP/1.1 204 No Content\r\n\r\n")
     when '/not-modified' then Reply("HTTP/1.1 304 Not Modified\r\n\r\n")

@@ -32,20 +32,20 @@ struct Tested
   condition_value: Bool
   is_type: UnionMember?
 
-tested := (body: Body, condition: Condition) ->
+tested := (body: Body, condition: Condition): Tested? ->
   case condition
-    when Identifier, Member then Tested(value: condition, condition_value: true)
+    when Identifier, Member then { value: condition, condition_value: true }
     when IsTest
       value := condition.value
       return nil unless is_name_or_member(value)
-      Tested value, condition_value: true, is_type: condition.type
+      { value, condition_value: true, is_type: condition.type }
     when BinaryOperation
       operator := condition.operator
       return nil unless is_equality_operator(operator)
       if value := nil_tested(condition.left, condition.right)
-        return Tested(value, condition_value: operator == '!=')
+        return { value, condition_value: operator == '!=' }
       value := value_tested(body, condition.left, condition.right) ? return nil
-      Tested value, condition_value: operator == '=='
+      { value, condition_value: operator == '==' }
     else nil
 
 is_name_or_member := (value: Expression) -> value is Identifier or value is Member
@@ -109,9 +109,9 @@ narrowings_of_logical := (body: Body, logical: BinaryOperation) ->
     second = narrowings_where(narrowings_of(body, logical.right), value)
   narrowings_only_where [first..., second...], value
 
-narrowings_only_where := (narrowings: Narrowing[], value: Bool) ->
-  return ConditionNarrowings(where_true: narrowings, where_false: []) if value
-  ConditionNarrowings where_true: [], where_false: narrowings
+narrowings_only_where := (narrowings: Narrowing[], value: Bool): ConditionNarrowings ->
+  return { where_true: narrowings, where_false: [] } if value
+  { where_true: [], where_false: narrowings }
 
 # Runs `check` where the right operand of `a and b` is evaluated, which is where a holds, or of
 # `a or b`, where a does not.

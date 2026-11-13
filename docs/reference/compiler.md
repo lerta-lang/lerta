@@ -300,6 +300,7 @@ The rewrites below depend on the checking of a program that holds the file.
 | [Type annotations left out](#type-annotations-left-out) | [Type annotations](style.md#type-annotations) |
 | [Enum members written alone](#enum-members-written-alone) | [Expected types](style.md#expected-types) |
 | [Structs constructed with `{}`](#structs-constructed-with-) | [Expected types](style.md#expected-types) |
+| [Types written once](#types-written-once) | [Expected types](style.md#expected-types) |
 | [Named arguments written alone](#named-arguments-written-alone) | [Shorthand](style.md#shorthand) |
 | [Membership tests written with `in`](#membership-tests-written-with-in) | [Membership tests](style.md#membership-tests), [Negated in tests](style.md#negated-in-tests) |
 | [Range tests written with `in`](#range-tests-written-with-in) | [Range tests](style.md#range-tests) |
@@ -348,8 +349,15 @@ Besides:
 
 - It writes a construction of a struct, `S(x: 1)`, as `{ x: 1 }` where `S` is expected.
 - Not where the expected type comes only from the other items of an array or a map, nor as the left operand of `==`.
-- It writes a variable or a field without a type whose value is an array of a struct that is not generic, `xs := [S(x: 1), s]`, with the type, as the first construction names it, and each construction in the array that a record can write as a record: `xs: S[] = [{ x: 1 }, s]`. Not an array where no construction gives an argument but a value alone.
-- A construction without parentheses is only reported.
+- A construction without parentheses is written so too, its arguments running to the end of its line or of the block below it: `{` for the name, and `}` after the arguments, on a line of its own where they take lines.
+- A construction of type arguments is only reported.
+
+#### Types written once
+
+- It writes the type of a variable or a field without one, from the values that give it: the items of an array literal, or else the value itself, or the values of its branches, of `then`/`else`, a `case`, an `if` or a `try`, and of those inside them.
+- It writes the return type of a function without one that is the value of such a variable or field, from its results: the values that it returns and its last value, and the values of their branches likewise. Not of a function that awaits or yields, nor of a generic one or one in generic code.
+- Where two or more of those values, of the type or of the type that it makes optional, are members of the enum written with it, `E.A`, whose names nothing takes, or constructions of the struct, not generic, that give an argument but a value alone: or one or more, for the items of an array of a struct.
+- The type is written as the first of them names it, `[]` after it for an array, and `?` for an optional; in the same edit, each of them is written alone or as a record, as without them the type would be left out again (see [Type annotations left out](#type-annotations-left-out)): `xs := [E.A, E.B]` as `xs: E[] = [A, B]`, `f := (n: Int) -> n == 0 then S(x: 0) else S(x: n)` as `f := (n: Int): S -> n == 0 then { x: 0 } else { x: n }`.
 
 #### Named arguments written alone
 

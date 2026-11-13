@@ -309,14 +309,14 @@ class Layout
 
   decide := (gap: Gap, index: Int) ->
     { tokens } := @text
-    decision :=
+    decision: Decision =
       case
-        when index == 0 then Decision(text: '', rule: LAYOUT)
-        when index == tokens.length then Decision(text: "\n", rule: ending_rule(gap))
+        when index == 0 then { text: '', rule: LAYOUT }
+        when index == tokens.length then { text: "\n", rule: ending_rule(gap) }
         else @decide_before(tokens[index], gap)
     @decisions.push decision
 
-  decide_before := (token: TextToken, gap: Gap) ->
+  decide_before := (token: TextToken, gap: Gap): Decision ->
     { code } := @text
     has_code := token.next_code < code.length
     code_gap := has_code then @code_gaps[token.next_code] else END
@@ -325,11 +325,11 @@ class Layout
     if comment and not comment.own_line
       # That of a statement that the walk skips keeps its place as written.
       return @kept(gap) if token.next_code - 1 in @skipped
-      return Decision(text: '  ', rule: COMMENTS)
+      return { text: '  ', rule: COMMENTS }
     case code_gap
       when Spaces
         rule := "\n" in gap.text then code_gap.joined else code_gap.rule
-        Decision rule, text: ' '.repeat(code_gap.count)
+        { rule, text: ' '.repeat(code_gap.count) }
       when LineStart
         next_column := has_code then code[token.next_code].column else 1
         # A comment before a dedent indented deeper than the line after it, as at the end of a
@@ -348,11 +348,11 @@ class Layout
   # A gap that the walk does not decide keeps its source text, spaces at the ends of lines too,
   # unreported, as the walk vouches only for the statements that it handles; but the indentation
   # after it moves with the line start before it.
-  kept := (gap: Gap) ->
+  kept := (gap: Gap): Decision ->
     { text } := gap
-    return Decision(text, rule: LAYOUT) unless "\n" in text
+    return { text, rule: LAYOUT } unless "\n" in text
     head := text.binary[..(text.binary.length - indentation(text))].text()!
-    Decision text: head + ' '.repeat(max(0, indentation(text) + @shift)), rule: LAYOUT
+    { text: head + ' '.repeat(max(0, indentation(text) + @shift)), rule: LAYOUT }
 
   # The lines of a `"""` or `'''` literal after its first are one level deeper than the line that
   # it starts on (see Multi-line literals), or move with it in a statement that the walk skips.

@@ -1,0 +1,121 @@
+# The type that the values of a variable, a field or a function give is written for it where two or
+# more of them name it: the members of an enum are then written alone, and the constructions of a
+# struct as records.
+import 'std:io' as io
+import sleep from 'std:time'
+
+enum Color
+  RED
+  GREEN
+  BLUE
+
+struct Point
+  x: Int
+
+flag := true
+
+# Of a function's results: its last value, through its branches, and the values that it returns.
+pick := (n: Int): Color ->
+  case
+    when n == 0 then RED
+    when n == 1 then GREEN
+    else BLUE
+early := (n: Int): Color ->
+  return RED if n == 0
+  GREEN
+bare := (): Color -> flag then RED else BLUE
+maybe := (n: Int): Color? ->
+  return nil if n < 0
+  n == 0 then RED else GREEN
+points := (n: Int): Point -> n == 0 then { x: 0 } else { x: n }
+kind := (): io.FileKind -> flag then FILE else DIR
+# A construction without parentheses: its arguments on its line, in a block below it, or with a
+# function last whose body takes the lines below.
+unwrapped := (n: Int): Pair ->
+  return { first: 0, second: -> 0 } if n == 0
+  if n == 1
+    { first: 1, second: -> 1 }
+  else
+    { first: n, second: ->
+      print n
+      n
+    }
+struct Pair
+  first: Int
+  second: () -> Int
+# Of `if` and `try` values, and of arms whose constructions take no parentheses.
+by_if := (n: Int): Color ->
+  if n == 0
+    RED
+  else
+    GREEN
+by_try := (): Color ->
+  try
+    RED
+  catch _: Error
+    BLUE
+# Of a `return` in a loop, and of a function in another, which gives the outer one no type.
+first_red := (ns: Int[]): Color ->
+  for n in ns
+    return RED if n == 0
+  GREEN
+outer := (n: Int) ->
+  inner := (): Color -> n == 0 then RED else GREEN
+  inner()
+arms := (n: Int): Point ->
+  case n
+    when 0 then { x: 0 }
+    when 1 then { x: 1 }
+    else { x: n }
+
+# Of a variable's or a field's branches, and an array's items.
+chosen: Color = flag then RED else GREEN
+var changing: Color = flag then RED else GREEN
+changing = BLUE
+colors: Color[] = [RED, GREEN]
+mixed: Color[] = [pick(0), RED, flag then GREEN else BLUE]
+pair: Point = flag then { x: 1 } else { x: 2 }
+nested: Color? = flag then RED else not flag then GREEN
+optionals: Color?[] = [maybe(1), RED, GREEN]
+
+class Holder
+  color: Color = flag then RED else GREEN
+  colors: Color[] = default [RED, BLUE]
+  typed: Color = flag then RED else GREEN
+  shade := (n: Int): Color -> n == 0 then RED else BLUE
+
+# Not where only one value names it, nor where a type is written or expected, nor of a function
+# that a function type is expected for, nor of one that awaits or that is generic; nor where a
+# name takes the member's.
+one := -> Color.RED
+single := [Color.RED]
+point := flag then Point(x: 1) else pair
+written: Color = flag then RED else GREEN
+typed := (n: Int): Color -> n == 0 then RED else GREEN
+called := [[0, 1].map((n) -> n == 0 then Color.RED else Color.GREEN)...]
+later := (n: Int) ->
+  await sleep(0.0)
+  n == 0 then Color.RED else Color.GREEN
+generic := <T>(value: T) -> flag then Color.RED else Color.GREEN
+taken := (RED: Int) -> RED == 0 then Color.RED else Color.GREEN
+# Nor where the other values do not name it, of another type or of a generic struct.
+returned := (n: Int) ->
+  return Color.RED if n == 0
+  pick n
+struct Box<T>
+  value: T
+boxes := flag then Box(value: 1) else Box(value: 2)
+enum Shade
+  LIGHT
+  DARK
+either := flag then Color.RED else Shade.DARK
+
+print "#{pick(1)} #{early(0)} #{bare()} #{maybe(1) ? Color.BLUE} #{points(1).x} #{kind()}"
+print "#{chosen} #{changing} #{colors.length} #{mixed.length} #{pair.x} #{Holder().color}"
+print "#{one()} #{single.length} #{point.x} #{written} #{typed(0)} #{called.length}"
+print "#{await later(1)} #{generic(1)} #{taken(0)} #{Holder().colors.length}"
+print "#{unwrapped(0).first} #{unwrapped(1).second()} #{unwrapped(2).second()}"
+print "#{by_if(0)} #{by_try()} #{arms(0).x} #{arms(1).x} #{arms(2).x} #{Holder().typed}"
+print "#{returned(1)} #{boxes.value} #{either == Color.RED}"
+print
+  "#{first_red([1, 0])} #{outer(1)} #{nested ? Color.BLUE} #{optionals.length} #{Holder().shade(0)}"
