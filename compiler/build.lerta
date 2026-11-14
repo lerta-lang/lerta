@@ -223,12 +223,13 @@ link_path := (cwd: String, path: String) -> is_absolute(path) then path else "#{
 compile_modules := (request: ModulesRequest, dir: String, prefix: String) ->
   { program, modules, runtime } := request
   names := ["#{prefix}module#{i}" for _ at i in modules]
-  cached_of := (key: String, ir: String[]) ->
-    if is_standard_name(key)
-      cached_module_object(runtime, ir)
-    else
-      nil
-  cached := [cached_of(module.key, ir) for (module, ir) in program.modules.zip(modules)]
+  cached := [
+    for (module, ir) in program.modules.zip(modules)
+      if is_standard_name(module.key)
+        cached_module_object(runtime, ir)
+      else
+        nil
+  ]
   reused := [path and is_file(path) for path in cached]
   compiled := [i for is_reused at i in reused when not is_reused]
   for i in compiled
@@ -250,12 +251,13 @@ compile_modules := (request: ModulesRequest, dir: String, prefix: String) ->
   # entry of the linker's ThinLTO cache on Linux holds the paths of the objects, which the next
   # build would not find otherwise. The link runs in `dir`, and the cache may be named relative to
   # where the compiler runs.
-  object_of := (name: String, path: String?) ->
-    if path and is_file(path)
-      real_path(path)
-    else
-      "#{name}.o"
-  [object_of(name, path) for (name, path) in names.zip(cached)]
+  [
+    for (name, path) in names.zip(cached)
+      if path and is_file(path)
+        real_path(path)
+      else
+        "#{name}.o"
+  ]
 
 # The modules that compile_modules compiles: the IR of each of the program's modules, and the
 # runtime for the build's kind, with the flags of that kind.
