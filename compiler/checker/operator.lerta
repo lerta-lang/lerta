@@ -72,8 +72,10 @@ export describe_kinds := (kinds: TypeKind[]) ->
   integers := INTEGER_KINDS.all((kind) -> kind in kinds)
   name := (kind: TypeKind) -> kind == ENUM then 'an enum' else kind.to_string()
   others := [name(kind) for kind in kinds when not (integers and kind in INTEGER_KINDS)]
+
   # All the integer types are named as one, first.
   names := integers then ['an integer type', others...] else others
+
   return names[0] if names.length == 1
   "#{names.all_but_last().join(', ')} or #{names.last()!}"
 
@@ -193,18 +195,22 @@ type_of_range_test := (body: Body, binary: BinaryOperation, range: Range) ->
 type_of_in_test := (body: Body, binary: BinaryOperation) ->
   { left, right, position } := binary
   expected := expected_container(body, binary)
+
   # The call of contains types the literal again, and takes its type from here.
   body.retyped_hints[right] = expected if expected and right is ArrayLiteral
   container := type_of(body, right, expected)
+
   contains := member_type_by_name(body, container, Identifier(position, name: 'contains'))
   unless contains
     message := "#{format_type(container)} has no contains, by which `in` applies"
     fail body.program, right.position, message
   reject_optional_item body, left, contains
+
   # The item is typed by the call, as the parameter's type may decide it, as of `[]`, but for the
   # Char that a String takes.
   text := is_kind(container, 'String') then char_as_text(container, type_of(body, left), left)
   call := method_call(right, 'contains', [text then text else left], position)
+
   body.facts.in_tests[binary] = call
   result := type_of(body, call)
   if result != bool_type
@@ -233,8 +239,10 @@ expected_container := (body: Body, binary: BinaryOperation) ->
   return nil if right is not ArrayLiteral or takes_context(body, left)
   return nil unless right.elements.all((item) -> takes_context(body, item))
   item := inner_of(type_of(body, left))
+
   # One that does not compare is typed as before, so that the error is not reported in contains.
   return nil unless compares_by_bounds(body, item, binary.position)
+
   ArrayType(item)
 
 # The call of `to_string()` of a Char that a String's contains takes, as `+` appends one: nil for
@@ -322,15 +330,19 @@ type_of_operation_call := (
   right_first: Bool, allowed_kinds: TypeKind[]
 ): Type? ->
   { left, right, operator } := binary
+
   # A string literal on the left of a Char, which no Char's method takes, is
   # the String it appends to.
   if right_first and operator == '+' and is_kind(type, 'Char') and second is StringLiteral
     expect_type body, second, string_type
     return string_type
+
   return nil if not is_numeric_operator(operator) or is_one_of_kinds(type, allowed_kinds)
+
   # The method is that of the left operand.
   name := OPERATOR_METHODS[operator]!
   return type_of_operator_call(body, binary, operator, left, type, name, [right]) unless right_first
+
   has_method := member_type_by_name(body, type, Identifier(name, position: first.position)) != nil
   if has_method or type is ObjectType
     message := "#{operator} calls the #{name} of its left operand, not of #{format_type(type)}"

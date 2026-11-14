@@ -76,6 +76,7 @@ extend Walker
       gap = NONE
       groups += 1
     @ungrouped_type type, gap
+
     # The `?` of a named type follows its name, as in `(Int?)[]`, and that of another its brackets.
     named := type is NamedType
     @take '?', NONE if optional and named
@@ -95,10 +96,12 @@ extend Walker
     case type
       when NamedType
         @take IDENTIFIER, before
+
         # `module.Name`, whose name holds the `.`.
         for _ in type.name.split('.')[1..]
           @take '.', NONE
           @take IDENTIFIER, NONE
+
         @type_arguments type.args
       when UnionTypeName
         for member at i in type.members
@@ -145,11 +148,13 @@ extend Walker
   expression := (node: Expression, before: CodeGap): void ->
     outer_groups := @open_groups
     @open_groups = 0
+
     # The expression's members are a chain of their own, not of one that it is part of.
     outer_dots := @chain_dots
     @chain_dots = nil
     @chain node, before
     @chain_dots = outer_dots
+
     unhandled() if @open_groups != 0
     @open_groups = outer_groups
 
@@ -163,12 +168,14 @@ extend Walker
       @take_before_operand '(', first
       first = NONE
       @open_groups += 1
+
     # An operation in parentheses stays on its line, which its `)` would end otherwise.
     breaks := @breaks_operations
     @node_breaks = breaks
     @breaks_operations = false if groups > 0
     @node node, first
     @breaks_operations = breaks
+
     while @open_groups > 0 and @at_kind(')')
       @take ')', NONE
       @open_groups -= 1
@@ -244,9 +251,11 @@ extend Walker
   # in a block, which has its members on the line after the block (see Multi-line literals).
   link := (node: Member | Call | Index, before: CodeGap): void ->
     return @walk_link(node, before) if @chain_dots != nil
+
     # Whether the chain is a whole value, as it was before the parentheses at its start, which may
     # close before its first `.`, as those of `(a + b).c()` do.
     breaks := @node_breaks
+
     first := @at
     outer := @shapes
     @shapes = []
@@ -258,6 +267,7 @@ extend Walker
     @chain_dots = nil
     inner := @shapes
     @shapes = outer
+
     # A call without parentheses, as `ir.module.declare` and its arguments in a block, takes them
     # after its last member, on its line.
     is_unbracketed := (shape: Shape) -> shape is ListShape and not shape.bracketed
@@ -268,6 +278,7 @@ extend Walker
       not @chain_nil_safe and
       not @chain_in_group and
       literal_under_members(node) == nil
+
     # The shapes inside follow it: a call's arguments stay the last shapes of its statement.
     @shapes.push ChainShape(first, dots, last: @at - 1) if is_chain
     kept := [dot for dot in dots when dot in @line_starts]
@@ -282,6 +293,7 @@ extend Walker
       when Index
         @chain node.object, before
         { index, default_value } := node
+
         # `xs[i, default: value]`: the index, then its default.
         walk := (i: Int, gap: CodeGap) ->
           if i == 0
@@ -376,12 +388,15 @@ extend Walker
     else
       @chain node.object, before
       object := node.object as Identifier?
+
       # Of `x?.y`, whose rest is in the `?.`, not after the value so far, as a member line would be.
       is_nil_safe := object != nil and object.name.starts_with('?')
       @chain_dots!.push(@at)
       @chain_nil_safe = true if is_nil_safe
+
       # Inside parentheses, as of `(a.b().c())`, where a member line would be an item.
       @chain_in_group = true if @open_groups > 0
+
       @take '.', NONE
     @take(IDENTIFIER, NONE)
 
@@ -491,6 +506,7 @@ extend Walker
       if test := node.operand as IsTest?
         @is_test test, before, true
         return
+
       # `x not in xs`, which is read as `not (x in xs)`.
       test := node.operand as BinaryOperation ? unhandled()
       unhandled() if test.operator != 'in'
@@ -554,8 +570,10 @@ extend Walker
 
   map := (node: MapLiteral, before: CodeGap) ->
     { entries } := node
+
     # A value in a block goes on the next line where it does not fit on its own, as after `=`.
     in_block := is_written_in_block(node)
+
     walk := (i: Int, gap: CodeGap) ->
       @expression entries[i].key, gap
       @value @take(':', NONE), entries[i].value, in_block
@@ -582,6 +600,7 @@ extend Walker
       count: spread_count + fields.length
       simple: (i) -> i >= spread_count and is_simple(fields[i - spread_count].value)
       function_last: [field.value for field in fields].last() is FunctionLiteral
+
     # `{}`, of no fields, has no space inside.
     @literal node, '{', before, '}', items.count == 0 then NONE else INSIDE, items
 

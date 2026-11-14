@@ -22,18 +22,23 @@ export class Server
     listener: Listener
     handler: (Request) -> Promise<Response>
     options: ServerOptions
+
     # Where it listens, as the host of the URL of a request that names none.
     address: String
   port := @listener.port
   private
     var closed = false
+
     # The connections that wait for their next request, before the whole of its request line has
     # come.
     waiting := Set<Socket>()
+
     # The connections that read and drop what the client still sends, before they close.
     lingering := Set<Socket>()
+
     # The connections that have not ended.
     var connections = 0
+
     # Resolved once the server is closed and no connection is left, which close waits for.
     ended := Signal()
 
@@ -82,6 +87,7 @@ accept_all := (server: Server) ->
       catch error: IOError
         return if server.closed
         throw error
+
     # Taken as the server was closed: close may have found no connection left and resolved already,
     # so it is closed rather than served, which would count it only after that.
     if server.closed
@@ -161,9 +167,11 @@ respond := (socket: Socket, server: Server, incoming: Incoming) ->
       return false
   { body } := response
   sends_reader := body is Reader and has_body(response.status, method)
+
   # A body sent as it comes may read the request's body once the head has gone, too late for 100
   # Continue, which goes before the head then.
   await incoming.body.send_continue() if sends_reader
+
   # A body whose read has failed cannot be read past to the next request, nor can one that the
   # client holds back until 100 Continue, which it was not sent; and one sent as it comes to
   # HTTP/1.0 ends with the connection.
@@ -171,6 +179,7 @@ respond := (socket: Socket, server: Server, incoming: Incoming) ->
   goes_on := incoming.keep_alive and not server.closed
   body_left := incoming.body.failure == nil and incoming.body.continue_on == nil
   keep_alive := goes_on and body_left and (chunked or not sends_reader)
+
   try
     bytes :=
       try
@@ -198,8 +207,10 @@ read_request := (socket: Socket, server: Server, deadline: Deadline) ->
   { reader } := socket
   options := server.options
   server.waiting.add socket
+
   # A connection that the server took before it was closed.
   socket.close() if server.closed
+
   line :=
     try
       await read_request_line(reader, options, deadline) ? return nil

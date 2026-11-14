@@ -29,57 +29,79 @@ from '../types'
 export class FieldInfo
   args
     name: Identifier
+
     # Nil until found, for a field given by an initializer alone.
     var type: Type?
+
     mutable: Bool
+
     # The initializer, or the default of a constructor argument (see is_argument).
     value: Expression?
     has_default: Bool
+
     # A weak field of a type with `!` holds its object without keeping it alive (see codegen weak).
     weak: Bool
 
 export class ObjectInfo
   args
     declaration: TypeDeclaration
+
     # A generic one's type parameters stand for themselves as its type arguments.
     type: ObjectType
+
     # The declaring module, whose functions hold the methods' types.
     module_index: Int
+
     # Resolves the fields' types and checks the initializers: the module's, with the type parameters
     # standing for themselves, or for an instance's type arguments.
     resolver: Resolver
+
     # What is found of the initializers' nodes: the module's, or an instance's own.
     facts: NodeFacts
+
     # Of an instance: the generic class or struct, which holds it among its instances, and so only
     # refers to it back, and the instances of its init and deinit.
     weak generic: ObjectInfo?
     var init: Instance?
     var deinit: Instance?
+
   # The instances of its own equals, compare and hash, of an instance of a generic class or struct
   # (see check_equality_methods).
   comparison_instances: Map<String, Instance> = Map()
+
   var fields: FieldInfo[] = []
+
   # The interface that the declaration says it satisfies, with the type arguments of an instance.
   var satisfies: InterfaceType?
+
   # Of a generic class or struct: the interface types that bound its type parameters (see
   # object_bounds).
   var bounds: InterfaceType?[] = []
+
   var methods: Map<String, FunctionLiteral> = Map()
+
   # The generic methods, those with type parameters, which have instances instead of a function.
   var generics: Map<String, GenericRef> = Map()
+
   var has_init = false
+
   # The members declared `private`, which only the code of its module reaches.
   var private_names = Set<String>()
+
   # `deinit`, which runs when the object is released (see runtime lerta_run_deinit).
   var has_deinit = false
+
   private var state: CheckState = UNCHECKED
+
   # Of a generic class or struct, whose type arguments make them.
   instances: ObjectInfo[] = []
+
   # Of a generic class or struct: those of type arguments that stand for themselves, which bodies
   # checked at their definitions read, and codegen never sees. The first, its definition, is of
   # its own type parameters, whose initializers it checks once; the others' fields have the types
   # that its fields have.
   standing: ObjectInfo[] = []
+
   # Of an instance: whether its written field types are checked (see reject_invalid_type).
   var fields_checked = false
 
@@ -143,9 +165,11 @@ export written_types := (member: MemberDeclaration) ->
 add_interface_fields := (shared: Shared, info: ObjectInfo, declared: Set<String>) ->
   program := shared.program
   written := info.declaration.satisfies!
+
   # As a bound, an interface whose members name Self can be named.
   interface_type := bound_interface(program, info.resolver, written)
   info.satisfies = interface_type
+
   field_of := (member: InterfaceMember) ->
     name := Identifier(name: member.name, position: written.position)
     FieldInfo(name, type: member.type, mutable: false, value: nil, has_default: false, weak: false)
@@ -204,6 +228,7 @@ add_method := (
   fail program, literal.position, "#{name} cannot await" if runs_alone and literal.awaits
   if name == 'init'
     info.has_init = true
+
     # Construction takes no value from it: that of its last expression is released as a
     # statement's is.
     written := literal.return_type
@@ -213,10 +238,12 @@ add_method := (
     fail program, member.position, 'a struct has no deinit'
   info.has_deinit = true if name == 'deinit'
   info.methods[name] = literal
+
   # Those of a generic class or struct are generic, as those of an extend of a generic type are.
   if literal.type_params.is_empty() and not is_generic_object(info)
     add_function shared, method_key(type_name, name), member.name, literal, info.type
     return
+
   receiver := Receiver(type: info.type, type_params: info.declaration.type_params)
   generic := make_generic_function(shared, member.name, literal, receiver)
   info.generics[name] = add_generic(shared, generic)
@@ -240,9 +267,11 @@ field_of_member := (shared: Shared, info: ObjectInfo, member: MemberDeclaration)
   reject_invalid_weak program, member, is_struct, type if weak
   is_argument := is_struct or member.in_args
   reject_unset_field program, member, type unless is_argument
+
   # A `var` of an optional type starts nil, as a local does.
   var value = member.value
   value = NilLiteral(member.position) if value == nil and not is_argument
+
   mutable := member.is_mutable()
   FieldInfo(
     type
@@ -297,8 +326,10 @@ export object_type := (shared: Shared, name: String) ->
 # demand, once the generic one's members are known.
 export info_of := (program: ProgramWide, type: ObjectType) ->
   declared := program.infos[type.symbol]!
+
   # A pattern, as the receiver of `extend<T> Stack<T>`, stands for any instance.
   return declared if type == declared.type or type.args.any(is_pattern)
+
   is_same := (instance: ObjectInfo) -> instance.type == type
   if type.args.any(has_standing)
     # The definition is the first view.
@@ -411,11 +442,13 @@ check_all_satisfy := (program: ProgramWide, infos: ObjectInfo[]) ->
 # that they give. An instance gets the instances of its generic's init and deinit.
 check_info := (program: ProgramWide, info: ObjectInfo): void ->
   return if info.state != UNCHECKED
+
   # As a generic function's, an instance of one whose definition has an error is not checked.
   if generic := info.generic
     if info not in generic.standing and check_definition_of(program, generic) == FAILED
       info.state = FAILED
       return
+
   info.state = CHECKING
   check := (): void ->
     reject_endless_instance program, info
@@ -436,9 +469,11 @@ check_info := (program: ProgramWide, info: ObjectInfo): void ->
 reject_endless_instance := (program: ProgramWide, info: ObjectInfo): void ->
   generic := info.generic ? return
   too_deep := info.type.args.any((type) -> type_depth(type) > MAX_TYPE_DEPTH)
+
   # The instance is counted already, as a generic function's is not before it is added.
   too_many := generic.instances.length > MAX_INSTANCES
   return if not too_deep and not too_many
+
   shared := program.shared[info.module_index]
   enter_module shared
   { name, position } := info.declaration.name

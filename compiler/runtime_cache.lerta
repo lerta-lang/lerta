@@ -116,6 +116,7 @@ export cached_include_dir := ->
   path := join(dir, base_name(HEADER_PATH))
   return real_path(dir) if is_file(path)
   make_dir dir
+
   # Written beside its place and renamed there, so that a build that runs meanwhile never reads a
   # part of it. Another that renames its own there first wrote the same header; on Windows, renaming
   # onto it fails while a build reads it.
@@ -125,6 +126,7 @@ export cached_include_dir := ->
     await remove_tree(staging_path)
     failed := CompileError("cannot write the runtime's header into the cache: #{path}")
     throw failed unless is_file(path)
+
   real_path(dir)
 
 # What `clang --version` prints, or nil if clang fails.
@@ -265,6 +267,7 @@ compile_runtime := (kind: BuildKind, build: PlatformBuild, staging_dir: String, 
     await write_file(join(source_dir, base_name(path)), embedded_source(path)!)
   libuv_dir := join(temp_dir, 'libuv')
   libuv_includes := await write_libuv_sources(libuv_dir)
+
   # uv.h, which the runtime includes, asks nothing of its users but where it is; libuv's own flags
   # are for its sources, whose warnings are not the program's, which a build prints.
   flags := build_flags(kind) + libuv_includes
@@ -274,6 +277,7 @@ compile_runtime := (kind: BuildKind, build: PlatformBuild, staging_dir: String, 
   libuv_job := (path: String) ->
     object := join(staging_dir, libuv_object_name(path))
     ['-c', libuv_flags..., join(libuv_dir, path), '-o', object]
+
   jobs := [
     [runtime_job(path) for path in c_paths(build)]...
     [libuv_job(path) for path in build.libuv_sources]...
@@ -327,11 +331,13 @@ is_complete := (files: String[]) -> files.all(is_file)
 # which is as good.
 move_into_place := (staging_dir: String, dir: String, files: String[]) ->
   return if renamed(staging_dir, dir)
+
   # POSIX renames a directory onto an empty one; Windows renames it onto none.
   if is_dir(dir) and list_dir(dir).is_empty()
     await remove_tree(dir)
     return if renamed(staging_dir, dir)
   await remove_tree(staging_dir)
+
   unless is_complete(files)
     throw CompileError("cannot move the compiled runtime into the cache: #{dir}")
 

@@ -77,6 +77,7 @@ generate_named_call := (g: Generator, call: Call, callee: Identifier) ->
       emit_call := (operands: String[]) ->
         emit_runtime_call(g.ir, reference.symbol, function_type_of(callee_type()), operands)
       result := borrowing_all(g, args, emit_call)
+
       # A C function of the runtime may throw (see lerta_raise).
       emit_exception_check g
       result
@@ -111,10 +112,12 @@ generate_new_map := (g: Generator, call: Call, map_type: MapType) ->
 generate_filled_array := (g: Generator, call: Call, type: ArrayType) ->
   fill := (operands: String[]) ->
     array := emit_array_filled(g.ir, operands[0], operands[1], type.element)
+
     # After the check: a negative length throws and gives no array, which the assumption would
     # then not hold of.
     emit_exception_check g
     emit_assume_length g.ir, array, operands[0]
+
     array
   borrowing_all(g, call.args, fill)
 
@@ -161,6 +164,7 @@ generate_method_call := (g: Generator, call: Call, member: Member, source: Metho
     return generate_inlined_method(g, call, member, instance)
   receiver := deferred_value(g, member.object)
   object_type := type_of(g, receiver)
+
   # An Iter's has_next and next run the code of its kind, which may throw.
   if source is BuiltinMethod and takes_object(source.member)
     # The object is owned, and held until the Iter's method takes it over.
@@ -171,6 +175,7 @@ generate_method_call := (g: Generator, call: Call, member: Member, source: Metho
     result := holding(g, object, object_type, call_iter)
     emit_exception_check g
     return result
+
   (object, is_owned) := generate_borrowed(g, receiver, arguments_of(g.facts, call))
   call_method := ->
     emit_call := (operands: String[]) ->
@@ -199,6 +204,7 @@ export generate_in_test := (g: Generator, call: Call) ->
     )
     check_after_method g, target.source, object_type
     return result
+
   # A field that holds a function, which the call owns and releases, as call_closure does.
   field_type := type_of(g, member)
   result := borrowing_all(g, [argument, object], (operands) ->
@@ -209,6 +215,7 @@ export generate_in_test := (g: Generator, call: Call) ->
     emit_release g.ir, closure
     called
   )
+
   emit_exception_check g
   result
 
@@ -248,9 +255,11 @@ export emit_method_call := (
       if source.member == OPERATOR
         return apply_operator_method(g, call.name, object, call.operands, object_type)
       return emit_by_parts(g, source, id, object, call.operands) if id := source.parts
+
       # A conversion between integer types gives nil where the value does not fit.
       if source.member == INTEGER_CONVERSION
         return emit_conversion(g.ir, object, object_type, function_type_of(source.type).result)
+
       { program } := g.code
       { operands, check } := call
       call_builtin_method(g.ir, program, source.member, object, object_type, operands, check)
@@ -302,6 +311,7 @@ call_function := (
   emit_call := (operands: String[]) ->
     emit_function_call(g, symbol, type, typed_arguments(g, args, operands), receiver)
   result := borrowing_all(g, args, emit_call)
+
   # A method's receiver is released after the check.
   emit_exception_check g if receiver == nil
   result
@@ -382,6 +392,7 @@ generate_construction := (g: Generator, call: Call, type: ObjectType) ->
       args.push "#{ir_type(field_type)} #{passed}"
       args.push "i1 #{value != nil}" if field.has_default
     g.ir.assign("call ptr #{constructor_symbol(info.type)}(#{args.join(', ')})")
+
   # The constructor takes the arguments over, owned.
   object := holding_all(g, [arg.value for arg in named_args], construct)
   emit_exception_check g

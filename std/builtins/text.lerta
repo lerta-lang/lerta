@@ -4,11 +4,14 @@ import is_control from '../internal/chars'
 import double_quoted from '../internal/escape'
 import char_at, lerta_binary_text, lerta_string_slice, sequence_length from '../internal/utf8'
 import INFINITY from './numbers'
+
 # Writes at once, unlike std:io's Writer (see runtime/io.c).
 extern lerta_print_stdout: (String) -> void
 extern lerta_print_stderr: (String) -> void
+
 # The bits of the double that a decimal text rounds to, or -1 if it is too large to be finite.
 extern lerta_float_literal_bits: (String) -> Int
+
 extern lerta_float_from_bits: (Int) -> Float
 
 # The types that have `to_string()`, which print and interpolation require.
@@ -62,8 +65,10 @@ extend Char
   to_string := ->
     code := @to_int()
     ASCII_TEXTS.get(code) ? text_of(@)
+
   # Quoted as a String of the one Char is.
   to_literal := -> @to_string().to_literal()
+
   # True only for ASCII characters: a digit, letter or space beyond them, as `０`, `é` or U+3000,
   # is in no class.
   is_digit := -> @ in '0'..='9'
@@ -72,11 +77,14 @@ extend Char
   is_lower := -> @ in 'a'..='z'
   is_upper := -> @ in 'A'..='Z'
   is_space := -> @ in [' ', "\t", "\n", "\r"]
+
   # Only the ASCII letters change, as those of a String do.
   to_upper := -> mapped_ascii_char(@, upper_of)
   to_lower := -> mapped_ascii_char(@, lower_of)
+
   # That of the Byte of the same number (see Byte.hex_value), or nil above the Bytes.
   hex_value := -> @to_int().to_byte()?.hex_value()
+
   # The Char that many places on, or back, which throws where no Char is.
   add := (count: Int) -> (@to_int() + count).to_char() ? throw not_a_char()
   sub := (count: Int) -> (@to_int() - count).to_char() ? throw not_a_char()
@@ -98,15 +106,19 @@ not_a_char := -> ValueError('not a Unicode scalar value')
 extend String
   to_string := -> @
   is_empty := -> @binary.is_empty()
+
   # By code points, so a combining mark moves away from its base.
   reversed := -> [char for char in @].reversed().join()
+
   # In single quotes, or, for a String that holds a single quote or a control character, in
   # double quotes, with what they would take otherwise escaped.
   to_literal := ->
     return "'#{@}'" unless @any((c) -> c == "'" or is_control(c))
     double_quoted(@, escape_in_double_quotes)
+
   # The Chars.
   iter := (): Iter<Char> -> Chars(@binary)
+
   # The digits are accumulated as a negative number, which can hold the minimum Int.
   parse_int := ->
     bytes := @binary
@@ -122,6 +134,7 @@ extend String
       value = value * 10 - digit
     return nil if not negative and value == INT_MIN
     negative then value else -value
+
   # The Float that the text writes, as to_string writes it: an infinity as `inf` or `-inf`.
   parse_float := ->
     return INFINITY if @ == 'inf'
@@ -129,13 +142,16 @@ extend String
     return nil unless is_decimal_number(@binary)
     bits := lerta_float_literal_bits(@)
     bits != -1 then lerta_float_from_bits(bits)
+
   # A valid separator starts and ends at code points, so the pieces are cut at them.
   split := (separator: String) ->
     throw ValueError('split by an empty separator') if separator.is_empty()
     bytes := @binary
     separator_bytes := separator.binary
+
     # Taken as a Byte once, so that each index_of below goes straight to the search of a byte.
     part: Binary | Byte = separator_bytes.length == 1 then separator_bytes[0] else separator_bytes
+
     pieces: String[]
     var start = 0
     while found := bytes.index_of(part, start)
@@ -143,6 +159,7 @@ extend String
       start = found + separator_bytes.length
     pieces.push lerta_string_slice(@, start, bytes.length)
     pieces
+
   # The lines without their `\n` or `\r\n`, and no empty line after a last `\n`.
   # Only a piece that a `\n` ends loses its `\r`.
   lines := ->
@@ -151,6 +168,7 @@ extend String
     ended := [piece.without_suffix("\r") ? piece for piece in pieces[..(pieces.length - 1)]]
     ended.push rest unless rest.is_empty()
     ended
+
   # The pieces between runs of spaces (see is_space), none empty.
   split_whitespace := ->
     bytes := @binary
@@ -165,56 +183,71 @@ extend String
       words.push lerta_string_slice(@, start, end)
       start = end
     words
+
   starts_with := (prefix: String) -> @binary.starts_with(prefix.binary)
   ends_with := (suffix: String) -> @binary.ends_with(suffix.binary)
   without_prefix := (prefix: String) ->
     @starts_with(prefix) then @binary.text(prefix.binary.length)!
   without_suffix := (suffix: String) ->
     @ends_with(suffix) then @binary.text(0, @binary.length - suffix.binary.length)!
+
   # By the first byte that differs, or else by length, so that a prefix goes first.
   compare := (other: String) ->
     (bytes, other_bytes) := (@binary, other.binary)
     for i in 0..min(bytes.length, other_bytes.length)
       return bytes[i].compare(other_bytes[i]) if bytes[i] != other_bytes[i]
     bytes.length.compare(other_bytes.length)
+
   # The empty String occurs in every one, as index_of finds an empty part.
   contains := (part: String) -> @binary.index_of(part.binary) != nil
+
   # Whether the String is one or more ASCII digits (see Char.is_digit).
   is_digits := -> not @is_empty() and @all(Char.is_digit)
+
   # Without the whitespace at both ends: the ASCII spaces of Byte.is_space, which no byte of a
   # multi-byte character is, so that what is left is cut at code points.
   trim := ->
     start := text_start(@binary)
     lerta_string_slice(@, start, text_end(@binary, start))
+
   # Likewise, at the start only.
   trim_start := -> lerta_string_slice(@, text_start(@binary), @binary.length)
+
   # Likewise, at the end only.
   trim_end := -> lerta_string_slice(@, 0, text_end(@binary, 0))
+
   # Each occurrence of the part, from the start and without overlapping, replaced.
   replace := (part: String, by: String) ->
     throw ValueError('replace of an empty part') if part.is_empty()
     @split(part).join(by)
+
   # Only the ASCII letters change.
   to_upper := -> mapped_ascii(@, upper_of)
   to_lower := -> mapped_ascii(@, lower_of)
+
   # The String after as many of `fill`, one code point, as make it `width` code points long, or the
   # String itself if it is no shorter.
   pad_start := (width: Int, fill = ' ') -> padding(@, width, fill) + @
+
   # Likewise, with the code points of `fill` after the String.
   pad_end := (width: Int, fill = ' ') -> @ + padding(@, width, fill)
+
   repeat := (count: Int) ->
     throw ValueError('repeat a negative number of times') if count < 0
     var repeated = ''
     repeated += @ for _ in 0..count
     repeated
+
   # What comes before the first occurrence of the part, or nil if there is none.
   before := (part: String) ->
     found := @binary.index_of(part.binary) ? return nil
     lerta_string_slice(@, 0, found)
+
   # What comes after the first occurrence of the part, or nil if there is none.
   after := (part: String) ->
     found := @binary.index_of(part.binary) ? return nil
     lerta_string_slice(@, found + part.binary.length, @binary.length)
+
   # The String after its first n code points, as `take(n)` gives them, so empty if it has no more.
   skip := (n: Int) ->
     bytes := @binary
@@ -223,14 +256,17 @@ extend String
       break if at == bytes.length
       at += sequence_length(bytes[at])
     lerta_string_slice(@, at, bytes.length)
+
   # The String after the code points for which `skipped` holds, from the start.
   skip_while := (skipped: (Char) -> Bool) ->
     bytes := @binary
     var at = 0
     at += sequence_length(bytes[at]) while at < bytes.length and skipped(char_at(bytes, at))
     lerta_string_slice(@, at, bytes.length)
+
   # The number of its bytes, its UTF-8's, rather than of its code points, which `count()` gives.
   byte_count := -> @binary.length
+
   # What comes before the first occurrence of the separator and what comes after it, or nil if
   # there is none.
   split_once := (separator: String) ->
@@ -248,19 +284,23 @@ extend Binary
   last := -> @get(@length - 1)
   starts_with := (prefix: Binary) -> @occurs_at(0, prefix)
   ends_with := (suffix: Binary) -> @occurs_at(@length - suffix.length, suffix)
+
   # The place of the first occurrence of `part`, bytes or a byte, at `from` or after it, or nil,
   # always so past the end; an empty part occurs at `from` if it is at most the length.
   index_of := (part: Binary | Byte, from = 0) ->
     throw IndexError('index_of from a negative place') if from < 0
     return byte_index(@, part, from) if part is Byte
+
     # A part of one byte is found as the byte, one comparison at each place. The search is a
     # function of its own rather than a call of index_of, which LLVM would not inline.
     return byte_index(@, part[0], from) if part.length == 1
     for i in from..max(from, @length - part.length + 1)
       return i if @occurs_at(i, part)
     nil
+
   # The bytes, read as the Iter is.
   iter := (): Iter<Byte> -> (b for b in @)
+
   occurs_at := (index: Int, part: Binary) ->
     return false if index < 0 or index > @length - part.length
     for byte at k in part
@@ -279,10 +319,12 @@ class Chars
   has_next := -> @at < @bytes.length
   next := ->
     lead := @bytes[@at]
+
     # An ASCII byte is its Char, which needs neither the decoding nor the length of a sequence.
     if lead < 0x80
       @at += 1
       return lead.to_char()
+
     c := char_at(@bytes, @at)
     @at += sequence_length(lead)
     c

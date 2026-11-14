@@ -64,6 +64,7 @@ export check_function_body := (
   define_params := ->
     define_parameters body, literal, params, checks_defaults
     narrow_where_holds body, holds if holds
+
     # The last statement, which check_block leaves to `finish`, may declare one too.
     predeclare_local_functions body, statements.last() then [statements.last()!] else []
   body.names_literals_assign = names_literals_assign(statements)
@@ -72,6 +73,7 @@ export check_function_body := (
     last := statements.last() ? return
     warn_if_unreachable body, previous, last if previous := before_last.last()
     check_last_statement body, last
+
   # A function literal's own name, outside its parameters and locals, which may hide it.
   body.scopes.push()
   body.scopes.define itself.identifier.name, itself if itself := body.self_local
@@ -94,6 +96,7 @@ export define_parameters := (
       expect_type body, default, params[i] if checks_defaults
     else if i > required
       described := described_parameter(identifier)
+
       # One taken apart takes no default (see parse_destructured_parameter).
       problem :=
         if is_taken_apart_parameter(identifier)
@@ -283,8 +286,10 @@ check_declaration := (body: Body, declaration: Declaration) ->
   expect_type body, value, annotated if annotated
   value_type := annotated ? type_of(body, value)
   reject_if_not_storable body, value_type, value
+
   # An exported value is for other modules to use.
   { name, mutable, exported, weak } := declaration
+
   type := weak then weak_local_type(body, declaration, value_type) else value_type
   declared := not declaration.of_loop
   is_this := value is This and not mutable and not weak
@@ -348,8 +353,10 @@ export check_discarded := (body: Body, statement: Expression, type: Type) ->
   at := statement.position
   reject_unconsumed body, statement, type
   return if statement is Call | Await or is_one_of_kinds(type, ['void', 'never'])
+
   # `x ? return` is a guard: its value is the reason to stop, not something to use.
   return if statement is Coalesce and is_never_typed(body, statement.fallback)
+
   if statement is Identifier and type is FunctionType
     message := "function value is unused; to call it, write `#{statement.name}()`"
     fail program, at, message

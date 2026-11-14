@@ -27,12 +27,16 @@ export struct BuildRequest
   linker_flags: String[]
   output: String?
   kind: BuildKind
+
   # `--werror`: a warning stops the build, as an error does.
   warnings_as_errors: Bool
+
   # Without `--no-trace`: an uncaught exception prints its trace (see generate).
   traces: Bool
+
   # `--source-lines`: the program tells a debugger where its code comes from in the source.
   source_lines: Bool
+
   # `--eager-nan-checks`: each float operation checks its own result for NaN where it is (see
   # docs/internals/representation.md#floats).
   eager_nan_checks := false
@@ -57,6 +61,7 @@ build_then := (request: BuildRequest, run_args: String[]?) ->
       await build_in_dir(request, program, dir, run_args)
     finally
       await remove_tree(dir)
+
   # A Windows program that crashes exits with an NTSTATUS, such as 0xC0000005, which exit does not
   # take.
   exit code in 0..=255 then code else 255
@@ -86,11 +91,13 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
   else
     executable = await link_executable(request, program, dir, '')
   return 1 unless executable
+
   # On macOS, the debug information stays in the object files, which are removed, so dsymutil
   # copies it beside the executable first; it reads their paths from the executable, as the link
   # was given them, in the directory it ran in.
   if request.source_lines and target_system(request.kind.target) == 'macos'
     return 1 if (await run('dsymutil', executable, cwd: real_path(dir))).code != 0
+
   program_args := run_args ? return 0
   (await run(executable, program_args...)).code
 
@@ -145,25 +152,32 @@ link_executable := (request: BuildRequest, program: ProgramWide, dir: String, pr
     }
   flags := build_flags(kind)
   objects := await compile_modules({ program, modules, runtime, flags }, dir, prefix) ? return nil
+
   # The linked C and Objective-C files may include the runtime's header.
   compiles_c := request.linked_files.any((file) -> file.ends_with('.c') or file.ends_with('.m'))
   include_flags: String[] = compiles_c then ["-I#{await cached_include_dir()}"] else []
+
   # The link runs in the temporary directory and names the modules' objects in it, and the paths it
   # is given besides are under the directory the compiler runs in (see
   # docs/internals/architecture.md#per-module-output).
   cwd := real_path('.')
   work_dir := real_path(dir)
+
   executable := executable_path(request, dir)
+
   # libm, which std:math calls, is apart from libc on Linux; elsewhere -lm links nothing more.
   libraries := ["-l#{library}" for library in ['m', runtime.libraries...]]
+
   lto_cache := join(real_path(cache_dir()), LTO_CACHE)
   system := target_system(kind.target)
   lto_flags := kind.optimize then lto_link_flags(system, lto_cache)
+
   # dsymutil (below) reads the debug information from the objects, which the link-time optimizer
   # makes in a directory that it removes unless told one.
   keeps_objects := source_lines and system == 'macos' and kind.optimize
   lto_objects: String[] =
     keeps_objects then ["-Wl,-object_path_lto,#{join(work_dir, "#{prefix}lto")}"] else []
+
   args := [
     objects...
     flags...
@@ -178,10 +192,12 @@ link_executable := (request: BuildRequest, program: ProgramWide, dir: String, pr
     '-o'
     executable
   ]
+
   # clang's driver for macOS, given a source to compile as it links with -flto, has the linker keep
   # what it optimizes in a directory under TMPDIR, which it never removes; under the temporary
   # directory, it is removed with it.
   clang := await run('clang', args..., cwd: work_dir, env: { 'TMPDIR': work_dir })
+
   clang.code == 0 then executable
 
 # The path that the link, which runs in the build's temporary directory, is given for a file named
@@ -210,13 +226,16 @@ compile_modules := (request: ModulesRequest, dir: String, prefix: String) ->
     { writer } := open(join(dir, "#{names[i]}.ll"), WRITE)
     await write_ir(modules[i], writer)
     await writer.end()
+
   # clang warns that the .ll has no target triple; it is given here, or the host's is meant.
   job := (i: Int) ->
     path := join(dir, names[i])
     ['-Wno-override-module', '-c', "#{path}.ll", request.flags..., '-o', "#{path}.o"]
+
   return nil unless await run_clang_jobs([job(i) for i in compiled])
   for i in compiled
     await keep_module_object(join(dir, "#{names[i]}.o"), path, dir) if path := cached[i]
+
   # A kept object is linked from the cache even by the build that compiled it, as the key of an
   # entry of the linker's ThinLTO cache on Linux holds the paths of the objects, which the next
   # build would not find otherwise. The link runs in `dir`, and the cache may be named relative to

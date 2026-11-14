@@ -114,16 +114,20 @@ generate_index_assignment := (g: Generator, assignment: Assignment, target: Inde
   array_depth := g.temporaries.length
   push_temporary g, value, type_at_use(g, operand)
   old := assignment.operator == '=' then '' else emit_get(ir, array, index, element)
+
   # An index out of range throws.
   emit_exception_check g unless old.is_empty()
+
   # `combine` consumes the value, but may throw, on an overflow, while the array is still held.
   pop_temporaries g, array_depth
   result := combine(g, assignment.operator, old, value, element, type_at_use(g, operand))
   pop_temporaries g, depth
+
   items := emit_checked_items(ir, array, index)
   emit_set_in ir, items, index, result, element
   emit_release_value ir, result, element
   emit_release ir, array if is_owned
+
   # An index out of range throws, which the items tell; an operator such as `+=` may have thrown
   # before, on an overflow, with the index in range, so that only the pending exception tells it.
   if assignment.operator == '='
@@ -176,9 +180,11 @@ update_with_default := (
       combine_by_method g, by_method, old, value, type.value, value_type
     else
       combine g, assignment.operator, old, value, type.value, value_type
+
   # A method, unlike an operator, may change the map, as the default may.
   place_anew := -> emit_place(ir, map, key, type)
   written := by_method then place_anew() else emit_branch(ir, 'ptr', missing, place_anew, place)
+
   emit_set_at ir, written, result, type
   emit_release_value ir, result, type.value
 
@@ -208,6 +214,7 @@ assign_through := (
   load := -> ir.load(ir_type(type), pointer, tag)
   operand := assignment.value
   is_plain := assignment.operator == '='
+
   # `x += e` of a Float or a Float32, where e is a tree (see float_tree) or a leaf, is a tree whose
   # root is the combining operation, as the old value, loaded after e, is a leaf too.
   is_root := not is_plain and
@@ -216,6 +223,7 @@ assign_through := (
     not g.code.eager_nan_checks and
     is_float_leaf(g, operand)
   value := with_deferred_checks(g, g.defers_float_checks or is_root, -> generate(g, operand))
+
   old := is_plain then '' else load()
   result := combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
   replaced := is_plain and ownership(type) != NONE then load() else ''

@@ -50,12 +50,16 @@ handle := (request: Request) ->
   if path == 'echo'
     coding := request.headers.get('transfer-encoding') ? '-'
     return Response(body: "#{request.method} #{coding}: #{(await request.text())!}")
+
   # Sent back as it comes.
   return Response(body: request.body) if path == 'mirror'
+
   return redirect(307) if path == 'redirect'
   return redirect(303) if path == 'see-other'
+
   # Answered before the body that comes is read.
   return Response(status: 413) if path == 'early'
+
   if path == 'many'
     pipe := Pipe()
     _feeding := feed_many(pipe)
@@ -109,9 +113,11 @@ post := (path: String, body: Pipe) ->
 
 await post('echo', fed(['sent', ' in parts']))
 await post('echo', fed(['sent'], true))
+
 # A 307 would send again the body, which has been read; a 303 asks for a GET without it.
 await post('redirect', fed(['sent']))
 await post('see-other', fed(['sent']))
+
 # A response that comes before the body has been sent is given; the rest is not sent.
 await post('early', fed(['x'.repeat(1048576) for _ in 0..8]))
 try

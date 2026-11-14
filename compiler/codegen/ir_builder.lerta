@@ -8,6 +8,7 @@ export struct Definition
   symbol: String
   text: String
   declaration: String?
+
   # The names in the text (see names_in), which linking looks up.
   names: String[]
 
@@ -52,21 +53,28 @@ export class IrModule
   args
     # Quoted, the name of the Lerta module, or of the program's entry for all modules as one.
     source_filename: String
+
     # The attributes of every function, such as the target's CPU, or none.
     function_attributes: String
+
     # The type of llvm.coro.end, i1, or void from LLVM 23 on, as the LLVM that reads the IR has it.
     coro_end_type: String
+
   # The definitions of named types, by name.
   types := Map<String, String>()
+
   globals: Definition[] = []
+
   # The declarations by symbol, in the order they were first made.
   private declarations := Map<String, String>()
+
   functions: Definition[] = []
   private
     defined := Set<String>()
     var symbol_count = 0
     names := Map<String, String>()
   metadata := Metadata()
+
   # With `--source-lines`, the metadata of the debug information, where the instructions come
   # from in the source, as LLVM's line tables have it; nil without.
   var source_lines: SourceLines?
@@ -151,9 +159,11 @@ export class IrModule
       [definition.text for definition in @functions]...
     ]
     lines.push "attributes #0 = { #{@function_attributes} }" unless @function_attributes.is_empty()
+
     # Naming the nodes may make more of them.
     named: String[]
     named.append source_lines.named_metadata() if source_lines := @source_lines
+
     lines.append @metadata.nodes
     lines.append named
     lines
@@ -168,20 +178,27 @@ defined_symbol := (signature: String) ->
 export class IrBuilder
   args
     module: IrModule
+
     # Where the code being emitted is in the source, of the function of the name in the file, for
     # the module's source lines; nil for code that is no function of the program.
     scope: SourceScope?
   private
     body: String[] = []
+
     # Stack slots go first in the entry block, where LLVM promotes them to registers.
     stack_slots: String[] = []
+
     var register_count = 0
     var label_count = 0
+
   # The block that instructions are being emitted into, as needed by `phi`.
   var current_block = 'entry'
+
   var location: Position?
+
   # Where the function is declared, which its subprogram starts at.
   var declared_at: Position?
+
   private var subprogram: String?
 
   # Emits `%r<n> = <value>` and returns the register.
@@ -250,12 +267,14 @@ export class IrBuilder
   finish := (signature: String) ->
     lines := ['entry:', @stack_slots..., @body...]
     subprogram := @subprogram ? return @module.define_function(signature, lines)
+
     # Every instruction of a function that has debug information has a location, as LLVM requires
     # of its calls: those before the first position get the function's own.
     start := @module.source_lines!.start_of(subprogram)
     located := (line: String) ->
       is_instruction := line.starts_with('  ') and '!dbg' not in line
       is_instruction then "#{line}, !dbg #{start}" else line
+
     # A private function has no symbol, which dsymutil finds the function's debug information by:
     # an internal one does, and is the same otherwise.
     linked := signature.without_prefix('private ')

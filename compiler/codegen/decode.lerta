@@ -104,6 +104,7 @@ emit_read_array := (ir: IrBuilder, reader: Coder, type: ArrayType) ->
   more := -> call_method(ir, reader, 'next_item', bool_type, [], unwind)
   read_item := ->
     item := emit_read(ir, reader, element, unwind)
+
     # The array retains the item, which this function owned.
     emit_push ir, array, item, element
     emit_release_value ir, item, element
@@ -117,12 +118,14 @@ emit_read_map := (ir: IrBuilder, reader: Coder, type: MapType) ->
   unwind := -> release_and_return(ir, map, type)
   shape := map_shape(type)
   call_void_method ir, reader, "begin_#{shape}", [], unwind
+
   # The map retains the key and the value, which this function owned.
   add := (key: String, release_key: () -> void) ->
     value := emit_read(ir, reader, type.value, release_key)
     emit_map_set ir, map, key, value, type
     emit_release_value ir, value, type.value
     emit_release_value ir, key, type.key
+
   case shape
     when MAP then emit_for_each_key(ir, reader, 'read_key', unwind, add)
     when SET then emit_read_set_items(ir, reader, map, type, unwind)
@@ -141,6 +144,7 @@ emit_read_set_items := (
       emit_release_value ir, item, type.key
       unwind()
     fail := -> call_void_method(ir, reader, 'fail_duplicate', [], release_item)
+
     # The set retains the item, which this function owned.
     emit_when ir, ir.negate(emit_set_add(ir, set, item, type)), fail
     emit_release_value ir, item, type.key
@@ -221,6 +225,7 @@ emit_read_object := (ir: IrBuilder, reader: Coder, type: ObjectType) ->
     for field at i in fields
       args.push "#{ir_type(field.type)} #{values.value(i)}"
       args.push "i1 #{values.given(i)}" if field.has_default
+
     # The constructor takes the values over, owned, and releases them if it throws.
     object := ir.assign("call ptr #{constructor_symbol(type)}(#{args.join(', ')})")
     emit_check_with ir, -> emit_return_thrown(ir, type)
@@ -234,6 +239,7 @@ class FieldValues
   args
     ir: IrBuilder
     fields: FieldToRead[]
+
     # The type that the function gives.
     type: Type
   private

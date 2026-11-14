@@ -30,11 +30,13 @@ print (await read_response(idle)).last()!
 busy := await connect_tcp('127.0.0.1', server.port)
 await busy.write("GET /slow HTTP/1.1\r\nHost: a\r\n\r\n")
 await started.promise()
+
 # Accepted, but sending nothing yet.
 silent := await connect_tcp('127.0.0.1', server.port)
 
 start := monotonic()
 var closed = 0
+
 # Counts the close once it resolves.
 counted := (closing: Promise) ->
   await closing
@@ -42,6 +44,7 @@ counted := (closing: Promise) ->
 closing := counted(server.close())
 closing_again := counted(server.close())
 print await idle.reader.read_line() ? 'end'
+
 # Reset instead if the listener was closed before the server took it.
 try
   print await silent.reader.read_line() ? 'end'
@@ -54,6 +57,7 @@ lines := await read_response(busy)
 print "#{lines.contains('connection: close')} #{lines.last()!}"
 print await busy.reader.read_line() ? 'end'
 print monotonic() - start < 1.0
+
 # The served connection lingers, as ever, until its client ends it.
 busy.close()
 await closing

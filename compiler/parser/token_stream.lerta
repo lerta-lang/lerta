@@ -16,36 +16,48 @@ export struct StreamMark
   spread: Position?
   brackets: Int
   functions: Int
+
   # What the innermost function literal had of its own, which the statement may have marked.
   yields: Bool
   await_at: Position?
+
   nesting: Int
 
 export class TokenStream
   args
     tokens: Token[]
+
     # Names the source in diagnostics.
     path: String
+
     # Where the interpolated code that the tokens are made of starts, if they are; a function
     # literal cannot be written there (see parse_function_literal).
     interpolation: Position?
   var index = 0
+
   # Where the last `xs...` after a value is, which no array item may have taken (see at_spread).
   var spread: Position?
+
   # The opening brackets that the expression being parsed is in, innermost last.
   private
     brackets: Token[] = []
+
     # The tokens that continue_line has skipped: the line ends, indentations and block ends around
     # the lines that continue a line.
     skipped := Set<Int>()
+
     # The index of the INDENT of each block of lines that continue a line.
     continued_blocks := Set<Int>()
+
     # What find_block_starts found, once it has.
     var block_starts: Int[]?
+
   # What each function literal being parsed, innermost last, has of its own.
   var functions: FunctionMarks[] = []
+
   # How deep the expression being parsed is in the tree it makes, which is limited (see deepen).
   var nesting = 0
+
   # Where the errors of the statements of blocks go, if an error ends the parsing of its statement
   # alone in a block too, as at the top level (see parse_partially); nil if it ends that of the
   # top-level statement.
@@ -182,8 +194,10 @@ export class TokenStream
       @fail
         at
         'a spread `xs...` can only be an item of an array or an argument of a variadic parameter'
+
     # The token is the next one, or the one just read, as by parse_primary.
     index := [@index_at(0), @index - 1].find((i) -> i >= 0 and @tokens[i] == token)
+
     hint := index != nil then @foreign_hint(index)
     instead := hint then ": #{hint}" else ''
     @fail at, "expected #{expected}, found #{describe_token(token)}#{instead}"
@@ -326,8 +340,10 @@ export class TokenStream
     ends_item := (close: TokenKind) ->
       if @accept(',')
         @continue_line()
+
         # A closing bracket after the block reports the comma before it.
         @next() if @peek().kind == NEWLINE and @peek_at(1).kind == close
+
         next := @peek()
         @fail_expecting next, "an item after ','" if next.kind == close
         return true
@@ -394,8 +410,10 @@ export class TokenStream
     @nesting = start.nesting
     depth := StatementDepth()
     depth.add @tokens[i].kind for i in start.index..@index
+
     # The error may be at the first token of the next statement, after the line that ends this one.
     return if @index > start.index and @ends_statement(@tokens[@index - 1].kind, depth)
+
     while @tokens[@index].kind != EOF
       kind := @tokens[@index].kind
       return if kind == DEDENT and depth.blocks == 0 and @index > start.index

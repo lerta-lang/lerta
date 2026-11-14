@@ -71,22 +71,27 @@ export generate_binary := (g: Generator, binary: BinaryOperation) ->
   operator := binary.operator
   return generate_logical(g, binary) if operator in ['and', 'or']
   return generate_nil_test(g, binary) if is_nil_test(binary)
+
   # The root of a tree of float arithmetic alone checks its result, which its operands leave
   # unchecked.
   is_root := not g.defers_float_checks and float_tree(g, binary)
   g.defers_float_checks = true if is_root
   reads_before := g.reads_unchecked_floats
   g.reads_unchecked_floats = false if is_root
+
   left := generate(g, binary.left)
   operand_type := type_at_use(g, binary.left)
   right := holding(g, left, operand_type, -> generate(g, binary.right))
   g.defers_float_checks = false if is_root
+
   # A NaN that a local not checked yet holds reaches the root, which checks it there once, rather
   # than each such local where it is read, even where the root gives no NaN of its own.
   reads_unchecked := is_root and g.reads_unchecked_floats
   g.reads_unchecked_floats = reads_before if is_root
+
   if is_bytes(operand_type) and operator == '+'
     return emit_extend(g.ir, left, right, type_at_use(g, binary.right))
+
   # An operation that would check its result, a tree's root or one of no tree, checks none where it
   # gives no NaN, as its ranges tell (see float_ranges): a root with its operands, which check none,
   # and one of no tree alone, as its operands check theirs.
@@ -165,9 +170,11 @@ apply_binary := (g: Generator, operator: String, left: String, right: String, op
   program := g.code.program
   inner := inner_of(operand_type)
   by_contents := compares_by_contents(program, inner)
+
   # nil is the null pointer, so optional objects compare as pointers too.
   if is_identity_type(inner) and not by_contents
     return negate_if_unequal(g, operator, generate_same_object(g, left, right))
+
   released := (result: String) ->
     emit_release g.ir, left
     emit_release g.ir, right

@@ -44,8 +44,10 @@ export receiver_type_arguments := (
   bind := (name: String, type: Type) -> bindings[name] = type unless name in bindings
   pattern := generic.receiver!.type
   infer pattern, receiver, bind
+
   # The receiver of an extend of an interface is Self, the first type parameter.
   infer_through_members body, generic.bounds[0]!, receiver, at, bind if pattern is TypeParameterType
+
   return nil if generic.type_params.any((param) -> param.name.name not in bindings)
   [bindings[param.name.name]! for param in generic.type_params]
 
@@ -58,6 +60,7 @@ export infer_type_arguments := (
   inferrer := Inferrer(body, args, generic, bindings)
   if receiver
     inferrer.bind_from generic.receiver!.type, receiver.type, receiver.at
+
     # An argument cannot widen the type arguments the receiver gives, as `T` of `Int[]` to `Int?`,
     # which the receiver does not hold.
     inferrer.fixed.add name for name in inferrer.bindings.keys()
@@ -81,6 +84,7 @@ class Inferrer
     args: Expression[]
     generic: GenericFunction
     bindings: Map<String, TypeBinding>
+
   # The names of the type arguments written or given by the receiver, which nothing inferred
   # replaces.
   private
@@ -108,16 +112,20 @@ class Inferrer
       arg := @args[index]
       declared := @generic.params[index]
       param := substitute(declared, types_of(@bindings))
+
       # A parameter whose type names no type parameter takes its argument as in any call.
       declared_alone := not is_pattern(declared)
       if declared_alone or (needs_context(body, arg) and not is_pattern(param))
         expect_type body, arg, param
+
         # The other arguments gave the type, which the constructions in the literal show as theirs
         # do.
         keep_constructions body, [arg] unless declared_alone
         return
+
       # A function literal's parameters may take the types that are known already.
       type := type_of(body, arg, takes_function_type(body, arg) then param)
+
       fail body.program, arg.position, 'expected a value, got void' if is_kind(type, 'void')
       @bind_from declared, type, arg.position
       @inferred.push { arg, type, index }

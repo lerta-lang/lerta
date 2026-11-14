@@ -14,13 +14,17 @@ import Command, is_found, OUT, print_row, print_rule, run_failure from './shared
 
 # The directories of bench/, one for each benchmark, in order; http/ has a runner of its own.
 BENCHMARKS := [name for name in list_dir('bench') when is_dir("bench/#{name}") and name != 'http']
+
 # The languages, in the order of the columns, and the extensions of their sources. C, the
 # reference, is last, and never in bold.
 EXTENSIONS := { 'lerta': 'lerta', 'swift': 'swift', 'go': 'go', 'node': 'js', 'c': 'c' }
 LANGUAGES := EXTENSIONS.keys().to_array()
+
 RUNS := 3
+
 # Swift links libm for `rounded()` only when asked, at least on Linux; Windows has none.
 SWIFT_LIBM: String[] = platform == 'windows' then [] else ['-lm']
+
 COLUMN := 8
 
 fail := (message: String) ->
@@ -30,9 +34,11 @@ fail := (message: String) ->
 # cl is on the PATH where vcvars64.bat has run (see README.md).
 MSVC := platform == 'windows'
 C_COMPILER := MSVC then 'cl' else 'cc'
+
 # cl prints its version on the first line of its banner, in English with VSLANG=1033; the usage
 # after it stays in the system's code page, which need not be UTF-8.
 C_VERSION := MSVC then 'VSLANG=1033 cl 2>&1 | head -1' else 'cc --version'
+
 fail "no C compiler: #{C_COMPILER} is not found" unless await is_found(C_COMPILER)
 has_swift := await is_found('swiftc')
 has_go := await is_found('go')
@@ -101,8 +107,10 @@ measure := (label: String, command: Command) ->
   var printed = ''
   for i in 0..RUNS
     start := monotonic()
+
     # C on Windows ends its lines with CRLF.
     output := (await run_checked(label, command, true)).replace("\r\n", "\n")
+
     times.push monotonic() - start
     fail "#{label} printed differently in two runs" if i > 0 and output != printed
     printed = output
@@ -125,6 +133,7 @@ print "#{language}: #{await version(language)}" for language in LANGUAGES
 print ''
 print_row 'benchmark', LANGUAGES, COLUMN
 print_rule LANGUAGES.length, COLUMN
+
 # The times of each language, one for each benchmark; none for a language whose compiler is missing.
 times: Map<String, Float[]>
 for name in BENCHMARKS

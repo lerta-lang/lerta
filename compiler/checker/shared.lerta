@@ -34,12 +34,16 @@ from '../types'
 # and the types they have there, which may be narrowed.
 export struct Capture
   name: String
+
   # What the name refers to around the literal, where the closure is made.
   source: Reference
+
   type: Type
   is_var: Bool
+
   # A weak local is captured as the box of its object (see captured_value in codegen).
   is_weak: Bool
+
   # `@`, or a `const` of it.
   is_this: Bool
 
@@ -54,8 +58,10 @@ export struct ExternType
 export class KeptArguments
   # The parameters that methods keep, each as the method and its place.
   kept: Set<(FunctionLiteral, Int)> = Set()
+
   # The parameters that methods pass to methods of the objects they hold.
   passed: PassedArgument[] = []
+
   # The function literals given to methods of objects that what they capture holds.
   calls: KeptCall[] = []
 
@@ -88,65 +94,88 @@ export struct CheckError
 export class NodeFacts
   # The type of every expression, and the type that the name of `x is T` stands for.
   types: Map<Node, Type> = Map()
+
   # The type an expression is converted to where it is used, such as an Int passed as an Int?.
   conversions: Map<Node, Type> = Map()
+
   # The values of the constant expressions, which codegen writes in their places (see constants).
   constants: Map<Expression, Constant> = Map()
+
   # What the names that are read, called or assigned refer to.
   references: Map<Identifier, Reference> = Map()
+
   # The declarations of the locals that names read or assign, by those names, for an editor's
   # going to a definition (see compiler/lsp).
   local_declarations: Map<Identifier, Identifier> = Map()
+
   # What the members that are read or called refer to.
   members: Map<Member, MemberTarget> = Map()
+
   # The names read as what a loop or a comprehension goes through, or as the object of a method
   # but an Iter's has_next and next, which step through it rather than go through it.
   consuming_reads: Set<Identifier> = Set()
+
   # The names read as the object of an Iter's has_next or next.
   stepping_reads: Set<Identifier> = Set()
+
   # The one read of each local that is read once, so, in its own scope, by the local's name in its
   # declaration (see record_only_read).
   lazy_reads: Map<Identifier, Identifier> = Map()
+
   # The members of enums that string literals name, `'text'`, as their places in them.
   enum_literals: Map<StringLiteral, Int> = Map()
+
   # The members of enums named with their enums, `E.MEMBER`, where the enum is expected and nothing
   # takes the name, which `lerta fmt` may write alone (see unqualifiable).
   unqualifiable: Set<Member> = Set()
+
   # The constructions of structs, `S(x: 1)`, where S is expected, which `lerta fmt` may write as
   # records, `{ x: 1 }` (see rewrites_of).
   recordable: Set<Call> = Set()
+
   # The constructions of structs that are not generic that records can write, and the members of
   # enums named with their enums whose names nothing takes, wherever they are: `lerta fmt` writes
   # them so where it writes the type that they give (see written_types.lerta).
   record_constructions: Set<Call> = Set()
   alone_members: Set<Member> = Set()
+
   # The constructions of classes and structs, whose named arguments of a variable of the same name
   # `lerta fmt` may write as the name alone (see shorthand).
   object_constructions: Set<Call> = Set()
+
   # The constructions that give every argument, which `lerta fmt` may write with a spread of the
   # value whose fields they copy, as none takes its default then (see spread_copy).
   full_constructions: Set<Call> = Set()
+
   # The constructions that give by its name only the one argument that must be given, which
   # `lerta fmt` writes as its value alone (see positional_construction).
   alone_constructions: Set<Call> = Set()
+
   # The casts that throw, `x as T!`, of values of type T already, which `lerta fmt` leaves out.
   redundant_casts: Set<Cast> = Set()
+
   captures: Map<FunctionLiteral, Capture[]> = Map()
+
   # The instances of generic functions that calls call, which their generic functions hold (see
   # InstanceLink).
   instances: Map<Call, InstanceLink> = Map()
+
   # The calls of `iter()` through which `for` and comprehensions go through the values of types
   # that satisfy Iterable, by those values (see type_of_iterated).
   iter_calls: Map<Expression, Call> = Map()
+
   # The calls of methods through which operators apply to the types that they do not apply to
   # otherwise, by the operations, and the assignments such as `+=` (see type_of_operator_call).
   operator_calls: Map<Node, Call> = Map()
+
   # The calls of `compare` whose Ordering `<` and the like of two Strings test, by the operations
   # (see order_by_compare).
   order_calls: Map<Node, Call> = Map()
+
   # The calls of `contains` that `x in xs` tests, `xs.contains(x)`, by the operations, which codegen
   # makes with `x` evaluated first, as written (see type_of_in_test).
   in_tests: Map<BinaryOperation, Call> = Map()
+
   # The expressions that codegen generates instead of those written, at their positions:
   # - `name.export` of a module imported as `name`, and its calls, as the name that the export is
   #   imported by (see qualified_name);
@@ -155,36 +184,46 @@ export class NodeFacts
   #   the fields that it reads from its spread (see spread_construction and spread_record).
   # A replacement may be replaced in turn, as `mod.Point(p..., x: 1)` is, twice.
   replacements: Map<Expression, Expression> = Map()
+
   # The code that the checker makes for each call of an intrinsic, which codegen generates in its
   # place (see compiler/checker/intrinsics.lerta).
   intrinsic_calls: Map<Call, IntrinsicCode> = Map()
+
   # The names of the intrinsic values that names read, by those names, whose values codegen writes
   # in their places, as only the build knows them (see compiler/checker/intrinsics.lerta).
   intrinsic_values: Map<Identifier, String> = Map()
+
   # The arguments of the calls whose variadic arguments are packed into an array, or whose named
   # arguments are gathered into an argument of the last parameter, as codegen passes them (see
   # check_arguments). The calls stay as they are written, since the instances of a generic function
   # share them, each with its own facts, and a program may be checked again, as by `lerta fmt`.
   arguments: Map<Call, Expression[]> = Map()
+
   # The itabs of the values converted to interface types (see interface_values).
   itabs: Map<Expression, Itab> = Map()
+
   # The `var`s that function literals capture, by their declarations' names.
   shared_vars: Set<Identifier> = Set()
+
   # The locals that a name refers to other than as the callee of a call in their own function, by
   # their declarations' names: the closure of a function literal declared as a local that is not
   # here never outlives the call that makes it (see generate_declared_value).
   escaping_locals: Set<Identifier> = Set()
+
   # The function literals declared as locals, by the names they are declared with, and those of
   # them that see themselves by that name, as their return type is written, on them or on their
   # declarations, which read it as their own closure (see self_local).
   local_function_names: Map<FunctionLiteral, Identifier> = Map()
   sees_itself: Set<FunctionLiteral> = Set()
+
   # The names that read local functions before their declarations, with the bodies that read them,
   # which capture what the functions capture to make their closures (see finish_local_functions).
   local_function_uses: Map<FunctionLiteral, LocalFunctionUse[]> = Map()
+
   # The values that each function gives as its results, which tell `lerta fmt` whether its return
   # type can be inferred (see inferable).
   results: Map<FunctionLiteral, Expression[]> = Map()
+
   # The function literals that return a Promise without awaiting, which their results settle, as a
   # function that awaits does (see settles_through).
   settling: Set<FunctionLiteral> = Set()
@@ -216,8 +255,10 @@ export compared_items := (facts: NodeFacts, test: BinaryOperation): Expression[]
 
 export is_fixed := (facts: NodeFacts, item: Expression) ->
   is_literal := item is IntegerLiteral | BooleanLiteral | StringLiteral
+
   # `b'x'`, which is `'x'.binary`.
   is_byte := binary_literal_bytes(item) != nil
+
   is_literal or is_byte or enum_value_of(facts, item) != nil or facts.constants[item] != nil
 
 export is_plainly_compared := (type: Type) ->
@@ -234,46 +275,61 @@ export class Shared
   args
     # The program, which holds this module's Shared.
     weak program: ProgramWide!
+
     # The module's index, how messages name it, and the path that diagnostics give for it (see
     # Module).
     index: Int
     name: String
     path: String?
+
     imports: Imports
     extensions: Extensions
     top_level: TopLevelValues
+
     # What the module exports, besides its extends, by name (see export_of).
     exported: Map<String, Exportable>
+
     # What the module exports from the modules it imports, by name: the name there (see export_ref).
     reexported: Map<String, ExportRef>
+
   # What is found of the nodes of the module's code; an instance of a generic function has its own.
   # The tokens of the module's source, lexed again once a call of an intrinsic quotes the code
   # (see compiler/checker/intrinsics.lerta).
   var source_tokens: Token[]?
   facts := NodeFacts()
+
   warnings: Diagnostic[] = []
   functions := Functions()
+
   # The generic functions, then the generic methods of the module's own extends, in the order they
   # are declared; others refer to them by their places here (see GenericRef).
   generics: GenericFunction[] = []
+
   # The classes and structs that the module declares, by name.
   objects: Map<String, ObjectInfo> = Map()
+
   # The enums that the module declares, by name.
   enums: Map<String, EnumType> = Map()
+
   # The interfaces that the module declares, by name.
   interfaces: Map<String, InterfaceInfo> = Map()
+
   # Type aliases, resolved on first use, so that they can refer to each other in any order.
   aliases: Map<String, AliasEntry> = Map()
   resolving := Set<String>()
+
   # The types that each type name of the module's code names, one for each instance of a generic
   # body it is in, and the alias's name for one that names an alias, for an editor's hover and going
   # to a definition (see compiler/lsp and record_type_name).
   type_names: Map<NamedType, Type[]> = Map()
   alias_names: Map<NamedType, Identifier> = Map()
+
   # The methods of the module's extends, which the modules that import it get.
   own_methods: ExtensionMethod[] = []
+
   # Whether the module's top-level code awaits, which makes the program's a coroutine (see main).
   var top_level_awaits = false
+
   # The names of the top-level code, once it is checked: those never used are warned about once
   # the functions that may use them are checked (see warn_unused).
   var top_level_scope: Map<String, Local>?
@@ -284,6 +340,7 @@ export struct EarlyInstance
   type: ObjectType | InterfaceType
   at: Position
   module_index: Int
+
   # The bounds of the type parameters standing for themselves where it is written, by which its
   # type arguments satisfy those of a generic class or struct (see check_early_bounds).
   bounds: Map<String, InterfaceType>
@@ -303,55 +360,76 @@ export class ProgramWide
   args
     entry_path: String
     modules: Module[]
+
     # Whether the checking goes on after an error with the other parts of the program, to find their
     # errors too (see check_part); not where the program is checked only to see whether it checks,
     # which the first error tells.
     finds_all_errors: Bool
   shared: Shared[] = []
   infos: Map<String, ObjectInfo> = Map()
+
   # Whether the fields of every class and struct and the members of every interface are known;
   # until then, the instances given are kept to be checked then.
   var members_known = false
   early_instances: EarlyInstance[] = []
+
   # Whether the extends of every module are in effect; until then, the instances given are kept
   # to have their bounds checked then (see check_early_bounds).
   var extends_known = false
   early_bound_checks: EarlyInstance[] = []
+
   # The instances of generic interfaces whose members have been checked, by their type_key.
   checked_interfaces := Map<String, Bool>()
+
   # What the checker found where it met the name of an editor's completion, if it did.
   var completion: CompletionProbe?
+
   # The module that std:builtins is, if the program has it.
   var builtins: Int?
+
   # The itabs of the runtime's errors (see plan_runtime_errors).
   var runtime_errors: Itab[] = []
+
   # The interfaces of every module, by symbol.
   interfaces: Map<String, InterfaceInfo> = Map()
+
   extern_types := Map<String, ExternType>()
+
   # The fields of classes that an assignment changes somewhere (see is_assigned_field).
   assigned_fields := Set<String>()
+
   # The item types of the arrays whose items code takes out somewhere (see are_items_taken).
   taken_items := Set<String>()
+
   errors: CheckError[] = []
+
   # The indexes of the modules whose code is being checked, innermost last: an error is in the
   # innermost.
   modules_checked: Int[] = []
+
   # The instances of generic functions being checked, as messages describe them, innermost last.
   contexts: String[] = []
+
   var annotated_call: AnnotatedCall?
+
   # The modules whose functions are checked, whose unused names can be told.
   bodies_checked: Int[] = []
+
   # The functions whose bodies are being checked, innermost last.
   functions_checked: FunctionLiteral[] = []
+
   # The functions whose types each function's body uses, which tell `lerta fmt` which functions
   # are recursive (see inferable).
   calls: Map<FunctionLiteral, FunctionLiteral[]> = Map()
+
   # Whether the written type of each parameter, by its name, is the one it would have without it,
   # from the function type expected or a default, every time it is checked; which tells `lerta fmt`
   # whether it can be left out (see inferable).
   inferable_parameters: Map<Identifier, Bool> = Map()
+
   # The plans of the methods that types get by their parts, each at its id (see PartsPlan).
   parts_plans: PartsPlan[] = []
+
   kept_arguments := KeptArguments()
 
 # The type of the object that `@` refers to: in a method, the method of an extend, or the
@@ -361,6 +439,7 @@ export class SelfContext
   args
     type: Type
     var initializing: FieldInfo?
+
   # The computed fields warned about as stale, once each (see warn_if_stale).
   stale: Set<FieldInfo> = Set()
 
@@ -378,10 +457,13 @@ export class FunctionContext
     var annotated: Type?
     yields: Bool
     awaits: Bool
+
   # Whether a function that returns a Promise without awaiting settles it with its results, rather
   # than returning the Promises they are; nil until a result tells (see undecided_promise).
   var settles: Bool?
+
   var inferred: Type?
+
   # The returned values, converted to the return type once it is known.
   results: Result[] = []
 
@@ -401,32 +483,43 @@ export class Body
     facts: NodeFacts
     context: FunctionContext?
     self: SelfContext?
+
     # For the body of a function literal: the body it is written in, whose locals it captures.
     enclosing: Body?
+
     # For a weak function literal's body: it captures `@` weakly.
     weak_this := false
+
   # For the body of a function literal declared as a local that sees itself: the local it sees
   # itself as, its own closure.
   var self_local: Local?
+
   program := @shared.program
+
   # Those it captures, if it is a function literal's.
   captures: Capture[] = []
+
   scopes := Scopes()
   var loop_depth = 0
+
   # How many `await`s it has checked, and the `a and b` or `a or b` whose b has one, after which a's
   # narrowings of the `var`s declared outside it end (see forget_outer_var_views).
   var awaits = 0
   awaiting_right_operands: Set<BinaryOperation> = Set()
+
   # The names that the function literals and methods in it assign (see names_literals_assign).
   var names_literals_assign = Set<String>()
+
   # The types that operands take from their context where a call that the checker makes of them
   # types them again with no expected type, so that they take their type from here: the array
   # literal of `x in [...]`, of the type of `x` (see type_of_in_test), and the base of `x ** n`
   # (see type_of_power).
   retyped_hints: Map<Expression, Type> = Map()
+
   # The indexes of maps with a default whose values are written, as their places allow (see
   # allow_default).
   written_defaults: Set<Index> = Set()
+
   # A function or a method sees the top-level values; the top-level code declares them.
   sees_top_level := @context != nil or @self != nil
 

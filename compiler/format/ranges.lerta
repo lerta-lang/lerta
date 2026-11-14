@@ -43,19 +43,24 @@ counted_changes := (tokens: Tokens, sum: BinaryOperation, end_at: Int): Change[]
 # written alike and running no code, where it has a start; but `xs[0..]` keeps its start.
 export index_ranges := (tokens: Tokens, index: Index): Edit?[] ->
   range := index.index as Range ? return []
+
   # An index takes no step, which is an error the rewrite must not hide.
   return [] if range.step or range.reversed
+
   # `xs[..]` is no range.
   has_start := range.start != nil
+
   ends_at_length := has_start and not range.inclusive and is_length_of(tokens, range, index.object)
   edits := [counted_range(tokens, range)]
   if ends_at_length
     end := range.end as Member!
     first := tokens.at(end.position) ? return edits
+
     # With the parentheses that it is written in.
     name := tokens.at(end.name.position) ? return edits
     closing := tokens.is_kind(first, '(') then tokens.matching(first)
     last := closing != nil and closing > name then closing else name
+
     return edits unless tokens.is_kind(first - 1, '..')
     edits.push
       tokens.edit(RANGE_ENDS, [{ from: tokens.end(first - 1), to: tokens.end(last), text: '' }])
@@ -82,6 +87,7 @@ is_length_of := (tokens: Tokens, range: Range, indexed: Expression) ->
   open := first - 1
   object := tokens.at(indexed.position) ? return false
   return false if not tokens.is_kind(open, '[') or not tokens.is_kind(name - 1, '.')
+
   # Without parentheses, which change nothing around a value that runs no code.
   written := (from: Int, to: Int) ->
     [

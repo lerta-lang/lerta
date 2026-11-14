@@ -37,6 +37,7 @@ export struct Parentheses
 
 export parentheses_of := (program: Statement[], tokens: Tokens) ->
   walk := ParenthesesWalk(tokens)
+
   # The value that the parser makes for a declaration without one is at its type, and the target of
   # an assignment, which is no place (see Visit), is no operand.
   places_of program, { statement: (statement, _) ->
@@ -46,6 +47,7 @@ export parentheses_of := (program: Statement[], tokens: Tokens) ->
       when Assignment then walk.operands_checked(whole(statement.target))
       else pass
   }
+
   places_of program, { before: (value, _: Place) -> walk.visit(value) }
   tight: Set<Expression>
   for (expression, operand) in walk.operands
@@ -60,6 +62,7 @@ class ParenthesesWalk
   private
     found: Edit[] = []
     unwritten := Set<Expression>()
+
     # The operands of the expressions visited, which are checked with them.
     operands := Map<Expression, Operand>()
 
@@ -75,8 +78,10 @@ class ParenthesesWalk
       for part in parts
         @operands[part.expression] = part
         @check part
+
       # Those that are no places (see Visit) are visited here.
       unvisited := unvisited_parts(own.expression)
+
       for part in parts
         @operands_checked part if part.expression in unvisited
 
@@ -107,8 +112,10 @@ dropped := (tokens: Tokens, operand: Operand) ->
   while tokens.is_kind(open + pairs, '(') and tokens.matching(open + pairs) == close - pairs
     pairs += 1
   runs_on := runs_to_end(expression) and (not last or continues_line(tokens, close))
+
   # `-(1).abs()` would read `-1` as one literal.
   joins_minus := is_number(expression) and tokens.is_kind(open - 1, '-')
+
   needed := clarified or precedence(expression) < level or runs_on or joins_minus
   dropped_pairs := needed then pairs - 1 else pairs
   return nil if dropped_pairs == 0
@@ -130,8 +137,10 @@ continues_line := (tokens: Tokens, close: Int) ->
 is_parenthesized := (tokens: Tokens, open: Int, expression: Expression, operands: Operand[]) ->
   return false unless tokens.is_kind(open, '(')
   starts_alike := operands.any((operand) -> operand.expression.position == expression.position)
+
   # The first item of an array in a block without brackets starts it.
   first_item := expression is ArrayLiteral then expression.elements.first()?.position
+
   not starts_alike and
     first_item != expression.position and
     not starts_with_own(tokens, open, expression)

@@ -22,6 +22,7 @@ extern lerta_open_file_failed: (Int) -> Bool
 extern lerta_open_file_append: (Int, Binary) -> Promise
 extern lerta_open_file_end: (Int, Binary) -> void
 extern lerta_open_file_free: (Int, Binary) -> void
+
 # std:process imports std:io, so std:io reads the environment itself.
 extern lerta_env: (String) -> Binary?
 
@@ -80,8 +81,10 @@ class FileWriter
   private
     var buffer = b''
     var ended = false
+
     # The first end, which a later one waits for too.
     var ending: Promise?
+
     # The write out on the event loop, one at a time, which a flush waits for before its own, and
     # after which it finds whether it failed.
     var writing: Promise?
@@ -226,8 +229,10 @@ export stat := (path: String) ->
   fields: Int[]
   lerta_status_fields path, fields
   return nil if fields.is_empty()
+
   # In the order of the kinds that the runtime gives.
   kinds := [FileKind.FILE, DIR, OTHER]
+
   modified_time := fields[2].to_float() / 1000000000.0
   FileStatus(modified_time, kind: kinds[fields[0]], size: fields[1])
 
@@ -314,9 +319,12 @@ class PipeWriter
     var used = false
     var queued: PipeChunk[] = []
     var ended = false
+
     # What the reader throws in place of its end.
     var failure: Error?
+
     var read_no_more = false
+
     # The takes that wait while nothing is queued. Every one looks again once something comes, as it
     # may find the queue empty again once another has taken.
     arrivals := Waiters()
@@ -424,13 +432,16 @@ extern lerta_handle_free as free_pipe: (Int) -> void
 class SystemPipe
   private
     files := system_pipe_files()
+
     # The handles that this program reads or writes the ends through: 0 before the first use, and -1
     # once closed.
     handles := [0, 0]
+
     # The writes that the system has not taken yet, which an end lets finish before it closes the
     # end that writes, as a Writer's end follows the writes before it.
     var writes = 0
     var ending = false
+
     # The read under way, as the handle takes one at a time, and the reads that wait for it.
     var reading = false
     turns := Waiters()
@@ -557,6 +568,7 @@ export class Reader
     var chunk = b''
     var start = 0
     var reading = false
+
     # What the read under way has sliced out of the chunks it went past, kept here rather than in
     # it, so that a read that throws or is cancelled leaves it for the next.
     var taken = b''

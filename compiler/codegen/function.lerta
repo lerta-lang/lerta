@@ -118,9 +118,11 @@ export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = f
   is_weak := (capture: Capture) -> capture.is_weak or local_of(capture).weak
   is_coroutine := literal.yields or is_awaiting(g, literal)
   on_stack := is_local and not is_coroutine and not literal.weak and not captures.any(is_weak)
+
   # A float that holds a NaN throws before any capture is retained, so that none is left held.
   for capture in captures
     emit_deferred_check g, local_of(capture) unless capture.is_var
+
   slots: HeapField[]
   operands: String[]
   for capture in captures
@@ -143,9 +145,11 @@ literal_symbol := (g: Generator, literal: FunctionLiteral, name: String, capture
   symbols: Map<FunctionLiteral, String>? = g.fusion.literals.is_empty() then shared_symbols(g)
   if symbols
     return found if found := symbols[literal]
+
   # Its symbol is numbered within the module.
   symbol := g.code.ir_module.fresh_symbol('lerta.lambda')
   symbols[literal] = symbol if symbols
+
   body_generator := function_generator(g.code, g.extensions, g.facts, name)
   body_generator.fusion = g.fusion
   generate_function body_generator, 'private ', symbol, literal, nil, captures
@@ -262,10 +266,12 @@ generate_function_body := (
   ir := g.ir
   g.nan_free = nan_free_operations(g.facts, literal.body, false)
   holds := g.coroutine != nil
+
   # A local function that sees itself is its own closure, outside its parameters and locals, which
   # may hide it; the closure outlives the call, held as `(closure)` by a coroutine.
   itself := literal in g.facts.sees_itself then g.facts.local_function_names[literal]
   g.locals.push()[itself.name] = ValueLocal(type, operand: '%closure') if itself
+
   scope := g.locals.push()
   bind := (name: String, operand: String, local_type: Type) ->
     unless holds
@@ -275,8 +281,10 @@ generate_function_body := (
     scope[name] = store_in_slot(g, operand, local_type)
   bind '@', '%this', this_type if this_type
   bind param.name.name, "%p#{i}", type.params[i] for param at i in literal.params
+
   # The name cannot be written in the source, so no code can read it.
   bind '(closure)', '%closure', type if holds and captures != nil
+
   # A captured var is its cell, which the closure holds; the literal reads and writes through it.
   captured := captures ? []
   slots := [capture_slot(capture) for capture in captured]
@@ -291,6 +299,7 @@ generate_function_body := (
         SlotLocal type, cell, weak, is_var, pointer: emit_cell_pointer(ir, type, value)
       else
         ValueLocal type, weak, operand: value
+
   hold_weak_this g, scope if literal.weak
   emit_suspend g if literal.yields
   generate_body_returning_last g, literal.body, result
@@ -432,8 +441,10 @@ emit_return := (g: Generator, value: String, type: Type): void ->
 # of a method, in the local's own scope, so that what the value reads by name is the same there.
 defers_to_read := (g: Generator, declaration: Declaration) ->
   read := g.facts.lazy_reads[declaration.name] ? return nil
+
   # A top-level value is read by functions too, which the checker counts no reads of.
   return nil if g.top_level_code and g.locals.depth() == 1
+
   is_fused_source(g, declaration.value, false) then read
 
 # Holds an owned reference in a scope of its own, which a jump out of it releases; the returned
@@ -460,6 +471,7 @@ export hold_arguments := (
 # Pushes a scope that holds an owned reference, which a jump out of it releases.
 push_held_scope := (g: Generator, value: String, type: Type) ->
   scope := g.locals.push()
+
   # The name cannot be written in the source, so no code can read it.
   scope['(held)'] = store_in_slot(g, value, type)
   scope
@@ -488,9 +500,11 @@ export generate_block_value := (
   generate_statements g, body.all_but_last()
   last := body.last()!
   expression := last as Expression?
+
   # nil that ends a branch of an if or a try that gives no value has no type to be converted to.
   is_discarded_nil := expression is NilLiteral and g.facts.conversions[expression] == nil
   value := expression and not is_discarded_nil then generate(g, expression) else ''
+
   generate_statement g, last if expression == nil
   release_scope g, scope
   g.locals.pop()
@@ -618,6 +632,7 @@ defers_declaration := (g: Generator, declaration: Declaration) ->
   return false if declaration.mutable or declaration.name in g.facts.shared_vars
   value := declaration.value
   return false if value is not BinaryOperation or g.defers_float_checks
+
   # Not one that a loop reads, which would check it at each turn rather than once here.
   read_in_loop := declaration.name in g.nan_free.read_in_loops
   float_tree(g, value) and value not in g.nan_free.whole and not read_in_loop

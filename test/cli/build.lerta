@@ -241,19 +241,23 @@ optimized_runtime_check := ->
     )
     succeed 'build', built.result
     executable := "#{built.cwd}/split#{host_executable_suffix}"
+
     # llvm-mingw has LLVM's objdump but not GNU's.
     disassembler :=
       case host_platform
         when 'macos' then 'otool'
         when 'windows' then 'llvm-objdump'
         else 'objdump'
+
     # Without the bytes of each instruction, which the check does not read, objdump's output stays
     # under the limit that the tests put on a command's output.
     objdump_args := ['-d', '--no-show-raw-insn', executable]
     args := host_platform == 'macos' then ['-tvV', executable] else objdump_args
     code := await run_command(disassembler, args, built.cwd)
+
     return ["#{disassembler} failed: #{code.stderr_text()}"] if code.status != 0
     lines := code.stdout_text().split("\n")
+
     # objdump shows a call as `call   1234 <lerta_retain>`, otool as `bl\t_lerta_retain`.
     is_call_opcode := (word: String) -> word.starts_with('call') or word in ['jmp', 'bl', 'b']
     names_retain := (word: String) ->
@@ -268,6 +272,7 @@ optimized_runtime_check := ->
       words := line.split_whitespace()
       opcode_index := words.find_index(is_call_opcode) ? return false
       words[(opcode_index + 1)..].any(names_retain)
+
     if lines.any(is_call)
       ['lerta_retain is not inlined']
     else
@@ -474,6 +479,7 @@ dump_float_ranges_check := ->
       checks := body.any((line) -> ' = fcmp uno ' in line)
       if checks != expected
         reasons.push "#{name} #{expected then 'does not check' else 'checks'} for NaN"
+
     # An operation of no tree checks alone: the division of calls checks, the subtraction does not.
     spread := function_body(lines, 'spread') ? return [reasons..., 'no function spread']
     count := spread.filter((line) -> ' = fcmp uno ' in line).count()
@@ -604,11 +610,13 @@ dump_field_tag_check := ->
       store := "store i1 #{flag}, #{value('points')}.set\""
       unless lines.any((line) -> store in line and line.ends_with(top_level))
         reasons.push "no #{store} with its tag"
+
     # id, the Int field, comes first after the header's two fields.
     id := body.find((line) -> 'Point", ptr %' in line and line.ends_with(', i32 0, i32 2'))
     id_load :=
       id and body.find((line) -> line.ends_with(" = load i64, ptr #{id.split(' = ')[0].trim()}"))
     reasons.push 'no load of the Int field without a tag' unless id_load
+
     reasons
   )
 

@@ -39,8 +39,10 @@ export struct Typed
   program: ProgramWide
   facts: NodeFacts
   unused_imports: Set<Identifier>
+
   # The names that the module imports, or that alias its imported modules.
   imported: Set<String>
+
   # The junctions inside a chain of `or`s or of `and`s, which its root, met first, stands for (see
   # membership_lists).
   inner_junctions: Set<BinaryOperation> = Set()
@@ -172,12 +174,15 @@ unused_imports := (tokens: Tokens, statement: Import, unused: Set<Identifier>) -
     first := tokens.at(name.name.position) ? return nil
     last := tokens.at((name.alias ? name.name).position) ? return nil
     spans.push { first, last, unused: is_unused(name) }
+
   # At the first name left out, not at the comma before it.
   first_unused := spans.find(Span.unused)!
+
   # A comment after the last name, left out, would stay after a name kept.
   last_line := tokens.code[spans.last()!.last].end_line
   if spans.last()!.unused and tokens.comments.any((comment) -> comment.line == last_line)
     return tokens.report(UNUSED_IMPORTS, tokens.start(first_unused.first))
+
   tokens.edit_at(UNUSED_IMPORTS, tokens.start(first_unused.first), left_out_names(tokens, spans))
 
 # The tokens of a name of an import, from its name through its alias.
@@ -227,6 +232,7 @@ export record_changes := (tokens: Tokens, call: Call) ->
   return nil if tokens.is_kind(open, '<')
   return unparenthesized_record(tokens, callee, open) unless tokens.is_kind(open, '(')
   close := tokens.matching(open) ? return nil
+
   # A space inside each brace that has the arguments on its line.
   opening := tokens.code[open + 1].line == tokens.code[open].line then '{ ' else '{'
   closing := tokens.code[close - 1].end_line == tokens.code[close].line then ' }' else '}'
@@ -398,6 +404,7 @@ struct TestedValue
   last: Int
   start: Int
   end: Int
+
   # Whether it is `x.length` before the operator, which `>` may compare.
   length_first: Bool
 
@@ -472,8 +479,10 @@ membership_test := (tokens: Tokens, call: Call, facts: NodeFacts) ->
   return nil if not runs_no_code(member.object) or not runs_no_code(item)
   first := tokens.at(member.object.position) ? return nil
   name := tokens.at(member.name.position) ? return nil
+
   # `@contains(x)` has no `.`.
   last := tokens.is_kind(name - 1, '.') then name - 2 else name - 1
+
   open := name + 1
   return nil if not tokens.is_kind(open, '(') or not is_balanced(tokens, first, last)
   close := tokens.matching(open) ? return nil
@@ -592,6 +601,7 @@ text_of := (tokens: Tokens, value: Expression) ->
 
 last_token := (tokens: Tokens, value: Expression) ->
   at := tokens.at(last_position(value)) ? return nil
+
   # `-1` is one literal of two tokens, found by the first.
   tokens.is_kind(at, '-') then at + 1 else at
 

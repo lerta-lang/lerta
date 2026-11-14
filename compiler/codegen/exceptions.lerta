@@ -163,6 +163,7 @@ export generate_try := (g: Generator, try_expression: Try) ->
     scope_depth := g.locals.depth()
     g.finallies.push { scope_depth, body: finally_body, handler_depth: g.handlers.length }
   incoming: String[]
+
   # A try that gives no value runs its blocks as statements, which release the values they discard.
   gives_value := not is_kind(type, 'void')
   generate_value := (body: Statement[], define: (Map<String, CodegenLocal>) -> void) ->
@@ -174,19 +175,24 @@ export generate_try := (g: Generator, try_expression: Try) ->
         ''
     incoming.push phi_incoming(value, ir.current_block)
     ir.branch done_label
+
   with_handler g, catches_label, -> generate_value(try_expression.body, no_locals)
   ir.start_block catches_label
+
   # A catch's own exception goes through the finally block, if there is one.
   catch_handler := finally_body then rethrow_label
   generate_catch g, clause, catch_handler, generate_value for clause in try_expression.catches
+
   # No catch takes the exception.
   ir.branch rethrow_label
   g.finallies.pop() if g.finallies.length > finally_depth
   ir.start_block rethrow_label
   run_finally_unwinding g, finally_body if finally_body
   emit_unwind g
+
   ir.start_block done_label
   result := merge(g, type, incoming)
+
   # The value is held while the finally block runs, which may throw.
   run_finally := -> generate_block(g, finally_body ? [])
   while_holding g, result, type, run_finally

@@ -119,14 +119,18 @@ reject_weak_result := (program: ProgramWide, literal: FunctionLiteral, result: T
 export captured := (body: Body, name: String): Local? ->
   enclosing := body.enclosing ? return nil
   local := enclosing.scopes.lookup_local(name) ? captured(enclosing, name) ? return nil
+
   # A local function before its declaration is not captured, but made where it is read.
   return local if local.original().pending
+
   if top_level := body.shared.top_level.locals[name]
     return nil if local == top_level
   origin := local.original()
   body.facts.shared_vars.add origin.identifier if origin.mutable
+
   # A `var` may be assigned before the literal runs, so it reads as declared.
   type := origin.mutable then origin.type else local.type
+
   unless body.captures.any((capture) -> capture.name == name)
     # A weak literal's `@` holds no reference to the object.
     weak_this := name == '@' and body.weak_this

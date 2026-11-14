@@ -78,9 +78,11 @@ export generate_fused_loop := (
   exit_label := ir.fresh_label('fused.exit')
   outer_depth := g.locals.depth()
   code := g.code
+
   # A top-level function that is not generic is checked with its module's facts and extensions,
   # whatever the loop's are.
   { extensions, facts } := code.shared
+
   inner := Generator
     code
     extensions
@@ -88,13 +90,17 @@ export generate_fused_loop := (
     ir
     function_name: trace_name(name, nil)
     top_level_code: false
+
   # The function's body is copied as many times as the loop; the loop's body, once more for each
   # yield.
   inner.fusion = { g.fusion..., literals: [g.fusion.literals..., literal] }
   copies := g.fusion.copies * fused.yields
+
   inner.nan_free = nan_free_operations(facts, literal.body, false)
+
   # The function's exception goes on from the loop, as from a call there.
   inner.fused_exit = { unwind: unwind_from(g, position), label: exit_label }
+
   # The function's scopes, which its generator holds, are captured rather than the generator, which
   # holds the function. Their names cannot be written in the source, so that the loop's body finds
   # none of the function's locals.
@@ -104,11 +110,13 @@ export generate_fused_loop := (
     resume_label := ir.fresh_label('fused.resume')
     define := (scope: Map<String, CodegenLocal>) ->
       scope[variable.name] = store_in_slot(g, value, item)
+
     # A loop in the body that takes a function in place copies what this one has copied.
     outer_fusion := g.fusion
     g.fusion = { outer_fusion..., copies }
     generate_loop_body g, body, exit_label, resume_label, define, outer_depth
     g.fusion = outer_fusion
+
     ir.branch resume_label
     ir.start_block resume_label
     g.locals.truncate outer_depth
@@ -196,8 +204,10 @@ export fused_comprehension := (g: Generator, iterable: Expression) ->
   lazy := lazy_source(g, iterable) ? return nil
   takes_in_place := (literal: FunctionLiteral?) ->
     return true if literal == nil
+
     # A literal that yields or awaits is a coroutine of its own, which the loop cannot run inline.
     return false if literal.yields or is_awaiting(g, literal)
+
     captures := g.facts.captures[literal] ? []
     not literal.weak and not captures.any(Capture.is_weak)
   takes_in_place(lazy.guard) and takes_in_place(lazy.element) then lazy

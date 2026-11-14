@@ -9,8 +9,10 @@ import CompileError from './errors'
 # as i686-linux-gnu) or else for the host.
 export struct BuildKind
   optimize: Bool
+
   # `--memory-checks`, or no `-O`: the program checks for leaks and for the use of dropped objects.
   memory_checks: Bool
+
   target: String?
 
 export build_flags := (kind: BuildKind) ->
@@ -100,11 +102,14 @@ export is_mingw := (target: String) ->
 target_flags := (target: String?): String[] ->
   return [] unless target
   flags := ["--target=#{target}"]
+
   # GNU ld, which clang uses for mingw by default, cannot link the bitcode of -flto.
   flags.push '-fuse-ld=lld' if is_mingw(target)
+
   # 32-bit x86 computes doubles on the x87 by default, in more precision, which hides a result too
   # large for a double from the check of a Float's arithmetic; SSE2 computes them as doubles.
   flags.append ['-msse2', '-mfpmath=sse'] if is_32_bit_x86(target)
+
   flags
 
 is_32_bit_x86 := (target: String) -> target.split('-')[0] in ['i386', 'i486', 'i586', 'i686']
@@ -119,13 +124,16 @@ export executable_suffix := (target: String?) -> target and is_mingw(target) the
 export run_clang_jobs := (jobs: String[][]) ->
   var next = 0
   var failed = false
+
   # Each runs the next job until none is left, or one has failed.
   worker := ->
     while not failed and next < jobs.length
       args := jobs[next]
       next += 1
       failed = true if (await run('clang', args...)).code != 0
+
   workers := [worker() for _ in 0..cpu_count]
+
   # Each is waited for, even after one has thrown, so that none still writes into a
   # directory that the caller removes afterwards.
   var error: Error?

@@ -63,45 +63,59 @@ export class Breaker
     gaps: Map<Int, CodeGap>
     skipped: Set<Int>
     closers: Map<Int, Closer>
+
     # The items that a line end separates from the item before them (see Walked).
     without_commas: Set<Int>
+
     widths: Int[]
+
     # The code tokens that a comment ending the line follows, and those that a comment on a line of
     # its own comes before.
     ending_comments: Map<Int, Int>
     own_line_comments: Set<Int>
+
     # The code tokens that start a line in the source.
     line_starts: Set<Int>
+
   # The gaps where a construct not decided yet would break first, where a line that is measured
   # ends.
   private
     undecided := Set<Int>()
+
     # The lists that must break after their opening bracket (see call), and the bodies that must go
     # in a block (see list).
     opened := Set<Int>()
     blocks := Set<Int>()
+
     # The lists without brackets that must go in a block below the token before them, by that token:
     # the arguments of a value, and block literals.
     in_blocks := Set<Int>()
+
     # The kept member lines (see ChainShape), which the arguments before them stay on the line of
     # their call for.
     kept_lines: KeptLines[] = []
+
     # The heads of the bodies that may go on their line whose statement is a call without
     # parentheses, which takes them there (see parenthesize): the width of its last token counts the
     # `)` until the body goes in a block.
     widened := Set<Int>()
+
     # The first tokens of the bodies that a `then` added goes before, whose line holds a call with
     # its parentheses (see call).
     thened := Set<Int>()
+
     # The closing brackets of the lists decided.
     closes := Set<Int>()
+
   # Whether the statement being decided keeps its gaps as written, whether it has a rewrite to
   # apply, and whether it is the body on the line of `->`, `then` or `else`.
   var keeps = false
   var rewritten = false
   private var joined = false
+
   # The first token of the statement on a line of its own being decided.
   var start = 0
+
   edits: Edit[] = []
 
   private
@@ -381,6 +395,7 @@ export class Breaker
     operation := (operation: OperationShape) ->
       { first, operands, last } := operation
       fits := @fits(first, last, @column_of(first), false)
+
       # Broken only where its first operand and operator fit, as it would only take more lines as
       # long otherwise.
       if not fits and @end_column(operands[0] - 1) - 1 <= WIDTH
@@ -412,9 +427,11 @@ export class Breaker
       below := (rule: StyleRule) -> @gaps[first] = LineStart(depth, rule)
       on_line := -> @fits(first, last, @column_of(first), false)
       on_next_line := -> @fits(first, last, 2 * depth + 1, false)
+
       # A member or a call that is no chain of members is laid out as any other value.
       laid_out: ValueKind =
         kind == CHAIN and value.shapes.first() is not ChainShape then OTHER else kind
+
       case laid_out
         when BELOW_COMMENT then below(COMMENTS)
         when BRANCH then below(BRANCHES)
@@ -436,10 +453,12 @@ export class Breaker
             below VALUE_LINES
         when BLOCK_CALL
           args := value.shapes.last() as ListShape!
+
           # Arguments without parentheses take them, a `(` for the space after the callee and a `)`
           # after them, and all of them must fit.
           { bracketed } := args
           extra := bracketed then 0 else 1
+
           if @fits(first, last, @column_of(first) + extra, not bracketed)
             @flatten first, VALUE_LINES
             @parenthesize args
@@ -481,16 +500,19 @@ export class Breaker
         @fits(first, last, @column_of(first) + extra, whole) and not @takes_lines(first, last)
       if bracketed
         rewritten := not fits(0, false) and @unbracket(literal, members)
+
         # Laid out in its brackets until its items are where a block can take them.
         @flatten first, VALUE_LINES unless rewritten
         return rewritten
       opening := literal.braced then '{ ' else '['
       closing := literal.braced then ' }' else ']'
+
       # An item that spans lines keeps them until the layout joins them, as the brackets would not.
       joinable := not @spans_any(literal)
       if joinable and fits(opening.count() + closing.count(), true)
         @bracket literal, opening, closing, members
         return true
+
       @in_blocks.add literal.open
       @gaps[close] = LineStart(depth: depth - 1, rule: MULTI_LINE_LITERALS) if members
       false
@@ -526,6 +548,7 @@ export class Breaker
       last := close - 1
       literal := list.shapes.last() as ListShape?
       item_last := (i: Int) -> @item_last(list, i)
+
       # One before the last that spans lines would end the line that the next follows; and until the
       # layout joins the lines of one in a block, joining it to the callee's could leave the lines
       # after it no deeper than that, but for the body of a function.
@@ -536,15 +559,18 @@ export class Breaker
       spanning :=
         in_block and (leading.any(spans) or (spans(items.length - 1) and not list.function_last))
       may_join := open not in @in_blocks and not leading_lines and not spanning
+
       # Up to the body of a function last, whose lines are its own.
       body := list.shapes.last() as BodyShape?
       line_last := list.function_last and body != nil then body.head else last
+
       on_line := may_join and @fits(open, line_last, @column_of(open), false)
       opens := may_join and
         not on_line and
         literal != nil and
         literal.bracketed and
         @opens_last(literal, last)
+
       # Arguments that kept member lines follow stay on the line, as in a block they would take the
       # lines: the line is reported when it does not fit.
       before_kept := @kept_lines.any((kept) -> open in kept.first..kept.dot)
@@ -629,11 +655,14 @@ export class Breaker
     # before a body on the line of the patterns, and not before a block there.
     arm := (arm: ArmShape, depth: Int) ->
       { patterns, then_at, body } := arm
+
       # The last token of the patterns, before `then` or the block.
       last := (then_at ? body.block.starts[0]) - 1
+
       var broken = false
       if arm.breakable
         @undecided.remove patterns[0]
+
         # Where only a comment after them does not fit, moving them below `when` would not shorten
         # its line, which they stay on.
         on_line := @fits(arm.start, last, @column_of(arm.start), false, false)
@@ -725,8 +754,10 @@ export class Breaker
         return false if end - 1 > WIDTH
         next := at + 1
         return at not in @ending_comments if next > last and not tail
+
         # One that the walk skips is no part of the line that it measures.
         gap := @gaps[next] ? return (not whole or next > last) and @fits_comment(at, end)
+
         ends := gap is LineStart or (next > last and next in @undecided)
         return (not whole or next > last) and @fits_comment(at, end) if ends
         return false if at in @ending_comments or next in @own_line_comments

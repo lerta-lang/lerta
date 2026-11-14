@@ -42,10 +42,13 @@ export rewrites_of := (
   parentheses := parentheses_of(program, tokens)
   found: Edit[]
   add := (edit: Edit?) -> found.push(edit) if edit
+
   # The negations that the rewrite of a condition takes, which no other rewrites.
   claimed: Set<UnaryOperation>
+
   # The junctions inside a chain of them, whose tests the rewrite of the chain takes.
   junctions: Set<BinaryOperation>
+
   with_else: Set<Condition>
   places_of program, {
     before: (value, _) ->
@@ -153,10 +156,12 @@ unneeded_pass := (tokens: Tokens, node: TypeDeclaration) ->
   last := tokens.line_end(head) ? return nil
   pass_at := last + 1
   return nil unless is_pass_body(tokens.code, head, pass_at)
+
   # A comment between them would go with `pass`, which then stays; one after `pass` moves to the
   # head's line.
   (first, line) := (tokens.code[last].line, tokens.code[pass_at].line)
   return nil if tokens.comments.any((comment) -> comment.line in first..line)
+
   change := Change(from: tokens.end(last), to: tokens.end(pass_at), text: '')
   tokens.edit_at(LAYOUT, tokens.start(pass_at), [change])
 
@@ -166,8 +171,10 @@ unneeded_pass := (tokens: Tokens, node: TypeDeclaration) ->
 two_way_value := (tokens: Tokens, value: Expression) ->
   branch := value as If ? return nil
   { then_body, else_body } := branch
+
   # A condition that binds a name is no operand.
   return nil if branch.nil_safe or branch.condition is Binding
+
   return nil if then_body.length != 1 or else_body.length != 1
   return nil if not then_body.all(is_value) or not else_body.all(is_value)
   if_at := tokens.at(branch.position) ? return nil
@@ -177,6 +184,7 @@ two_way_value := (tokens: Tokens, value: Expression) ->
   first_line := tokens.code[if_at].line
   last_line := tokens.code[else_at].end_line
   return nil if tokens.comments.any((comment) -> comment.line in first_line..=last_line)
+
   # Each part ends its line, as the next part, `else`, or a line no deeper than `else` follows.
   condition_end := tokens.line_end(if_at + 1) ? return nil
   then_end := tokens.line_end(then_at) ? return nil
@@ -185,12 +193,15 @@ two_way_value := (tokens: Tokens, value: Expression) ->
   ends_block :=
     after == tokens.code.length or tokens.code[after].column <= tokens.code[else_at - 1].column
   return nil if condition_end + 1 != then_at or then_end + 2 != else_at or not ends_block
+
   part := (first: Int, last: Int) -> tokens.slice(tokens.start(first), tokens.end(last))
   condition := part(if_at + 1, condition_end)
   written := "#{condition} then #{part(then_at, then_end)} else #{part(else_at, else_end)}"
   parentheses := added_parentheses(tokens, then_body[0]) + added_parentheses(tokens, else_body[0])
+
   # After the head, `x :=` and a space.
   return nil if tokens.end(if_at - 1).column + written.count() + parentheses > WIDTH
+
   tokens.report(TWO_WAY_VALUES, tokens.start(if_at))
 
 # The column that a call without parentheses takes for them as a part of an operation: one, as its
@@ -255,9 +266,11 @@ cast_fallback := (tokens: Tokens, coalesce: Coalesce, tight: Set<Expression>) ->
   return nil unless tokens.is_kind(open, '(')
   close := tokens.matching(open) ? return nil
   type := tokens.at(cast.type.position) ? return nil
+
   # Parentheses around the cast alone, not around what it casts, on one line.
   around := close > type and tokens.is_kind(close - 1, '?')
   return nil if not around or tokens.code[open].line != tokens.code[close].line
+
   question := Change(from: tokens.start(close - 1), to: tokens.end(close), text: '')
   tokens.edit(CAST_FALLBACKS, [tokens.removed(open), question])
 
@@ -316,6 +329,7 @@ empty_initial_value := (tokens: Tokens, declaration: Declaration) ->
         named := written as NamedType ? return nil
         assign := start - 1
         type_at := tokens.at(named.position) ? return nil
+
         # A value of another type would not be the same.
         value_type := tokens.joined(start, close - 2)
         same_type := value.type_args.is_empty() or value_type == tokens.joined(type_at, assign - 1)
@@ -356,8 +370,10 @@ without_parameters := (tokens: Tokens, function: FunctionLiteral) ->
   has_signature := not function.params.is_empty() or function.return_type != nil
   return nil if has_signature or not function.type_params.is_empty()
   var at = tokens.at(function.position) ? return nil
+
   # The parentheses that the literal is written in come before its `weak` and its own.
   at += 1 while tokens.is_kind(at, '(') and not tokens.is_kind(at + 1, ')')
+
   at += 1 if tokens.is_word(at, 'weak')
   is_empty := tokens.is_kind(at, '(') and tokens.is_kind(at + 1, ')')
   return nil if not is_empty or not tokens.is_kind(at + 2, '->')

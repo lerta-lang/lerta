@@ -36,6 +36,7 @@ export annotation_statement_edits := (
     when Declaration
       return [] if statement.type == nil or statement.omits_value or statement.weak
       { name, value, mutable } := statement
+
       # A `const`'s empty value goes as a whole (see empty_initial_value).
       collection := collection_call(statement.type, value, keeps_empty: mutable)
       [left_out_type(tokens, name, value, mutable, typed, collection)]
@@ -118,9 +119,11 @@ left_out_type := (
   assign := value_at - 1
   return nil if not tokens.is_kind(name_at + 1, ':') or not tokens.is_kind(assign, '=')
   return nil if names_import(tokens, name_at + 2, assign, typed)
+
   # The `=` stays after a `var`, and goes with `:` into `:=` otherwise.
   to := mutable then tokens.start(assign) else tokens.end(assign)
   change := Change(to, from: tokens.end(name_at), text: mutable then ' ' else ' :=')
+
   changes := [change]
   if { call, type } := collection
     callee := tokens.at(call.callee.position) ? return nil
@@ -158,8 +161,10 @@ function_types := (
   return [] unless tokens.is_kind(open, '(')
   close := tokens.matching(open) ? return []
   returned := left_out_return(tokens, function, open, close, typed)
+
   # `(x): T ->` does not parse: a parameter without its type takes the return type with it.
   return [returned] if function.return_type != nil and returned?.change == nil
+
   is_expected := function not in functions.unexpected
   parameters := [
     left_out_parameter(tokens, function, i, close, typed)
@@ -202,10 +207,12 @@ left_out_return := (
   return nil unless tokens.is_kind(close + 1, ':')
   arrow := arrow_after(tokens, close + 2) ? return nil
   return nil if names_import(tokens, close + 2, arrow, typed)
+
   # Without its parameters, the function is written without the `()`.
   bare := function.params.is_empty()
   from := bare then tokens.start(open) else tokens.end(close)
   change := Change(from, to: tokens.start(arrow), text: bare then '' else ' ')
+
   tokens.edit_at(TYPE_ANNOTATIONS, tokens.start(close + 1), [change])
 
 # The `->` after a type that holds none outside its brackets, from `from`.
@@ -245,6 +252,7 @@ left_out_field_type := (tokens: Tokens, member: MemberDeclaration, typed: Typed)
   given := value ? return nil
   return nil if type == nil or given is FunctionLiteral
   return nil if member.is_weak()
+
   # A field keeps its empty value (see Empty initial values).
   collection := collection_call(type, given, keeps_empty: true)
   left_out_type(tokens, member.name, given, member.is_mutable(), typed, collection)

@@ -72,16 +72,20 @@ export completion_items := (
   program: ProgramWide, module_index: Int, probe: CompletionProbe?
 ): CompletionItem[] ->
   shared := program.shared[module_index]
+
   # The checker met no name of its own where the code is no value to write, as a comment, a
   # string or a type; nor after an error before it in the part of the code it is in, which ends
   # the checking of that part. A member of an enum written alone, where the enum is expected, is
   # not offered among the names.
   found := probe ? return []
+
   # A member, of an object, a module or an enum, as the checker found it, or else a name.
   return member_items(program, shared, found, object) if object := found.object
   return exported_items(program, program.shared[index]) if index := found.module_index
   return enum_items(type) if type := found.enum_type
+
   locals := local_items(found.locals)
+
   # A local takes the name from the module's.
   outer := [
     item
@@ -152,6 +156,7 @@ module_items := (program: ProgramWide, shared: Shared, in_top_level: Bool) ->
   declared_later := (item: CompletionItem) -> in_top_level and item.label in shared.top_level.locals
   items := [item for item in own when not declared_later(item)]
   items.push { label: name, kind: MODULE, detail: nil } for name in shared.imports.modules.keys()
+
   # An imported name is as its module declares it, under the name it is imported by; a name of a
   # module imported as a name, `m.x`, is no name of its own.
   for (name, imported) in shared.imports.names
@@ -202,10 +207,12 @@ names_of := (program: ProgramWide, shared: Shared) ->
   items: CompletionItem[]
   for (name, local) in shared.top_level.locals
     items.push { label: name, kind: VARIABLE, detail: format_type(local.type) }
+
   # A method's entry is named by its receiver too, as `Point.sum`.
   for (name, entry) in shared.functions.entries
     continue if '.' in name
     items.push { label: name, kind: FUNCTION, detail: formatted(entry.type) }
+
   for generic in shared.generics
     items.push { label: generic.name.name, kind: FUNCTION, detail: nil } if generic.receiver == nil
   for (name, info) in shared.objects

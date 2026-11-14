@@ -99,12 +99,15 @@ export test_target := (target: String) ->
   return await call('nice', BUILD_TOOL, 'test') if target == host
   return 1 if await call(BUILD_TOOL, 'bin/lerta') != 0 or await call(BUILD_TOOL, 'bin/test') != 0
   under_wine := is_mingw(target_triple(target)) and platform != 'windows'
+
   # Without it, Wine writes its own messages to the programs' stderr.
   env := under_wine then { 'WINEDEBUG': '-all' } else Map<String, String>()
+
   # Before the run tests, so that a run without one fails at once.
   if under_wine and not await has_wine_clang(env)
     print_error "the bootstrap for #{target} needs a clang for Windows on Wine's PATH"
     return 1
+
   code := (await run('nice', HARNESS_PROGRAM, '--target', target, env: env)).code
   bootstrap := (await run('nice', BUILD_TOOL, 'test-bootstrap', '--target', target, env: env)).code
   code == 0 and bootstrap == 0 then 0 else 1
@@ -169,18 +172,22 @@ run_on_host := (host: String, targets: String[]) ->
 # stopped first (see STOP_RUN).
 run_over_ssh := (host: String, targets: String[]) ->
   print "started: #{targets.join(', ')} over SSH (#{host})"
+
   # The last line, as a login's profile may print lines before it, which must be the absolute path
   # of the directory, as `rm -rf` takes it.
   dir := (await remote_output(host, 'mktemp -d')).trim().lines().last() ? ''
   if not dir.starts_with('/') or ' ' in dir
     throw BuildError("#{host} made no temporary directory: '#{dir}'")
+
   outcomes: Outcome[]
   try
     archive := await tree_archive()
+
     # The archive takes the standard input, so the command is an argument, without a quote or a
     # `$`, which cmd and a POSIX shell would read apart.
     sent := await run('ssh', host, "bash -lc \"tar -xf - -C #{dir}\"", stdin: archive)
     throw BuildError("cannot send the tree to #{host}") if sent.code != 0
+
     for target in targets
       # The ID is that of bash, whose process group, or tree on Windows, holds the run.
       script := """

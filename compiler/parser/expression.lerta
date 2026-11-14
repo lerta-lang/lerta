@@ -272,10 +272,12 @@ parse_range := (tokens: TokenStream): Expression ->
     return start
   reject_old_range tokens
   operator := tokens.next().kind
+
   # `a..`, which has no end: whether it includes it would mean nothing, and `a...` is a spread.
   if at_range_end(tokens)
     tokens.fail_here "a range with '..=' takes an end" if operator == '..='
     return Range(start, inclusive: false, end: nil, position: start.position)
+
   inclusive := operator == '..='
   end := parse_arithmetic(tokens, 0)
   reject_chained_range tokens
@@ -389,6 +391,7 @@ parse_unary := (tokens: TokenStream): Expression ->
     return UnaryOperation(position, operator: '~', operand: tokens.nested(-> parse_unary(tokens)))
   return parse_postfix(tokens, parse_primary(tokens)) if token.kind != '-'
   tokens.next()
+
   # `-1` with no space is a negative literal, so that the minimum Int can be written; `-1.5` is one
   # too, so that a member applies to it as it does to `-1`.
   literal := tokens.peek()
@@ -398,6 +401,7 @@ parse_unary := (tokens: TokenStream): Expression ->
   if literal.kind == FLOAT and not literal.spaced
     tokens.next()
     return parse_postfix(tokens, FloatLiteral(position, text: "-#{literal.text}"))
+
   UnaryOperation(position, operator: '-', operand: tokens.nested(-> parse_unary(tokens)))
 
 export parse_identifier := (tokens: TokenStream) ->
@@ -455,9 +459,11 @@ extend_by_postfix := (tokens: TokenStream, expression: Expression): Expression? 
 parse_index := (tokens: TokenStream, object: Expression, position: Position) ->
   parse_contents := ->
     index := parse_expression(tokens)
+
     # `xs[a...]`, which reads as a spread.
     if tokens.spread == tokens.peek().position()
       tokens.fail_here 'a range without an end is written `a..`'
+
     default_value := parse_index_default(tokens)
     tokens.expect_close ']'
     Index(position, object, index, default_value)

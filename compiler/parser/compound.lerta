@@ -43,11 +43,14 @@ looks_like_parameters := (tokens: TokenStream, offset: Int) ->
   second := tokens.peek_at(offset).kind
   third := tokens.peek_at(offset + 1).kind
   return third in [':', '->'] if second == ')'
+
   # `(x = 1)` is no expression, as an assignment is a statement.
   return true if second == IDENTIFIER and third in [':', '=']
+
   # Nor is `({ x }: P` or `((a, b): T`, a typed parameter taken apart.
   names_close := names_closing_offset(tokens, offset)
   return true if names_close and tokens.peek_at(names_close + 1).kind == ':'
+
   close := tokens.closing_offset('(', ')', (kind) -> kind != EOF) ? return false
   tokens.peek_at(close + 1).kind == '->'
 
@@ -60,18 +63,22 @@ export parse_function_literal := (tokens: TokenStream, weak = false) ->
   parse_params := (): ParsedParameter[] ->
     return [] unless tokens.accept('(')
     tokens.parse_list(')', -> parse_parameter(tokens))
+
   # A default is computed before the body runs (see generate_default_entry), so it cannot wait.
   parsed_params := tokens.in_function(parse_params)
   params := [parsed.parameter for parsed in parsed_params.body]
   parts := [part for parsed in parsed_params.body for part in parsed.parts]
   tokens.fail at, "'await' cannot be in a default" if at := parsed_params.marks.await_at
+
   return_type := parse_result_annotation(tokens)
   tokens.expect '->'
   is_block := tokens.peek().kind == NEWLINE
+
   # Interpolated code is one expression; a function literal, whose body is made of statements,
   # cannot be written there.
   if start := tokens.interpolation
     tokens.fail start, 'a function cannot be written in an interpolation'
+
   parse_body := ->
     return [pass] if pass := parse_pass(tokens)
     case
@@ -151,6 +158,7 @@ export parse_parenthesized := (tokens: TokenStream, position: Position) ->
       items := tokens.parse_list_rest(')', -> parse_expression(tokens), [first])
       return TupleLiteral(items, position)
     tokens.expect_close ')'
+
     # Diagnostics about the group point at its opening parenthesis.
     first.position = position
     first
@@ -184,9 +192,11 @@ comprehension_of := (
   { variable, index, iterable, guard } := header
   if is_lazy and index != nil
     tokens.fail index.position, 'an Iter comprehension takes no index so far'
+
   # Each place that reads the parts declares them anew, as each is its own function or scope.
   bindings := -> take_apart_item(header)
   lazy := is_lazy then lazy_functions(element, variable, guard, bindings)
+
   Comprehension(
     element
     variable
@@ -306,8 +316,10 @@ parse_catch := (tokens: TokenStream) ->
 
 parse_case_arm := (tokens: TokenStream, has_subject: Bool): CaseArm ->
   tokens.expect_word 'when'
+
   # A pattern stops before `then`, which begins the arm's value.
   parse_pattern := -> parse_or(tokens)
+
   if has_subject and at_block(tokens)
     patterns := parse_pattern_block(tokens, parse_pattern)
     return { patterns, body: parse_arm_body(tokens, 'else') }

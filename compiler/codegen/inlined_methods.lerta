@@ -41,11 +41,13 @@ export inlined_method := (g: Generator, call: Call, member: Member, source: Meth
   return nil if literal.yields or literal.awaits or literal in g.fusion.literals
   return nil unless goes_through_this_once(literal.body)
   receiver := deferred_value(g, member.object)
+
   # Arguments without effects cannot assign a field that the receiver reads.
   reads_fields := arguments_of(g.facts, call).all((arg) ->
     replaced(g, arg) is FunctionLiteral or is_plain(g, arg)
   )
   return instance if is_fused_source(g, receiver, reads_fields)
+
   type := type_of(g, receiver)
   is_sequence := type is ArrayType or is_kind(type, 'Binary')
   is_sequence and is_stable(g, receiver, reads_fields) then instance
@@ -163,6 +165,7 @@ export generate_inlined_method := (
   exit_label := ir.fresh_label('inlined.exit')
   unwind := -> at_call(-> emit_traced_unwind(g, TRACE_PUSH))
   inner.fused_exit = { unwind, label: exit_label }
+
   # The method's generator is passed rather than captured, as it holds the function.
   for written at i in arguments_of(g.facts, call)
     # A method used as a value is the literal that the checker put in its place.

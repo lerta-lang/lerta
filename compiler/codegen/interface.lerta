@@ -77,8 +77,10 @@ define_reader := (g: Generator, type: Type, entry: ItabEntry) ->
     params := function_type?.params ? []
     operands := ["%p#{i}" for i in 0..params.length]
     result_type := function_type?.result ? member_type
+
     # What the reader returns when it passes an exception on.
     reader.result_type = result_type
+
     result := generate_reading(reader, type, entry, operands)
     return_type := ir_return_type(result_type)
     reader.ir.emit return_type == 'void' then 'ret void' else "ret #{return_type} #{result}"
@@ -99,6 +101,7 @@ generate_reading := (reader: Generator, type: Type, entry: ItabEntry, operands: 
     when Method
       source := target.source
       return call_union_method(reader, type, name, source, operands) if source is UnionMethod
+
       # The other methods are written in Lerta (see entry_function).
       call_builtin(reader, type, source as BuiltinMethod!, operands)
     when InterfaceProperty, EnumValue
@@ -137,8 +140,10 @@ call_builtin := (reader: Generator, type: Type, builtin: BuiltinMethod, operands
   release_and_return := ->
     emit_release ir, '%data'
     emit_return_thrown ir, reader.result_type
+
   # Only an Iter's next calls it, past the end, before it takes the object over.
   check := -> emit_check_with(ir, release_and_return)
+
   if id := builtin.parts
     value := emit_by_parts(reader, builtin, id, '%data', operands)
     emit_check_or_return_thrown ir, reader.result_type

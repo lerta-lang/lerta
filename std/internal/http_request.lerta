@@ -26,6 +26,7 @@ export struct Incoming
   request: Request
   body: BodyChunks
   keep_alive: Bool
+
   # Whether a body that the response sends as it comes may go in chunks,
   # which HTTP/1.0 does not take.
   chunked: Bool
@@ -50,10 +51,12 @@ export read_rest_of_request := (
       throw RequestError(status: 408, message: 'request timeout')
   chunked := is_chunked(headers, version)
   hosts := [value for (name, value) in headers.fields when name == 'host']
+
   # HTTP/1.0 came before Host, which HTTP/1.1 requires.
   throw bad_request() if hosts.length > 1 or (hosts.is_empty() and version == 'HTTP/1.1')
   host := hosts.first() ? address
   throw bad_request() unless is_host(host)
+
   length := content_length(headers)
   throw RequestError(status: 413, message: 'content too large') if length > options.max_body
   { max_body, body_timeout } := options
@@ -63,9 +66,11 @@ export read_rest_of_request := (
     else
       SizedBody reader, name: 'body', left: length
   body := BodyChunks(chunks, deadline, seconds: body_timeout)
+
   # HTTP/1.0 has no 100 Continue.
   expects := (headers.get('expect') ? '').to_lower() == '100-continue'
   body.continue_on = socket if expects and version == 'HTTP/1.1' and (chunked or length > 0)
+
   url := url_of(host, target) ? throw bad_request()
   request := Request(method, url, headers, body: Reader(-> await body.next()))
   Incoming(request, body, keep_alive: keeps_alive(version, headers), chunked: version == 'HTTP/1.1')
@@ -120,17 +125,22 @@ is_chunked := (headers: Headers, version: String) ->
   coding := headers.get('transfer-encoding') ? return false
   throw bad_request() if 'content-length' in headers or version == 'HTTP/1.0'
   names := [each.trim().to_lower() for each in coding.split(',')]
+
   # An empty element of a list is no element.
   codings := [name for name in names when not name.is_empty()]
+
   throw bad_request() if codings.is_empty()
   unless codings.all((each) -> each == 'chunked')
     throw RequestError(status: 501, message: 'transfer-encoding not implemented')
+
   # Chunks are not put in chunks again.
   throw bad_request() if codings.length > 1
+
   true
 
 content_length := (headers: Headers) ->
   text := headers.get('content-length') ? return 0
+
   # Digits alone, as parse_int would also take a sign.
   throw bad_request() unless text.is_digits()
   text.parse_int() ? throw bad_request()
@@ -160,8 +170,10 @@ export class BodyChunks
     deadline: Deadline
     seconds: Float
   private var ended = false
+
   # Only an IOError is kept: the reads throw no other but a cancel, which leaves the place known.
   var failure: IOError?
+
   # The connection of a client that waits for 100 Continue before it sends the body, which is sent
   # before the first read.
   var continue_on: Socket?

@@ -46,8 +46,10 @@ class Renderer
   var title: String?
   links: String[] = []
   warnings: String[] = []
+
   # How many headings have taken each slug, so that a later one takes a suffix, as on GitHub.
   slugs := Map<String, Int>()
+
   # The anchors given, so that a suffixed one does not take that of a heading written so.
   anchors := Set<String>()
 
@@ -147,8 +149,10 @@ class Renderer
 
   list := (lines: Line[], at: Int): (String, Int) ->
     first := list_marker(lines[at].text)!
+
     # The lines of each item, after its marker's width.
     item_lines: (Line[], Int)[]
+
     # A list is loose, its items' paragraphs in `<p>`, if a blank line is between its items or
     # between the blocks of one, as on GitHub.
     var loose = false
@@ -164,6 +168,7 @@ class Renderer
       next += 1 while next < lines.length and is_blank(lines[next].text)
       following := next < lines.length then list_marker(lines[next].text)
       loose = true if next > end and following?.ordered == first.ordered
+
     items := [@item(item, width, not loose) for (item, width) in item_lines].join('')
     start_attribute := first.ordered and first.number != 1 then " start=\"#{first.number}\"" else ''
     html :=
@@ -191,9 +196,11 @@ class Renderer
   inline := (text: String) ->
     bytes := text.binary
     var html = ''
+
     # Where the text not yet written starts.
     var plain = 0
     var at = 0
+
     while at < bytes.length
       if found := @inline_part(bytes, at)
         (part, next) := found
@@ -217,6 +224,7 @@ class Renderer
         if span := code_span(bytes, at)
           (code, end) := span
           return ("<code>#{escape_html(code)}</code>", end)
+
         # A run that nothing closes is text, all of it, so that none of its backticks opens a span.
         end := at + run_length(bytes, at, b'`')
         (bytes.text(at, end)!, end)
@@ -344,6 +352,7 @@ is_tag := (bytes: Binary, start: Int) ->
   var end = name_start
   end += 1 while end < bytes.length and (is_word_byte(bytes[end]) or bytes[end] == b'-')
   after := bytes.get(end) ? return false
+
   # `:` makes it an autolink, as `<https://lerta.org>`, which is not rendered either.
   after in [b' ', b'>', b'/', b':', b"\n"]
 
@@ -351,10 +360,12 @@ is_word_byte := (byte: Byte) -> byte.is_alphanumeric()
 
 continues_paragraph := (text: String) ->
   starts_block := text.starts_with('```') or text.starts_with('#') or text.starts_with('|')
+
   # An ordered list starts in a paragraph only from 1, as on GitHub, so that a line such as
   # `1999. It rained.` goes on the paragraph.
   marker := list_marker(text)
   starts_list := marker != nil and (not marker.ordered or marker.number == 1)
+
   starts_other := starts_list or unsupported_block(text) != nil
   not is_blank(text) and not text.starts_with(' ') and not starts_block and not starts_other
 
@@ -415,9 +426,11 @@ closing_emphasis := (bytes: Binary, start: Int, delimiter: Binary) ->
     unless bytes[next] == b'*'
       next += 1
       continue
+
     # Only a run of as many asterisks closes it, so that `*` does not close at half of a `**`.
     run := run_length(bytes, next, b'*')
     return next if run == delimiter.length and bytes[next - 1] != b' '
+
     next += run
   nil
 

@@ -14,9 +14,12 @@ handle := (request: Request) ->
   headers := Headers()
   headers.append 'set-cookie', 'a=1; Path=/'
   headers.append 'set-cookie', 'b=2, c'
+
   # The server's own, which it writes in place of this, in any case.
   headers.fields.push ('Content-Length', '99')
+
   fields := ["#{name}: #{value}" for (name, value) in request.headers.fields when name != 'host']
+
   # The URL holds the host that the client wrote.
   url := request.url.replace(port.to_string(), 'PORT')
   Response(headers, body: "#{request.method} #{url} #{fields} '#{(await request.text())!}'")
@@ -34,14 +37,18 @@ print response.headers.get_all('Set-Cookie')
 print response.headers.get('set-cookie')!
 headers := Headers()
 headers.set 'X-Name', 'lerta'
+
 # Its own, which the client writes in place of these.
 headers.set 'Host', 'example.com'
 headers.set 'Content-Length', '99'
+
 # Left out, as HTTP/1.1 keeps the connection alive anyway.
 headers.set 'Connection', 'close'
+
 # Put in directly, in another case, which the client tells as its own too.
 headers.fields.push ('Content-Length', '0')
 headers.fields.push ('Transfer-Encoding', 'chunked')
+
 await show('/post', await fetch("#{base}/post", headers: headers, method: 'POST', body: 'hello'))
 await show('/empty', await fetch("#{base}/empty", method: 'PUT'))
 await show('/binary', await fetch("#{base}/binary", method: 'PATCH', body: b'ab'))

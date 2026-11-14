@@ -75,14 +75,18 @@ literal_hint := (expression: Expression, expected: Type?) ->
 # expected is a T, as where a T is, and where a union is, of its one member of the literal's kind.
 compute_type := (body: Body, expression: Expression, expected: Type?): Type ->
   literal_kind := literal_hint(expression, expected)
+
   # A string literal of one character is a Char where a Char is expected; where a Byte is, it
   # reaches integer_literal only to be reported as no Byte.
   wants_character := literal_kind != nil and is_one_of_kinds(literal_kind, ['Byte', 'Char'])
+
   # A Binary literal of one byte is a Byte where a Byte is expected.
   wants_byte := literal_kind != nil and is_kind(literal_kind, 'Byte')
+
   # An integer literal is an Int unless another integer type is expected.
   wants_integer :=
     literal_kind != nil and is_integer(literal_kind) and not is_kind(literal_kind, 'Int')
+
   wants_float := literal_kind != nil and is_float(literal_kind)
   program := body.program
   case expression
@@ -154,6 +158,7 @@ compute_type := (body: Body, expression: Expression, expected: Type?): Type ->
 type_of_call := (body: Body, call: Call, expected: Type?): Type ->
   callee := call.callee
   allow_default body, callee.object if callee is Member
+
   # A call of `name.export` is the call of the name that the export is imported by.
   if callee is Member
     if name := qualified_name(body, callee)
@@ -167,6 +172,7 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
       for constructions in all
         constructions.add call if qualified_call in constructions
       return type
+
   if makes_builtin(body, call, 'Map')
     return made_collection(body, call, type_of_new_map(body, call, expected))
   if makes_builtin(body, call, 'Set')
@@ -252,8 +258,10 @@ check_interface_member := (
 ): Type ->
   body.facts.types[type_name] = type
   return type if type is TypeParameterType and body.resolver.bounds[type.name] == bound
+
   # The interface itself, as a type parameter bounded by it may stand for.
   return type if type == bound
+
   if type is not ObjectType or not satisfies(body, type, bound, type_name.position)
     satisfying := "class or struct that satisfies #{format_type(bound)}"
     message := "#{format_type(type)} is no #{satisfying}, nor a type parameter bounded by it"

@@ -104,16 +104,22 @@ export CLOSING_BRACKETS: TokenKind[] = [')', ']', '}']
 
 export struct Token
   kind: TokenKind
+
   # The identifier name, the number's text without separators (with its `0x` prefix if
   # hexadecimal), the string literal's contents or the punctuation; empty for layout tokens.
   text: String
+
   # Whether whitespace or the start of the line precedes it: `f (x)` and `f(x)` parse differently.
   spaced: Bool
+
   line: Int
+
   # Counted in code points, starting at 1.
   column: Int
+
   # The parts of an interpolated string or a Binary literal.
   parts: TemplatePart[]?
+
   # The line and the column after it, where the formatter reads its spelling up to; those of its
   # start for a layout token. Only a `"""` or `'''` literal ends on a later line.
   end_line := @line
@@ -144,10 +150,13 @@ export lex := (source: String, path: String) ->
   comments: Comment[]
   layout := Layout(path, tokens)
   lines := source_lines(source, path)
+
   # The lines up to this number are inside a `"""` or `'''` literal.
   var literal_end = 0
+
   # The brackets open at the start of the line (see LineScanner.depth).
   var brackets = 0
+
   for line in lines
     continue if line.number <= literal_end
     indent := line.scan_while(0, is_space)
@@ -234,16 +243,20 @@ class LineScanner
   args
     line: SourceLine
     var position: Int
+
     # The brackets open here, from the lines before too, which a closing bracket that opens none
     # leaves as they are, for the parser to report.
     var depth: Int
   private
     tokens: Token[] = []
+
     # Where the comment that ends the line starts, if any; scanning stops at it.
     var comment_index: Int?
+
     # Where the `"""` or `'''` that opens a literal on the lines after it starts, if the line ends
     # with one; scanning stops at it, and the caller reads the literal.
     var multiline_start: Int?
+
     # Where the first `;` on the line is, if any.
     var separator_index: Int?
 
@@ -259,8 +272,10 @@ class LineScanner
           when c == b';' then @scan_separator()
           when @at_multiline_quotes()
             quotes := @line.text(@position, @position + 3)
+
             # Quoted with the other quote, which is clearer than the same one next to them.
             shown := quotes == '"""' then "'#{quotes}'" else "\"#{quotes}\""
+
             @line.fail "#{shown} must end its line", @position if @position + 3 != @line.length
             @multiline_start = @position
             break
@@ -343,15 +358,19 @@ class LineScanner
       after_digits := (start: Int) -> @line.scan_while(start, is_identifier_part)
       var end = after_digits(@position)
       is_decimal := not @line.text(@position, end).starts_with('0x')
+
       # What looks like a fraction is taken whole (see Float literals in docs/reference/syntax.md).
       at_dot := end + 1 < @line.length and bytes[end] == b'.'
       after_dot: Byte = at_dot then bytes[end + 1] else b' '
       has_fraction := after_dot.is_digit() or after_dot == b'_'
       end = after_digits(end + 1) if has_fraction
+
       ends_with_exponent := bytes[end - 1] == b'e' or bytes[end - 1] == b'E'
+
       # The sign is taken even with no digit after it, so that a diagnostic shows it.
       sign_follows := end < @line.length and (bytes[end] == b'+' or bytes[end] == b'-')
       end = after_digits(end + 1) if is_decimal and ends_with_exponent and sign_follows
+
       text := @line.text(@position, end)
       digits := text.replace('_', '')
       return @add(INTEGER, digits, end, nil) if is_integer_literal(text)
@@ -402,6 +421,7 @@ multiline_token := (line: SourceLine, start: Int, literal: MultilineLiteral) ->
 plain_text := (parts: TemplatePart[]) ->
   return nil if parts.length != 1
   part := parts[0]
+
   # A String's escapes give valid UTF-8 (see read_escape).
   part is TextPart then part.bytes.text()!
 

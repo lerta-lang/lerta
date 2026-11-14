@@ -29,10 +29,12 @@ export parse_block_literal := (tokens: TokenStream) ->
   position := tokens.peek_at(2).position()
   items: Item[]
   tokens.read_block_items -> add_item(tokens, items)
+
   # A spread starts the fields of a struct alone (see record_of); an array's is written in brackets.
   is_record := items.any((item) -> item is NamedValue)
   if not is_record and items.any(is_spread_element)
     tokens.fail position, 'a spread in a block starts its fields, as `p...` before `x: 1`'
+
   to_literal(items, position)
 
 add_item := (tokens: TokenStream, items: Item[]) ->
@@ -40,8 +42,10 @@ add_item := (tokens: TokenStream, items: Item[]) ->
   item := parse_item(tokens)
   if is_spread_element(item) and not items.is_empty()
     tokens.fail start, 'a spread comes first in a block, once'
+
   # A spread first, then fields, spreads a struct (see record_of).
   spread_first := items.length == 1 and is_spread_element(items[0]) and item is NamedValue
+
   if previous := items.last()
     if not spread_first and kind_of(item) != kind_of(previous)
       tokens.fail start, "the items of this block are #{kind_of(previous)}, so this one must be too"

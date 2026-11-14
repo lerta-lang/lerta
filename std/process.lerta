@@ -7,17 +7,21 @@ import platform from './internal/platform'
 
 extern lerta_exit: (Int) -> never
 extern lerta_pipe_new: (String) -> Int
+
 # The command and its arguments, and the milliseconds that a stop waits before it kills; 0 if the
 # program cannot start.
 extern lerta_program_run: (String[], String?, Binary[]?, Int[], Int) -> Int
+
 extern lerta_program_wait: (Int) -> Promise<Int>
 extern lerta_program_stop: (Int) -> void
 extern lerta_program_free: (Int) -> void
 extern lerta_argv: () -> Binary[]
 extern lerta_program_path: () -> Binary
 extern lerta_executable: () -> Binary?
+
 # Windows compares the names of variables without case.
 extern lerta_same_env_name as same_env_name: (Binary, Binary) -> Bool
+
 extern lerta_environ: (Binary[]) -> void
 extern lerta_env: (String) -> Binary?
 extern lerta_cpu_count: () -> Int
@@ -63,10 +67,12 @@ export exit := (code: Int) ->
 export run := (command: String, args: String..., options: RunOptions) ->
   check_options options
   { cwd, env, unset_env, kill_after } := options
+
   # A program cannot start with a text that holds a NUL byte, as it cannot without its command; a
   # name that holds one is no name, which check_options refuses.
   texts := [command, args..., cwd ? '', env.values()...]
   throw IOError("cannot run: #{command}") if texts.any(holds_nul)
+
   changes_env := not env.is_empty() or not unset_env.is_empty()
   program_env := changes_env then env_with(env, unset_env)
   input := input_of(options.stdin, command)
@@ -76,8 +82,10 @@ export run := (command: String, args: String..., options: RunOptions) ->
     stream_of(input.pipe, input.file)
     stream_of(output.pipe, output.file, options.stdout)
     stream_of(errors.pipe, errors.file, options.stderr)
+
   # Rounded up, so as not to kill early.
   kill_milliseconds := ceil(kill_after * 1000.0).to_int() ? INT_MAX
+
   pointer := lerta_program_run([command, args...], cwd, program_env, streams, kill_milliseconds)
   throw IOError("cannot run: #{command}") if pointer == 0
   program := Program(pointer)
@@ -95,8 +103,10 @@ export run := (command: String, args: String..., options: RunOptions) ->
       await give_up(copies, feeding, outputting, erroring)
       await end_writers(output.sink, errors.sink, copies)
       throw error
+
   # What the program did not read is not wanted any more.
   await give_up(copies, feeding, nil, nil)
+
   # A stopped program's output is not wanted, and a program that it started may hold its pipes
   # open, so it is not waited for; an output read once the program has ended may still fail, and
   # stop it, which gives up the other output then, settled or not.
@@ -104,6 +114,7 @@ export run := (command: String, args: String..., options: RunOptions) ->
   await outputting if outputting and not copies.stopped
   await erroring if erroring and not copies.stopped
   await give_up(copies, nil, outputting, erroring) if copies.stopped
+
   await end_writers(output.sink, errors.sink, copies)
   throw error if error := copies.error
   return Exit(status) if status >= 0
@@ -123,8 +134,10 @@ class Copies
     command: String
   private
     var error: Error?
+
     # Whether a copy that failed stopped the program.
     var stopped = false
+
     # Whether run has cancelled the copy of the input, and those of the outputs, which a
     # CancelledError of a Reader or a Writer is not.
     var input_given_up = false
@@ -156,6 +169,7 @@ input_of := (stdin: Binary | Reader | Pipe?, command: String) ->
 # reads into its `sink`, or neither, for this program's own output, which it shares.
 output_of := (output: Output | Writer | Pipe?, stream: String, command: String) ->
   file := file_of(output, false)
+
   # Of the type written, so that a Pipe's writer counts as a Writer.
   sink: Writer? =
     case output
@@ -324,6 +338,7 @@ export executable := ->
 program_name := (path: String) ->
   return path.split('/').last()! unless platform == 'windows'
   name := path.replace('\\', '/').split('/').last()!
+
   # Windows takes the extension in any case, as `TOOL.EXE`.
   return name unless name.to_lower().ends_with('.exe')
   bytes := name.binary

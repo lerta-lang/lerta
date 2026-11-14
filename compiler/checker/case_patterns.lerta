@@ -37,11 +37,13 @@ export check_patterns := (body: Body, case_expression: Case): CaseNarrowings ->
   unhandled_nil := is_optional and not check_nil_arms(body, arms)
   missing: String[] = unhandled_nil then ['nil'] else []
   type := inner_of(subject_type)
+
   # As `is` does, the patterns take the members of the type that the subject was declared with.
   declared := inner_of(unnarrowed_type(body, subject, subject_type))
   is_value := is_one_of_kinds(type, VALUE_KINDS)
   if declared is UnionType and not is_value
     return check_type_patterns(body, case_expression, is_nil_arm, subject, declared, type, missing)
+
   unless is_value
     message := "cannot branch on a value of type #{format_type(subject_type)}"
     fail body.program, subject.position, message
@@ -91,11 +93,13 @@ check_type_patterns := (
   unhandled_members := members_of(narrowed).filter(is_unhandled)
   missing := [format_member(member, union) for member in unhandled_members]
   fail_unhandled body, case_expression, missing + missing_nil
+
   # Where nil is handled, the else arm does not see it.
   unhandled := not missing_nil.is_empty() then optional_type(narrowed) else narrowed
   handled_members := [member for member in union.members when member in handled]
   others := other_members(unhandled, union_type(handled_members))
   otherwise: Narrowing[] = others then subject_narrowings(body, subject, others) else []
+
   CaseNarrowings(otherwise, arms: arm_narrowings)
 
 check_member_patterns := (

@@ -43,9 +43,11 @@ run_driver := (
   extra_env: Map<String, String> = Map()
 ) ->
   no_retry: String[] = retry then [] else ['--no-retry']
+
   # Two at once, unless the check gives its own count, as an option may not be given twice.
   gives_jobs := args.any((arg) -> arg in ['-j', '--jobs'] or arg.starts_with('--jobs='))
   jobs: String[] = gives_jobs then [] else ['-j', '2']
+
   env :=
     'LERTA_TEST_RUN_DIR': harness_dir
     'LERTA_TEST_FAILED_FILE': failed_file
@@ -137,6 +139,7 @@ result_line := (name: String, reasons: String[]) ->
 # and ends with the time; the reasons follow, indented by 6, and what they show by more.
 reported_results := (stdout: String) ->
   results: HarnessResult[]
+
   # Whether the lines that follow give reasons of the last result.
   var in_result = false
   for line in stdout.lines()
@@ -150,6 +153,7 @@ reported_results := (stdout: String) ->
       results.last()!.reasons.push(reason) if in_result and not reason.starts_with(' ')
     else
       in_result = false
+
   [result_line(result.name, result.reasons) for result in results]
 
 # The driver shows the results, and keeps the failed checks, as the checks finish, in an order that
@@ -214,11 +218,13 @@ slots_check := Check(name: 'slots are given in the order that they were asked fo
   second := take('second')
   third := take('third')
   given_early := taken.length
+
   # Both given back before either is awaited, so that slots given in another order fail the check
   # rather than leave one waiting.
   slots.give_back()
   slots.give_back()
   await all([second, third])
+
   [
     reason_unless(given_early == 1, "#{given_early} slots given while one was held")...
     compare_text('order', 'first second third', taken.join(' '))...
@@ -342,6 +348,7 @@ driver_checks: Check[] =
     name := 'tests/harness/flaky'
     failed_file := await new_failed_file([])
     ran := await run_driver(['run', '-q', '-k', name], failed_file, true)
+
     # With -q, the -O check, which passed at once, is not shown.
     expected := [result_line(name, [])]
     [
@@ -433,6 +440,7 @@ export suite := ->
       leak_checks...
     ]
   ) ? return nil
+
   # The drivers that the checks run share the cache (see cache_dir), filled first, as each would
   # compile the runtimes otherwise.
   SuiteChecks(title, checks, ready: build_runtimes(work_dir, [[], ['-O']]))

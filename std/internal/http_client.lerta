@@ -27,6 +27,7 @@ export class Client
   args
     idle_timeout := 4.0
     max_idle := 8
+
   # The connections kept by host and port, the latest last.
   var idle = Map<String, IdleSocket[]>()
 
@@ -88,15 +89,18 @@ export class Client
       # What is still being sent when the response has come is not wanted any more.
       sending?.cancel()
       { left, chunked } := framing(head, request.method)
+
       # A body that ends with the connection leaves nothing to keep, and so does a request that has
       # not been sent whole.
       keeps := left != nil and keeps_alive(head.version, head.headers) and sent?.whole ? true
+
       # The connection is given back once the body has been read to its end, or closed.
       finish := ->
         if keeps
           @give_back request.target.authority, socket
         else
           socket.close()
+
       { reader } := socket
       chunks: ChunkedBody | SizedBody =
         if chunked
@@ -104,8 +108,10 @@ export class Client
         else
           SizedBody reader, left, name: 'response'
       body := BodyChunks(socket, finish, chunks)
+
       # A body that is empty by its framing does not hold the connection until it is read.
       body.end() if left == 0 and not chunked
+
       read_body := Reader(read_chunk: -> await body.next(), on_close: -> body.abandon())
       Response(body: read_body, status: head.status, headers: head.headers)
     catch error
@@ -177,8 +183,10 @@ class SentBody
   args
     socket: Socket
     request: Outgoing
+
     # The request's body, which is a Reader.
     body: Reader
+
   # Whether the last chunk has been written.
   private
     var whole = false
@@ -212,6 +220,7 @@ struct Target
   authority: String
   host: String
   port: Int
+
   # The path and the query, as the request line names them.
   path: String
 
@@ -337,14 +346,17 @@ read_fields := (reader: Reader) ->
     return headers if line.is_empty()
     throw malformed() if lines == MAX_FIELDS
     lines += 1
+
     # A line that starts with whitespace goes on with the field before it, as RFC 9112 has a user
     # agent take it, joined by a space.
     is_folded := line.starts_with(' ') or line.starts_with("\t")
     throw malformed() if is_folded and headers.fields.is_empty()
     field := is_folded then folded(headers.fields.pop(), line) else line.split_once(':')
     (name, value) := field ? throw malformed()
+
     # A value joined of lines may be as long as a line, so that each join copies a bounded value.
     throw malformed() if value.binary.length > MAX_LINE
+
     try
       headers.append name, value.trim()
     catch _: ValueError
@@ -450,8 +462,10 @@ resolve := (base: Target, location: String) ->
   return location if has_scheme(location)
   return "http:#{location}" if location.starts_with('//')
   origin := "http://#{base.authority}"
+
   # The same document, whose fragment the request leaves out.
   return origin + base.path if location.is_empty() or location.starts_with('#')
+
   return origin + location if location.starts_with('/')
   (path, _query) := split_or_whole(base.path, '?')
   return origin + path + location if location.starts_with('?')
