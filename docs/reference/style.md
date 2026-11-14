@@ -176,6 +176,8 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 ### Spreads
 
 - Construct a value from another of its type with a spread, `Point(p..., x: 1)`, not by copying its fields one by one, `Point(x: 1, y: p.y, z: p.z)`.
+- Spread no comprehension: name it and spread the name, or, of an array comprehension among the items of an array literal, join it with `+`, `[x] + [f(y) for y in ys]`. `lerta fmt` reports it, to be rewritten by hand.
+  - Why: `[f(y) for y in ys]...` reads as two steps, an array made and then taken apart, with its `...` far from its `[`.
 
 ### Comprehensions
 
