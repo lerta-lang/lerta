@@ -23,7 +23,10 @@ export struct Page
 # cannot take, which fails as the line of the link.
 export render_markdown := (source: String, rewrite: (String) -> String) ->
   renderer := Renderer(rewrite)
-  lines := [Line(text, number: index + 1) for text at index in source.lines()]
+  lines := [
+    for text at index in source.lines()
+      Line(text, number: index + 1)
+  ]
   html := renderer.blocks(lines, false)
   title := renderer.title else throw MarkdownError('no heading of level 1')
   Page(title, html, links: renderer.links, warnings: renderer.warnings)
@@ -141,7 +144,11 @@ class Renderer
     if not end - at >= 2 or not is_delimiter_row(table_cells(lines[at + 1]))
       fail lines[at], 'a table needs a row of dashes under its head'
     head := @row(lines[at], 'th')
-    body := [@row(lines[index], 'td') for index in (at + 2)..end].join('')
+    rows := [
+      for index in (at + 2)..end
+        @row(lines[index], 'td')
+    ]
+    body := rows.join('')
     ("<table>\n<thead>\n#{head}</thead>\n<tbody>\n#{body}</tbody>\n</table>\n", end)
 
   row := (line: Line, tag: String) ->
@@ -174,7 +181,11 @@ class Renderer
           nil
       loose = true if next > end and following?.ordered == first.ordered
 
-    items := [@item(item, width, not loose) for (item, width) in item_lines].join('')
+    written := [
+      for (item, width) in item_lines
+        @item(item, width, not loose)
+    ]
+    items := written.join('')
     start_attribute :=
       if first.ordered and first.number != 1
         " start=\"#{first.number}\""
@@ -187,10 +198,11 @@ class Renderer
   # The item of the lines, the first of which starts with its marker, `width` wide.
   item := (lines: Line[], width: Int, tight: Bool) ->
     marked := lines[0]
-    content: Line[] = [
-      { text: marked.text.binary.text(width)!, number: marked.number }
-      (Line(text: dedent(line.text, width), number: line.number) for line in lines[1..])...
+    rest := [
+      for line in lines[1..]
+        Line(text: dedent(line.text, width), number: line.number)
     ]
+    content: Line[] = [{ text: marked.text.binary.text(width)!, number: marked.number }, rest...]
     "<li>#{@blocks(content, tight)}</li>\n"
 
   paragraph := (lines: Line[], at: Int, tight: Bool) ->

@@ -44,7 +44,10 @@ export break_lines := (walked: Walked, text: SourceTokens, tokens: Tokens) ->
     skipped: walked.skipped
     closers: walked.closers
     without_commas: walked.without_commas
-    widths: [width_of(token_text, code[i]) for token_text at i in code_texts]
+    widths: [
+      for token_text at i in code_texts
+        width_of(token_text, code[i])
+    ]
     ending_comments: comment_widths
     own_line_comments: Set(text.own_line_comments.keys())
     line_starts: text.line_starts
@@ -165,8 +168,11 @@ export class Breaker
       on_decided_line := (head: Int) ->
         var at = head
         at -= 1 while at > statement.start and at not in @line_starts
-        split := [i for i in (at + 1)..=head when @gaps[i] is LineStart].first() != nil
-        not split and (at == statement.start or at in tokens)
+        breaks := [
+          for i in (at + 1)..=head when @gaps[i] is LineStart
+            i
+        ]
+        breaks.is_empty() and (at == statement.start or at in tokens)
       add_block := (block: BlockShape) ->
         first := block.starts.first() else return
         head := block.head else return
@@ -324,10 +330,12 @@ export class Breaker
       items: Int[], item_last: (Int) -> Int, depth: Int, simple: Bool, commas: Bool?, close: Int?
     ) ->
       count := items.length
-      after_comment := [i for i in 0..count when @follows_comment(items[i])].first() != nil
-      shares := simple and
-        not after_comment and
-        [i for i in 0..count when @takes_lines(items[i], item_last(i))].is_empty()
+      after_comment := items.any((item) -> @follows_comment(item))
+      spanning := [
+        for i in 0..count when @takes_lines(items[i], item_last(i))
+          i
+      ]
+      shares := simple and not after_comment and spanning.is_empty()
       if count > 1 and commas != shares
         if shares
           @with_commas items

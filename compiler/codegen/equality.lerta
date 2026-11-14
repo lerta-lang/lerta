@@ -112,7 +112,11 @@ emit_equals := (
       value_equals := (value_type: Type, index: Int) ->
         load := (object: String) -> emit_borrowed_value(ir, object, type, index)
         nested(value_type, load(left), load(right))
-      all_of(ir, [value_equals(each, i) for each at i in value_types(type)])
+      equals := [
+        for each at i in value_types(type)
+          value_equals(each, i)
+      ]
+      all_of(ir, equals)
     when type is ArrayType
       items := item_equals_function(ir.module, program, type.element)
       args := "ptr #{left}, ptr #{right}, ptr #{items}"
@@ -177,7 +181,11 @@ emit_hash := (ir: IrBuilder, program: ProgramWide, value: String, type: Type): S
       value_hash := (value_type: Type, index: Int) ->
         loaded := emit_borrowed_value(ir, value, type, index)
         emit_hash_by_contents(ir, program, loaded, value_type)
-      combine(ir, [value_hash(each, i) for each at i in value_types(type)])
+      hashes := [
+        for each at i in value_types(type)
+          value_hash(each, i)
+      ]
+      combine(ir, hashes)
     when type is ArrayType
       items := item_hash_function(ir.module, program, type.element)
       call_runtime(ir, 'i64 @lerta_array_hash(ptr, ptr)', "ptr #{value}, ptr #{items}")

@@ -185,6 +185,10 @@ link_executable := (request: BuildRequest, program: ProgramWide, dir: String, pr
   lto_objects: String[] =
     keeps_objects then ["-Wl,-object_path_lto,#{join(work_dir, "#{prefix}lto")}"] else []
 
+  linked := [
+    for file in request.linked_files
+      link_path(cwd, file)
+  ]
   args := [
     objects...
     flags...
@@ -192,7 +196,7 @@ link_executable := (request: BuildRequest, program: ProgramWide, dir: String, pr
     (lto_flags else [])...
     lto_objects...
     [real_path(object) for object in runtime.objects]...
-    [link_path(cwd, file) for file in request.linked_files]...
+    linked...
     ["-Wl,#{flag}" for flag in request.linker_flags]...
     # Last, as GNU ld with --as-needed drops a library that nothing before it on the line needs.
     libraries...
@@ -230,7 +234,10 @@ compile_modules := (request: ModulesRequest, dir: String, prefix: String) ->
       else
         nil
   ]
-  reused := [path and is_file(path) for path in cached]
+  reused := [
+    for path in cached
+      path and is_file(path)
+  ]
   compiled := [i for is_reused at i in reused when not is_reused]
   for i in compiled
     { writer } := open(join(dir, "#{names[i]}.ll"), WRITE)

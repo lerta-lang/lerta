@@ -91,7 +91,10 @@ export runs_of_alike_arms := (case_value: Case) ->
   runs: CaseArm[][]
   return runs if case_value.subject == nil
   arms := case_value.arms
-  bodies := [is_nil_arm(arm) then '' else dump_ast_without_positions(arm.body) for arm in arms]
+  bodies := [
+    for arm in arms
+      is_nil_arm(arm) then '' else dump_ast_without_positions(arm.body)
+  ]
   var start = 0
   while start < arms.length
     var end = start + 1
@@ -109,7 +112,10 @@ is_nil_arm := (arm: CaseArm) -> arm.patterns.any((pattern) -> pattern is NilLite
 # the spread reads before the arguments written, so those before a copy must have no effects.
 export copied_source := (call: Call) ->
   return nil if call.args.any(is_spread)
-  copies := [named for named in call.named_args when copied_field(named) != nil]
+  copies := [
+    for named in call.named_args when copied_field(named) != nil
+      named
+  ]
   first := copies.first() else return nil
   source := copied_field(first)!.object
   is_path := source is Identifier | This | Member
@@ -118,7 +124,10 @@ export copied_source := (call: Call) ->
   unless copies.all((named) -> dump_ast_without_positions([copied_field(named)!.object]) == key)
     return nil
   last_copy := call.named_args.index_of(copies.last()!)!
-  before := [named for named at i in call.named_args when i < last_copy and named not in copies]
+  before := [
+    for named at i in call.named_args when i < last_copy and named not in copies
+      named
+  ]
   if before.all((named) -> has_no_effects(named.value))
     source
   else

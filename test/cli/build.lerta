@@ -309,7 +309,10 @@ dump_seldom_check := ->
     targets := ['label %unwind.', 'label %raise.', 'label %generator.reject.']
     to := (line: String, target: String) -> line.starts_with('  br i1 ') and target in line
     for target in targets
-      branches := [line for line in lines when to(line, target)]
+      branches := [
+        for line in lines when to(line, target)
+          line
+      ]
       reasons.push "no branch to #{target}" if branches.is_empty()
       reasons.append ["no weights: #{line}" for line in branches when weights not in line]
     reasons
@@ -527,11 +530,17 @@ dump_fixed_captures_check := ->
     lines := dumped.result.stdout_text().split("\n")
     is_capture := (line: String) -> '%closure, i32 0, i32 ' in line and not line.ends_with(' 2')
     captures := [i for line at i in lines when is_capture(line)]
-    unfixed := [i for i in captures when '!invariant.group' not in lines[i + 1]]
+    unfixed := [
+      for i in captures when '!invariant.group' not in lines[i + 1]
+        i
+    ]
     reasons.push 'no capture read' if captures.length < 2
     reasons.append ["not read as fixed: #{lines[i + 1].trim()}" for i in unfixed]
     body := function_body(lines, 'rounds') else return [reasons..., 'no function rounds']
-    stack := [line.trim().split(' = ')[0] for line in body when ' = alloca {' in line]
+    stack := [
+      for line in body when ' = alloca {' in line
+        line.trim().split(' = ')[0]
+    ]
     is_laundered := (place: String) ->
       body.any((line) -> "@llvm.launder.invariant.group.p0(ptr #{place})" in line)
     reasons.push 'no stack closure laundered' unless stack.any(is_laundered)

@@ -29,7 +29,10 @@ export check_patterns := (body: Body, case_expression: Case): CaseNarrowings ->
   { arms } := case_expression
   subject := case_expression.subject
   if subject == nil
-    conditions := [check_condition(body, arm.patterns[0]) for arm in arms]
+    conditions := [
+      for arm in arms
+        check_condition(body, arm.patterns[0])
+    ]
     return { arms: conditions, otherwise: [] }
   subject_type := type_of(body, subject)
   is_optional := subject_type is OptionalType
@@ -62,7 +65,10 @@ export check_patterns := (body: Body, case_expression: Case): CaseNarrowings ->
       subject_narrowings body, subject, type
     else
       no_narrowings
-  arm_narrowings := [is_nil_arm(arm) then no_narrowings else narrowed for arm in arms]
+  arm_narrowings := [
+    for arm in arms
+      is_nil_arm(arm) then no_narrowings else narrowed
+  ]
   { arms: arm_narrowings, otherwise: unhandled_nil then no_narrowings else narrowed }
 
 is_nil_pattern := (pattern: Expression) -> pattern is NilLiteral
@@ -90,7 +96,10 @@ check_type_patterns := (
     if is_nil_arm(arm)
       arm_narrowings.push []
       continue
-    types := [type_pattern(body, pattern, union) for pattern in arm.patterns]
+    types := [
+      for pattern in arm.patterns
+        type_pattern(body, pattern, union)
+    ]
     for (pattern_type, pattern) in types.zip(arm.patterns)
       for member in members_of(pattern_type)
         unless handled.add(member)
@@ -98,7 +107,10 @@ check_type_patterns := (
     arm_narrowings.push subject_narrowings(body, subject, union_of(types)!)
   is_unhandled := (member: Type) -> member not in handled
   unhandled_members := members_of(narrowed).filter(is_unhandled)
-  missing := [format_member(member, union) for member in unhandled_members]
+  missing := [
+    for member in unhandled_members
+      format_member(member, union)
+  ]
   fail_unhandled body, case_expression, missing + missing_nil
 
   # Where nil is handled, the else arm does not see it.

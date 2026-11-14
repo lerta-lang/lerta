@@ -23,8 +23,14 @@ export union_test_edits := (
   negated := junction.operator == 'and'
   return [] if junction in claimed or not negated and junction.operator != 'or'
   operands := operands_of(junction, claimed)
-  placed := [placed_test(tokens, operand, negated) for operand in operands]
-  [union_edit(tokens, run) for run in runs_of(tokens, placed) when run.length > 1]
+  placed := [
+    for operand in operands
+      placed_test(tokens, operand, negated)
+  ]
+  [
+    for run in runs_of(tokens, placed) when run.length > 1
+      union_edit(tokens, run)
+  ]
 
 # The operands of the chain from left to right; `a or (b or c)` has two, the second in parentheses.
 operands_of := (junction: BinaryOperation, claimed: Set<BinaryOperation>): Expression[] ->
@@ -78,7 +84,10 @@ subject_of := (tokens: Tokens, test: PlacedTest) -> tokens.joined(test.first, te
 # and the types of the tests between come in its place.
 union_edit := (tokens: Tokens, run: PlacedTest[]) ->
   between := run[1..run.length - 1]
-  types := [type_text(tokens, test, run[i + 2]) for test at i in between]
+  types := [
+    for test at i in between
+      type_text(tokens, test, run[i + 2])
+  ]
   text := " | #{[type + ' | ' for type in types].join()}"
   from := tokens.end(run[1].first - 2)
   at := tokens.start(run[0].first)
