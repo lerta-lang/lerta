@@ -170,31 +170,34 @@ struct Shown
 
 # The locals that hold the operands of an assertion, and the operands that its message shows.
 class Held
-  body: Body
-  prefix: String
-  private declarations: Declaration[] = []
-  private shown: Shown[] = []
+  args
+    body: Body
+    prefix: String
+  private
+    declarations: Declaration[] = []
+    shown: Shown[] = []
 
-  # An operand is held in a local of its own, of the type that the test gave it, so that the message
-  # shows the value that was tested; the guard's test converts the local where it converted the
-  # operand. A path, which narrowing needs as it is and which reads the same value again, is left
-  # as it is, and so is what the source shows: a literal, nil, which makes the test one of nil, or
-  # a name that stands for a member of an enum, which the message leaves out.
-  private hold := (operand: Expression, label: String) ->
-    is_written := is_contextual(operand) or operand is NilLiteral or may_name_member(@body, operand)
-    return operand if is_written
-    read :=
-      if is_path(operand)
-        operand
-      else
-        name := "#{@prefix}.#{label}"
-        facts := @body.facts
-        type := facts.types[operand] ? type_of(@body, operand)
-        facts.conversions.remove operand
-        @declarations.push held_local(@body, name, operand, type)
-        named name, operand.position
-    @shown.push { label, value: copied_path(read) }
-    read
+    # An operand is held in a local of its own, of the type that the test gave it, so that the
+    # message shows the value that was tested; the guard's test converts the local where it
+    # converted the operand. A path, which narrowing needs as it is and which reads the same value
+    # again, is left as it is, and so is what the source shows: a literal, nil, which makes the test
+    # one of nil, or a name that stands for a member of an enum, which the message leaves out.
+    hold := (operand: Expression, label: String) ->
+      is_written :=
+        is_contextual(operand) or operand is NilLiteral or may_name_member(@body, operand)
+      return operand if is_written
+      read :=
+        if is_path(operand)
+          operand
+        else
+          name := "#{@prefix}.#{label}"
+          facts := @body.facts
+          type := facts.types[operand] ? type_of(@body, operand)
+          facts.conversions.remove operand
+          @declarations.push held_local(@body, name, operand, type)
+          named name, operand.position
+      @shown.push { label, value: copied_path(read) }
+      read
 
 # A name, `@` or a path of members from one.
 is_path := (expression: Expression): Bool ->

@@ -57,42 +57,44 @@ width_of := (text: String, token: Token) ->
 is_multi_line := (token: Token) -> token.end_line > token.line
 
 export class Breaker
-  code: Token[]
-  tokens: Tokens
-  gaps: Map<Int, CodeGap>
-  skipped: Set<Int>
-  closers: Map<Int, Closer>
-  # The items that a line end separates from the item before them (see Walked).
-  without_commas: Set<Int>
-  widths: Int[]
-  # The code tokens that a comment ending the line follows, and those that a comment on a line of
-  # its own comes before.
-  ending_comments: Map<Int, Int>
-  own_line_comments: Set<Int>
-  # The code tokens that start a line in the source.
-  line_starts: Set<Int>
+  args
+    code: Token[]
+    tokens: Tokens
+    gaps: Map<Int, CodeGap>
+    skipped: Set<Int>
+    closers: Map<Int, Closer>
+    # The items that a line end separates from the item before them (see Walked).
+    without_commas: Set<Int>
+    widths: Int[]
+    # The code tokens that a comment ending the line follows, and those that a comment on a line of
+    # its own comes before.
+    ending_comments: Map<Int, Int>
+    own_line_comments: Set<Int>
+    # The code tokens that start a line in the source.
+    line_starts: Set<Int>
   # The gaps where a construct not decided yet would break first, where a line that is measured
   # ends.
-  private undecided := Set<Int>()
-  # The lists that must break after their opening bracket (see call), and the bodies that must go in
-  # a block (see list).
-  private opened := Set<Int>()
-  private blocks := Set<Int>()
-  # The lists without brackets that must go in a block below the token before them, by that token:
-  # the arguments of a value, and block literals.
-  private in_blocks := Set<Int>()
-  # The kept member lines (see ChainShape), which the arguments before them stay on the line of
-  # their call for.
-  private kept_lines: KeptLines[] = []
-  # The heads of the bodies that may go on their line whose statement is a call without
-  # parentheses, which takes them there (see parenthesize): the width of its last token counts the
-  # `)` until the body goes in a block.
-  private widened := Set<Int>()
-  # The first tokens of the bodies that a `then` added goes before, whose line holds a call with its
-  # parentheses (see call).
-  private thened := Set<Int>()
-  # The closing brackets of the lists decided.
-  private closes := Set<Int>()
+  private
+    undecided := Set<Int>()
+    # The lists that must break after their opening bracket (see call), and the bodies that must go
+    # in a block (see list).
+    opened := Set<Int>()
+    blocks := Set<Int>()
+    # The lists without brackets that must go in a block below the token before them, by that token:
+    # the arguments of a value, and block literals.
+    in_blocks := Set<Int>()
+    # The kept member lines (see ChainShape), which the arguments before them stay on the line of
+    # their call for.
+    kept_lines: KeptLines[] = []
+    # The heads of the bodies that may go on their line whose statement is a call without
+    # parentheses, which takes them there (see parenthesize): the width of its last token counts the
+    # `)` until the body goes in a block.
+    widened := Set<Int>()
+    # The first tokens of the bodies that a `then` added goes before, whose line holds a call with
+    # its parentheses (see call).
+    thened := Set<Int>()
+    # The closing brackets of the lists decided.
+    closes := Set<Int>()
   # Whether the statement being decided keeps its gaps as written, whether it has a rewrite to
   # apply, and whether it is the body on the line of `->`, `then` or `else`.
   var keeps = false
@@ -102,224 +104,225 @@ export class Breaker
   var start = 0
   edits: Edit[] = []
 
-  private block := (block: BlockShape, depth: Int) ->
-    @gaps[start] = LineStart(depth) for start in block.starts
-    @statement_on_line statement for statement in block.statements
+  private
+    block := (block: BlockShape, depth: Int) ->
+      @gaps[start] = LineStart(depth) for start in block.starts
+      @statement_on_line statement for statement in block.statements
 
-  private statement_on_line := (statement: StatementShape) ->
-    outer := [@keeps, @rewritten, @joined]
-    outer_start := @start
-    @keeps = false
-    @rewritten = false
-    @joined = false
-    @start = statement.start
-    @prepare statement.shapes
-    @decide statement.shapes
-    @keep statement if @keeps or not @ends_lines_at_comments(statement)
-    @keeps = outer[0]
-    @rewritten = outer[1]
-    @joined = outer[2]
-    @start = outer_start
+    statement_on_line := (statement: StatementShape) ->
+      outer := [@keeps, @rewritten, @joined]
+      outer_start := @start
+      @keeps = false
+      @rewritten = false
+      @joined = false
+      @start = statement.start
+      @prepare statement.shapes
+      @decide statement.shapes
+      @keep statement if @keeps or not @ends_lines_at_comments(statement)
+      @keeps = outer[0]
+      @rewritten = outer[1]
+      @joined = outer[2]
+      @start = outer_start
 
-  # The statement keeps its gaps as written, but for the lines that blocks inside it, written below
-  # their heads, start, and the tokens after them, whose statements decide their own gaps.
-  private keep := (statement: StatementShape) ->
-    decided := @block_tokens(statement.shapes, statement)
-    for at in statement.start..statement.end
-      continue if at in decided
-      @gaps.remove at if at > statement.start
-      @skipped.add at
+    # The statement keeps its gaps as written, but for the lines that blocks inside it, written
+    # below their heads, start, and the tokens after them, whose statements decide their own gaps.
+    keep := (statement: StatementShape) ->
+      decided := @block_tokens(statement.shapes, statement)
+      for at in statement.start..statement.end
+        continue if at in decided
+        @gaps.remove at if at > statement.start
+        @skipped.add at
 
-  # The tokens of the blocks among the shapes of the statement that are written and laid out below
-  # their heads, the arms of a `case` included, with the tokens that close them. Only those whose
-  # head is on a line that the statement starts, or that such a block or arm starts, and that no
-  # line start decided before the head splits, as one below a line that the statement continues on
-  # as written could come out no deeper than that line, and the depth of one after a line start
-  # that the statement drops was worked out from it.
-  private block_tokens := (
-    shapes: Shape[]
-    statement: StatementShape
-    tokens: Set<Int> = Set()
-  ): Set<Int> ->
-    { end } := statement
-    on_decided_line := (head: Int) ->
-      var at = head
-      at -= 1 while at > statement.start and at not in @line_starts
-      split := [i for i in (at + 1)..=head when @gaps[i] is LineStart].first() != nil
-      not split and (at == statement.start or at in tokens)
-    add_block := (block: BlockShape) ->
-      first := block.starts.first() ? return
-      head := block.head ? return
-      return if first not in @line_starts or @gaps[first] is not LineStart
-      return unless on_decided_line(head)
-      if closer := @closers[head]
-        tokens.add at for at in first..=closer.at
+    # The tokens of the blocks among the shapes of the statement that are written and laid out below
+    # their heads, the arms of a `case` included, with the tokens that close them. Only those whose
+    # head is on a line that the statement starts, or that such a block or arm starts, and that no
+    # line start decided before the head splits, as one below a line that the statement continues on
+    # as written could come out no deeper than that line, and the depth of one after a line start
+    # that the statement drops was worked out from it.
+    block_tokens := (
+      shapes: Shape[]
+      statement: StatementShape
+      tokens: Set<Int> = Set()
+    ): Set<Int> ->
+      { end } := statement
+      on_decided_line := (head: Int) ->
+        var at = head
+        at -= 1 while at > statement.start and at not in @line_starts
+        split := [i for i in (at + 1)..=head when @gaps[i] is LineStart].first() != nil
+        not split and (at == statement.start or at in tokens)
+      add_block := (block: BlockShape) ->
+        first := block.starts.first() ? return
+        head := block.head ? return
+        return if first not in @line_starts or @gaps[first] is not LineStart
+        return unless on_decided_line(head)
+        if closer := @closers[head]
+          tokens.add at for at in first..=closer.at
+        else
+          tokens.add at for at in first..end
+      add_shapes := (inner: Shape[]): void -> @block_tokens(inner, statement, tokens)
+      add_body := (body: BodyShape) ->
+        add_block body.block
+        add_shapes statement.shapes for statement in body.block.statements
+      for shape in shapes
+        case shape
+          when ListShape, OperationShape, ValueShape, CallShape, ComprehensionShape
+            add_shapes shape.shapes
+          when ImportShape then add_shapes([shape.names])
+          when PostfixShape then add_shapes(shape.body.shapes + shape.shapes) if shape.postfix
+          when BodyShape then add_body(shape)
+          when BlockShape then add_block(shape)
+          when ArmsShape
+            continue unless on_decided_line(shape.head)
+            for arm in shape.arms
+              tokens.add arm.start
+              add_shapes arm.shapes
+              add_body arm.body
+          when ChainShape, UnionShape then pass
+      tokens
+
+    # Sets the gaps that the shapes break in every form, as blocks do, and notes those that they may
+    # break.
+    prepare := (shapes: Shape[]): void ->
+      for shape in shapes
+        case shape
+          when ChainShape
+            @kept_lines.push { first: shape.first, dot: shape.dots[0] } if shape.kept
+          when ListShape
+            @undecided.add shape.items[0] unless shape.items.is_empty()
+            @prepare shape.shapes
+          when OperationShape then @prepare(shape.shapes)
+          when ComprehensionShape
+            @undecided.add shape.parts[0]
+            @prepare shape.shapes
+          when ValueShape
+            case shape.kind
+              when BELOW_COMMENT, BRANCH then @gaps[shape.first] = LineStart(0)
+              else @undecided.add(shape.first)
+            @prepare shape.shapes
+          when CallShape then @prepare(shape.shapes)
+          when ImportShape then @undecided.add(shape.names.items[0])
+          when PostfixShape then @prepare(shape.body.shapes + shape.shapes) if shape.postfix
+          when BodyShape then @prepare_body(shape)
+          when ArmsShape
+            for arm in shape.arms
+              @undecided.add arm.patterns[0] if arm.breakable
+              @prepare arm.shapes
+              @prepare_body arm.body
+          else pass
+
+    # A body that may go on the line of its head is measured there until it is decided; one that
+    # cannot goes in a block, though it may be written on that line.
+    prepare_body := (body: BodyShape) ->
+      { statements } := body.block
+      @prepare statement.shapes for statement in statements
+      first := statements.first() ? return
+      if body.joinable
+        @undecided.add first.start
+        @gaps[first.start] = Spaces(count: 1, rule: SPACING)
+        if is_unbracketed_call(first)
+          @widths[first.end - 1] += 1
+          @widened.add body.head
       else
-        tokens.add at for at in first..end
-    add_shapes := (inner: Shape[]): void -> @block_tokens(inner, statement, tokens)
-    add_body := (body: BodyShape) ->
-      add_block body.block
-      add_shapes statement.shapes for statement in body.block.statements
-    for shape in shapes
-      case shape
-        when ListShape, OperationShape, ValueShape, CallShape, ComprehensionShape
-          add_shapes shape.shapes
-        when ImportShape then add_shapes([shape.names])
-        when PostfixShape then add_shapes(shape.body.shapes + shape.shapes) if shape.postfix
-        when BodyShape then add_body(shape)
-        when BlockShape then add_block(shape)
-        when ArmsShape
-          continue unless on_decided_line(shape.head)
-          for arm in shape.arms
-            tokens.add arm.start
-            add_shapes arm.shapes
-            add_body arm.body
-        when ChainShape, UnionShape then pass
-    tokens
+        @gaps[first.start] = LineStart(0)
+      closer := @closers[body.head] ? return
+      return unless closer.at == first.end
+      if not body.joinable
+        @gaps[closer.at] = LineStart(0)
+      else if closer.flat is Spaces
+        @gaps[closer.at] = closer.flat
 
-  # Sets the gaps that the shapes break in every form, as blocks do, and notes those that they may
-  # break.
-  private prepare := (shapes: Shape[]): void ->
-    for shape in shapes
-      case shape
-        when ChainShape
-          @kept_lines.push { first: shape.first, dot: shape.dots[0] } if shape.kept
-        when ListShape
-          @undecided.add shape.items[0] unless shape.items.is_empty()
-          @prepare shape.shapes
-        when OperationShape then @prepare(shape.shapes)
-        when ComprehensionShape
-          @undecided.add shape.parts[0]
-          @prepare shape.shapes
-        when ValueShape
-          case shape.kind
-            when BELOW_COMMENT, BRANCH then @gaps[shape.first] = LineStart(0)
-            else @undecided.add(shape.first)
-          @prepare shape.shapes
-        when CallShape then @prepare(shape.shapes)
-        when ImportShape then @undecided.add(shape.names.items[0])
-        when PostfixShape then @prepare(shape.body.shapes + shape.shapes) if shape.postfix
-        when BodyShape then @prepare_body(shape)
-        when ArmsShape
-          for arm in shape.arms
-            @undecided.add arm.patterns[0] if arm.breakable
-            @prepare arm.shapes
-            @prepare_body arm.body
-        else pass
+    decide := (shapes: Shape[]): void ->
+      for shape in shapes
+        case shape
+          when ListShape
+            if shape.bracketed
+              @list shape
+            else
+              @unbracketed shape
+          when OperationShape then @operation(shape)
+          when ChainShape then @chain(shape)
+          when ValueShape then @value(shape)
+          when CallShape then @call(shape)
+          when BodyShape then @body(shape)
+          when BlockShape then @nested_block(shape)
+          when ArmsShape then @arms(shape)
+          when PostfixShape then @postfix(shape)
+          when ImportShape then @import_names(shape)
+          when ComprehensionShape then @comprehension(shape)
+          when UnionShape then @union(shape)
+          else pass
 
-  # A body that may go on the line of its head is measured there until it is decided; one that
-  # cannot goes in a block, though it may be written on that line.
-  private prepare_body := (body: BodyShape) ->
-    { statements } := body.block
-    @prepare statement.shapes for statement in statements
-    first := statements.first() ? return
-    if body.joinable
-      @undecided.add first.start
-      @gaps[first.start] = Spaces(count: 1, rule: SPACING)
-      if is_unbracketed_call(first)
-        @widths[first.end - 1] += 1
-        @widened.add body.head
-    else
-      @gaps[first.start] = LineStart(0)
-    closer := @closers[body.head] ? return
-    return unless closer.at == first.end
-    if not body.joinable
-      @gaps[closer.at] = LineStart(0)
-    else if closer.flat is Spaces
-      @gaps[closer.at] = closer.flat
-
-  private decide := (shapes: Shape[]): void ->
-    for shape in shapes
-      case shape
-        when ListShape
-          if shape.bracketed
-            @list shape
-          else
-            @unbracketed shape
-        when OperationShape then @operation(shape)
-        when ChainShape then @chain(shape)
-        when ValueShape then @value(shape)
-        when CallShape then @call(shape)
-        when BodyShape then @body(shape)
-        when BlockShape then @nested_block(shape)
-        when ArmsShape then @arms(shape)
-        when PostfixShape then @postfix(shape)
-        when ImportShape then @import_names(shape)
-        when ComprehensionShape then @comprehension(shape)
-        when UnionShape then @union(shape)
-        else pass
-
-  private list := (list: ListShape) ->
-    { open, close, items } := list
-    @closes.add close
-    if items.is_empty()
-      @decide list.shapes
-      return
-    @undecided.remove items[0]
-    base := @line_depth(open)
-    last := items.length - 1
-    block := (i: Int) ->
-      i < last then @takes_lines(items[i], @item_last(list, i)) else @breaks(items[i], close)
-    holding := [i for i in 0..items.length when block(i)].first()
-    body := list.shapes.last() as BodyShape?
-    ends_with_body := list.function_last and body != nil
-    if open in @opened
-      @open list, base
-    else if holding
-      if holding == last and ends_with_body and @fits(open, close, @column_of(open), false)
+    list := (list: ListShape) ->
+      { open, close, items } := list
+      @closes.add close
+      if items.is_empty()
+        @decide list.shapes
+        return
+      @undecided.remove items[0]
+      base := @line_depth(open)
+      last := items.length - 1
+      block := (i: Int) ->
+        i < last then @takes_lines(items[i], @item_last(list, i)) else @breaks(items[i], close)
+      holding := [i for i in 0..items.length when block(i)].first()
+      body := list.shapes.last() as BodyShape?
+      ends_with_body := list.function_last and body != nil
+      if open in @opened
+        @open list, base
+      else if holding
+        if holding == last and ends_with_body and @fits(open, close, @column_of(open), false)
+          @end_with_body list, base
+        else
+          @open list, base
+      else if @fits(open, close, @column_of(open), false)
+        @with_commas list.items
+        @flatten_items list, LONG_LISTS
+        @flatten close, LONG_LISTS
+      else if ends_with_body and body!.joinable and @fits(open, body!.head, @column_of(open), false)
+        @blocks.add body!.head
         @end_with_body list, base
       else
         @open list, base
-    else if @fits(open, close, @column_of(open), false)
+      @decide list.shapes
+
+    # The list on its line, but for its closing bracket, after the body of its last item.
+    end_with_body := (list: ListShape, base: Int) ->
       @with_commas list.items
       @flatten_items list, LONG_LISTS
-      @flatten close, LONG_LISTS
-    else if ends_with_body and body!.joinable and @fits(open, body!.head, @column_of(open), false)
-      @blocks.add body!.head
-      @end_with_body list, base
-    else
-      @open list, base
-    @decide list.shapes
+      @gaps[list.close] = LineStart(depth: base, rule: LONG_LISTS)
 
-  # The list on its line, but for its closing bracket, after the body of its last item.
-  private end_with_body := (list: ListShape, base: Int) ->
-    @with_commas list.items
-    @flatten_items list, LONG_LISTS
-    @gaps[list.close] = LineStart(depth: base, rule: LONG_LISTS)
+    # The list's items on lines of their own inside its brackets.
+    open := (list: ListShape, base: Int) ->
+      item_last := (i: Int) -> @item_last(list, i)
+      @lay_out_items list.items, item_last, base + 1, list.simple, list.commas, list.close
+      @gaps[list.close] = LineStart(depth: base, rule: LONG_LISTS)
 
-  # The list's items on lines of their own inside its brackets.
-  private open := (list: ListShape, base: Int) ->
-    item_last := (i: Int) -> @item_last(list, i)
-    @lay_out_items list.items, item_last, base + 1, list.simple, list.commas, list.close
-    @gaps[list.close] = LineStart(depth: base, rule: LONG_LISTS)
+    # Items on lines of their own at `depth`, before `close` if it closes them: as many on a line as
+    # fit if all are simple, with a comma ending each line but the last, and otherwise one on each
+    # line, without commas.
+    lay_out_items := (
+      items: Int[], item_last: (Int) -> Int, depth: Int, simple: Bool, commas: Bool?, close: Int?
+    ) ->
+      count := items.length
+      after_comment := [i for i in 0..count when @follows_comment(items[i])].first() != nil
+      shares := simple and
+        not after_comment and
+        [i for i in 0..count when @takes_lines(items[i], item_last(i))].is_empty()
+      if count > 1 and commas != shares
+        if shares
+          @with_commas items
+        else
+          @on_own_lines items, item_last, close
+        return
+      @gaps[items[0]] = LineStart(depth, rule: LONG_LISTS)
+      for i in 1..count
+        if shares
+          @flatten items[i], LONG_LISTS
+          comma := i < count - 1 then 1 else 0
+          continue if @end_column(item_last(i)) + comma - 1 <= WIDTH
+        @gaps[items[i]] = LineStart(depth, rule: LONG_LISTS)
 
-  # Items on lines of their own at `depth`, before `close` if it closes them: as many on a line as
-  # fit if all are simple, with a comma ending each line but the last, and otherwise one on each
-  # line, without commas.
-  private lay_out_items := (
-    items: Int[], item_last: (Int) -> Int, depth: Int, simple: Bool, commas: Bool?, close: Int?
-  ) ->
-    count := items.length
-    after_comment := [i for i in 0..count when @follows_comment(items[i])].first() != nil
-    shares := simple and
-      not after_comment and
-      [i for i in 0..count when @takes_lines(items[i], item_last(i))].is_empty()
-    if count > 1 and commas != shares
-      if shares
-        @with_commas items
-      else
-        @on_own_lines items, item_last, close
-      return
-    @gaps[items[0]] = LineStart(depth, rule: LONG_LISTS)
-    for i in 1..count
-      if shares
-        @flatten items[i], LONG_LISTS
-        comma := i < count - 1 then 1 else 0
-        continue if @end_column(item_last(i)) + comma - 1 <= WIDTH
-      @gaps[items[i]] = LineStart(depth, rule: LONG_LISTS)
-
-  private flatten_items := (list: ListShape, rule: StyleRule) ->
-    @flatten item, rule for item in list.items
+    flatten_items := (list: ListShape, rule: StyleRule) ->
+      @flatten item, rule for item in list.items
 
   # The last token of the item, before the comma after it.
   item_last := (list: ListShape, i: Int) ->
@@ -334,398 +337,402 @@ export class Breaker
 
   # On its line if it fits there; otherwise on a line of its own inside its brackets if it fits
   # there, and on a line for each part if it does not.
-  private comprehension := (shape: ComprehensionShape) ->
-    { open, close, parts } := shape
-    @undecided.remove parts[0]
-    @closes.add close
-    flatten_parts := -> @flatten(part, LINE_LENGTH) for part in parts[1..]
-    if @fits(open, close, @column_of(open), false)
-      @flatten parts[0], LINE_LENGTH
-      flatten_parts()
-      @flatten close, LINE_LENGTH
-    else
-      depth := @line_depth(open) + 1
-      @gaps[parts[0]] = LineStart(depth, rule: LINE_LENGTH)
-      if @fits(parts[0], close - 1, 2 * depth + 1, false, false)
+  private
+    comprehension := (shape: ComprehensionShape) ->
+      { open, close, parts } := shape
+      @undecided.remove parts[0]
+      @closes.add close
+      flatten_parts := -> @flatten(part, LINE_LENGTH) for part in parts[1..]
+      if @fits(open, close, @column_of(open), false)
+        @flatten parts[0], LINE_LENGTH
         flatten_parts()
+        @flatten close, LINE_LENGTH
       else
-        @gaps[part] = LineStart(depth, rule: LINE_LENGTH) for part in parts[1..]
-      @gaps[close] = LineStart(depth: depth - 1, rule: LINE_LENGTH)
-    @decide shape.shapes
+        depth := @line_depth(open) + 1
+        @gaps[parts[0]] = LineStart(depth, rule: LINE_LENGTH)
+        if @fits(parts[0], close - 1, 2 * depth + 1, false, false)
+          flatten_parts()
+        else
+          @gaps[part] = LineStart(depth, rule: LINE_LENGTH) for part in parts[1..]
+        @gaps[close] = LineStart(depth: depth - 1, rule: LINE_LENGTH)
+      @decide shape.shapes
 
-  # See ImportShape.
-  private import_names := (shape: ImportShape) ->
-    { names, from_at, last } := shape
-    { open, items } := names
-    @undecided.remove items[0]
-    commented := [items..., from_at].any((at) -> @follows_comment(at))
-    if @fits(open, last, @column_of(open), true) and not commented
-      # Names in a block, which line ends may separate, join with commas, a rewrite.
-      if items[0] in @line_starts or names.commas == false
-        joined_from := Change(from: @tokens.end(from_at - 1), to: @tokens.start(from_at), text: ' ')
-        @rewrite LONG_LISTS, [@on_one_line(items, ' ')..., joined_from]
+    # See ImportShape.
+    import_names := (shape: ImportShape) ->
+      { names, from_at, last } := shape
+      { open, items } := names
+      @undecided.remove items[0]
+      commented := [items..., from_at].any((at) -> @follows_comment(at))
+      if @fits(open, last, @column_of(open), true) and not commented
+        # Names in a block, which line ends may separate, join with commas, a rewrite.
+        if items[0] in @line_starts or names.commas == false
+          joined_from :=
+            Change(from: @tokens.end(from_at - 1), to: @tokens.start(from_at), text: ' ')
+          @rewrite LONG_LISTS, [@on_one_line(items, ' ')..., joined_from]
+          return
+        @flatten_items names, LONG_LISTS
+        @flatten from_at, LONG_LISTS
         return
-      @flatten_items names, LONG_LISTS
-      @flatten from_at, LONG_LISTS
-      return
-    depth := @line_depth(open)
-    item_last := (i: Int) -> @item_last(names, i)
-    @lay_out_items items, item_last, depth + 1, true, names.commas, from_at
-    @gaps[from_at] = LineStart(depth, rule: LONG_LISTS)
+      depth := @line_depth(open)
+      item_last := (i: Int) -> @item_last(names, i)
+      @lay_out_items items, item_last, depth + 1, true, names.commas, from_at
+      @gaps[from_at] = LineStart(depth, rule: LONG_LISTS)
 
-  private operation := (operation: OperationShape) ->
-    { first, operands, last } := operation
-    fits := @fits(first, last, @column_of(first), false)
-    # Broken only where its first operand and operator fit, as it would only take more lines as
-    # long otherwise.
-    if not fits and @end_column(operands[0] - 1) - 1 <= WIDTH
-      depth := @line_depth(first) + 1
-      @gaps[operand] = LineStart(depth, rule: LONG_OPERATIONS) for operand in operands
-    else
-      @flatten operand, LONG_OPERATIONS for operand in operands
-    @decide operation.shapes
-
-  # A chain of members on its line if it fits there, and otherwise one member a line, one level
-  # deeper than its first, from its first `.` on.
-  private chain := (chain: ChainShape) ->
-    { first, dots, last } := chain
-    if chain.kept
-      # The arguments before them stay on the call's line (see unbracketed).
-      depth := @line_depth(first) + 1
-      @gaps[dot] = LineStart(depth, rule: LAYOUT) for dot in dots
-      return
-    if @fits(first, last, @column_of(first), false)
-      @flatten dot, LONG_CHAINS for dot in dots
-    else
-      depth := @line_depth(first) + 1
-      @gaps[dot] = LineStart(depth, rule: LONG_CHAINS) for dot in dots
-
-  private value := (value: ValueShape) ->
-    { first, last, kind } := value
-    @undecided.remove first
-    depth := @line_depth(first - 1) + 1
-    below := (rule: StyleRule) -> @gaps[first] = LineStart(depth, rule)
-    on_line := -> @fits(first, last, @column_of(first), false)
-    on_next_line := -> @fits(first, last, 2 * depth + 1, false)
-    # A member or a call that is no chain of members is laid out as any other value.
-    laid_out: ValueKind =
-      kind == CHAIN and value.shapes.first() is not ChainShape then OTHER else kind
-    case laid_out
-      when BELOW_COMMENT then below(COMMENTS)
-      when BRANCH then below(BRANCHES)
-      when LITERAL_BLOCK
-        if @literal_block(value, depth)
-          literal := value.shapes[0] as ListShape!
-          @decide [literal.shapes..., value.shapes[1..]...]
-          return
-      when CHAIN
-        # A chain that does not fit on the line of its value breaks there rather than below it.
-        if on_line() or @starts_on_line(value)
-          @flatten first, VALUE_LINES
-        else
-          below VALUE_LINES
-      when OPERATION
-        if on_line() or (not on_next_line() and @starts_on_line(value))
-          @flatten first, VALUE_LINES
-        else
-          below VALUE_LINES
-      when BLOCK_CALL
-        args := value.shapes.last() as ListShape!
-        # Arguments without parentheses take them, a `(` for the space after the callee and a `)`
-        # after them, and all of them must fit.
-        { bracketed } := args
-        extra := bracketed then 0 else 1
-        if @fits(first, last, @column_of(first) + extra, not bracketed)
-          @flatten first, VALUE_LINES
-          @parenthesize args
-        else if @fits(first, last, 2 * depth + 1 + extra, not bracketed)
-          below VALUE_LINES
-          @parenthesize args
-        else if not bracketed
-          # Which a value cannot take on its line.
-          @in_blocks.add args.open
-        else if not args.function_last and not @breaks(first, last + 1)
-          # Unless a function's body takes the lines below.
-          @unparenthesize args, "\n" + ' '.repeat(@source_indentation(args.open) + 2)
-      when TWO_WAY
-        if on_line()
-          @flatten first, VALUE_LINES
-        else if on_next_line()
-          below VALUE_LINES
-        else
-          # Which an `if` writes, a rewrite left to be done by hand.
-          @report_only TWO_WAY_VALUES, first
-          return
+    operation := (operation: OperationShape) ->
+      { first, operands, last } := operation
+      fits := @fits(first, last, @column_of(first), false)
+      # Broken only where its first operand and operator fit, as it would only take more lines as
+      # long otherwise.
+      if not fits and @end_column(operands[0] - 1) - 1 <= WIDTH
+        depth := @line_depth(first) + 1
+        @gaps[operand] = LineStart(depth, rule: LONG_OPERATIONS) for operand in operands
       else
-        if on_line() or not on_next_line()
-          @flatten first, VALUE_LINES
+        @flatten operand, LONG_OPERATIONS for operand in operands
+      @decide operation.shapes
+
+    # A chain of members on its line if it fits there, and otherwise one member a line, one level
+    # deeper than its first, from its first `.` on.
+    chain := (chain: ChainShape) ->
+      { first, dots, last } := chain
+      if chain.kept
+        # The arguments before them stay on the call's line (see unbracketed).
+        depth := @line_depth(first) + 1
+        @gaps[dot] = LineStart(depth, rule: LAYOUT) for dot in dots
+        return
+      if @fits(first, last, @column_of(first), false)
+        @flatten dot, LONG_CHAINS for dot in dots
+      else
+        depth := @line_depth(first) + 1
+        @gaps[dot] = LineStart(depth, rule: LONG_CHAINS) for dot in dots
+
+    value := (value: ValueShape) ->
+      { first, last, kind } := value
+      @undecided.remove first
+      depth := @line_depth(first - 1) + 1
+      below := (rule: StyleRule) -> @gaps[first] = LineStart(depth, rule)
+      on_line := -> @fits(first, last, @column_of(first), false)
+      on_next_line := -> @fits(first, last, 2 * depth + 1, false)
+      # A member or a call that is no chain of members is laid out as any other value.
+      laid_out: ValueKind =
+        kind == CHAIN and value.shapes.first() is not ChainShape then OTHER else kind
+      case laid_out
+        when BELOW_COMMENT then below(COMMENTS)
+        when BRANCH then below(BRANCHES)
+        when LITERAL_BLOCK
+          if @literal_block(value, depth)
+            literal := value.shapes[0] as ListShape!
+            @decide [literal.shapes..., value.shapes[1..]...]
+            return
+        when CHAIN
+          # A chain that does not fit on the line of its value breaks there rather than below it.
+          if on_line() or @starts_on_line(value)
+            @flatten first, VALUE_LINES
+          else
+            below VALUE_LINES
+        when OPERATION
+          if on_line() or (not on_next_line() and @starts_on_line(value))
+            @flatten first, VALUE_LINES
+          else
+            below VALUE_LINES
+        when BLOCK_CALL
+          args := value.shapes.last() as ListShape!
+          # Arguments without parentheses take them, a `(` for the space after the callee and a `)`
+          # after them, and all of them must fit.
+          { bracketed } := args
+          extra := bracketed then 0 else 1
+          if @fits(first, last, @column_of(first) + extra, not bracketed)
+            @flatten first, VALUE_LINES
+            @parenthesize args
+          else if @fits(first, last, 2 * depth + 1 + extra, not bracketed)
+            below VALUE_LINES
+            @parenthesize args
+          else if not bracketed
+            # Which a value cannot take on its line.
+            @in_blocks.add args.open
+          else if not args.function_last and not @breaks(first, last + 1)
+            # Unless a function's body takes the lines below.
+            @unparenthesize args, "\n" + ' '.repeat(@source_indentation(args.open) + 2)
+        when TWO_WAY
+          if on_line()
+            @flatten first, VALUE_LINES
+          else if on_next_line()
+            below VALUE_LINES
+          else
+            # Which an `if` writes, a rewrite left to be done by hand.
+            @report_only TWO_WAY_VALUES, first
+            return
         else
-          below VALUE_LINES
-    @decide value.shapes
+          if on_line() or not on_next_line()
+            @flatten first, VALUE_LINES
+          else
+            below VALUE_LINES
+      @decide value.shapes
 
-  # A literal on its line, in its brackets, if it fits there and spans no lines, and otherwise in a
-  # block below the head of the value at `depth`, without them, with the members after it on the
-  # line after the block, as deep as the line of the head (see Multi-line literals): whether a
-  # rewrite of its brackets does so, which leaves its items as written for now.
-  private literal_block := (value: ValueShape, depth: Int) ->
-    { first, last } := value
-    literal := value.shapes[0] as ListShape!
-    { bracketed, close } := literal
-    members := bracketed then close < last else close <= last
-    fits := (extra: Int, whole: Bool) ->
-      @fits(first, last, @column_of(first) + extra, whole) and not @takes_lines(first, last)
-    if bracketed
-      rewritten := not fits(0, false) and @unbracket(literal, members)
-      # Laid out in its brackets until its items are where a block can take them.
-      @flatten first, VALUE_LINES unless rewritten
-      return rewritten
-    opening := literal.braced then '{ ' else '['
-    closing := literal.braced then ' }' else ']'
-    # An item that spans lines keeps them until the layout joins them, as the brackets would not.
-    joinable := not @spans_any(literal)
-    if joinable and fits(opening.count() + closing.count(), true)
-      @bracket literal, opening, closing, members
-      return true
-    @in_blocks.add literal.open
-    @gaps[close] = LineStart(depth: depth - 1, rule: MULTI_LINE_LITERALS) if members
-    false
+    # A literal on its line, in its brackets, if it fits there and spans no lines, and otherwise in
+    # a block below the head of the value at `depth`, without them, with the members after it on the
+    # line after the block, as deep as the line of the head (see Multi-line literals): whether a
+    # rewrite of its brackets does so, which leaves its items as written for now.
+    literal_block := (value: ValueShape, depth: Int) ->
+      { first, last } := value
+      literal := value.shapes[0] as ListShape!
+      { bracketed, close } := literal
+      members := bracketed then close < last else close <= last
+      fits := (extra: Int, whole: Bool) ->
+        @fits(first, last, @column_of(first) + extra, whole) and not @takes_lines(first, last)
+      if bracketed
+        rewritten := not fits(0, false) and @unbracket(literal, members)
+        # Laid out in its brackets until its items are where a block can take them.
+        @flatten first, VALUE_LINES unless rewritten
+        return rewritten
+      opening := literal.braced then '{ ' else '['
+      closing := literal.braced then ' }' else ']'
+      # An item that spans lines keeps them until the layout joins them, as the brackets would not.
+      joinable := not @spans_any(literal)
+      if joinable and fits(opening.count() + closing.count(), true)
+        @bracket literal, opening, closing, members
+        return true
+      @in_blocks.add literal.open
+      @gaps[close] = LineStart(depth: depth - 1, rule: MULTI_LINE_LITERALS) if members
+      false
 
-  # Whether the first operand and operator of the operation that is the value fit on its line, or
-  # the start of the chain of members up to its first `.`, after which the chain breaks.
-  private starts_on_line := (value: ValueShape) ->
-    shape := value.shapes.first()
-    case shape
-      when OperationShape then @end_column(shape.operands[0] - 1) - 1 <= WIDTH
-      when ChainShape then @end_column(shape.dots[0] - 1) <= WIDTH
-      else false
+    # Whether the first operand and operator of the operation that is the value fit on its line, or
+    # the start of the chain of members up to its first `.`, after which the chain breaks.
+    starts_on_line := (value: ValueShape) ->
+      shape := value.shapes.first()
+      case shape
+        when OperationShape then @end_column(shape.operands[0] - 1) - 1 <= WIDTH
+        when ChainShape then @end_column(shape.dots[0] - 1) <= WIDTH
+        else false
 
-  # A call at the start of a statement takes its arguments without parentheses where it can, but on
-  # the line of `->`, `then` or `else`, which holds it with them (see Calls without parentheses).
-  private call := (call: CallShape) ->
-    args := call.shapes.last() as ListShape!
-    if @joined or @start in @thened or args.takes_parentheses
-      @parenthesize args
-    else if @start in @line_starts
-      # One that the source has on the line of `->`, `then` or `else` takes them until the layout
-      # puts it in a block, as what follows on that line would be its arguments without them.
-      @unparenthesize args, ' '
-    @decide call.shapes
+    # A call at the start of a statement takes its arguments without parentheses where it can, but
+    # on the line of `->`, `then` or `else`, which holds it with them (see Calls without
+    # parentheses).
+    call := (call: CallShape) ->
+      args := call.shapes.last() as ListShape!
+      if @joined or @start in @thened or args.takes_parentheses
+        @parenthesize args
+      else if @start in @line_starts
+        # One that the source has on the line of `->`, `then` or `else` takes them until the layout
+        # puts it in a block, as what follows on that line would be its arguments without them.
+        @unparenthesize args, ' '
+      @decide call.shapes
 
-  # Arguments without parentheses: on the line of the callee if they fit there, or if the last is a
-  # function, whose body takes the lines below, or a literal that breaks after its opening bracket
-  # there; and otherwise in a block below it.
-  private unbracketed := (list: ListShape) ->
-    { open, close, items } := list
-    @undecided.remove items[0]
-    last := close - 1
-    literal := list.shapes.last() as ListShape?
-    item_last := (i: Int) -> @item_last(list, i)
-    # One before the last that spans lines would end the line that the next follows; and until the
-    # layout joins the lines of one in a block, joining it to the callee's could leave the lines
-    # after it no deeper than that, but for the body of a function.
-    leading := [i for i in 0..(items.length - 1)]
-    leading_lines := leading.any((i) -> @takes_lines(items[i], item_last(i)))
-    spans := (i: Int) -> @code[items[i]].line != @code[item_last(i)].end_line
-    in_block := items[0] in @line_starts
-    spanning :=
-      in_block and (leading.any(spans) or (spans(items.length - 1) and not list.function_last))
-    may_join := open not in @in_blocks and not leading_lines and not spanning
-    # Up to the body of a function last, whose lines are its own.
-    body := list.shapes.last() as BodyShape?
-    line_last := list.function_last and body != nil then body.head else last
-    on_line := may_join and @fits(open, line_last, @column_of(open), false)
-    opens := may_join and
-      not on_line and
-      literal != nil and
-      literal.bracketed and
-      @opens_last(literal, last)
-    # Arguments that kept member lines follow stay on the line, as in a block they would take the
-    # lines: the line is reported when it does not fit.
-    before_kept := @kept_lines.any((kept) -> open in kept.first..kept.dot)
-    if on_line or opens or before_kept
-      @opened.add literal!.open if opens
-      @join_arguments list
-      @flatten_items list, LONG_LISTS
-    else
-      @lay_out_items items, item_last, @line_depth(open) + 1, list.simple, list.commas, nil
-    @decide list.shapes
-
-  # Whether the list is a literal that the call ends with, which can break after its opening
-  # bracket on the line of the call.
-  private opens_last := (list: ListShape, last: Int) ->
-    is_literal := @code[list.open].spaced and list.close == last
-    is_literal and @end_column(list.open) - 1 <= WIDTH
-
-  private body := (body: BodyShape) ->
-    if @goes_on_line(body)
-      @join_body body
-    else
-      @block_body body, @line_depth(body.head) + 1
-
-  # Whether the body is one statement that fits on the line of its head, all of it.
-  private goes_on_line := (body: BodyShape) ->
-    statement := body.block.statements.first() ? return false
-    @undecided.remove statement.start
-    can_join := body.joinable and body.head not in @blocks
-    can_join and @fits(statement.start, statement.end - 1, @end_column(body.head) + 1, true)
-
-  private join_body := (body: BodyShape) ->
-    statement := body.block.statements[0]
-    @flatten statement.start, body.rule
-    if closer := @closers[body.head]
-      @flatten closer.at, body.rule if closer.at == statement.end
-    outer := @joined
-    @joined = true
-    @decide statement.shapes
-    @joined = outer
-
-  private block_body := (body: BodyShape, depth: Int) ->
-    if body.head in @widened
-      @widened.remove body.head
-      @widths[body.block.statements[0].end - 1] -= 1
-    @block body.block, depth
-    @gaps[body.block.statements[0].start] = LineStart(depth, rule: body.rule) if body.joinable
-    @close body.head, depth - 1, body.rule
-
-  private nested_block := (block: BlockShape) ->
-    head := block.head ? return
-    depth := @line_depth(head) + 1
-    if block.joins_if and block.starts.length == 1 and block.statements.length == 1
-      @join_if block.statements[0], depth
-    else
-      @block block, depth
-    @close head, depth - 1, LAYOUT
-
-  # The `if` alone in the block of an `else` goes on its line, unless it keeps its gaps as written.
-  private join_if := (statement: StatementShape, depth: Int) ->
-    { start } := statement
-    @gaps[start] = Spaces(count: 1, rule: SPACING, joined: BRANCHES)
-    @statement_on_line statement
-    @gaps[start] = LineStart(depth) if start in @skipped
-
-  # The token after the body at `head` starts a line at `depth`, unless it is the closing bracket of
-  # a list, which goes back to the depth of the list's line.
-  private close := (head: Int, depth: Int, rule: StyleRule) ->
-    closer := @closers[head] ? return
-    @gaps[closer.at] = LineStart(depth, rule) if closer.at in @gaps and closer.at not in @closes
-
-  private arms := (arms: ArmsShape) ->
-    depth := @line_depth(arms.head) + 1
-    for arm in arms.arms
-      @gaps[arm.start] = LineStart(depth)
-      @arm arm, depth
-    @close arms.head, depth - 1, BRANCHES
-
-  # The patterns on the line of `when` if they fit there, and otherwise on lines of their own below
-  # it, with `then` on the line after them (see Long lists); and the body on the line of `then` or
-  # `else` if it fits there, and otherwise in a block (see Branches). `then` is written before a
-  # body on the line of the patterns, and not before a block there.
-  private arm := (arm: ArmShape, depth: Int) ->
-    { patterns, then_at, body } := arm
-    # The last token of the patterns, before `then` or the block.
-    last := (then_at ? body.block.starts[0]) - 1
-    var broken = false
-    if arm.breakable
-      @undecided.remove patterns[0]
-      # Where only a comment after them does not fit, moving them below `when` would not shorten its
-      # line, which they stay on.
-      on_line := @fits(arm.start, last, @column_of(arm.start), false, false)
-      if on_line or (then_at == nil and @end_column(last) - 1 <= WIDTH)
-        @flatten pattern, LONG_LISTS for pattern in patterns
-        @flatten then_at, LONG_LISTS if then_at
-      else if then_at
-        broken = true
-        item_last := (i: Int) -> i < patterns.length - 1 then patterns[i + 1] - 2 else last
-        @lay_out_items patterns, item_last, depth + 1, true, arm.commas, then_at
-        @gaps[then_at] = LineStart(depth, rule: LONG_LISTS)
+    # Arguments without parentheses: on the line of the callee if they fit there, or if the last is
+    # a function, whose body takes the lines below, or a literal that breaks after its opening
+    # bracket there; and otherwise in a block below it.
+    unbracketed := (list: ListShape) ->
+      { open, close, items } := list
+      @undecided.remove items[0]
+      last := close - 1
+      literal := list.shapes.last() as ListShape?
+      item_last := (i: Int) -> @item_last(list, i)
+      # One before the last that spans lines would end the line that the next follows; and until the
+      # layout joins the lines of one in a block, joining it to the callee's could leave the lines
+      # after it no deeper than that, but for the body of a function.
+      leading := [i for i in 0..(items.length - 1)]
+      leading_lines := leading.any((i) -> @takes_lines(items[i], item_last(i)))
+      spans := (i: Int) -> @code[items[i]].line != @code[item_last(i)].end_line
+      in_block := items[0] in @line_starts
+      spanning :=
+        in_block and (leading.any(spans) or (spans(items.length - 1) and not list.function_last))
+      may_join := open not in @in_blocks and not leading_lines and not spanning
+      # Up to the body of a function last, whose lines are its own.
+      body := list.shapes.last() as BodyShape?
+      line_last := list.function_last and body != nil then body.head else last
+      on_line := may_join and @fits(open, line_last, @column_of(open), false)
+      opens := may_join and
+        not on_line and
+        literal != nil and
+        literal.bracketed and
+        @opens_last(literal, last)
+      # Arguments that kept member lines follow stay on the line, as in a block they would take the
+      # lines: the line is reported when it does not fit.
+      before_kept := @kept_lines.any((kept) -> open in kept.first..kept.dot)
+      if on_line or opens or before_kept
+        @opened.add literal!.open if opens
+        @join_arguments list
+        @flatten_items list, LONG_LISTS
       else
-        @patterns_below arm, last
-    @decide arm.shapes
-    is_else := patterns.is_empty()
-    if then_at == nil and not is_else
-      if @fits_after_then(body, last)
-        @add_then last
-        @thened.add body.block.statements[0].start
-      @block_body body, depth + 1
-    else if @goes_on_line(body)
-      @join_body body
-    else
-      @remove_then arm, then_at!, body if not broken and not is_else
-      @block_body body, depth + 1
+        @lay_out_items items, item_last, @line_depth(open) + 1, list.simple, list.commas, nil
+      @decide list.shapes
 
-  # Whether the body is one statement that fits on the line of the patterns that end at `last`,
-  # after `then`; not a call without parentheses or a postfix form, which the block after `then`
-  # that the rewrite leaves until the layout joins it cannot hold.
-  private fits_after_then := (body: BodyShape, last: Int) ->
-    statement := body.block.statements.first() ? return false
-    column := @end_column(last) + ' then '.count()
-    fits := @fits(statement.start, statement.end - 1, column, true)
-    held := not is_unbracketed_call(statement) and not is_postfix_form(statement)
-    body.joinable and held and fits
+    # Whether the list is a literal that the call ends with, which can break after its opening
+    # bracket on the line of the call.
+    opens_last := (list: ListShape, last: Int) ->
+      is_literal := @code[list.open].spaced and list.close == last
+      is_literal and @end_column(list.open) - 1 <= WIDTH
 
-  # A postfix form that takes more than its line, or follows another, or a guard, goes in a block,
-  # and a block form that a postfix form can write and that fits on the line of its head takes it
-  # (see Postfix forms). A postfix form on the line of `->`, `then` or `else` that must go in a
-  # block goes in the block of the body first, where the layout puts it.
-  private postfix := (shape: PostfixShape) ->
-    { body } := shape
-    unless shape.postfix
-      # A body that spans lines takes its postfix form once the layout joins them.
-      return if @code[body.start].line != @code[body.end - 1].end_line
-      width := @postfix_width(shape) ? return
-      @to_postfix shape if 2 * @line_depth(shape.keyword) + width <= WIDTH
-      return
-    on_line := @fits(body.start, shape.last, @column_of(body.start), true)
-    in_block := body.start in @line_starts
-    @to_block shape if in_block and (shape.stacked or shape.guard != nil or not on_line)
-    @decide body.shapes + shape.shapes
-
-  # The columns of the block form's postfix form, the body and its head on one line.
-  private postfix_width := (shape: PostfixShape) ->
-    body := @flat_span(shape.body.start, shape.body.end - 1) ? return nil
-    head := @flat_span(shape.keyword, shape.head_last) ? return nil
-    body + 1 + head
-
-  # The columns of the code tokens from `first` up to `last` on one line, with the gaps between them
-  # flat; nil where a line must start among them, after a comment or in a `"""` literal.
-  private flat_span := (first: Int, last: Int) ->
-    var width = 0
-    for at in first..=last
-      return nil if is_multi_line(@code[at])
-      width += @widths[at]
-      continue if at == last
-      return nil if at in @ending_comments
-      gap := @gaps[at + 1] ? return nil
-      case gap
-        when Spaces then width += @flat_width(gap, at + 1)
-        else return nil
-    width
-
-  # Whether the code tokens from `first` up to `last` fit flat on the line from `column`, where the
-  # first starts, with what follows them up to where the line ends, unless not `tail`: at a line
-  # start decided, or one where a construct not decided yet breaks first. Without `whole`, only the
-  # line of `first` must fit, up to a line start among them; with it, all of them must be on it. A
-  # comment ends the line, which no token can follow.
-  private fits := (first: Int, last: Int, column: Int, whole: Bool, tail = true) ->
-    var end = column
-    var at = first
-    while true
-      if is_multi_line(@code[at])
-        return false if whole and at <= last
-        end = @literal_end(at)
+    body := (body: BodyShape) ->
+      if @goes_on_line(body)
+        @join_body body
       else
-        end += @widths[at]
-      return false if end - 1 > WIDTH
-      next := at + 1
-      return at not in @ending_comments if next > last and not tail
-      # One that the walk skips is no part of the line that it measures.
-      gap := @gaps[next] ? return (not whole or next > last) and @fits_comment(at, end)
-      ends := gap is LineStart or (next > last and next in @undecided)
-      return (not whole or next > last) and @fits_comment(at, end) if ends
-      return false if at in @ending_comments or next in @own_line_comments
-      end += @flat_width(gap as Spaces!, next)
-      at = next
-    true
+        @block_body body, @line_depth(body.head) + 1
+
+    # Whether the body is one statement that fits on the line of its head, all of it.
+    goes_on_line := (body: BodyShape) ->
+      statement := body.block.statements.first() ? return false
+      @undecided.remove statement.start
+      can_join := body.joinable and body.head not in @blocks
+      can_join and @fits(statement.start, statement.end - 1, @end_column(body.head) + 1, true)
+
+    join_body := (body: BodyShape) ->
+      statement := body.block.statements[0]
+      @flatten statement.start, body.rule
+      if closer := @closers[body.head]
+        @flatten closer.at, body.rule if closer.at == statement.end
+      outer := @joined
+      @joined = true
+      @decide statement.shapes
+      @joined = outer
+
+    block_body := (body: BodyShape, depth: Int) ->
+      if body.head in @widened
+        @widened.remove body.head
+        @widths[body.block.statements[0].end - 1] -= 1
+      @block body.block, depth
+      @gaps[body.block.statements[0].start] = LineStart(depth, rule: body.rule) if body.joinable
+      @close body.head, depth - 1, body.rule
+
+    nested_block := (block: BlockShape) ->
+      head := block.head ? return
+      depth := @line_depth(head) + 1
+      if block.joins_if and block.starts.length == 1 and block.statements.length == 1
+        @join_if block.statements[0], depth
+      else
+        @block block, depth
+      @close head, depth - 1, LAYOUT
+
+    # The `if` alone in the block of an `else` goes on its line, unless it keeps its gaps as
+    # written.
+    join_if := (statement: StatementShape, depth: Int) ->
+      { start } := statement
+      @gaps[start] = Spaces(count: 1, rule: SPACING, joined: BRANCHES)
+      @statement_on_line statement
+      @gaps[start] = LineStart(depth) if start in @skipped
+
+    # The token after the body at `head` starts a line at `depth`, unless it is the closing bracket
+    # of a list, which goes back to the depth of the list's line.
+    close := (head: Int, depth: Int, rule: StyleRule) ->
+      closer := @closers[head] ? return
+      @gaps[closer.at] = LineStart(depth, rule) if closer.at in @gaps and closer.at not in @closes
+
+    arms := (arms: ArmsShape) ->
+      depth := @line_depth(arms.head) + 1
+      for arm in arms.arms
+        @gaps[arm.start] = LineStart(depth)
+        @arm arm, depth
+      @close arms.head, depth - 1, BRANCHES
+
+    # The patterns on the line of `when` if they fit there, and otherwise on lines of their own
+    # below it, with `then` on the line after them (see Long lists); and the body on the line of
+    # `then` or `else` if it fits there, and otherwise in a block (see Branches). `then` is written
+    # before a body on the line of the patterns, and not before a block there.
+    arm := (arm: ArmShape, depth: Int) ->
+      { patterns, then_at, body } := arm
+      # The last token of the patterns, before `then` or the block.
+      last := (then_at ? body.block.starts[0]) - 1
+      var broken = false
+      if arm.breakable
+        @undecided.remove patterns[0]
+        # Where only a comment after them does not fit, moving them below `when` would not shorten
+        # its line, which they stay on.
+        on_line := @fits(arm.start, last, @column_of(arm.start), false, false)
+        if on_line or (then_at == nil and @end_column(last) - 1 <= WIDTH)
+          @flatten pattern, LONG_LISTS for pattern in patterns
+          @flatten then_at, LONG_LISTS if then_at
+        else if then_at
+          broken = true
+          item_last := (i: Int) -> i < patterns.length - 1 then patterns[i + 1] - 2 else last
+          @lay_out_items patterns, item_last, depth + 1, true, arm.commas, then_at
+          @gaps[then_at] = LineStart(depth, rule: LONG_LISTS)
+        else
+          @patterns_below arm, last
+      @decide arm.shapes
+      is_else := patterns.is_empty()
+      if then_at == nil and not is_else
+        if @fits_after_then(body, last)
+          @add_then last
+          @thened.add body.block.statements[0].start
+        @block_body body, depth + 1
+      else if @goes_on_line(body)
+        @join_body body
+      else
+        @remove_then arm, then_at!, body if not broken and not is_else
+        @block_body body, depth + 1
+
+    # Whether the body is one statement that fits on the line of the patterns that end at `last`,
+    # after `then`; not a call without parentheses or a postfix form, which the block after `then`
+    # that the rewrite leaves until the layout joins it cannot hold.
+    fits_after_then := (body: BodyShape, last: Int) ->
+      statement := body.block.statements.first() ? return false
+      column := @end_column(last) + ' then '.count()
+      fits := @fits(statement.start, statement.end - 1, column, true)
+      held := not is_unbracketed_call(statement) and not is_postfix_form(statement)
+      body.joinable and held and fits
+
+    # A postfix form that takes more than its line, or follows another, or a guard, goes in a block,
+    # and a block form that a postfix form can write and that fits on the line of its head takes it
+    # (see Postfix forms). A postfix form on the line of `->`, `then` or `else` that must go in a
+    # block goes in the block of the body first, where the layout puts it.
+    postfix := (shape: PostfixShape) ->
+      { body } := shape
+      unless shape.postfix
+        # A body that spans lines takes its postfix form once the layout joins them.
+        return if @code[body.start].line != @code[body.end - 1].end_line
+        width := @postfix_width(shape) ? return
+        @to_postfix shape if 2 * @line_depth(shape.keyword) + width <= WIDTH
+        return
+      on_line := @fits(body.start, shape.last, @column_of(body.start), true)
+      in_block := body.start in @line_starts
+      @to_block shape if in_block and (shape.stacked or shape.guard != nil or not on_line)
+      @decide body.shapes + shape.shapes
+
+    # The columns of the block form's postfix form, the body and its head on one line.
+    postfix_width := (shape: PostfixShape) ->
+      body := @flat_span(shape.body.start, shape.body.end - 1) ? return nil
+      head := @flat_span(shape.keyword, shape.head_last) ? return nil
+      body + 1 + head
+
+    # The columns of the code tokens from `first` up to `last` on one line, with the gaps between
+    # them flat; nil where a line must start among them, after a comment or in a `"""` literal.
+    flat_span := (first: Int, last: Int) ->
+      var width = 0
+      for at in first..=last
+        return nil if is_multi_line(@code[at])
+        width += @widths[at]
+        continue if at == last
+        return nil if at in @ending_comments
+        gap := @gaps[at + 1] ? return nil
+        case gap
+          when Spaces then width += @flat_width(gap, at + 1)
+          else return nil
+      width
+
+    # Whether the code tokens from `first` up to `last` fit flat on the line from `column`, where
+    # the first starts, with what follows them up to where the line ends, unless not `tail`: at a
+    # line start decided, or one where a construct not decided yet breaks first. Without `whole`,
+    # only the line of `first` must fit, up to a line start among them; with it, all of them must be
+    # on it. A comment ends the line, which no token can follow.
+    fits := (first: Int, last: Int, column: Int, whole: Bool, tail = true) ->
+      var end = column
+      var at = first
+      while true
+        if is_multi_line(@code[at])
+          return false if whole and at <= last
+          end = @literal_end(at)
+        else
+          end += @widths[at]
+        return false if end - 1 > WIDTH
+        next := at + 1
+        return at not in @ending_comments if next > last and not tail
+        # One that the walk skips is no part of the line that it measures.
+        gap := @gaps[next] ? return (not whole or next > last) and @fits_comment(at, end)
+        ends := gap is LineStart or (next > last and next in @undecided)
+        return (not whole or next > last) and @fits_comment(at, end) if ends
+        return false if at in @ending_comments or next in @own_line_comments
+        end += @flat_width(gap as Spaces!, next)
+        at = next
+      true
 
   # Whether a comment that ends the line after the code token, two spaces after `end`, the column
   # after the token, fits on the line too (see Line length).
@@ -735,33 +742,34 @@ export class Breaker
 
   # Whether a code token from `first` up to `end` is a `"""` or `'''` literal, or a line start
   # after the first.
-  private takes_lines := (first: Int, end: Int) ->
-    for at in first..=end
-      return true if is_multi_line(@code[at])
-    @breaks(first, end + 1)
+  private
+    takes_lines := (first: Int, end: Int) ->
+      for at in first..=end
+        return true if is_multi_line(@code[at])
+      @breaks(first, end + 1)
 
-  # Whether a line starts after the code token at `first`, up to that before `end`.
-  private breaks := (first: Int, end: Int) ->
-    for at in (first + 1)..end
-      return true if @gaps[at] is LineStart
-    false
+    # Whether a line starts after the code token at `first`, up to that before `end`.
+    breaks := (first: Int, end: Int) ->
+      for at in (first + 1)..end
+        return true if @gaps[at] is LineStart
+      false
 
-  # Whether a comment ends the line before the code token, or is on a line of its own before it.
-  private follows_comment := (at: Int) -> at - 1 in @ending_comments or at in @own_line_comments
+    # Whether a comment ends the line before the code token, or is on a line of its own before it.
+    follows_comment := (at: Int) -> at - 1 in @ending_comments or at in @own_line_comments
 
-  # Whether each comment in the statement ends its line.
-  private ends_lines_at_comments := (statement: StatementShape) ->
-    for at in (statement.start + 1)..statement.end
-      gap := @gaps[at] ? continue
-      return false if gap is Spaces and @follows_comment(at)
-    true
+    # Whether each comment in the statement ends its line.
+    ends_lines_at_comments := (statement: StatementShape) ->
+      for at in (statement.start + 1)..statement.end
+        gap := @gaps[at] ? continue
+        return false if gap is Spaces and @follows_comment(at)
+      true
 
-  # The gap, inside a line, stays there, which `rule` decides where the source breaks the line.
-  private flatten := (at: Int, rule: StyleRule) ->
-    gap := @gaps[at] ? return
-    case gap
-      when Spaces then @gaps[at] = Spaces(gap..., joined: rule)
-      else pass
+    # The gap, inside a line, stays there, which `rule` decides where the source breaks the line.
+    flatten := (at: Int, rule: StyleRule) ->
+      gap := @gaps[at] ? return
+      case gap
+        when Spaces then @gaps[at] = Spaces(gap..., joined: rule)
+        else pass
 
   # The column where the code token starts, after the gaps decided so far.
   column_of := (index: Int) ->

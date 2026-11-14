@@ -48,7 +48,7 @@ type Item = Scalar | Group
 struct Field
   name: String
   value: Value
-  is_position := default false
+  is_position := false
 
 NONE := Scalar('-')
 
@@ -141,6 +141,9 @@ number := (value: Int) -> Scalar(value.to_string())
 flag := (value: Bool) -> Scalar(value.to_string())
 
 optional_node := (value: Node?): Value -> value then dump_node(value) else NONE
+
+optional_position := (position: Position?) ->
+  position then group(position_fields(position)) else NONE
 
 optional_text := (value: String?) -> value then text(value) else NONE
 
@@ -498,7 +501,7 @@ dump_type_declaration := (declaration: TypeDeclaration): Group ->
     'type_declaration'
     declaration
     [
-      field('args', optional_text(args_at(declaration.args_position)))
+      field('args', optional_position(declaration.args_position))
       field('exported', flag(declaration.exported))
       field('is_struct', flag(declaration.is_struct))
       field('members', members(declaration.members))
@@ -755,6 +758,3 @@ type_annotation := (shared: Shared, node: Node) ->
   converted := shared.facts.conversions[node]
   conversion := converted then " => #{format_type(converted)}" else ''
   " : #{format_type(type)}#{conversion}"
-
-# Where the word `args` is, as a node's position is written.
-args_at := (position: Position?) -> position then "#{position.line}:#{position.column}"

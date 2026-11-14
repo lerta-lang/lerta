@@ -305,77 +305,79 @@ lay_out := (text: SourceTokens, walked: Walked) ->
 # The second pass: decides each gap between text tokens, in order, from the gaps between code
 # tokens that the walk decides, and the lines laid out before it; and the text of each token.
 class Layout
-  text: SourceTokens
-  code_gaps: Map<Int, CodeGap>
-  skipped: Set<Int>
-  private decisions: Decision[] = []
-  private texts: String[] = []
-  # The depth of the last line start.
-  private var depth = 0
-  # The columns that the last line start moves the indentation of its source line by, which the
-  # lines after it that keep their source text move by too, so that their blocks stay as deep as
-  # they are under it. A block that the source indents by other than two spaces thus keeps its
-  # width there, unreported, until the walk handles the statement that holds it.
-  private var shift = 0
+  args
+    text: SourceTokens
+    code_gaps: Map<Int, CodeGap>
+    skipped: Set<Int>
+  private
+    decisions: Decision[] = []
+    texts: String[] = []
+    # The depth of the last line start.
+    var depth = 0
+    # The columns that the last line start moves the indentation of its source line by, which the
+    # lines after it that keep their source text move by too, so that their blocks stay as deep as
+    # they are under it. A block that the source indents by other than two spaces thus keeps its
+    # width there, unreported, until the walk handles the statement that holds it.
+    var shift = 0
 
-  private decide := (gap: Gap, index: Int) ->
-    { tokens } := @text
-    decision: Decision =
-      case
-        when index == 0 then { text: '', rule: LAYOUT }
-        when index == tokens.length then { text: "\n", rule: ending_rule(gap) }
-        else @decide_before(tokens[index], gap)
-    @decisions.push decision
+    decide := (gap: Gap, index: Int) ->
+      { tokens } := @text
+      decision: Decision =
+        case
+          when index == 0 then { text: '', rule: LAYOUT }
+          when index == tokens.length then { text: "\n", rule: ending_rule(gap) }
+          else @decide_before(tokens[index], gap)
+      @decisions.push decision
 
-  private decide_before := (token: TextToken, gap: Gap): Decision ->
-    { code } := @text
-    has_code := token.next_code < code.length
-    code_gap := has_code then @code_gaps[token.next_code] else END
-    return @kept(gap) unless code_gap
-    comment := token.comment
-    if comment and not comment.own_line
-      # That of a statement that the walk skips keeps its place as written.
-      return @kept(gap) if token.next_code - 1 in @skipped
-      return { text: '  ', rule: COMMENTS }
-    case code_gap
-      when Spaces
-        rule := "\n" in gap.text then code_gap.joined else code_gap.rule
-        { rule, text: ' '.repeat(code_gap.count) }
-      when LineStart
-        next_column := has_code then code[token.next_code].column else 1
-        # A comment before a dedent indented deeper than the line after it, as at the end of a
-        # block, stays in the block that its column reads as in, moved as the line before it is,
-        # two spaces a level, the deeper of two that it is between, from that of the line before it
-        # out to that of the line after it.
-        dedent := code_gap.depth < @depth
-        if comment and dedent and comment.column > next_column
-          read := (comment.column + @shift) / 2
-          @depth = min(@depth, max(code_gap.depth, read))
+    decide_before := (token: TextToken, gap: Gap): Decision ->
+      { code } := @text
+      has_code := token.next_code < code.length
+      code_gap := has_code then @code_gaps[token.next_code] else END
+      return @kept(gap) unless code_gap
+      comment := token.comment
+      if comment and not comment.own_line
+        # That of a statement that the walk skips keeps its place as written.
+        return @kept(gap) if token.next_code - 1 in @skipped
+        return { text: '  ', rule: COMMENTS }
+      case code_gap
+        when Spaces
+          rule := "\n" in gap.text then code_gap.joined else code_gap.rule
+          { rule, text: ' '.repeat(code_gap.count) }
+        when LineStart
+          next_column := has_code then code[token.next_code].column else 1
+          # A comment before a dedent indented deeper than the line after it, as at the end of a
+          # block, stays in the block that its column reads as in, moved as the line before it is,
+          # two spaces a level, the deeper of two that it is between, from that of the line before
+          # it out to that of the line after it.
+          dedent := code_gap.depth < @depth
+          if comment and dedent and comment.column > next_column
+            read := (comment.column + @shift) / 2
+            @depth = min(@depth, max(code_gap.depth, read))
+          else
+            @depth = code_gap.depth
+          @shift = 2 * @depth - token.line_indentation
+          line_feed(gap, 2 * @depth, code_gap.rule)
+
+    # A gap that the walk does not decide keeps its source text, spaces at the ends of lines too,
+    # unreported, as the walk vouches only for the statements that it handles; but the indentation
+    # after it moves with the line start before it.
+    kept := (gap: Gap): Decision ->
+      { text } := gap
+      return { text, rule: LAYOUT } unless "\n" in text
+      head := text.binary[..(text.binary.length - indentation(text))].text()!
+      { text: head + ' '.repeat(max(0, indentation(text) + @shift)), rule: LAYOUT }
+
+    # The lines of a `"""` or `'''` literal after its first are one level deeper than the line that
+    # it starts on (see Multi-line literals), or move with it in a statement that the walk skips.
+    decide_text := (token: TextToken) ->
+      text :=
+        if token.comment != nil or "\n" not in token.text
+          token.text
+        else if token.next_code in @code_gaps
+          indented token.text, 2 * (@depth + 1)
         else
-          @depth = code_gap.depth
-        @shift = 2 * @depth - token.line_indentation
-        line_feed(gap, 2 * @depth, code_gap.rule)
-
-  # A gap that the walk does not decide keeps its source text, spaces at the ends of lines too,
-  # unreported, as the walk vouches only for the statements that it handles; but the indentation
-  # after it moves with the line start before it.
-  private kept := (gap: Gap): Decision ->
-    { text } := gap
-    return { text, rule: LAYOUT } unless "\n" in text
-    head := text.binary[..(text.binary.length - indentation(text))].text()!
-    { text: head + ' '.repeat(max(0, indentation(text) + @shift)), rule: LAYOUT }
-
-  # The lines of a `"""` or `'''` literal after its first are one level deeper than the line that
-  # it starts on (see Multi-line literals), or move with it in a statement that the walk skips.
-  private decide_text := (token: TextToken) ->
-    text :=
-      if token.comment != nil or "\n" not in token.text
-        token.text
-      else if token.next_code in @code_gaps
-        indented token.text, 2 * (@depth + 1)
-      else
-        shifted_lines token.text, @shift
-    @texts.push text
+          shifted_lines token.text, @shift
+      @texts.push text
 
 # The end of the source starts a line at depth 0, which a comment before it is indented by.
 END := LineStart(0)

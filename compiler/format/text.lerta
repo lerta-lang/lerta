@@ -56,20 +56,21 @@ export struct SourceTokens
 
   # The first code token of `(a, b) := value`, or of `var (a, b) = value`, whose value is at
   # `value`: the holder of a tuple is where its value is.
-  private tuple_start := (value: Int) ->
-    var open = value - 1
-    open -= 1 while @code[open].kind != ':=' and @code[open].kind != '='
-    var depth = 0
-    while true
-      open -= 1
-      kind := @code[open].kind
-      depth += 1 if kind == ')'
-      depth -= 1 if kind == '('
-      break if depth == 0
-    open > 0 and @code[open - 1].kind == 'var' then open - 1 else open
+  private
+    tuple_start := (value: Int) ->
+      var open = value - 1
+      open -= 1 while @code[open].kind != ':=' and @code[open].kind != '='
+      var depth = 0
+      while true
+        open -= 1
+        kind := @code[open].kind
+        depth += 1 if kind == ')'
+        depth -= 1 if kind == '('
+        break if depth == 0
+      open > 0 and @code[open - 1].kind == 'var' then open - 1 else open
 
-  private is_exported_at := (statement: Statement, at: Int) ->
-    is_exported(statement) and at > 0 and @code[at - 1].kind == 'export'
+    is_exported_at := (statement: Statement, at: Int) ->
+      is_exported(statement) and at > 0 and @code[at - 1].kind == 'export'
 
 LAYOUT_KINDS: TokenKind[] = [NEWLINE, INDENT, DEDENT, EOF]
 
@@ -135,60 +136,69 @@ comes_before := (comment: Comment, token: Token) ->
 
 # Reads the source from its start, as far as each text token asks, tracking the line and the column.
 class SourceReader
-  scanner: Scanner
-  private var line = 1
-  private var column = 1
-  # Where the next gap starts, and the spaces after a comment, which start it.
-  private var gap_start = Position(line: 1, column: 1)
-  private var carried = ''
-  # The line of the last text token, and the columns before the first text token on it.
-  private var last_line = 0
-  private var last_indentation = 0
+  args
+    scanner: Scanner
+  private
+    var line = 1
+    var column = 1
+    # Where the next gap starts, and the spaces after a comment, which start it.
+    var gap_start = Position(line: 1, column: 1)
+    var carried = ''
+    # The line of the last text token, and the columns before the first text token on it.
+    var last_line = 0
+    var last_indentation = 0
 
-  private gap_to := (line: Int, column: Int) -> @gap(@text_to(line, column))
+    gap_to := (line: Int, column: Int) -> @gap(@text_to(line, column))
 
-  private rest := -> @gap(@scanner.rest())
+    rest := -> @gap(@scanner.rest())
 
-  private gap := (text: String) ->
-    gap := Gap(text: @carried + text, start: @gap_start)
-    @carried = ''
-    gap
+    gap := (text: String) ->
+      gap := Gap(text: @carried + text, start: @gap_start)
+      @carried = ''
+      gap
 
-  private code := (token: Token, index: Int) ->
-    text := @text_to(token.end_line, token.end_column)
-    @gap_start = { line: @line, column: @column }
-    start := token.position()
-    TextToken(text, start, comment: nil, next_code: index, line_indentation: @indentation_at(start))
+    code := (token: Token, index: Int) ->
+      text := @text_to(token.end_line, token.end_column)
+      @gap_start = { line: @line, column: @column }
+      start := token.position()
+      TextToken(
+        text
+        start
+        comment: nil
+        next_code: index
+        line_indentation: @indentation_at(start)
+      )
 
-  # The comment runs to the end of its line, without the spaces after it, which the next gap holds.
-  private comment := (comment: Comment, next_code: Int) ->
-    raw := @scanner.take_while((c) -> c != "\n")
-    @column += raw.count()
-    text := raw.trim_end()
-    @carried = raw.binary[text.binary.length..].text()!
-    @gap_start = { line: comment.line, column: comment.column + text.count() }
-    start := Position(line: comment.line, column: comment.column)
-    TextToken(text, start, comment, next_code, line_indentation: @indentation_at(start))
+    # The comment runs to the end of its line, without the spaces after it, which the next gap
+    # holds.
+    comment := (comment: Comment, next_code: Int) ->
+      raw := @scanner.take_while((c) -> c != "\n")
+      @column += raw.count()
+      text := raw.trim_end()
+      @carried = raw.binary[text.binary.length..].text()!
+      @gap_start = { line: comment.line, column: comment.column + text.count() }
+      start := Position(line: comment.line, column: comment.column)
+      TextToken(text, start, comment, next_code, line_indentation: @indentation_at(start))
 
-  private indentation_at := (start: Position) ->
-    if start.line != @last_line
-      @last_line = start.line
-      @last_indentation = start.column - 1
-    @last_indentation
+    indentation_at := (start: Position) ->
+      if start.line != @last_line
+        @last_line = start.line
+        @last_indentation = start.column - 1
+      @last_indentation
 
-  private text_to := (line: Int, column: Int) ->
-    taken := @scanner.mark()
-    while @line < line or (@line == line and @column < column)
-      c := @scanner.next() ? break
-      @step c
-    taken()
+    text_to := (line: Int, column: Int) ->
+      taken := @scanner.mark()
+      while @line < line or (@line == line and @column < column)
+        c := @scanner.next() ? break
+        @step c
+      taken()
 
-  private step := (c: Char) ->
-    if c == "\n"
-      @line += 1
-      @column = 1
-    else
-      @column += 1
+    step := (c: Char) ->
+      if c == "\n"
+        @line += 1
+        @column = 1
+      else
+        @column += 1
 
 # The lines of a `"""` or `'''` literal after its first, without the indentation that they share in
 # the source, a blank one empty, the last ending with the closing quotes (see Multi-line literals).

@@ -53,7 +53,8 @@ export jobs := -> options().jobs
 # suite runs to get ready, so that those processes do not run beside as many checks; given in the
 # order they were asked for, so that the checks start in their order.
 export class Slots
-  var free: Int
+  args
+    var free: Int
   private waiting: Signal[] = []
 
   take := ->
@@ -167,114 +168,117 @@ struct Entry
 # How a suite's checks went: `started` and `finished` are when the first of them started, once the
 # suite was ready, and when the last finished, before any ran once more.
 class Tally
-  private failed: String[] = []
-  private var run_count = 0
-  private var flaky_count = 0
-  private var started: Float? = nil
-  private var finished = 0.0
-  private var setup_error: String? = nil
-  private var setup_error_shown = false
+  private
+    failed: String[] = []
+    var run_count = 0
+    var flaky_count = 0
+    var started: Float? = nil
+    var finished = 0.0
+    var setup_error: String? = nil
+    var setup_error_shown = false
 
 # The run of the checks of every suite as one list: several at once, each result shown as soon as it
 # has finished, then, with retry, those that failed, once more, one at a time; so the checks of a
 # suite run while the last ones of the suite before it still do.
 class ChecksRun
-  suites: SuiteChecks[]
-  entries: Entry[]
-  # Results are printed as they come, so the width also counts checks that turn out not to apply.
-  name_width: Int
-  tallies: Tally[]
-  private retried: Entry[] = []
-  private var next_to_start = 0
+  args
+    suites: SuiteChecks[]
+    entries: Entry[]
+    # Results are printed as they come, so the width also counts checks that turn out not to apply.
+    name_width: Int
+    tallies: Tally[]
+  private
+    retried: Entry[] = []
+    var next_to_start = 0
 
-  private key_of := (entry: Entry) -> key(@suites[entry.suite].title, entry.check.name)
+    key_of := (entry: Entry) -> key(@suites[entry.suite].title, entry.check.name)
 
-  private show := (status: String, check: Check, result: Result, reasons: String[]) ->
-    duration := format_duration(result.duration).pad_start(6)
-    print "#{status.pad_end(5)} #{check.name.pad_end(@name_width)}  #{duration}"
-    print "      #{reason}" for reason in reasons
+    show := (status: String, check: Check, result: Result, reasons: String[]) ->
+      duration := format_duration(result.duration).pad_start(6)
+      print "#{status.pad_end(5)} #{check.name.pad_end(@name_width)}  #{duration}"
+      print "      #{reason}" for reason in reasons
 
-  private fail := (entry: Entry) ->
-    @tallies[entry.suite].failed.push(entry.check.name)
-    failed_keys.push @key_of(entry)
-
-  private report := (entry: Entry, result: Result) ->
-    tally := @tallies[entry.suite]
-    if error := tally.setup_error
+    fail := (entry: Entry) ->
+      @tallies[entry.suite].failed.push(entry.check.name)
       failed_keys.push @key_of(entry)
-      unless tally.setup_error_shown
-        tally.setup_error_shown = true
-        print "#{@suites[entry.suite].title}: the suite could not run its checks: #{error}"
-      return
-    ran_keys.push @key_of(entry)
-    reasons := result.reasons ? return
-    tally.run_count += 1
-    if reasons.is_empty()
-      @show 'ok', entry.check, result, reasons unless options().quiet
-    else if options().retry
-      @retried.push entry
-      @show 'FAIL?', entry.check, result, reasons
-    else
-      @fail entry
-      @show 'FAIL', entry.check, result, reasons
 
-  # The result of the check, or none if its suite could not get ready, which its tally then tells.
-  private run_entry := (entry: Entry) ->
-    tally := @tallies[entry.suite]
-    try
-      await ready if ready := @suites[entry.suite].ready
-    catch error
-      tally.setup_error = tally.setup_error ? error.message
-    return Result(reasons: nil, duration: 0.0) if tally.setup_error
-    tally.started = tally.started ? milliseconds()
-    result := await run_in_slot(entry.check)
-    tally.finished = max(tally.finished, milliseconds())
-    result
-
-  # Runs the checks not started yet, one after another, and reports each as it finishes.
-  private work := ->
-    while @next_to_start < @entries.length
-      entry := @entries[@next_to_start]
-      @next_to_start += 1
-      @report entry, await @run_entry(entry)
-
-  private run_all := -> await all([@work() for _ in 0..jobs()])
-
-  private retry := ->
-    unless @retried.is_empty()
-      print "running the checks that failed once more, one at a time: #{@retried.length}"
-    for entry in @retried
-      result := await run_one(entry.check)
-      # A check that does not apply now did not pass either.
-      reasons := result.reasons ? ['did not apply when run once more']
+    report := (entry: Entry, result: Result) ->
+      tally := @tallies[entry.suite]
+      if error := tally.setup_error
+        failed_keys.push @key_of(entry)
+        unless tally.setup_error_shown
+          tally.setup_error_shown = true
+          print "#{@suites[entry.suite].title}: the suite could not run its checks: #{error}"
+        return
+      ran_keys.push @key_of(entry)
+      reasons := result.reasons ? return
+      tally.run_count += 1
       if reasons.is_empty()
-        # Shown even with quiet, as the end of the FAIL? that was shown.
-        @tallies[entry.suite].flaky_count += 1
-        @show 'ok', entry.check, result, reasons
+        @show 'ok', entry.check, result, reasons unless options().quiet
+      else if options().retry
+        @retried.push entry
+        @show 'FAIL?', entry.check, result, reasons
       else
         @fail entry
         @show 'FAIL', entry.check, result, reasons
 
-  # Prints how each suite went, and gives the number of those that failed.
-  private summarize := ->
-    var failed_suites = 0
-    for suite at i in @suites
-      tally := @tallies[i]
-      if tally.setup_error
-        failed_suites += 1
-        # Why was shown where its checks would have been.
-        print "#{suite.title}: the suite could not run its checks"
+    # The result of the check, or none if its suite could not get ready, which its tally then tells.
+    run_entry := (entry: Entry) ->
+      tally := @tallies[entry.suite]
+      try
+        await ready if ready := @suites[entry.suite].ready
+      catch error
+        tally.setup_error = tally.setup_error ? error.message
+      return Result(reasons: nil, duration: 0.0) if tally.setup_error
+      tally.started = tally.started ? milliseconds()
+      result := await run_in_slot(entry.check)
+      tally.finished = max(tally.finished, milliseconds())
+      result
+
+    # Runs the checks not started yet, one after another, and reports each as it finishes.
+    work := ->
+      while @next_to_start < @entries.length
+        entry := @entries[@next_to_start]
+        @next_to_start += 1
+        @report entry, await @run_entry(entry)
+
+    run_all := -> await all([@work() for _ in 0..jobs()])
+
+    retry := ->
+      unless @retried.is_empty()
+        print "running the checks that failed once more, one at a time: #{@retried.length}"
+      for entry in @retried
+        result := await run_one(entry.check)
+        # A check that does not apply now did not pass either.
+        reasons := result.reasons ? ['did not apply when run once more']
+        if reasons.is_empty()
+          # Shown even with quiet, as the end of the FAIL? that was shown.
+          @tallies[entry.suite].flaky_count += 1
+          @show 'ok', entry.check, result, reasons
+        else
+          @fail entry
+          @show 'FAIL', entry.check, result, reasons
+
+    # Prints how each suite went, and gives the number of those that failed.
+    summarize := ->
+      var failed_suites = 0
+      for suite at i in @suites
+        tally := @tallies[i]
+        if tally.setup_error
+          failed_suites += 1
+          # Why was shown where its checks would have been.
+          print "#{suite.title}: the suite could not run its checks"
+          print ''
+          continue
+        failed := tally.failed
+        failed_suites += 1 unless failed.is_empty()
+        total := format_duration(tally.finished - (tally.started ? tally.finished))
+        flaky := tally.flaky_count > 0 then ", #{tally.flaky_count} flaky" else ''
+        passed := tally.run_count - failed.length
+        print "#{suite.title}: #{passed} passed, #{failed.length} failed#{flaky} in #{total}"
+        print "  FAIL #{name}" for name in failed.sorted()
         print ''
-        continue
-      failed := tally.failed
-      failed_suites += 1 unless failed.is_empty()
-      total := format_duration(tally.finished - (tally.started ? tally.finished))
-      flaky := tally.flaky_count > 0 then ", #{tally.flaky_count} flaky" else ''
-      passed := tally.run_count - failed.length
-      print "#{suite.title}: #{passed} passed, #{failed.length} failed#{flaky} in #{total}"
-      print "  FAIL #{name}" for name in failed.sorted()
-      print ''
-    failed_suites
+      failed_suites
 
 # Runs the checks that the suites selected, and gives the number of the suites that failed. With
 # retry, a check that failed is shown as FAIL? and run once more after the others, alone, as a check

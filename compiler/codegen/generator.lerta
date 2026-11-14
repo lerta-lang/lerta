@@ -28,30 +28,31 @@ export struct TopLevelGlobal
 # top-level values of every module, by module index; and whether exceptions are traced (see
 # emit_trace_entry).
 export class ModuleCode
-  program: ProgramWide
-  ir_module: IrModule
-  globals: Map<String, TopLevelGlobal>[]
-  module: Module
-  shared: Shared
-  traces: Bool
-  # Each float operation checks its result for NaN where it is, as no tree or local defers it.
-  eager_nan_checks := default false
+  args
+    program: ProgramWide
+    ir_module: IrModule
+    globals: Map<String, TopLevelGlobal>[]
+    module: Module
+    shared: Shared
+    traces: Bool
+    # Each float operation checks its result for NaN where it is, as no tree or local defers it.
+    eager_nan_checks := false
+    # The build is optimized, and for the system, as the intrinsic values `optimized` and `platform`
+    # give.
+    optimized := false
+    system: String?
   # The code of each function literal generated outside any loop that takes functions in place,
   # which every closure of it shares, as a local function's made where it is read before its
   # declaration does; by the facts it is generated with, as each instance of a generic function has
   # its own.
   literal_symbols: Map<NodeFacts, Map<FunctionLiteral, String>> = Map()
-  # The build is optimized, and for the system, as the intrinsic values `optimized` and `platform`
-  # give.
-  optimized := default false
-  system: String?
 
 # A loop variable or a parameter is an SSA value; a `const` or `var` lives in a stack slot.
 export struct ValueLocal
   operand: String
   type: Type
   # A weak local holds the weak box of its object, or null for nil (see emit_weak_box_of).
-  weak := default false
+  weak := false
 
 export struct TopLevelSlot
   global: TopLevelGlobal
@@ -69,13 +70,13 @@ export struct SlotLocal
   type: Type
   top_level: TopLevelSlot?
   cell: CellSlot?
-  weak := default false
+  weak := false
   # A `var`, which assignments may change.
-  is_var := default false
+  is_var := false
   # The exception that a catch takes, whose throw goes on with its trace (see emit_throw_error).
-  caught := default false
+  caught := false
   # Another generator's, which this one reads in place and does not release (see generate_in_place).
-  is_borrowed := default false
+  is_borrowed := false
 
 export type CodegenLocal = ValueLocal | SlotLocal
 
@@ -184,12 +185,13 @@ export struct Fusion
 # initialized; `extensions` are those its body sees (see Instance); `function_name` names it in
 # traces (see trace_name).
 export class Generator
-  code: ModuleCode
-  extensions: Extensions
-  facts: NodeFacts
-  top_level_code: Bool
-  function_name: String
-  ir := default IrBuilder(module: @code.ir_module, scope: source_scope(@code, @function_name))
+  args
+    code: ModuleCode
+    extensions: Extensions
+    facts: NodeFacts
+    top_level_code: Bool
+    function_name: String
+    ir := IrBuilder(module: @code.ir_module, scope: source_scope(@code, @function_name))
   locals := Locals()
   loops: Loop[] = []
   # The result type of the function being generated; the top-level code returns nothing.

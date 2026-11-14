@@ -216,7 +216,8 @@ An arithmetic or bitwise operator on a value of a type it does not otherwise app
 
 ```lerta
 class File
-  path: String
+  args
+    path: String
   deinit := -> print("closing #{@path}")
 ```
 

@@ -76,56 +76,59 @@ export infer_type_arguments := (
 
 # The type arguments of a call as they are found, from those written on.
 class Inferrer
-  body: Body
-  args: Expression[]
-  generic: GenericFunction
-  bindings: Map<String, TypeBinding>
+  args
+    body: Body
+    args: Expression[]
+    generic: GenericFunction
+    bindings: Map<String, TypeBinding>
   # The names of the type arguments written or given by the receiver, which nothing inferred
   # replaces.
-  private fixed := Set(@bindings.keys())
-  private inferred: InferredArgument[] = []
+  private
+    fixed := Set(@bindings.keys())
+    inferred: InferredArgument[] = []
 
-  private bind_at := (at: Position) ->
-    (name: String, bound_type: Type) ->
-      # nil and never tell nothing about the type.
-      return if is_one_of_kinds(bound_type, ['nil', 'never'])
-      if bound := @bindings[name]
-        return if name in @fixed or not widens(bound.type, bound_type)
-      @bindings[name] = { at, type: bound_type }
+    bind_at := (at: Position) ->
+      (name: String, bound_type: Type) ->
+        # nil and never tell nothing about the type.
+        return if is_one_of_kinds(bound_type, ['nil', 'never'])
+        if bound := @bindings[name]
+          return if name in @fixed or not widens(bound.type, bound_type)
+        @bindings[name] = { at, type: bound_type }
 
-  # A value converts to an interface type, whose type arguments its members may give.
-  private bind_from := (pattern: Type, type: Type, at: Position) ->
-    infer pattern, type, @bind_at(at)
-    target := inner_of(pattern)
-    value_type := inner_of(type)
-    if target is InterfaceType and value_type is not InterfaceType
-      infer_through_members @body, target, value_type, at, @bind_at(at)
+    # A value converts to an interface type, whose type arguments its members may give.
+    bind_from := (pattern: Type, type: Type, at: Position) ->
+      infer pattern, type, @bind_at(at)
+      target := inner_of(pattern)
+      value_type := inner_of(type)
+      if target is InterfaceType and value_type is not InterfaceType
+        infer_through_members @body, target, value_type, at, @bind_at(at)
 
-  private check_argument := (index: Int) ->
-    body := @body
-    arg := @args[index]
-    declared := @generic.params[index]
-    param := substitute(declared, types_of(@bindings))
-    # A parameter whose type names no type parameter takes its argument as in any call.
-    declared_alone := not is_pattern(declared)
-    if declared_alone or (needs_context(body, arg) and not is_pattern(param))
-      expect_type body, arg, param
-      # The other arguments gave the type, which the constructions in the literal show as theirs do.
-      keep_constructions body, [arg] unless declared_alone
-      return
-    # A function literal's parameters may take the types that are known already.
-    type := type_of(body, arg, takes_function_type(body, arg) then param)
-    fail body.program, arg.position, 'expected a value, got void' if is_kind(type, 'void')
-    @bind_from declared, type, arg.position
-    @inferred.push { arg, type, index }
+    check_argument := (index: Int) ->
+      body := @body
+      arg := @args[index]
+      declared := @generic.params[index]
+      param := substitute(declared, types_of(@bindings))
+      # A parameter whose type names no type parameter takes its argument as in any call.
+      declared_alone := not is_pattern(declared)
+      if declared_alone or (needs_context(body, arg) and not is_pattern(param))
+        expect_type body, arg, param
+        # The other arguments gave the type, which the constructions in the literal show as theirs
+        # do.
+        keep_constructions body, [arg] unless declared_alone
+        return
+      # A function literal's parameters may take the types that are known already.
+      type := type_of(body, arg, takes_function_type(body, arg) then param)
+      fail body.program, arg.position, 'expected a value, got void' if is_kind(type, 'void')
+      @bind_from declared, type, arg.position
+      @inferred.push { arg, type, index }
 
-  # The type argument of a bounded type parameter gives those that its bound names, as `X:
-  # Iterable<T>` gives T, before function literals take their parameters' types.
-  private bind_from_bounds := ->
-    for (type_param, written_bound) in @generic.type_params.zip(@generic.bounds)
-      bound := written_bound ? continue
-      known := @bindings[type_param.name.name] ? continue
-      infer_through_members @body, bound, known.type, known.at, @bind_at(known.at)
+    # The type argument of a bounded type parameter gives those that its bound names, as `X:
+    # Iterable<T>` gives T, before function literals take their parameters' types.
+    bind_from_bounds := ->
+      for (type_param, written_bound) in @generic.type_params.zip(@generic.bounds)
+        bound := written_bound ? continue
+        known := @bindings[type_param.name.name] ? continue
+        infer_through_members @body, bound, known.type, known.at, @bind_at(known.at)
 
 widens := (bound: Type, type: Type) -> type is OptionalType then type.inner == bound else false
 

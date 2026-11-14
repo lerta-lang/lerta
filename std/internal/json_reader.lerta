@@ -5,14 +5,16 @@ import FieldKeys, is_finite, Level, path_of, quoted from './json_text'
 import JsonError, JsonKeys from '../json'
 
 export class JsonReader
-  bytes: Binary
-  keys: JsonKeys
-  private var at = 0
-  # Each array or object being read, the innermost last.
-  private levels: Level[] = []
-  # The keys that each object being read has given, the innermost last.
-  private seen_keys: Set<String>[] = []
-  private field_keys := FieldKeys(@keys)
+  args
+    bytes: Binary
+    keys: JsonKeys
+  private
+    var at = 0
+    # Each array or object being read, the innermost last.
+    levels: Level[] = []
+    # The keys that each object being read has given, the innermost last.
+    seen_keys: Set<String>[] = []
+    field_keys := FieldKeys(@keys)
 
   read_bool := ->
     return true if @read_literal('true')
@@ -135,26 +137,27 @@ export class JsonReader
     true
 
   # Reads `{` of an object, whose keys next_key then gives.
-  private begin_object := ->
-    @begin b'{', 'an object'
-    @seen_keys.push Set<String>()
+  private
+    begin_object := ->
+      @begin b'{', 'an object'
+      @seen_keys.push Set<String>()
 
-  # The next key of the innermost object, whose value it then starts reading, or nil at its end.
-  private next_key := ->
-    unless @has_next(b'}')
-      @seen_keys.pop()
-      return nil
-    # An error before the key is read is the object's.
-    @levels.last()!.step = ''
-    @skip_space()
-    @fail_expected 'a key' if @peek() != b'"'
-    key := @read_string()
-    @levels.last()!.step = ".#{key}"
-    @skip_space()
-    @fail_expected "':'" if @peek() != b':'
-    @at += 1
-    @fail "the key #{quoted(key)} twice" unless @seen_keys.last()!.add(key)
-    key
+    # The next key of the innermost object, whose value it then starts reading, or nil at its end.
+    next_key := ->
+      unless @has_next(b'}')
+        @seen_keys.pop()
+        return nil
+      # An error before the key is read is the object's.
+      @levels.last()!.step = ''
+      @skip_space()
+      @fail_expected 'a key' if @peek() != b'"'
+      key := @read_string()
+      @levels.last()!.step = ".#{key}"
+      @skip_space()
+      @fail_expected "':'" if @peek() != b':'
+      @at += 1
+      @fail "the key #{quoted(key)} twice" unless @seen_keys.last()!.add(key)
+      key
 
   # The value where the reader is, of whatever kind, as that of a key that is no field.
   skip_value := (): void ->
@@ -224,65 +227,66 @@ export class JsonReader
     @skip_space()
     @fail_expected 'the end of the text' if @at < @bytes.length
 
-  private read_literal := (literal: String) ->
-    @skip_space()
-    return false unless @bytes.occurs_at(@at, literal.binary)
-    @at += literal.binary.length
-    true
+  private
+    read_literal := (literal: String) ->
+      @skip_space()
+      return false unless @bytes.occurs_at(@at, literal.binary)
+      @at += literal.binary.length
+      true
 
-  # Reads the escape after a backslash in a string, as the Char it gives.
-  private read_escape := ->
-    byte := @peek() ? @fail('a string that does not end')
-    @at += 1
-    return @read_escaped_char() if byte == b'u'
-    escaped := unescaped(byte) ? @fail("an escape that is not JSON, \\#{byte_text(byte)}")
-    escaped.to_char()
-
-  # A surrogate pair is one Char, written as two escapes.
-  private read_escaped_char := ->
-    code := @read_hex_unit()
-    return code.to_char()! unless code in 0xD800..=0xDFFF
-    lone := -> @fail("a lone surrogate in a string, \\u#{code.to_hex(4)}")
-    lone() if code > 0xDBFF or not @bytes.occurs_at(@at, b'\u')
-    @at += 2
-    low := @read_hex_unit()
-    lone() unless low in 0xDC00..=0xDFFF
-    (0x10000 + (code - 0xD800) << 10 + (low - 0xDC00)).to_char()!
-
-  private read_hex_unit := ->
-    var code = 0
-    for _ in 0..4
-      digit := (@peek() ? 0).hex_value() ? @fail('an escape \u without four hex digits')
-      code = code * 16 + digit
+    # Reads the escape after a backslash in a string, as the Char it gives.
+    read_escape := ->
+      byte := @peek() ? @fail('a string that does not end')
       @at += 1
-    code
+      return @read_escaped_char() if byte == b'u'
+      escaped := unescaped(byte) ? @fail("an escape that is not JSON, \\#{byte_text(byte)}")
+      escaped.to_char()
 
-  # The number's text where the reader is, as JSON writes numbers, or nil if none is there.
-  private number := ->
-    @skip_space()
-    bytes := @bytes
-    var end = @at
-    digits := ->
-      start := end
-      end += 1 while bytes.get(end)?.is_digit() == true
-      end > start
-    end += 1 if bytes.get(end) == b'-'
-    if bytes.get(end) == b'0'
-      end += 1
-    else if not digits()
-      return nil
-    if bytes.get(end) == b'.'
-      end += 1
-      return nil unless digits()
-    if bytes.get(end) == b'e' or bytes.get(end) == b'E'
-      end += 1
-      end += 1 if bytes.get(end) == b'+' or bytes.get(end) == b'-'
-      return nil unless digits()
-    bytes.text(@at, end)!
+    # A surrogate pair is one Char, written as two escapes.
+    read_escaped_char := ->
+      code := @read_hex_unit()
+      return code.to_char()! unless code in 0xD800..=0xDFFF
+      lone := -> @fail("a lone surrogate in a string, \\u#{code.to_hex(4)}")
+      lone() if code > 0xDBFF or not @bytes.occurs_at(@at, b'\u')
+      @at += 2
+      low := @read_hex_unit()
+      lone() unless low in 0xDC00..=0xDFFF
+      (0x10000 + (code - 0xD800) << 10 + (low - 0xDC00)).to_char()!
 
-  private skip_space := -> @at += 1 while @peek()?.is_space() == true
+    read_hex_unit := ->
+      var code = 0
+      for _ in 0..4
+        digit := (@peek() ? 0).hex_value() ? @fail('an escape \u without four hex digits')
+        code = code * 16 + digit
+        @at += 1
+      code
 
-  private peek := -> @bytes.get(@at)
+    # The number's text where the reader is, as JSON writes numbers, or nil if none is there.
+    number := ->
+      @skip_space()
+      bytes := @bytes
+      var end = @at
+      digits := ->
+        start := end
+        end += 1 while bytes.get(end)?.is_digit() == true
+        end > start
+      end += 1 if bytes.get(end) == b'-'
+      if bytes.get(end) == b'0'
+        end += 1
+      else if not digits()
+        return nil
+      if bytes.get(end) == b'.'
+        end += 1
+        return nil unless digits()
+      if bytes.get(end) == b'e' or bytes.get(end) == b'E'
+        end += 1
+        end += 1 if bytes.get(end) == b'+' or bytes.get(end) == b'-'
+        return nil unless digits()
+      bytes.text(@at, end)!
+
+    skip_space := -> @at += 1 while @peek()?.is_space() == true
+
+    peek := -> @bytes.get(@at)
 
   fail_expected := (expected: String) -> @fail("expected #{expected}, found #{@found()}")
 

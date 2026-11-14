@@ -54,26 +54,30 @@ layout := (kind: TokenKind, at: Token) ->
 # The literals of an array, a set, a tuple, a record or a map being read, in their order: a
 # record's with its fields' names, a map's with their keys.
 class Level
-  values: Expression[]
-  names: Identifier[] = default []
-  keys: Expression[] = default []
-  position: Position
-  private var at = 0
-  # The names, or the keys of String, read so far, which none may repeat.
-  private seen := Set<String>()
+  args
+    values: Expression[]
+    names: Identifier[] = []
+    keys: Expression[] = []
+    position: Position
+  private
+    var at = 0
+    # The names, or the keys of String, read so far, which none may repeat.
+    seen := Set<String>()
 
-  private is_done := -> @at == @values.length
+    is_done := -> @at == @values.length
 
 # The Decoder of llit: `value` is the literal to read next, which each read takes.
 class LlitReader
-  path: String
-  var value: Expression?
+  args
+    path: String
+    var value: Expression?
   # Each array, set, tuple, record or map being read, the innermost last.
-  private levels: Level[] = []
-  # Where the last literal read is, or the last level that ended, which a failure after it names.
-  private var last: Position = { line: 1, column: 1 }
-  # The name of the last field read, which a field that the type has not fails with.
-  private var field = ''
+  private
+    levels: Level[] = []
+    # Where the last literal read is, or the last level that ended, which a failure after it names.
+    var last: Position = { line: 1, column: 1 }
+    # The name of the last field read, which a field that the type has not fails with.
+    var field = ''
 
   read_nil := ->
     return false unless @value is NilLiteral
@@ -233,48 +237,49 @@ class LlitReader
     @fail_last "expected a member of #{enum_name}, found #{name}"
 
   # The literal to read, which it takes.
-  private take := ->
-    value := @value!
-    @value = nil
-    @last = value.position
-    value
+  private
+    take := ->
+      value := @value!
+      @value = nil
+      @last = value.position
+      value
 
-  private begin_items := (array: ArrayLiteral) ->
-    @take()
-    @levels.push Level(values: array.elements, position: array.position)
+    begin_items := (array: ArrayLiteral) ->
+      @take()
+      @levels.push Level(values: array.elements, position: array.position)
 
-  # Ends the innermost level, as reading it does when it has nothing more.
-  private end_level := ->
-    @last = @levels.pop().position
-    false
+    # Ends the innermost level, as reading it does when it has nothing more.
+    end_level := ->
+      @last = @levels.pop().position
+      false
 
-  # Starts reading the value of the field or the key of the name, which the level must not have had
-  # already.
-  private next_named := (name: String, at: Position, what: String) ->
-    level := @levels.last()!
-    @fail_at at, "the #{what} #{name} twice" unless level.seen.add(name)
-    @value = level.values[level.at]
-    level.at += 1
-    name
+    # Starts reading the value of the field or the key of the name, which the level must not have
+    # had already.
+    next_named := (name: String, at: Position, what: String) ->
+      level := @levels.last()!
+      @fail_at at, "the #{what} #{name} twice" unless level.seen.add(name)
+      @value = level.values[level.at]
+      level.at += 1
+      name
 
-  # The integer to read, which the parser gives with its minus, if it is one that an Int holds.
-  private integer := (expected: String) ->
-    literal := @value as IntegerLiteral ? @fail_expected(expected)
-    value := literal.value ? @fail_expected(expected)
-    @take()
-    value
+    # The integer to read, which the parser gives with its minus, if it is one that an Int holds.
+    integer := (expected: String) ->
+      literal := @value as IntegerLiteral ? @fail_expected(expected)
+      value := literal.value ? @fail_expected(expected)
+      @take()
+      value
 
-  # The number to read, an integer or not, which the parser gives with its minus.
-  private number := (expected: String) ->
-    value := @value!
-    number := number_of(value) ? @fail_expected(expected)
-    @take()
-    number
+    # The number to read, an integer or not, which the parser gives with its minus.
+    number := (expected: String) ->
+      value := @value!
+      number := number_of(value) ? @fail_expected(expected)
+      @take()
+      number
 
-  private fail_last := (message: String) -> @fail_at(@last, message)
+    fail_last := (message: String) -> @fail_at(@last, message)
 
-  private fail_at := (at: Position, message: String) ->
-    throw LlitError("#{@path}:#{at.line}:#{at.column}: #{message}")
+    fail_at := (at: Position, message: String) ->
+      throw LlitError("#{@path}:#{at.line}:#{at.column}: #{message}")
 
 # The text of a number literal, an integer or not, with its minus, if any.
 number_text := (value: Expression) ->

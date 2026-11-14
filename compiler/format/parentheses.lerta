@@ -24,7 +24,7 @@ struct Operand
   expression: Expression
   level: Int
   last: Bool
-  clarified := default false
+  clarified := false
 
 # A place that takes any expression, such as an argument or a value.
 WHOLE_LEVEL := 0
@@ -55,30 +55,32 @@ export parentheses_of := (program: Statement[], tokens: Tokens) ->
 whole := (value: Expression) -> Operand(expression: value, level: WHOLE_LEVEL, last: true)
 
 class ParenthesesWalk
-  tokens: Tokens
-  private found: Edit[] = []
-  private unwritten := Set<Expression>()
-  # The operands of the expressions visited, which are checked with them.
-  private operands := Map<Expression, Operand>()
+  args
+    tokens: Tokens
+  private
+    found: Edit[] = []
+    unwritten := Set<Expression>()
+    # The operands of the expressions visited, which are checked with them.
+    operands := Map<Expression, Operand>()
 
-  # The expression in its place, in the order of the source.
-  private visit := (value: Expression) ->
-    return if value in @unwritten
-    own := @operands[value] ? whole(value)
-    @check own unless value in @operands
-    @operands_checked own
+    # The expression in its place, in the order of the source.
+    visit := (value: Expression) ->
+      return if value in @unwritten
+      own := @operands[value] ? whole(value)
+      @check own unless value in @operands
+      @operands_checked own
 
-  private operands_checked := (own: Operand): void ->
-    parts := operands_of(own)
-    for part in parts
-      @operands[part.expression] = part
-      @check part
-    # Those that are no places (see Visit) are visited here.
-    unvisited := unvisited_parts(own.expression)
-    for part in parts
-      @operands_checked part if part.expression in unvisited
+    operands_checked := (own: Operand): void ->
+      parts := operands_of(own)
+      for part in parts
+        @operands[part.expression] = part
+        @check part
+      # Those that are no places (see Visit) are visited here.
+      unvisited := unvisited_parts(own.expression)
+      for part in parts
+        @operands_checked part if part.expression in unvisited
 
-  private check := (operand: Operand) -> @found.push(edit) if edit := dropped(@tokens, operand)
+    check := (operand: Operand) -> @found.push(edit) if edit := dropped(@tokens, operand)
 
 # The parts of the expression that places_of does not visit as places (see Visit).
 export unvisited_parts := (expression: Expression): Expression[] ->

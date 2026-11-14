@@ -16,16 +16,17 @@ import bytes_of from './utf8'
 # What a request sends besides its URL, and whether a redirect is followed. A body that is a Reader
 # is sent in chunks as it comes, and closed once the final response has come.
 export struct FetchOptions
-  method := default 'GET'
-  headers := default Headers()
-  body: Body = default ''
-  follow_redirects := default true
+  method := 'GET'
+  headers := Headers()
+  body: Body = ''
+  follow_redirects := true
 
 # Keeps each connection whose response has been read to its end, for the next request to the same
 # host and port, for `idle_timeout` seconds and at most `max_idle` of them to each.
 export class Client
-  idle_timeout := default 4.0
-  max_idle := default 8
+  args
+    idle_timeout := 4.0
+    max_idle := 8
   # The connections kept by host and port, the latest last.
   var idle = Map<String, IdleSocket[]>()
 
@@ -114,22 +115,23 @@ export class Client
 
   # The latest connection kept for the host and port, after closing those kept too long, which the
   # server may be closing. A request on one the server has closed is sent again.
-  private take_idle := (authority: String) ->
-    kept := @idle[authority] ? return nil
-    now := monotonic()
-    fresh := [idle for idle in kept when now - idle.since < @idle_timeout]
-    for idle in kept
-      idle.socket.close() if now - idle.since >= @idle_timeout
-    @idle[authority] = fresh
-    fresh.is_empty() then nil else fresh.pop().socket
+  private
+    take_idle := (authority: String) ->
+      kept := @idle[authority] ? return nil
+      now := monotonic()
+      fresh := [idle for idle in kept when now - idle.since < @idle_timeout]
+      for idle in kept
+        idle.socket.close() if now - idle.since >= @idle_timeout
+      @idle[authority] = fresh
+      fresh.is_empty() then nil else fresh.pop().socket
 
-  private give_back := (authority: String, socket: Socket) ->
-    kept := @idle[authority] ? []
-    if kept.length >= @max_idle
-      socket.close()
-      return
-    kept.push { socket, since: monotonic() }
-    @idle[authority] = kept
+    give_back := (authority: String, socket: Socket) ->
+      kept := @idle[authority] ? []
+      if kept.length >= @max_idle
+        socket.close()
+        return
+      kept.push { socket, since: monotonic() }
+      @idle[authority] = kept
 
 # A request that a connection failed before any of its response came, which may then be sent again.
 struct NoAnswer: Error
@@ -172,13 +174,15 @@ struct Outgoing
 # side of the connection, so that the server does not wait for the rest; a write that fails ends the
 # sending too, as the server has stopped reading, and its response may have come.
 class SentBody
-  socket: Socket
-  request: Outgoing
-  # The request's body, which is a Reader.
-  body: Reader
+  args
+    socket: Socket
+    request: Outgoing
+    # The request's body, which is a Reader.
+    body: Reader
   # Whether the last chunk has been written.
-  private var whole = false
-  private var failure: Error? = nil
+  private
+    var whole = false
+    var failure: Error? = nil
 
   send := ->
     reads := JoinedReads(@body)
@@ -361,7 +365,7 @@ malformed := -> IOError('a malformed response')
 # for one that ends with the connection; or `chunked`.
 struct Framing
   left: Int?
-  chunked := default false
+  chunked := false
 
 # A response to HEAD, and one of 204 or 304, has no body, whatever its fields tell.
 framing := (head: Head, method: String): Framing ->
@@ -376,9 +380,10 @@ framing := (head: Head, method: String): Framing ->
 
 # The chunks of a body as they come, after which the connection is finished with.
 class BodyChunks
-  socket: Socket
-  finish: () -> void
-  chunks: ChunkedBody | SizedBody
+  args
+    socket: Socket
+    finish: () -> void
+    chunks: ChunkedBody | SizedBody
   private var ended = false
 
   next := ->

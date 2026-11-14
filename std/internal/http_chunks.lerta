@@ -6,9 +6,10 @@ import LineTooLongError, Reader from 'std:io'
 # The bytes of a body of `left` bytes as they come from `reader`, or of all that it gives where
 # `left` is nil, or nil at its end. `name` names the message in its error, `a <name> ended early`.
 export class SizedBody
-  reader: Reader
-  name: String
-  var left: Int?
+  args
+    reader: Reader
+    name: String
+    var left: Int?
 
   next := ->
     left := @left ? return await @reader.read(CHUNK_SIZE)
@@ -24,18 +25,20 @@ export class SizedBody
 # and those of the trailer, each counted with CR LF, which a body of chunks of a sensible size does
 # not come to before its data does.
 export class ChunkedBody
-  reader: Reader
-  name: String
-  room: Int
-  private var data_taken = 0
-  private var lines_taken = 0
-  # The bytes left of the chunk being read.
-  private var left = 0
-  # Where the body stands, kept before each read, so that a read that is cancelled leaves the next
-  # to go on from there: after the data of a chunk, before its line end, and in the trailer.
-  private var ending_chunk = false
-  private var in_trailer = false
-  private var ended = false
+  args
+    reader: Reader
+    name: String
+    room: Int
+  private
+    var data_taken = 0
+    var lines_taken = 0
+    # The bytes left of the chunk being read.
+    var left = 0
+    # Where the body stands, kept before each read, so that a read that is cancelled leaves the next
+    # to go on from there: after the data of a chunk, before its line end, and in the trailer.
+    var ending_chunk = false
+    var in_trailer = false
+    var ended = false
 
   next := ->
     return nil if @ended
@@ -77,26 +80,27 @@ export class ChunkedBody
     size = size * 16 + (byte.hex_value() ? throw @malformed()) for byte in hex
     size
 
-  private end_chunk := ->
-    line := await @line() ? throw ended_early(@name)
-    throw @malformed() unless line.is_empty()
+  private
+    end_chunk := ->
+      line := await @line() ? throw ended_early(@name)
+      throw @malformed() unless line.is_empty()
 
-  private skip_trailer := ->
-    while line := await @line()
-      return if line.is_empty()
-    throw ended_early(@name)
+    skip_trailer := ->
+      while line := await @line()
+        return if line.is_empty()
+      throw ended_early(@name)
 
-  # A line, its line end counted as CR LF.
-  private line := ->
-    line := await well_formed(@reader.read_line(MAX_LINE), @name) ? return nil
-    @lines_taken += line.binary.length + 2
-    # Compared so, as `room` may be INT_MAX.
-    throw @too_large() if @lines_taken - MAX_LINE > @room
-    line
+    # A line, its line end counted as CR LF.
+    line := ->
+      line := await well_formed(@reader.read_line(MAX_LINE), @name) ? return nil
+      @lines_taken += line.binary.length + 2
+      # Compared so, as `room` may be INT_MAX.
+      throw @too_large() if @lines_taken - MAX_LINE > @room
+      line
 
-  private too_large := -> IOError("a #{@name} too large")
+    too_large := -> IOError("a #{@name} too large")
 
-  private malformed := -> IOError("a malformed #{@name}")
+    malformed := -> IOError("a malformed #{@name}")
 
 export ended_early := (name: String) -> IOError("a #{name} ended early")
 
@@ -105,7 +109,8 @@ export ended_early := (name: String) -> IOError("a #{name} ended early")
 # not give at once, or that fails, is left for the next, so that what has come is not held back.
 # `ended` tells that the bytes given last were found to end the body.
 export class JoinedReads
-  reader: Reader
+  args
+    reader: Reader
   var ended = false
   private var waiting: Promise<Binary?>? = nil
 

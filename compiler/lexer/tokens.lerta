@@ -116,8 +116,8 @@ export struct Token
   parts: TemplatePart[]?
   # The line and the column after it, where the formatter reads its spelling up to; those of its
   # start for a layout token. Only a `"""` or `'''` literal ends on a later line.
-  end_line := default @line
-  end_column := default @column
+  end_line := @line
+  end_column := @column
 
   position := -> Position(line: @line, column: @column)
 
@@ -205,101 +205,105 @@ layout_token := (kind: TokenKind, line: Int, column: Int) ->
 # brackets too: the parser reads the lines of a block that continues a line as its continuation
 # (see TokenStream.continue_line).
 class Layout
-  path: String
-  tokens: Token[]
-  private indents := [0]
+  args
+    path: String
+    tokens: Token[]
+  private
+    indents := [0]
 
-  private start_line := (line: SourceLine, indent: Int) ->
-    column := line.column(indent)
-    if indent > @indents.last()!
-      @indents.push indent
-      @tokens.push layout_token(INDENT, line.number, column)
-      return
-    while indent < @indents.last()!
-      @indents.pop()
-      @tokens.push layout_token(DEDENT, line.number, column)
-    line.fail 'indentation does not match any outer block', indent if indent != @indents.last()!
+    start_line := (line: SourceLine, indent: Int) ->
+      column := line.column(indent)
+      if indent > @indents.last()!
+        @indents.push indent
+        @tokens.push layout_token(INDENT, line.number, column)
+        return
+      while indent < @indents.last()!
+        @indents.pop()
+        @tokens.push layout_token(DEDENT, line.number, column)
+      line.fail 'indentation does not match any outer block', indent if indent != @indents.last()!
 
-  private end_line := (line: SourceLine) ->
-    @tokens.push layout_token(NEWLINE, line.number, line.column(line.length))
+    end_line := (line: SourceLine) ->
+      @tokens.push layout_token(NEWLINE, line.number, line.column(line.length))
 
-  private finish := (eof_line: Int) ->
-    @tokens.push layout_token(DEDENT, eof_line, 1) for _ in 1..@indents.length
-    @tokens.push layout_token(EOF, eof_line, 1)
+    finish := (eof_line: Int) ->
+      @tokens.push layout_token(DEDENT, eof_line, 1) for _ in 1..@indents.length
+      @tokens.push layout_token(EOF, eof_line, 1)
 
 # The tokens of one line, from `position`.
 class LineScanner
-  line: SourceLine
-  var position: Int
-  private tokens: Token[] = []
-  # Where the comment that ends the line starts, if any; scanning stops at it.
-  private var comment_index: Int? = nil
-  # Where the `"""` or `'''` that opens a literal on the lines after it starts, if the line ends
-  # with one; scanning stops at it, and the caller reads the literal.
-  private var multiline_start: Int? = nil
-  # The brackets open here, from the lines before too, which a closing bracket that opens none
-  # leaves as they are, for the parser to report.
-  var depth: Int
-  # Where the first `;` on the line is, if any.
-  private var separator_index: Int? = nil
+  args
+    line: SourceLine
+    var position: Int
+    # The brackets open here, from the lines before too, which a closing bracket that opens none
+    # leaves as they are, for the parser to report.
+    var depth: Int
+  private
+    tokens: Token[] = []
+    # Where the comment that ends the line starts, if any; scanning stops at it.
+    var comment_index: Int? = nil
+    # Where the `"""` or `'''` that opens a literal on the lines after it starts, if the line ends
+    # with one; scanning stops at it, and the caller reads the literal.
+    var multiline_start: Int? = nil
+    # Where the first `;` on the line is, if any.
+    var separator_index: Int? = nil
 
-  private run := ->
-    while @position < @line.length
-      c := @line.bytes[@position]
-      case
-        when c == b' ' then @position += 1
-        when c == b'#'
-          @comment_index = @position
-          break
-        # Ends a statement as a line end does, for a program on one line, as on the command line.
-        when c == b';' then @scan_separator()
-        when @at_multiline_quotes()
-          quotes := @line.text(@position, @position + 3)
-          # Quoted with the other quote, which is clearer than the same one next to them.
-          shown := quotes == '"""' then "'#{quotes}'" else "\"#{quotes}\""
-          @line.fail "#{shown} must end its line", @position if @position + 3 != @line.length
-          @multiline_start = @position
-          break
-        when @at_binary_literal() then @scan_binary()
-        when is_identifier_start(c) then @scan_word()
-        when c == b"'" then @scan_raw_string()
-        when c == b'"' then @read_double_quoted()
-        when c.is_digit() then @scan_number()
-        else @scan_punctuation()
-    @tokens
+    run := ->
+      while @position < @line.length
+        c := @line.bytes[@position]
+        case
+          when c == b' ' then @position += 1
+          when c == b'#'
+            @comment_index = @position
+            break
+          # Ends a statement as a line end does, for a program on one line, as on the command line.
+          when c == b';' then @scan_separator()
+          when @at_multiline_quotes()
+            quotes := @line.text(@position, @position + 3)
+            # Quoted with the other quote, which is clearer than the same one next to them.
+            shown := quotes == '"""' then "'#{quotes}'" else "\"#{quotes}\""
+            @line.fail "#{shown} must end its line", @position if @position + 3 != @line.length
+            @multiline_start = @position
+            break
+          when @at_binary_literal() then @scan_binary()
+          when is_identifier_start(c) then @scan_word()
+          when c == b"'" then @scan_raw_string()
+          when c == b'"' then @read_double_quoted()
+          when c.is_digit() then @scan_number()
+          else @scan_punctuation()
+      @tokens
 
-  # A `;` comes between two statements: after code on its line other than another `;`, and before
-  # code.
-  private scan_separator := ->
-    @separator_index = @position unless @separator_index
-    after_separator := @tokens.last()?.kind == NEWLINE
-    after_code := @line.scan_while(0, is_space) < @position and not after_separator
-    next := @line.scan_while(@position + 1, is_space)
-    between := after_code and next < @line.length and @line.bytes[next] != b'#'
-    @line.fail "';' must come between statements", @position unless between
-    @line.fail "';' cannot be inside brackets", @position if @depth > 0
-    @add NEWLINE, ';', @position + 1, nil
+    # A `;` comes between two statements: after code on its line other than another `;`, and before
+    # code.
+    scan_separator := ->
+      @separator_index = @position unless @separator_index
+      after_separator := @tokens.last()?.kind == NEWLINE
+      after_code := @line.scan_while(0, is_space) < @position and not after_separator
+      next := @line.scan_while(@position + 1, is_space)
+      between := after_code and next < @line.length and @line.bytes[next] != b'#'
+      @line.fail "';' must come between statements", @position unless between
+      @line.fail "';' cannot be inside brackets", @position if @depth > 0
+      @add NEWLINE, ';', @position + 1, nil
 
-  private at_multiline_quotes := ->
-    bytes := @line.bytes
-    bytes.occurs_at(@position, b'"""') or bytes.occurs_at(@position, b"'''")
+    at_multiline_quotes := ->
+      bytes := @line.bytes
+      bytes.occurs_at(@position, b'"""') or bytes.occurs_at(@position, b"'''")
 
-  # `b` before a quote.
-  private at_binary_literal := ->
-    next := @line.bytes.get(@position + 1)
-    @line.bytes[@position] == b'b' and (next == b"'" or next == b'"')
+    # `b` before a quote.
+    at_binary_literal := ->
+      next := @line.bytes.get(@position + 1)
+      @line.bytes[@position] == b'b' and (next == b"'" or next == b'"')
 
-  private scan_binary := ->
-    quote := @position + 1
-    if @line.bytes.occurs_at(quote, b"'''") or @line.bytes.occurs_at(quote, b'"""')
-      @line.fail 'a Binary literal spans one line', @position
-    if @line.bytes[quote] == b"'"
-      close := @raw_string_end(quote)
-      parts: TemplatePart[] = [TextPart(@line.bytes[(quote + 1)..close])]
-      @add BINARY, '', close + 1, parts
-    else
-      { parts, end } := scan_double_quoted(@line, quote, true)
-      @add BINARY, '', end, parts
+    scan_binary := ->
+      quote := @position + 1
+      if @line.bytes.occurs_at(quote, b"'''") or @line.bytes.occurs_at(quote, b'"""')
+        @line.fail 'a Binary literal spans one line', @position
+      if @line.bytes[quote] == b"'"
+        close := @raw_string_end(quote)
+        parts: TemplatePart[] = [TextPart(@line.bytes[(quote + 1)..close])]
+        @add BINARY, '', close + 1, parts
+      else
+        { parts, end } := scan_double_quoted(@line, quote, true)
+        @add BINARY, '', end, parts
 
   # Adds the token that starts at the position, and moves to `end`, after it.
   add := (kind: TokenKind, text: String, end: Int, parts: TemplatePart[]?) ->
@@ -312,70 +316,71 @@ class LineScanner
     @depth -= 1 if kind in CLOSING_BRACKETS and @depth > 0
     @position = end
 
-  private scan_word := ->
-    end := @line.scan_while(@position, is_identifier_part)
-    word := @line.text(@position, end)
-    @add keyword_kind(word) ? IDENTIFIER, word, end, nil
+  private
+    scan_word := ->
+      end := @line.scan_while(@position, is_identifier_part)
+      word := @line.text(@position, end)
+      @add keyword_kind(word) ? IDENTIFIER, word, end, nil
 
-  private scan_raw_string := ->
-    close := @raw_string_end(@position)
-    @add STRING, @line.text(@position + 1, close), close + 1, nil
+    scan_raw_string := ->
+      close := @raw_string_end(@position)
+      @add STRING, @line.text(@position + 1, close), close + 1, nil
 
-  # The index of the `'` that closes the `'...'` literal whose opening quote is at `start`.
-  private raw_string_end := (start: Int) ->
-    @line.index_of(b"'", start + 1) ? @line.fail('unterminated string literal', start)
+    # The index of the `'` that closes the `'...'` literal whose opening quote is at `start`.
+    raw_string_end := (start: Int) ->
+      @line.index_of(b"'", start + 1) ? @line.fail('unterminated string literal', start)
 
-  private read_double_quoted := ->
-    { parts, end } := scan_double_quoted(@line, @position, false)
-    if text := plain_text(parts)
-      @add STRING, text, end, nil
-    else
-      @add INTERPOLATED, '', end, parts
-
-  # A `.` begins a fraction only before a digit, so `1.f()` stays an integer and a member.
-  private scan_number := ->
-    bytes := @line.bytes
-    after_digits := (start: Int) -> @line.scan_while(start, is_identifier_part)
-    var end = after_digits(@position)
-    is_decimal := not @line.text(@position, end).starts_with('0x')
-    # What looks like a fraction is taken whole (see Float literals in docs/reference/syntax.md).
-    at_dot := end + 1 < @line.length and bytes[end] == b'.'
-    after_dot: Byte = at_dot then bytes[end + 1] else b' '
-    has_fraction := after_dot.is_digit() or after_dot == b'_'
-    end = after_digits(end + 1) if has_fraction
-    ends_with_exponent := bytes[end - 1] == b'e' or bytes[end - 1] == b'E'
-    # The sign is taken even with no digit after it, so that a diagnostic shows it.
-    sign_follows := end < @line.length and (bytes[end] == b'+' or bytes[end] == b'-')
-    end = after_digits(end + 1) if is_decimal and ends_with_exponent and sign_follows
-    text := @line.text(@position, end)
-    digits := text.replace('_', '')
-    return @add(INTEGER, digits, end, nil) if is_integer_literal(text)
-    return @add(FLOAT, digits, end, nil) if is_float_literal(text)
-    @line.fail "invalid number literal '#{text}'", @position
-
-  # The longest punctuation that starts here; `...` and `..=` are the longest of all. What follows
-  # may not be a whole character, so a slice that is not valid UTF-8 is skipped. No word starts
-  # here, so no keyword or named kind can match.
-  private scan_punctuation := ->
-    for length in [3, 2, 1]
-      end := @position + length
-      continue if end > @line.length
-      text := @line.bytes.text(@position, end) ? continue
-      if kind := parse<TokenKind>(text)
-        @add kind, text, end, nil
-        return
-    @fail_unexpected_character()
-
-  # Control characters such as '\r' would garble the error line if printed raw.
-  private fail_unexpected_character := ->
-    number := @line.char_at(@position).to_int()
-    is_printable_ascii := number in 0x20..=0x7E
-    shown :=
-      if is_printable_ascii
-        "'#{@line.text(@position, @position + 1)}'"
+    read_double_quoted := ->
+      { parts, end } := scan_double_quoted(@line, @position, false)
+      if text := plain_text(parts)
+        @add STRING, text, end, nil
       else
-        "U+#{number.to_hex(4).to_upper()}"
-    @line.fail "unexpected character #{shown}", @position
+        @add INTERPOLATED, '', end, parts
+
+    # A `.` begins a fraction only before a digit, so `1.f()` stays an integer and a member.
+    scan_number := ->
+      bytes := @line.bytes
+      after_digits := (start: Int) -> @line.scan_while(start, is_identifier_part)
+      var end = after_digits(@position)
+      is_decimal := not @line.text(@position, end).starts_with('0x')
+      # What looks like a fraction is taken whole (see Float literals in docs/reference/syntax.md).
+      at_dot := end + 1 < @line.length and bytes[end] == b'.'
+      after_dot: Byte = at_dot then bytes[end + 1] else b' '
+      has_fraction := after_dot.is_digit() or after_dot == b'_'
+      end = after_digits(end + 1) if has_fraction
+      ends_with_exponent := bytes[end - 1] == b'e' or bytes[end - 1] == b'E'
+      # The sign is taken even with no digit after it, so that a diagnostic shows it.
+      sign_follows := end < @line.length and (bytes[end] == b'+' or bytes[end] == b'-')
+      end = after_digits(end + 1) if is_decimal and ends_with_exponent and sign_follows
+      text := @line.text(@position, end)
+      digits := text.replace('_', '')
+      return @add(INTEGER, digits, end, nil) if is_integer_literal(text)
+      return @add(FLOAT, digits, end, nil) if is_float_literal(text)
+      @line.fail "invalid number literal '#{text}'", @position
+
+    # The longest punctuation that starts here; `...` and `..=` are the longest of all. What follows
+    # may not be a whole character, so a slice that is not valid UTF-8 is skipped. No word starts
+    # here, so no keyword or named kind can match.
+    scan_punctuation := ->
+      for length in [3, 2, 1]
+        end := @position + length
+        continue if end > @line.length
+        text := @line.bytes.text(@position, end) ? continue
+        if kind := parse<TokenKind>(text)
+          @add kind, text, end, nil
+          return
+      @fail_unexpected_character()
+
+    # Control characters such as '\r' would garble the error line if printed raw.
+    fail_unexpected_character := ->
+      number := @line.char_at(@position).to_int()
+      is_printable_ascii := number in 0x20..=0x7E
+      shown :=
+        if is_printable_ascii
+          "'#{@line.text(@position, @position + 1)}'"
+        else
+          "U+#{number.to_hex(4).to_upper()}"
+      @line.fail "unexpected character #{shown}", @position
 
 # The token of the `"""` or `'''` literal that starts at `start` on the line.
 multiline_token := (line: SourceLine, start: Int, literal: MultilineLiteral) ->

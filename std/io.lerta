@@ -74,15 +74,17 @@ FILE_BUFFER_SIZE := 65536
 # the file after; what is left when it is freed, it writes out at once. A write out that fails fails
 # every later write, flush and end (see lerta_open_file_failed).
 class FileWriter
-  pointer: Int
-  path: String
-  private var buffer = b''
-  private var ended = false
-  # The first end, which a later one waits for too.
-  private var ending: Promise? = nil
-  # The write out on the event loop, one at a time, which a flush waits for before its own, and
-  # after which it finds whether it failed.
-  private var writing: Promise? = nil
+  args
+    pointer: Int
+    path: String
+  private
+    var buffer = b''
+    var ended = false
+    # The first end, which a later one waits for too.
+    var ending: Promise? = nil
+    # The write out on the event loop, one at a time, which a flush waits for before its own, and
+    # after which it finds whether it failed.
+    var writing: Promise? = nil
 
   write := (data: String | Binary) ->
     @check_open()
@@ -108,24 +110,25 @@ class FileWriter
     @check_open()
     await @write_out()
 
-  private write_out := ->
-    while true
-      await writing while writing := @writing
+  private
+    write_out := ->
+      while true
+        await writing while writing := @writing
+        throw @write_failure() if lerta_open_file_failed(@pointer)
+        return if @buffer.is_empty()
+        bytes := @buffer
+        @buffer = b''
+        @writing = lerta_open_file_append(@pointer, bytes)
+        try
+          await @writing!
+        finally
+          @writing = nil
+
+    check_open := ->
+      throw IOError('cannot write to a file that has ended') if @ended
       throw @write_failure() if lerta_open_file_failed(@pointer)
-      return if @buffer.is_empty()
-      bytes := @buffer
-      @buffer = b''
-      @writing = lerta_open_file_append(@pointer, bytes)
-      try
-        await @writing!
-      finally
-        @writing = nil
 
-  private check_open := ->
-    throw IOError('cannot write to a file that has ended') if @ended
-    throw @write_failure() if lerta_open_file_failed(@pointer)
-
-  private write_failure := -> IOError("cannot write file: #{@path}")
+    write_failure := -> IOError("cannot write file: #{@path}")
 
   deinit := -> lerta_open_file_free(@pointer, @buffer)
 
@@ -272,7 +275,8 @@ export stderr := StandardOutput(2)
 # A Writer that keeps what is written, at most `limit` bytes, as run of std:process keeps a
 # program's output. A write past the limit or after the end throws, and adds nothing.
 export class Buffer
-  limit: Int?
+  args
+    limit: Int?
   var binary = b''
   private var ended = false
 
@@ -305,16 +309,17 @@ reader_of_pipe := (writer: PipeWriter) ->
 
 class PipeWriter
   # Once set, the Pipe is a system pipe, and the rest is not used.
-  private var system: SystemPipe? = nil
-  private var used = false
-  private var queued: PipeChunk[] = []
-  private var ended = false
-  # What the reader throws in place of its end.
-  private var failure: Error? = nil
-  private var read_no_more = false
-  # The takes that wait while nothing is queued. Every one looks again once something comes, as it
-  # may find the queue empty again once another has taken.
-  private arrivals := Waiters()
+  private
+    var system: SystemPipe? = nil
+    var used = false
+    var queued: PipeChunk[] = []
+    var ended = false
+    # What the reader throws in place of its end.
+    var failure: Error? = nil
+    var read_no_more = false
+    # The takes that wait while nothing is queued. Every one looks again once something comes, as it
+    # may find the queue empty again once another has taken.
+    arrivals := Waiters()
 
   # An empty chunk is not queued, as the reader would take it for the end.
   write := (data: String | Binary) ->
@@ -353,36 +358,37 @@ class PipeWriter
     @finish()
 
   # On a system pipe, an end that a program has taken is ended as far as this program goes.
-  private writes_here := -> @system?.holds(WRITING) ? true
+  private
+    writes_here := -> @system?.holds(WRITING) ? true
 
-  # The chunks left are not read, and their writes fail.
-  private unread := ->
-    return system.close(READING) if system := @system
-    @used = true
-    @read_no_more = true
-    chunks := @queued
-    @queued = []
-    chunk.taken.reject closed_pipe() for chunk in chunks
-    @arrivals.wake_all()
+    # The chunks left are not read, and their writes fail.
+    unread := ->
+      return system.close(READING) if system := @system
+      @used = true
+      @read_no_more = true
+      chunks := @queued
+      @queued = []
+      chunk.taken.reject closed_pipe() for chunk in chunks
+      @arrivals.wake_all()
 
-  private take := ->
-    if system := @system
-      chunk := await system.read()
-      failure := @failure
-      throw failure if chunk == nil and failure != nil
-      return chunk
-    @used = true
-    while @queued.is_empty()
-      return nil if @read_no_more
-      if @ended
-        throw failure if failure := @failure
-        return nil
-      await @arrivals.wait()
-    first := @queued[0]
-    @queued = @queued[1..]
-    first.was_taken = true
-    first.taken.resolve()
-    first.bytes
+    take := ->
+      if system := @system
+        chunk := await system.read()
+        failure := @failure
+        throw failure if chunk == nil and failure != nil
+        return chunk
+      @used = true
+      while @queued.is_empty()
+        return nil if @read_no_more
+        if @ended
+          throw failure if failure := @failure
+          return nil
+        await @arrivals.wait()
+      first := @queued[0]
+      @queued = @queued[1..]
+      first.was_taken = true
+      first.taken.resolve()
+      first.bytes
 
   # The file of an end for a program to take, which makes the Pipe a system pipe if nothing has
   # used it yet; nil once this program uses the Pipe, or that end, or has given it.
@@ -416,17 +422,18 @@ extern lerta_handle_free as free_pipe: (Int) -> void
 # runtime/handle.c), which a program then does not take: the handle makes the file non-blocking on
 # POSIX systems, which a program that inherited it would not expect.
 class SystemPipe
-  private files := system_pipe_files()
-  # The handles that this program reads or writes the ends through: 0 before the first use, and -1
-  # once closed.
-  private handles := [0, 0]
-  # The writes that the system has not taken yet, which an end lets finish before it closes the end
-  # that writes, as a Writer's end follows the writes before it.
-  private var writes = 0
-  private var ending = false
-  # The read under way, as the handle takes one at a time, and the reads that wait for it.
-  private var reading = false
-  private turns := Waiters()
+  private
+    files := system_pipe_files()
+    # The handles that this program reads or writes the ends through: 0 before the first use, and -1
+    # once closed.
+    handles := [0, 0]
+    # The writes that the system has not taken yet, which an end lets finish before it closes the
+    # end that writes, as a Writer's end follows the writes before it.
+    var writes = 0
+    var ending = false
+    # The read under way, as the handle takes one at a time, and the reads that wait for it.
+    var reading = false
+    turns := Waiters()
 
   deinit := ->
     for file in @files
@@ -434,14 +441,15 @@ class SystemPipe
     for handle in @handles
       free_pipe handle if handle > 0
 
-  private file_for := (side: Int) -> @files[side] >= 0 then @files[side]
+  private
+    file_for := (side: Int) -> @files[side] >= 0 then @files[side]
 
-  private holds := (side: Int) -> @files[side] >= 0 or @handles[side] > 0
+    holds := (side: Int) -> @files[side] >= 0 or @handles[side] > 0
 
-  private give := (side: Int) ->
-    return if @files[side] < 0
-    lerta_file_close @files[side]
-    @files[side] = -1
+    give := (side: Int) ->
+      return if @files[side] < 0
+      lerta_file_close @files[side]
+      @files[side] = -1
 
   write := (bytes: Binary) ->
     throw ended_pipe() if @ending
@@ -495,26 +503,29 @@ system_pipe_files := ->
 # Those that wait until the next `wake_all`, each on its own, so that a cancel of one leaves the
 # others waiting.
 class Waiters
-  private var signals: Signal[] = []
+  private
+    var signals: Signal[] = []
 
-  private wait := ->
-    signal := Signal()
-    @signals.push signal
-    try
-      await signal.promise()
-    catch error: CancelledError
-      @signals = [each for each in @signals when each != signal]
-      throw error
+    wait := ->
+      signal := Signal()
+      @signals.push signal
+      try
+        await signal.promise()
+      catch error: CancelledError
+        @signals = [each for each in @signals when each != signal]
+        throw error
 
-  private wake_all := ->
-    signals := @signals
-    @signals = []
-    signal.resolve() for signal in signals
+    wake_all := ->
+      signals := @signals
+      @signals = []
+      signal.resolve() for signal in signals
 
 class PipeChunk
-  bytes: Binary
-  private taken := Signal()
-  private var was_taken = false
+  args
+    bytes: Binary
+  private
+    taken := Signal()
+    var was_taken = false
 
 extern lerta_dir_names: (String) -> Binary[]?
 
@@ -539,14 +550,16 @@ export struct LineTooLongError: Error
 # read must end before the next one starts: one that starts while another is pending throws.
 # `on_close` tells the source that nothing reads it any more, as a pipe's writer is told.
 export class Reader
-  read_chunk: () -> Promise<Binary?>
-  on_close: (() -> void)?
-  private var chunk = b''
-  private var start = 0
-  private var reading = false
-  # What the read under way has sliced out of the chunks it went past, kept here rather than in
-  # it, so that a read that throws or is cancelled leaves it for the next.
-  private var taken = b''
+  args
+    read_chunk: () -> Promise<Binary?>
+    on_close: (() -> void)?
+  private
+    var chunk = b''
+    var start = 0
+    var reading = false
+    # What the read under way has sliced out of the chunks it went past, kept here rather than in
+    # it, so that a read that throws or is cancelled leaves it for the next.
+    var taken = b''
 
   # The next line, without its "\n" and a "\r" before it, or nil at the end. A LineTooLongError
   # if more than `max` bytes, a "\r" among them, come before its "\n", which leaves them unread.
@@ -577,70 +590,72 @@ export class Reader
 
   close := -> on_close() if on_close := @on_close
 
-  private exclusive := <T>(read: () -> Promise<T>): Promise<T> ->
-    throw ValueError(message: 'a Reader is read by another read that has not ended') if @reading
-    @reading = true
-    @put_back_taken()
-    try
-      await read()
-    finally
-      @reading = false
+  private
+    exclusive := <T>(read: () -> Promise<T>): Promise<T> ->
+      throw ValueError(message: 'a Reader is read by another read that has not ended') if @reading
+      @reading = true
+      @put_back_taken()
+      try
+        await read()
+      finally
+        @reading = false
 
-  # Whether a chunk is there to read, read in place of the one read up if needed.
-  private fill := ->
-    return true if @start < @chunk.length
-    next := await @read_chunk() ? return false
-    @chunk = next
-    @start = 0
-    true
-
-  # What a cancelled read took goes back before the rest of the chunk.
-  private put_back_taken := ->
-    return if @taken.is_empty()
-    @taken += @chunk[@start..]
-    @chunk = @taken_out()
-    @start = 0
-
-  private taken_out := ->
-    bytes := @taken
-    @taken = b''
-    bytes
-
-  private line := (max: Int) ->
-    while await @fill()
-      end := @chunk.index_of(b"\n", @start) ? @chunk.length
-      @taken += @chunk[@start..end]
-      @start = end
-      throw LineTooLongError("a line is longer than #{max} bytes") if @taken.length > max
-      if end < @chunk.length
-        @start = end + 1
-        return ended_line_text(@taken_out())
-    return nil if @taken.is_empty()
-    utf8_line(@taken_out())
-
-  # Whether there are bytes to read, past the empty chunks that come before them; false at the end.
-  private has_bytes := ->
-    while await @fill()
+    # Whether a chunk is there to read, read in place of the one read up if needed.
+    fill := ->
       return true if @start < @chunk.length
-    false
+      next := await @read_chunk() ? return false
+      @chunk = next
+      @start = 0
+      true
 
-  private some := (max: Int) -> await @has_bytes() then @take(max)
+    # What a cancelled read took goes back before the rest of the chunk.
+    put_back_taken := ->
+      return if @taken.is_empty()
+      @taken += @chunk[@start..]
+      @chunk = @taken_out()
+      @start = 0
 
-  private part := (count: Int) ->
-    return nil unless await @has_bytes()
-    @taken += @take(count)
-    @taken += @take(count - @taken.length) while @taken.length < count and await @fill()
-    @taken_out()
+    taken_out := ->
+      bytes := @taken
+      @taken = b''
+      bytes
 
-  # Up to `count` bytes of the chunk, from where it is read.
-  private take := (count: Int) ->
-    end := @start + min(count, @chunk.length - @start)
-    bytes := @chunk[@start..end]
-    @start = end
-    bytes
+    line := (max: Int) ->
+      while await @fill()
+        end := @chunk.index_of(b"\n", @start) ? @chunk.length
+        @taken += @chunk[@start..end]
+        @start = end
+        throw LineTooLongError("a line is longer than #{max} bytes") if @taken.length > max
+        if end < @chunk.length
+          @start = end + 1
+          return ended_line_text(@taken_out())
+      return nil if @taken.is_empty()
+      utf8_line(@taken_out())
 
-  # All that is left: a part of INT_MAX bytes, as many as a read can ask for, reads to the end.
-  private rest := -> await @part(INT_MAX) ? b''
+    # Whether there are bytes to read, past the empty chunks that come before them; false at the
+    # end.
+    has_bytes := ->
+      while await @fill()
+        return true if @start < @chunk.length
+      false
+
+    some := (max: Int) -> await @has_bytes() then @take(max)
+
+    part := (count: Int) ->
+      return nil unless await @has_bytes()
+      @taken += @take(count)
+      @taken += @take(count - @taken.length) while @taken.length < count and await @fill()
+      @taken_out()
+
+    # Up to `count` bytes of the chunk, from where it is read.
+    take := (count: Int) ->
+      end := @start + min(count, @chunk.length - @start)
+      bytes := @chunk[@start..end]
+      @start = end
+      bytes
+
+    # All that is left: a part of INT_MAX bytes, as many as a read can ask for, reads to the end.
+    rest := -> await @part(INT_MAX) ? b''
 
 # A line that ended with "\n", without a "\r" before it.
 ended_line_text := (bytes: Binary) ->

@@ -77,7 +77,7 @@ export struct KeptCall
 export struct Diagnostic
   message: String
   at: Position
-  kind: DiagnosticKind = default OTHER
+  kind: DiagnosticKind = OTHER
 
 # An error found in the module of the path, nil for the entry module.
 export struct CheckError
@@ -226,24 +226,26 @@ export is_plainly_compared := (type: Type) ->
 # An instance as a call refers to it, without holding it: an instance's own calls, of itself or of
 # one that calls it back, would hold it in a cycle, which would never be released.
 export class InstanceLink
-  weak instance: Instance!
+  args
+    weak instance: Instance!
 
 # What is found for one module, and what its checkers share.
 export class Shared
-  # The program, which holds this module's Shared.
-  weak program: ProgramWide!
-  # The module's index, how messages name it, and the path that diagnostics give for it (see
-  # Module).
-  index: Int
-  name: String
-  path: String?
-  imports: Imports
-  extensions: Extensions
-  top_level: TopLevelValues
-  # What the module exports, besides its extends, by name (see export_of).
-  exported: Map<String, Exportable>
-  # What the module exports from the modules it imports, by name: the name there (see export_ref).
-  reexported: Map<String, ExportRef>
+  args
+    # The program, which holds this module's Shared.
+    weak program: ProgramWide!
+    # The module's index, how messages name it, and the path that diagnostics give for it (see
+    # Module).
+    index: Int
+    name: String
+    path: String?
+    imports: Imports
+    extensions: Extensions
+    top_level: TopLevelValues
+    # What the module exports, besides its extends, by name (see export_of).
+    exported: Map<String, Exportable>
+    # What the module exports from the modules it imports, by name: the name there (see export_ref).
+    reexported: Map<String, ExportRef>
   # What is found of the nodes of the module's code; an instance of a generic function has its own.
   # The tokens of the module's source, lexed again once a call of an intrinsic quotes the code
   # (see compiler/checker/intrinsics.lerta).
@@ -298,12 +300,13 @@ export struct AnnotatedCall
 # module, by symbol, the type each C function was first declared with by an extern, and what a
 # compile error reports with it.
 export class ProgramWide
-  entry_path: String
-  modules: Module[]
-  # Whether the checking goes on after an error with the other parts of the program, to find their
-  # errors too (see check_part); not where the program is checked only to see whether it checks,
-  # which the first error tells.
-  finds_all_errors: Bool
+  args
+    entry_path: String
+    modules: Module[]
+    # Whether the checking goes on after an error with the other parts of the program, to find their
+    # errors too (see check_part); not where the program is checked only to see whether it checks,
+    # which the first error tells.
+    finds_all_errors: Bool
   shared: Shared[] = []
   infos: Map<String, ObjectInfo> = Map()
   # Whether the fields of every class and struct and the members of every interface are known;
@@ -355,8 +358,9 @@ export class ProgramWide
 # initializer of a field, which sees the constructor arguments and the fields initialized before
 # it.
 export class SelfContext
-  type: Type
-  var initializing: FieldInfo?
+  args
+    type: Type
+    var initializing: FieldInfo?
   # The computed fields warned about as stale, once each (see warn_if_stale).
   stale: Set<FieldInfo> = Set()
 
@@ -369,10 +373,11 @@ export struct Result
 # results are the values it yields; for a function that awaits, the value type of the Promise it
 # returns.
 export class FunctionContext
-  literal: FunctionLiteral
-  var annotated: Type?
-  yields: Bool
-  awaits: Bool
+  args
+    literal: FunctionLiteral
+    var annotated: Type?
+    yields: Bool
+    awaits: Bool
   # Whether a function that returns a Promise without awaiting settles it with its results, rather
   # than returning the Promises they are; nil until a result tells (see undecided_promise).
   var settles: Bool? = nil
@@ -389,16 +394,17 @@ export struct LocalFunctionUse
 # struct. The body of a generic function's instance resolves its type parameters to its type
 # arguments, and sees the extends where it is called (see Instance).
 export class Body
-  shared: Shared
-  resolver: Resolver
-  extensions: Extensions
-  facts: NodeFacts
-  context: FunctionContext?
-  self: SelfContext?
-  # For the body of a function literal: the body it is written in, whose locals it captures.
-  enclosing: Body?
-  # For a weak function literal's body: it captures `@` weakly.
-  weak_this := default false
+  args
+    shared: Shared
+    resolver: Resolver
+    extensions: Extensions
+    facts: NodeFacts
+    context: FunctionContext?
+    self: SelfContext?
+    # For the body of a function literal: the body it is written in, whose locals it captures.
+    enclosing: Body?
+    # For a weak function literal's body: it captures `@` weakly.
+    weak_this := false
   # For the body of a function literal declared as a local that sees itself: the local it sees
   # itself as, its own closure.
   var self_local: Local? = nil

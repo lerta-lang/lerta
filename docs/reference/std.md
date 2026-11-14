@@ -14,7 +14,7 @@ import parse_args from 'std:args'
 
 struct Args
   lines: Bool
-  jobs: Int = default 4
+  jobs: Int = 4
   files: String[]
 
 SPEC :=
