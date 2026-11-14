@@ -130,7 +130,6 @@ A signed type takes the rules of [`Int`](#int), an unsigned one those of [`Byte`
 ### Literals
 
 - An integer literal is of the integer type expected, and must fit in it; elsewhere it is an `Int`.
-- A `UInt64` literal cannot be above the largest `Int` so far.
 
 ### Integer conversions
 

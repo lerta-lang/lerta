@@ -72,7 +72,6 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
 
 ## Numeric types
 
-- A `UInt64` literal above the largest `Int`, as `0xFFFFFFFFFFFFFFFF`.
 - Conversions from `Float` to the sized integer types, which now go through `to_int()`.
 - `Int` divides as `Div<Int, Int>` (see [operators](../reference/builtins.md#operators)). To divide as `Float`, convert explicitly. For an always non-negative remainder, use `x.mod(n)`.
 

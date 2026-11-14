@@ -39,4 +39,4 @@ The value is read as the type that the code gives, which takes the literal of it
 | unions | The member that the kind of the literal tells, as std:json's [unions](../reference/std.md#types). |
 
 - Errors name where in the text the value is that they are about: `settings.llit:3:9: expected an Int8, found 300`, `settings.llit:1:1: missing the field name`.
-- A `UInt64` above the largest `Int` cannot be written, as no integer literal holds it, nor a `Float` of a hexadecimal integer beyond `Int`.
+- A `Float` of a hexadecimal integer beyond `Int` cannot be written.

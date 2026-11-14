@@ -2,7 +2,7 @@
 # string literals as the integer types that are expected.
 import
   ArrayLiteral, binary_literal_bytes, BinaryOperation, Comprehension, Expression, FloatLiteral,
-  IntegerLiteral, Interpolation, is_spread, StringLiteral, UnaryOperation
+  IntegerLiteral, Interpolation, is_spread, StringLiteral, uint64_value, UnaryOperation
 from '../ast'
 import fail from './diagnostics'
 import is_numeric_operator from './operator'
@@ -66,9 +66,13 @@ export integer_literal := (
   at := literal.position
   case literal
     when IntegerLiteral
-      { least, most } := integer_range(type)
-      value := literal.value
-      fits := value != nil and value in least..=most
+      fits :=
+        if is_kind(type, 'UInt64')
+          uint64_value(literal) != nil
+        else
+          { least, most } := integer_range(type)
+          value := literal.value
+          value != nil and value in least..=most
       unless fits
         fail program, at, "integer literal does not fit in #{format_type(type)}"
     when StringLiteral

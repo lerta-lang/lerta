@@ -43,6 +43,21 @@ export class IntegerLiteral
 
     var position: Position
 
+# The value of an integer literal as a UInt64, which may be beyond Int, or nil if it is negative or
+# beyond UInt64.
+export uint64_value := (literal: IntegerLiteral) ->
+  return value.to_uint64() if value := literal.value
+  return nil if literal.text.starts_with('-')
+  hex_digits := literal.text.without_prefix('0x')
+  base: UInt64 = hex_digits then 16 else 10
+  most := -1.to_bits()
+  var value: UInt64 = 0
+  for digit in (hex_digits else literal.text).binary
+    digit_value := digit.hex_value()!.to_bits()
+    return nil if value > (most - digit_value) / base
+    value = value * base + digit_value
+  value
+
 # `1.5`, `1e9`: its text, without separators, which the compiler converts to a double as C does.
 export class FloatLiteral
   args
