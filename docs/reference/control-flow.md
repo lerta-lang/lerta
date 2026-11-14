@@ -181,6 +181,8 @@ for i in 0..3
 | `<start>..<end>` | each integer from `<start>` up to, but not including, `<end>`; none if `<end>` is not greater than `<start>` |
 | `<start>..=<end>` | the same, including `<end>` |
 
+- An array is shared, not copied, and a `for` over it sees what its block changes, as reading an index would. Why neither copying it on write, as Swift's, nor making a change during the loop an error: either costs on every array or every round, where a loop over an array already reads within its length.
+
 ### Ranges
 
 - `1..3` is `1` and `2`, as in Rust and as SQL's `>= 1 AND < 3`. `1..=3` is `1`, `2` and `3`, as SQL's `BETWEEN 1 AND 3`.

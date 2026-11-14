@@ -133,5 +133,4 @@ The size classes of the allocator ([internals](../internals/memory.md#allocation
 ## Open questions
 
 - Whether stack overflow should be an exception that can be caught, instead of a panic. That needs the remaining stack checked at function entry instead of [the guard page](../internals/execution.md#stack-overflow), as on the targets without one, such as [microcontrollers](#platforms). Catching it then works like any throw, since the handler runs after unwinding.
-- Value semantics for arrays (copy-on-write), or detection of modification during iteration.
 - How to pass values to workers (candidates: deep copy only + sharing immutable `Binary` / run-time moves like JS transfer).
