@@ -54,10 +54,9 @@ parse_status := (text: String, where: String) ->
   status else throw ValueError("not an exit status in #{where}: #{text}")
 
 # The files of tests/cli, with those of tests/cli/posix as `posix/<file>`.
-case_files := [
-  (file for file in list_dir(cases_dir) when file != 'posix')...
-  ("posix/#{file}" for file in list_dir("#{cases_dir}/posix"))...
-]
+top_case_files := [file for file in list_dir(cases_dir) when file != 'posix']
+posix_case_files := ["posix/#{file}" for file in list_dir("#{cases_dir}/posix")]
+case_files := top_case_files + posix_case_files
 
 case_names := [file.without_suffix('.args')! for file in case_files when file.ends_with('.args')]
 
@@ -137,8 +136,9 @@ export suite := ->
   extras: Check[] =
     { name: 'CLI runtime setup', run: -> await at_once(runtime_setup_errors) }
     { name: 'tests/cli has no file that no case reads', run: -> await at_once(stray_files()) }
+  file_checks := [file_check(test) for test in cases]
   all_checks := [
-    (file_check(test) for test in cases)...
+    file_checks...
     await status_checks()...
     std_checks...
     embed_checks...

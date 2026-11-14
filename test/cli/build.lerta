@@ -563,15 +563,10 @@ dump_item_tag_check := ->
     has_root := lines.any((line) -> line.ends_with(" = #{root}"))
     return ["no node of clang's root of type-based alias analysis, #{root}"] unless has_root
     types := ['i8', 'i32', 'float', 'i64', '{ ptr, ptr }']
-    accesses := [
-      ["load #{type}, ptr" for type in types]...
-      ["store #{type} " for type in types]...
-    ]
+    accesses := ["load #{type}, ptr" for type in types] + ["store #{type} " for type in types]
     is_tagged := (access: String) -> lines.any((line) -> access in line and line.ends_with(tagged))
-    [
-      expect_status(0, dumped.result.status)...
-      ["no #{access} with the tag" for access in accesses when not is_tagged(access)]...
-    ]
+    untagged := ["no #{access} with the tag" for access in accesses when not is_tagged(access)]
+    expect_status(0, dumped.result.status) + untagged
   )
 
 # What an access with the alias tag of the type of the name ends with, among the lines of the IR,
@@ -706,9 +701,10 @@ dump_symbols_check := ->
       '%"lerta.object.lib/\E5\90\8D\E5\89\8D \22a\5Cb\22.lerta.Pair<String>"'
       '@"lerta.value../escaped_path.lerta.box.set"'
       '@"lerta.fn.std:builtins/text.print<String>"'
+    missing := ["no #{symbol}" for symbol in symbols when symbol not in ir]
     [
       expect_status(0, dumped.result.status)...
-      ["no #{symbol}" for symbol in symbols when symbol not in ir]...
+      missing...
       expect_left('files left', copied, dumped.left)...
       expect_left('files left in the temporary directory', [], dumped.left_in_temp)...
     ]
@@ -796,18 +792,20 @@ source_lines_build_check := (flags: String[]) ->
         else
           []
       has_debug := await has_debug_info(output)
+      row_reasons :=
+        if rows
+          missing := [
+            for line in expected_lines when line not in rows
+              "no row of line #{line} in the line table"
+          ]
+          missing + (rows.is_empty() then ['the line table has no rows'] else no_reasons)
+        else
+          no_reasons
       [
         expect_success('run', ran)...
         compare_output('stdout', b"2\n7\n", ran.stdout)...
         (has_debug then no_reasons else ['no debug information'])...
-        (rows == nil then no_reasons else [
-          [
-            "no row of line #{line} in the line table"
-            for line in expected_lines
-            when line not in rows
-          ]...
-          (rows.is_empty() then ['the line table has no rows'] else no_reasons)...
-        ])...
+        row_reasons...
       ]
   )
 
@@ -882,8 +880,10 @@ target_checks: Check[] =
   else
     []
 
+runtime_checks := [build_and_run(flags) for flags in runtime_flags]
+
 export checks: Check[] = [
-  [build_and_run(flags) for flags in runtime_flags]...
+  runtime_checks...
   target_checks...
   (host_platform == 'macos' then [
     universal_check(no_build_flags)

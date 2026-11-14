@@ -61,13 +61,14 @@ set_up_runtime := ->
   { libuv_sources, libuv_flags, libraries } := build
   objects_dir := "#{work_dir}/libuv"
   make_dir objects_dir
+  libuv_paths := ["#{libuv_dir}/#{source}" for source in libuv_sources]
   libuv_args := [
     '-c'
     libuv_flags...
     "-I#{libuv_dir}/include"
     "-I#{libuv_dir}/src"
     '-w'
-    ("#{libuv_dir}/#{source}" for source in libuv_sources)...
+    libuv_paths...
   ]
   await in_slot(-> clang(libuv_args, objects_dir))
   c_files := ["#{runtime_dir}/#{file}" for file in runtime_c_names(list_dir(runtime_dir), build)]
@@ -77,13 +78,14 @@ set_up_runtime := ->
 # What `build` gives clang for the runtime's sources on the host, with -O or without it and its
 # default memory checks; libuv is compiled once, without them, by set_up_runtime.
 runtime_clang_args := (optimize: Bool) ->
+  # libm, as compiler/build.lerta links it.
+  libraries := ["-l#{library}" for library in ['m', runtime.libraries...]]
   [
     build_flags({ optimize, memory_checks: not optimize, target: nil })...
     "-I#{libuv_dir}/include"
     runtime.c_files...
     runtime.libuv_objects...
-    # libm, as compiler/build.lerta links it.
-    ("-l#{library}" for library in ['m', runtime.libraries...])...
+    libraries...
     (platform == 'windows' then ["#{sources_dir}/binary_stdout.c"] else [])...
   ]
 
@@ -94,11 +96,12 @@ var build_count = 0
 build := (source: String, optimize: Bool, macros: String[] = []) ->
   build_count += 1
   executable := "#{work_dir}/#{source}-#{build_count}"
+  defines := ["-D#{macro}" for macro in macros]
   await clang(
     [
       '-I'
       runtime_dir
-      ("-D#{macro}" for macro in macros)...
+      defines...
       "#{sources_dir}/#{source}.c"
       runtime_clang_args(optimize)...
       '-o'

@@ -142,11 +142,8 @@ analyze_for := (analysis: Analysis, loop: For) ->
   restore analysis, before
 
 analyze_try := (analysis: Analysis, expression: Try) ->
-  blocks := [
-    expression.body
-    [clause.body for clause in expression.catches]...
-    expression.finally_body else []
-  ]
+  catches := [clause.body for clause in expression.catches]
+  blocks := [expression.body, catches..., expression.finally_body else []]
   forget_locals analysis, assigned_in_blocks(analysis, blocks)
   before := analysis.ranges.to_array()
   for block in blocks
@@ -157,7 +154,7 @@ analyze_case := (analysis: Analysis, expression: Case) ->
   if subject := expression.subject
     forget_assigned analysis, [subject]
     visit analysis, subject
-  blocks := [[arm.body for arm in expression.arms]..., expression.otherwise else []]
+  blocks := [arm.body for arm in expression.arms] + [expression.otherwise else []]
   forget_locals analysis, assigned_in_blocks(analysis, blocks)
   before := analysis.ranges.to_array()
   for block in blocks
