@@ -116,32 +116,32 @@ export format_parsed := (parsed: Parsed, path: String, typed: Typed?) ->
 # that end them, over WIDTH columns there: of a comment, a string or a name that the formatter
 # cannot break, to be shortened by hand, reported where the formatted line passes WIDTH. Not those
 # `left`, as kept as written.
-long_lines := (source: String, formatted: String, left: Set<Int>) ->
+long_lines := (source: String, formatted: String, left: Set<Int>): Finding[] ->
   formatted_lines: Map<String, String>
   formatted_lines[line.trim()] = line for line in formatted.split("\n")
-  found: Finding[]
-  for line at i in source.split("\n")
-    continue if i + 1 in left
-    written := formatted_lines[line.trim()] else continue
-    continue if written.count() <= WIDTH
+  [
+    for line at i in source.split("\n")
+      continue if i + 1 in left
+      written := formatted_lines[line.trim()] else continue
+      continue if written.count() <= WIDTH
 
-    # The source column of the formatted line's first past WIDTH, as its indentation changes.
-    shift := leading_spaces(written) - leading_spaces(line)
-    found.push { rule: UNBREAKABLE_LINES, at: { line: i + 1, column: max(WIDTH + 1 - shift, 1) } }
-  found
+      # The source column of the formatted line's first past WIDTH, as its indentation changes.
+      shift := leading_spaces(written) - leading_spaces(line)
+      { rule: UNBREAKABLE_LINES, at: { line: i + 1, column: max(WIDTH + 1 - shift, 1) } }
+  ]
 
 leading_spaces := (line: String) -> line.count() - line.trim_start().count()
 
 distinct := (findings: Finding[]) ->
   seen: Set<String>
-  found: Finding[]
-  for finding in findings
-    { at, rule } := finding
-    key := "#{at.line}:#{at.column} #{rule.label} #{rule.message}"
-    continue if key in seen
-    seen.add key
-    found.push finding
-  found
+  [
+    for finding in findings
+      { at, rule } := finding
+      key := "#{at.line}:#{at.column} #{rule.label} #{rule.message}"
+      continue if key in seen
+      seen.add key
+      finding
+  ]
 
 export parsed_source := (source: String, path: String) ->
   lexed := lex(source, path)
@@ -518,13 +518,13 @@ findings := (gaps: Gap[], decisions: Decision[]) ->
   found
 
 # A finding for each token whose text differs from the source, as the lines of a literal moved.
-token_findings := (tokens: TextToken[], texts: String[]) ->
-  found: Finding[]
-  for token at index in tokens
-    source := Gap(text: token.text, start: token.start)
-    if at := first_difference(source, texts[index])
-      found.push { at, rule: LAYOUT }
-  found
+token_findings := (tokens: TextToken[], texts: String[]): Finding[] ->
+  [
+    for token at index in tokens
+      source := Gap(text: token.text, start: token.start)
+      at := first_difference(source, texts[index]) else continue
+      { at, rule: LAYOUT }
+  ]
 
 first_difference := (gap: Gap, decided: String) ->
   source := scan(gap.text)

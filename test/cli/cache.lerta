@@ -53,12 +53,13 @@ runtime_file_names := ->
 thinlto_entries := (cache: String): String[] ->
   directory := "#{cache}/#{LTO_CACHE}"
   return [] unless is_dir(directory)
-  entries: String[]
-  for entry in list_dir(directory)
-    continue if entry == 'llvmcache.timestamp'
-    path := "#{directory}/#{entry}"
-    details := stat(path) else throw ValueError("no ThinLTO cache entry: #{path}")
-    entries.push "#{entry} #{details.modified_time.to_fixed(9)}"
+  entries := [
+    for entry in list_dir(directory)
+      continue if entry == 'llvmcache.timestamp'
+      path := "#{directory}/#{entry}"
+      details := stat(path) else throw ValueError("no ThinLTO cache entry: #{path}")
+      "#{entry} #{details.modified_time.to_fixed(9)}"
+  ]
   entries.sorted()
 
 MODULE_PREFIX := 'module-'
@@ -66,10 +67,11 @@ MODULE_PREFIX := 'module-'
 # The objects of standard modules that the runtime `name` keeps, each with when it was written.
 module_objects := (cache: String, name: String): String[] ->
   dir := "#{cache}/#{name}"
-  objects: String[]
-  for entry in list_dir(dir)
-    continue unless entry.starts_with(MODULE_PREFIX)
-    objects.push "#{entry} #{stat("#{dir}/#{entry}")!.modified_time.to_fixed(9)}"
+  objects := [
+    for entry in list_dir(dir)
+      continue unless entry.starts_with(MODULE_PREFIX)
+      "#{entry} #{stat("#{dir}/#{entry}")!.modified_time.to_fixed(9)}"
+  ]
   objects.sorted()
 
 build_in_cache := (cache: String, flags: String[]) ->

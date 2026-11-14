@@ -188,11 +188,12 @@ unused_imports := (tokens: Tokens, statement: Import, unused: Set<Identifier>) -
   is_unused := (name: ImportName) -> name.alias else name.name in unused
   return nil unless names.any(is_unused)
   return tokens.report(UNUSED_IMPORTS, statement.position) if names.all(is_unused)
-  spans: Span[]
-  for name in names
-    first := tokens.at(name.name.position) else return nil
-    last := tokens.at((name.alias else name.name).position) else return nil
-    spans.push { first, last, unused: is_unused(name) }
+  spans: Span[] = [
+    for name in names
+      first := tokens.at(name.name.position) else return nil
+      last := tokens.at((name.alias else name.name).position) else return nil
+      { first, last, unused: is_unused(name) }
+  ]
 
   # At the first name left out, not at the comma before it.
   first_unused := spans.find(Span.unused)!
@@ -630,10 +631,11 @@ membership_list := (tokens: Tokens, terms: Expression[], junction: String) ->
   last := last_token(tokens, tests.last()!.right) else return nil
   return nil unless is_balanced(tokens, first, last)
   tested := text_of(tokens, tests[0].left) else return nil
-  items: String[]
-  for test in tests
-    item := text_of(tokens, test.right) else return nil
-    items.push item
+  items := [
+    for test in tests
+      item := text_of(tokens, test.right) else return nil
+      item
+  ]
   operator := junction == 'and' then 'not in' else 'in'
   text := "#{tested} #{operator} [#{items.join(', ')}]"
   change := Change(text, from: tokens.start(first), to: tokens.end(last))

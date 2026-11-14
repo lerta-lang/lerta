@@ -79,27 +79,28 @@ export generate_batched_field_writes := (g: Generator, statements: Statement[]) 
   outer := g.position
   depth := g.temporaries.length
   owned: String[]
-  writes: BatchedWrite[]
-  for statement in statements
-    locate g, statement.position
-    (assignment, target) := batched_write(g, statement)!
-    object_type := type_of(g, target.object)
-    (object, is_owned) := generate_borrowed(g, target.object, [assignment.value])
-    if is_owned
-      push_temporary g, object, object_type
-      owned.push object
-    type := type_of(g, target)
-    pointer := field_pointer(g, object, object_type, target.name.name)
-    tag := field_tag(ir, type)
-    operand := assignment.value
-    g.defers_float_checks = true
-    value := generate(g, operand)
-    old := ir.load(ir_type(type), pointer, tag)
-    result := combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
-    g.defers_float_checks = false
-    is_nan := emit_is_nan(ir, result, type)
-    store := "store #{ir_type(type)} #{result}, ptr #{pointer}#{tag}"
-    writes.push { is_nan, store, position: statement.position }
+  writes: BatchedWrite[] = [
+    for statement in statements
+      locate g, statement.position
+      (assignment, target) := batched_write(g, statement)!
+      object_type := type_of(g, target.object)
+      (object, is_owned) := generate_borrowed(g, target.object, [assignment.value])
+      if is_owned
+        push_temporary g, object, object_type
+        owned.push object
+      type := type_of(g, target)
+      pointer := field_pointer(g, object, object_type, target.name.name)
+      tag := field_tag(ir, type)
+      operand := assignment.value
+      g.defers_float_checks = true
+      value := generate(g, operand)
+      old := ir.load(ir_type(type), pointer, tag)
+      result := combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
+      g.defers_float_checks = false
+      is_nan := emit_is_nan(ir, result, type)
+      store := "store #{ir_type(type)} #{result}, ptr #{pointer}#{tag}"
+      { is_nan, store, position: statement.position }
+  ]
   any := any_of(ir, [write.is_nan for write in writes])
   one_by_one := ir.fresh_label('nan.one.by.one')
   stored := ir.fresh_label('nan.none')

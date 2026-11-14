@@ -108,26 +108,27 @@ names_with_extension := (dir: String, extension: String) ->
     when file.ends_with(suffix)
   ]
 
-collect := (suite: Suite) ->
-  tests: TestCase[]
-  for name in names_with_extension(suite.source_dir, 'lerta')
-    expected: Map<String, Binary>
-    for extension in suite.extensions
-      path := "#{root_dir}/#{suite.expected_dir}/#{name}.#{extension}"
-      if is_file(path)
-        expected[extension] = await read_file(path)
-    tests.push { name, suite, expected, label: "#{suite.source_dir}/#{name}" }
-  tests
+collect := (suite: Suite): Promise<TestCase[]> ->
+  [
+    for name in names_with_extension(suite.source_dir, 'lerta')
+      expected: Map<String, Binary>
+      for extension in suite.extensions
+        path := "#{root_dir}/#{suite.expected_dir}/#{name}.#{extension}"
+        if is_file(path)
+          expected[extension] = await read_file(path)
+      { name, suite, expected, label: "#{suite.source_dir}/#{name}" }
+  ]
 
 # Files in the expected directory that no test would read, such as the expected output of a
 # deleted source.
 stray_files := (suite: Suite) ->
   sources := names_with_extension(suite.source_dir, 'lerta')
-  expected_files: String[]
-  for extension in EXPECTED_EXTENSIONS
-    for name in names_with_extension(suite.expected_dir, extension)
-      if name not in sources or extension not in suite.extensions
-        expected_files.push "#{suite.expected_dir}/#{name}.#{extension}"
+  expected_files := [
+    for extension in EXPECTED_EXTENSIONS
+      for name in names_with_extension(suite.expected_dir, extension)
+        continue if name in sources and extension in suite.extensions
+        "#{suite.expected_dir}/#{name}.#{extension}"
+  ]
   misplaced_sources: String[] =
     if suite.expected_dir == suite.source_dir
       []

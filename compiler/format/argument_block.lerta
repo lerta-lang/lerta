@@ -74,23 +74,24 @@ export long_argument_edits := (tokens: Tokens, statement: Statement): Edit?[] ->
 
   columns := line_columns + 2
   values_last := parenthesized then last - 1 else last
-  items: String[]
-  for start at i in starts
-    item_last :=
-      if i + 1 < starts.length
-        starts[i + 1] - 2
-      else
-        values_last
-    return report() if item_last != values_last and not tokens.is_kind(item_last + 1, ',')
-    long := longs[i]
-    written :=
-      if long
-        return report() if is_wrapped(tokens, long.parts.first)
-        head := tokens.slice(tokens.start(start), tokens.start(long.parts.first))
-        head + two_way_block(tokens, long.parts, long.rule, columns)
-      else
-        tokens.slice tokens.start(start), tokens.end(item_last)
-    items.push "\n#{' '.repeat(columns)}#{written}"
+  items := [
+    for start at i in starts
+      item_last :=
+        if i + 1 < starts.length
+          starts[i + 1] - 2
+        else
+          values_last
+      return report() if item_last != values_last and not tokens.is_kind(item_last + 1, ',')
+      long := longs[i]
+      written :=
+        if long
+          return report() if is_wrapped(tokens, long.parts.first)
+          head := tokens.slice(tokens.start(start), tokens.start(long.parts.first))
+          head + two_way_block(tokens, long.parts, long.rule, columns)
+        else
+          tokens.slice tokens.start(start), tokens.end(item_last)
+      "\n#{' '.repeat(columns)}#{written}"
+  ]
   change := Change(from: tokens.end(callee_last), to: tokens.end(last), text: items.join())
   [tokens.edit_at(found[0].rule, tokens.start(found[0].parts.first), [change])]
 

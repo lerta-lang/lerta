@@ -57,19 +57,20 @@ export parameter_types := (
   literal: FunctionLiteral
   expected: Type?[] = []
 ) ->
-  types: Type[]
-  for param at i in literal.params
-    expected_type := i < expected.length then expected[i]
-    unwritten := expected_type then expected_type else literal_type(param.default)
-    if type_name := param.type
-      type := resolve(program, resolver, type_name)
-      inferable := type == unwritten
-      inferable_before := program.inferable_parameters[param.name] else true
-      program.inferable_parameters[param.name] = inferable and inferable_before
-      types.push param.variadic then ArrayType(type) else type
-      continue
-    message := "the type of #{described_parameter(param.name)} must be written"
-    types.push unwritten else fail(program, param.name.position, message)
+  types: Type[] = [
+    for param at i in literal.params
+      expected_type := i < expected.length then expected[i]
+      unwritten := expected_type then expected_type else literal_type(param.default)
+      if type_name := param.type
+        type := resolve(program, resolver, type_name)
+        inferable := type == unwritten
+        inferable_before := program.inferable_parameters[param.name] else true
+        program.inferable_parameters[param.name] = inferable and inferable_before
+        param.variadic then ArrayType(type) else type
+      else
+        message := "the type of #{described_parameter(param.name)} must be written"
+        unwritten else fail(program, param.name.position, message)
+  ]
   last_is_struct := ends_with_struct(resolver, literal, types)
   reject_misplaced_variadic program, literal, last_is_struct
   reject_struct_default program, literal, last_is_struct

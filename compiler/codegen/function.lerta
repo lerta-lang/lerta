@@ -330,16 +330,17 @@ generate_default_entry := (
   scope := g.locals.push()
   if this_type
     scope['@'] = ValueLocal(operand: '%this', type: this_type)
-  operands: String[]
-  for param at i in literal.params
-    param_type := type.params[i]
-    if i < given
-      scope[param.name.name] = ValueLocal(operand: "%p#{i}", type: param_type)
-      operands.push "%p#{i}"
-    else
-      value := generate(g, param.default!)
-      scope[param.name.name] = store_in_slot(g, value, param_type)
-      operands.push value
+  operands := [
+    for param at i in literal.params
+      param_type := type.params[i]
+      if i < given
+        scope[param.name.name] = ValueLocal(operand: "%p#{i}", type: param_type)
+        "%p#{i}"
+      else
+        value := generate(g, param.default!)
+        scope[param.name.name] = store_in_slot(g, value, param_type)
+        value
+  ]
   args: String[]
   args.push "#{ir_type(this_type)} %this" if this_type
   args.push "#{ir_type(param)} #{operand}" for (param, operand) in type.params.zip(operands)
@@ -483,11 +484,12 @@ export hold_arguments := (
   g: Generator, args: Expression[], prefix: String, generate_arg: (Expression, Int) -> String
 ) ->
   scope := g.locals.push()
-  operands: String[]
-  for arg at i in args
-    operand := generate_arg(arg, i)
-    scope["(#{prefix} argument #{i})"] = store_in_slot(g, operand, type_at_use(g, arg))
-    operands.push operand
+  operands := [
+    for arg at i in args
+      operand := generate_arg(arg, i)
+      scope["(#{prefix} argument #{i})"] = store_in_slot(g, operand, type_at_use(g, arg))
+      operand
+  ]
   (scope, operands)
 
 # Pushes a scope that holds an owned reference, which a jump out of it releases.

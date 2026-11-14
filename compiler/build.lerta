@@ -105,13 +105,14 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
 # Links an executable for each of UNIVERSAL_TRIPLES, from objects in a directory of its own under
 # `dir`, and has lipo join them into the executable; nil if either fails.
 build_universal := (request: BuildRequest, program: ProgramWide, dir: String) ->
-  slices: String[]
-  for triple in UNIVERSAL_TRIPLES
-    make_dir join(dir, triple)
-    kind: BuildKind = { request.kind..., target: triple }
-    slice_request: BuildRequest = { request..., output: join(dir, "#{triple}/program"), kind }
-    slice := await link_executable(slice_request, program, dir, "#{triple}/") else return nil
-    slices.push slice
+  slices := [
+    for triple in UNIVERSAL_TRIPLES
+      make_dir join(dir, triple)
+      kind: BuildKind = { request.kind..., target: triple }
+      slice_request: BuildRequest = { request..., output: join(dir, "#{triple}/program"), kind }
+      slice := await link_executable(slice_request, program, dir, "#{triple}/") else return nil
+      slice
+  ]
   executable := executable_path(request, dir)
   return nil if (await run('lipo', '-create', '-output', executable, slices...)).code != 0
   executable
