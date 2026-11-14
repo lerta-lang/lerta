@@ -1,0 +1,72 @@
+# A `for` over an array borrows each item where no code of the program takes out an item of an
+# array of its type, and the loop holds the array, so that each item stays while the loop uses it.
+import sleep from 'std:time'
+
+class Kept
+  name: String
+  deinit := -> print("kept #{@name} gone")
+
+class Popped
+  name: String
+  deinit := -> print("popped #{@name} gone")
+
+class Awaited
+  name: String
+  deinit := -> print("awaited #{@name} gone")
+
+struct Wrapper
+  kept: Kept
+
+# Items used, captured, stored, returned, and left by `break` and `continue`.
+kept := [Kept('a'), Kept('b'), Kept('c')]
+names: (() -> String)[]
+stored: Kept[]
+for item in kept
+  continue if item.name == 'b'
+  names.push -> item.name
+  stored.push item
+print [name() for name in names].join(' ')
+print stored.length
+find := (items: Kept[], name: String) ->
+  for item in items
+    return item if item.name == name
+  nil
+print find(kept, 'c')!.name
+for item at i in kept
+  print "#{i} #{item.name}"
+  break if i == 1
+
+# The array that a var holds, replaced in the loop, stays until the loop ends.
+replace := ->
+  var items = [Kept('old')]
+  for item in items
+    items = [Kept('new')]
+    print "#{item.name} still held"
+  print items[0].name
+replace()
+
+# Items pushed in the loop, which may move the items, are gone over too.
+grow := (items: Kept[]) ->
+  for item in items
+    items.push Kept("after #{item.name}") if items.length == 1
+    print "#{item.name} still held"
+grow [Kept('grown')]
+
+# Items of a type whose items the program takes out are held.
+pop_all := (items: Popped[]) ->
+  for item in items
+    items.pop()
+    print "#{item.name} still held"
+pop_all [Popped('only')]
+
+# A struct item, whose reference field is read through it.
+wrappers: Wrapper[] = [{ kept: Kept('wrapped') }]
+print wrapper.kept.name for wrapper in wrappers
+
+# A body that suspends holds each item.
+await_each := (items: Awaited[]) ->
+  for item in items
+    await sleep(0)
+    print "#{item.name} still held"
+await await_each([Awaited('suspended')])
+print 'done'

@@ -4,7 +4,8 @@ import
   Binding, Comprehension, Condition, Expression, For, Identifier, If, is_nested, Jump,
   LazyFunctions, Range, statement_else_body, This, While
 from '../ast'
-import emit_array_new, emit_push from './array'
+import emit_array_new, emit_borrowed_item, emit_push from './array'
+import are_items_taken from '../checker/taken_items'
 import function_type_of from './closure'
 import generate, generate_condition, release_if_reference, type_of from './expression'
 import
@@ -170,13 +171,27 @@ export generate_iteration := (
   item_type := iterable_item(type)!
   sequence := generate(g, iterable)
   release := hold(g, sequence, type)
+  borrows := borrows_items(g, type)
   define := (scope: Map<String, CodegenLocal>, current: String) ->
-    item := emit_sequence_get(g.ir, sequence, current, type)
-    scope[variable.name] = store_in_slot(g, item, item_type)
+    if borrows
+      item := emit_borrowed_item(g.ir, sequence, current, item_type)
+      scope[variable.name] = ValueLocal(operand: item, type: item_type)
+    else
+      item := emit_sequence_get(g.ir, sequence, current, type)
+      scope[variable.name] = store_in_slot(g, item, item_type)
     define_index scope, current
   end := -> emit_sequence_length(g.ir, sequence, type)
   generate_counting_loop g, '0', end, body, define
   release()
+
+# Whether a loop's variable borrows each item of what the loop goes through, which the loop holds:
+# an array's, where no code of the program takes out an item of an array of its type (see
+# are_items_taken), so that the item stays as long as the array does. A body that suspends holds
+# the item, as it does a borrowed const (see holds_borrowed).
+borrows_items := (g: Generator, type: Type) ->
+  return false if g.coroutine != nil
+  array := type as ArrayType ? return false
+  not are_items_taken(g.code.program, array)
 
 # Generates `use` of each item, borrowed, of what a loop goes through, as `Set(items)` does.
 export generate_each := (g: Generator, iterable: Expression, use: (String) -> void) ->
