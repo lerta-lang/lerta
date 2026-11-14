@@ -138,6 +138,7 @@ options:
   - Why: a type of values would not tell which type to convert by.
 - It has no members: the types that satisfy it are those of data, which the compiler tells by their parts, and it generates the code that converts each, so no type declares anything for it. It is the only interface without members.
 - A type with a part that is not data does not satisfy it: a function, a `Promise`, an `Iter`, an interface or a `weak` field.
+- Nor does a class or struct with a [private](objects.md#private-members) field: it is the state of the type's methods, not data, which decoding would set as it is written. As with an interface, this holds in the type's own module too, since the code that converts it, as std:json's, is in another.
 - That is an error at the call, which names the path of the part, as JsonError's messages write it, with `$[]` for an item of an array or a set, `$.*` for a value of a map of `String` keys, and `$[][0]` and `$[][1]` for a key and a value of another map: `Request does not satisfy Codable: $.handler is of type (Int) -> Int, which is not data`.
 - So far, neither does a union that std:json's [unions](#types) leave out.
 

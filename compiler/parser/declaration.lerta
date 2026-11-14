@@ -210,6 +210,7 @@ parse_member_modifier := (tokens: TokenStream) ->
 # weak field's type may be `Type!`, as a cast's is.
 parse_member := (tokens: TokenStream) ->
   token := tokens.peek()
+  private := at_private(tokens) and tokens.accept_word('private')
   modifier := parse_member_modifier(tokens)
   name := parse_identifier(tokens)
   type := parse_type_annotation(tokens)
@@ -231,7 +232,21 @@ parse_member := (tokens: TokenStream) ->
   has_default := has_value and at_default(tokens)
   tokens.next() if has_default
   value := has_value then parse_value(tokens)
-  MemberDeclaration(name, modifier, type, value, has_default, throws, position: token.position())
+  MemberDeclaration(
+    name
+    modifier
+    type
+    value
+    has_default
+    throws
+    private
+    position: token.position()
+  )
+
+# `private` marks a member when a name, `var` or `weak` follows it, as a field may be named
+# `private` too.
+at_private := (tokens: TokenStream) ->
+  tokens.at_word('private') and tokens.peek_at(1).kind in [IDENTIFIER, 'var']
 
 # `default` marks a default when an operand follows it, as the argument of a call without
 # parentheses would.

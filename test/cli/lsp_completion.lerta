@@ -269,6 +269,34 @@ completion_mixed_exports_check := ->
     ]
   )
 
+completion_private_check := ->
+  Check(name: 'lerta lsp completes the private members of a type only in its module', run: ->
+    dir := new_cli_dir('lsp-completion-private')
+    path := "#{dir}/a.lerta"
+    text := "import Counter from './lib'\nx := Counter().\n"
+    await write_file(path, b'')
+    lib := "export class Counter\n  private var count = 0\n  private note := -> 1\n" +
+      "  step := -> @co\n"
+    await write_file("#{dir}/lib.lerta", lib)
+    uri := uri_of(path)
+    lib_uri := uri_of("#{dir}/lib.lerta")
+    messages :=
+      did_open(uri, text)
+      did_change(uri, text)
+      completion_request(uri, 1, 15)
+      did_open(lib_uri, lib)
+      completion_request(lib_uri, 3, 16, 2)
+    .join()
+    ran := await session(dir, messages)
+    outside := completion_items(ran.stdout_text(), 1)
+    inside := completion_items(ran.stdout_text(), 2)
+    [
+      expect_status(0, ran.status)...
+      compare_text('outside', 'step equals hash', completion_labels(outside))...
+      compare_text('inside', 'count note step equals hash', completion_labels(inside))...
+    ]
+  )
+
 completion_import_clash_check := ->
   Check(name: 'lerta lsp completes a name that is both imported and declared once', run: ->
     dir := new_cli_dir('lsp-completion-import-clash')
@@ -547,5 +575,6 @@ export checks :=
   completion_imports_check()
   completion_reexports_check()
   completion_mixed_exports_check()
+  completion_private_check()
   completion_import_clash_check()
   completion_coverage_check()

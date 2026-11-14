@@ -3,7 +3,9 @@
 import Identifier, Member, This from '../ast'
 import fail, warn from './diagnostics'
 import type_of from './expression'
-import field_type as info_field_type, FieldInfo, info_of from './object_types'
+import
+  field_type as info_field_type, FieldInfo, info_of, reject_private_member
+from './object_types'
 import method_owner from './object'
 import Body, ProgramWide from './shared'
 import
@@ -75,6 +77,9 @@ export common_field_problem := (body: Body, union: UnionType, name: Identifier) 
 common_fields := (body: Body, union: UnionType, member: Member) ->
   found := find_common_fields(body, union, member.name)
   fail body.program, member.name.position, problem if problem := found.problem
+  for field in found.fields
+    if field.member_type is ObjectType
+      reject_private_member body.shared, field.member_type, member.name
   found.fields
 
 struct CommonFields
@@ -176,6 +181,7 @@ field_key := (type: ObjectType, name: String) -> "#{type.symbol}.#{name}"
 field_of := (body: Body, object_type: Type, member: Member) ->
   return nil unless object_type is ObjectType
   field := declared_field(body, object_type, member.name.name) ? return nil
+  reject_private_member body.shared, object_type, member.name
   # Before the field is typed, which would infer the type of one not initialized yet.
   if member.object is This
     reject_uninitialized body, object_type, field, member

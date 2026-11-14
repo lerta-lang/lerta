@@ -35,6 +35,7 @@ The members of a type, one per line, are declared as locals are (see [declaratio
 | `name := default value`, `name: Type = default value` | A constructor argument that may be left out; the value is then computed as an initializer. `default` is not a [keyword](syntax.md#contextual-words). |
 | `var` before any of the above | A field of a class that can be assigned (see [mutability](#mutability)). |
 | `weak name: Type?`, `weak name: Type!`, either with `weak var` | A [weak field](#weak-references). |
+| `private` before any of the above or below | A member that only the code of its module reaches (see [private members](#private-members)). |
 | `name := (params) -> body` | A method (see below). |
 | `pass` alone | No members: a type without them, as an empty struct (see [pass](syntax.md#pass)). |
 
@@ -44,6 +45,20 @@ The members of a type, one per line, are declared as locals are (see [declaratio
 - An initializer can use `@` only to read a field set before it (`@name`). The object is not complete yet, so it cannot be passed on, and its methods cannot be called.
 - `p.x` reads a field; `p.m(...)` calls a method.
 - There are no static members. Write functions related to a type as module functions. `extend` adds methods, not functions without a receiver.
+
+#### Private members
+
+```lerta
+export class Counter
+  private var count = 0
+  step := -> @count += 1
+```
+
+- A private member is reached only by the code of the module that declares its type: there, by any code, as a module function or another type's method; elsewhere, not at all, neither read, assigned, called nor taken as a value: `'count' is private to the module of Counter`. A module keeps its members as it keeps the names it does not export.
+  - Why the module, not the type: a module's functions and helper types work with its types' state, as a constructing function or a type's `equals` with another object's.
+- A private field is computed at construction: it is no constructor argument, and takes no `default`. A spread copy computes it again.
+- It satisfies no member of an interface (see [satisfying an interface](#satisfying-an-interface)), and an interface member cannot be private; nor can a method of an extend, whose module is not its type's. A type with a private field is not [Codable](std.md#codable).
+- A struct's `to_literal` and `to_string` by its fields (see [Literal](builtins.md#literal)) still write the private ones, which `print` and `dbg` show: they only show the value, for debugging, and give no way to read or set it.
 
 #### Methods
 
@@ -306,6 +321,7 @@ print shape.area() for shape in shapes
 
 - A type satisfies an interface when it has, for each member, a method, a field or a property of the member's name and of exactly its type. Nothing needs to declare it (structural typing).
   - Why exactly the member's type, not one assignable to it: generic code is checked with the member's type (see [generic functions](functions.md#generic-functions)), so a `String` field for a member `name: String?` would fail in that code rather than where the type is given.
+- A private member satisfies none, even in its own module, as an interface value would reach it from anywhere.
 - A method may come from an extend in effect where the check is made. A method with type parameters of its own has no single type and satisfies no member.
 - A function member, such as `area: () -> Int`, is satisfied alike by a method and by a field that holds a function.
 - A union satisfies a member by a method that every member of it has, or by a field that every member has, of the member's type, as it is called or read through the union (see [unions](types.md#unions)). A method in some members and a field in others do not.

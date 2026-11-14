@@ -105,9 +105,14 @@ member_items := (program: ProgramWide, shared: Shared, probe: CompletionProbe, r
   add := (label: String, kind: Int, detail: String?) -> add_new(items, { label, kind, detail })
   if type is ObjectType
     info := info_of(program, type)
-    add field.name.name, FIELD, formatted(field.type) for field in info.fields
-    add name, METHOD, nil for name in info.methods.keys()
-    add name, METHOD, nil for name in info.generics.keys()
+    is_inside := shared.index == info.module_index
+    reaches := (name: String) -> is_inside or name not in info.private_names
+    for field in info.fields
+      add field.name.name, FIELD, formatted(field.type) if reaches(field.name.name)
+    for name in info.methods.keys()
+      add name, METHOD, nil if reaches(name)
+    for name in info.generics.keys()
+      add name, METHOD, nil if reaches(name)
   else if type is RecordType
     add field.name, FIELD, format_type(field.type) for field in type.fields
   else if type is InterfaceType

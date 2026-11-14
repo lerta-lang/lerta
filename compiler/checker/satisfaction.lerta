@@ -16,10 +16,12 @@ from './member'
 import is_codable_bound, reject_uncodable from './codable'
 import is_enum_bound, reject_non_enum from './enums'
 import find_method from './methods'
+import info_of from './object_types'
 import Body from './shared'
 import infer, substitute, type_parameter_names from './type_patterns'
 import
-  binary_type, format_type, InterfaceType, is_kind, OptionalType, string_type, Type, UnionType
+  binary_type, format_type, InterfaceType, is_kind, ObjectType, OptionalType, string_type, Type,
+  UnionType
 from '../types'
 
 # Rejects a type that does not satisfy the interface type.
@@ -35,6 +37,7 @@ export reject_unsatisfied := (body: Body, type: Type, bound: InterfaceType, at: 
 export satisfies := (body: Body, type: Type, bound: InterfaceType, at: Position) ->
   satisfied := (member: InterfaceMember) ->
     name := Identifier(position: at, name: member.name)
+    return false if has_private(body, type, member.name)
     found := find_member(body, type, name, nil)
     unsatisfied_reason(body, type, member, name, found?.type) == nil
   members_for(body.program, bound, type).all(satisfied)
@@ -44,14 +47,26 @@ satisfying_member := (
   body: Body, type: Type, bound: InterfaceType, member: InterfaceMember, name: Identifier,
   call: Call?
 ) ->
+  bound_name := format_type(bound)
+  if has_private(body, type, member.name)
+    fail
+      body.program
+      name.position
+      "#{format_type(type)} does not satisfy #{bound_name}: its #{member.name} is private"
   found := find_member(body, type, name, call)
   reason := unsatisfied_reason(body, type, member, name, found?.type) ? return found!
-  bound_name := format_type(bound)
   fail(
     body.program
     name.position
     "#{format_type(type)} does not satisfy #{bound_name}: #{reason}"
   )
+
+# A private member satisfies no interface, as the code that reads it through one may be anywhere.
+has_private := (body: Body, type: Type, name: String): Bool ->
+  case type
+    when ObjectType then name in info_of(body.program, type).private_names
+    when UnionType then type.members.any((member) -> has_private(body, member, name))
+    else false
 
 # Why the type's member, of the type found, does not satisfy the interface's member, or nil if it
 # does: it must be of exactly the member's type. Not merely of a type assignable to it: the

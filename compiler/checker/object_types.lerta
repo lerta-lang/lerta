@@ -66,6 +66,8 @@ export class ObjectInfo
   # The generic methods, those with type parameters, which have instances instead of a function.
   var generics: Map<String, GenericRef> = Map()
   var has_init = false
+  # The members declared `private`, which only the code of its module reaches.
+  var private_names = Set<String>()
   # `deinit`, which runs when the object is released (see runtime lerta_run_deinit).
   var has_deinit = false
   var state: CheckState = UNCHECKED
@@ -119,6 +121,7 @@ export add_members := (shared: Shared) ->
     for member in info.declaration.members
       { name, position } := member.name
       fail_already_member program, position, name, info.declaration.name.name unless seen.add(name)
+      info.private_names.add name if member.private
       if literal := method_literal(member)
         add_method shared, info, member, literal
       else
@@ -216,8 +219,23 @@ field_of_member := (shared: Shared, info: ObjectInfo, member: MemberDeclaration)
   if member.throws and not weak
     fail program, member.position, "only a weak field's type is written with '!'"
   reject_invalid_weak program, member, is_struct, type if weak
+  reject_private_argument program, member if member.private
   mutable := member.is_mutable()
   FieldInfo(type, mutable, value, weak, name: member.name, has_default: member.has_default)
+
+# A private field is computed, as no code outside its module could give it.
+reject_private_argument := (program: ProgramWide, member: MemberDeclaration) ->
+  if member.value == nil
+    fail program, member.position, 'a private field is no constructor argument: give it a value'
+  if member.has_default
+    fail program, member.position, 'a private field is no constructor argument: it takes no default'
+
+# Fails where the code of another module than the type's reaches a private member of it.
+export reject_private_member := (shared: Shared, type: ObjectType, name: Identifier) ->
+  info := info_of(shared.program, type)
+  return if name.name not in info.private_names or shared.index == info.module_index
+  message := "'#{name.name}' is private to the module of #{info.declaration.name.name}"
+  fail shared.program, name.position, message
 
 reject_invalid_weak := (
   program: ProgramWide, member: MemberDeclaration, is_struct: Bool, type: Type?
@@ -280,7 +298,7 @@ add_instance := (generic: ObjectInfo, type: ObjectType) ->
   info
 
 make_instance := (generic: ObjectInfo, type: ObjectType, bounds: Map<String, InterfaceType>) ->
-  { declaration, module_index, methods, generics, has_init, has_deinit } := generic
+  { declaration, module_index, methods, generics, has_init, has_deinit, private_names } := generic
   type_bindings := bindings_of(generic, type)
   with_arguments := with_type_parameters(module_resolver(module_index), type_bindings)
   resolver: Resolver = { with_arguments..., bounds }
@@ -295,6 +313,7 @@ make_instance := (generic: ObjectInfo, type: ObjectType, bounds: Map<String, Int
   info.generics = generics
   info.has_init = has_init
   info.has_deinit = has_deinit
+  info.private_names = private_names
   info
 
 # The type arguments of the instance by the names of its generic's type parameters.
