@@ -326,6 +326,11 @@ export class Breaker
     next := i < items.length - 1 then items[i + 1] else close
     next - 1 > items[i] and @code[next - 1].kind == ',' then next - 2 else next - 1
 
+  # Whether an item of the list spans lines in the source.
+  spans_any := (list: ListShape) ->
+    spans := (i: Int) -> @code[list.items[i]].line != @code[@item_last(list, i)].end_line
+    [i for i in 0..list.items.length].any(spans)
+
   # On its line if it fits there; otherwise on a line of its own inside its brackets if it fits
   # there, and on a line for each part if it does not.
   comprehension := (shape: ComprehensionShape) ->
@@ -475,7 +480,9 @@ export class Breaker
       return rewritten
     opening := literal.braced then '{ ' else '['
     closing := literal.braced then ' }' else ']'
-    if fits(opening.count() + closing.count(), true)
+    # An item that spans lines keeps them until the layout joins them, as the brackets would not.
+    joinable := not @spans_any(literal)
+    if joinable and fits(opening.count() + closing.count(), true)
       @bracket literal, opening, closing, members
       return true
     @in_blocks.add literal.open
