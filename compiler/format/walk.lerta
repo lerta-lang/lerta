@@ -33,14 +33,24 @@ export struct Walked
   closers: Map<Int, Closer>
   without_commas: Set<Int>
   statements: StatementShape[]
+  line_statements: Set<Int>
 
 export walk := (statements: Statement[], text: SourceTokens, kept: KeptLines, results: Set<Call>) ->
   { code, line_starts, ending_comments, own_line_comments } := text
   walker := Walker(text, code, line_starts, ending_comments, own_line_comments, kept, results)
   block := walker.block(statements, 0, nil)
   walker.resume_at walker.code.length
-  { gaps, stranded, skipped, closers, without_commas } := walker
-  Walked(gaps, stranded, skipped, block, closers, without_commas, statements: walker.walked)
+  { gaps, stranded, skipped, closers, without_commas, line_statements } := walker
+  Walked(
+    gaps
+    stranded
+    skipped
+    block
+    closers
+    without_commas
+    line_statements
+    statements: walker.walked
+  )
 
 # A construct that the walk does not handle yet, whose statement it skips.
 export struct Unhandled: Error
@@ -60,59 +70,82 @@ export class Walker
     # The source, which says where its statements start.
     text: SourceTokens
     code: Token[]
+
     # Those of the code tokens where a statement may start.
     line_starts: Set<Int>
+
     ending_comments: Map<Int, TextToken>
+
     # The columns of the comments on lines of their own before code tokens (see SourceTokens).
     own_line_comments: Map<Int, Int[]>
+
     kept: KeptLines
+
     # The calls whose values are results, which keep their parentheses (see result_calls); none
     # where the program does not check.
     results: Set<Call>
   var stranded: Int[] = []
   private skipped := Set<Int>()
+
   # The gaps of the statement being walked, which those of the block that holds it take once it is
   # walked through.
   var gaps: Map<Int, CodeGap> = Map()
+
   starts := @text.starts
   var at = 0
+
   # The parentheses around an expression, which the syntax tree leaves out, that its chain has
   # opened and not closed yet (see chain).
   var open_groups = 0
+
   # The depth of the statement being walked.
   var depth = 0
+
   # Where the statements that the walk skips start, up to the next statement that it resumes at.
   var skipped_from: Int?
+
   # The shapes of the construct being walked, and the statements of the block being walked, with
   # where each starts (see BlockShape).
   var shapes: Shape[] = []
   var block_starts: Int[] = []
   var block_statements: StatementShape[] = []
+
   # The statements on lines of their own walked, at every depth.
   walked: StatementShape[] = []
+
   # Whether the expression being walked is a whole value, whose operations may break (see Long
   # operations); whether it is inside brackets; and whether it is on a line of its own, rather than
   # on that of `->` or `then`.
   var breaks_operations = true
   var in_brackets = false
   var on_own_line = true
+
   # The first tokens of the `if` statements alone in the blocks of `else`.
   alone_in_else := Set<Int>()
+
   # The heads of the bodies just walked, whose closer the next token of their statement is, and
   # whether one of them is a block (see Closer).
   var closing: Int[] = []
   var closing_block = false
+
   private closers := Map<Int, Closer>()
   without_commas := Set<Int>()
+
+  # The first tokens of the statements and the members of types walked on lines of their own.
+  line_statements := Set<Int>()
+
   # The tokens of each binary operation walked, and where the expression being walked starts.
   operations := Map<BinaryOperation, OperationTokens>()
   var node_start = 0
+
   # The `.`s of the chain of members being walked, if one is, which its outermost link gathers (see
   # ChainShape).
   var chain_dots: Int[]?
+
   # Whether that chain has a `?.`, which a member line would change, or a `.` inside parentheses.
   var chain_nil_safe = false
   var chain_in_group = false
+
   # Whether the expression whose parentheses at its start the walk is in is a whole value.
   var node_breaks = true
 

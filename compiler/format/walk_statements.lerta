@@ -54,8 +54,10 @@ extend Walker
     @resume_at first if first
     start := @at
     return @skip(start) if first != start or @skipped_from != nil
+
     # A statement that the walk skips starts its line still.
     @gaps[start] = line
+
     @block_starts.push start
     outer := @gaps
     @gaps = Map()
@@ -73,8 +75,10 @@ extend Walker
         true
       catch _: Unhandled
         false
+
     # Asked after the walk, as the statements inside claim their marked lines first.
     kept := @kept.keeps(@code[start].position(), next)
+
     if kept
       # A kept statement reports nothing.
       @stranded = @stranded[..outer_stranded]
@@ -83,6 +87,7 @@ extend Walker
       walked_statement := StatementShape(start, end: @at, shapes: @shapes)
       @block_statements.push walked_statement
       @walked.push walked_statement
+      @line_statements.add start
     else
       @skip start
     @gaps = outer
@@ -133,11 +138,13 @@ extend Walker
     block := @block(node.else_body, @depth + 1, else_at)
     if_at := @starts[first.position]!
     if_alone := first is If and node.else_body.length == 1 and @code[if_at].kind == 'if'
+
     # Nor a comment after the `if` in the block, as deep as the `if`, which would go into the block
     # of its last branch; one deeper is in that block already.
     after_if := (column: Int) -> column > @indentation_of(else_at) and column <= @code[if_at].column
     trails := (@own_line_comments[@at] ? []).any(after_if)
     joins_if := if_alone and not @has_comments(else_at, if_at) and not trails
+
     @shapes.push BlockShape(block..., joins_if, head: else_at)
     @close else_at, true
 
@@ -338,6 +345,7 @@ extend Walker
   type_alias := (node: TypeAlias, before: CodeGap) ->
     @declaration_head node.exported, IDENTIFIER, before
     @take IDENTIFIER, ONE
+
     # The type, as a value, on the line of `=` if it fits there and on the next otherwise; but the
     # next line holds only union members, which a function type, or a union in parentheses, is not.
     after := @take('=', ONE)
@@ -388,10 +396,12 @@ extend Walker
   extern_declaration := (node: Extern, before: CodeGap) ->
     @declaration_head node.exported, 'extern', before
     @take IDENTIFIER, ONE
+
     # Its name may be written as its symbol, after `as` or not.
     if spelling_of(@code[@at]) == 'as'
       @take_spelled 'as', ONE
       @take IDENTIFIER, ONE
+
     @take ':', NONE
     @type node.type, ONE
 
@@ -533,9 +543,11 @@ extend Walker
     if start in @line_starts
       block := @block(statements, @depth + 1, head)
       one := written.length == 1 and block.statements.length == 1
+
       # A postfix form inside brackets would not end its line, which it must.
       first := written[0]
       postfix := first is If | While | For and is_written_postfix(first)
+
       # A member line that stays one keeps the body below its head, whose line it would seem to
       # apply to.
       keeps_lines := block.statements.any((each) -> each.shapes.any(is_kept_chain))
@@ -544,6 +556,7 @@ extend Walker
         not (postfix and @in_brackets) and
         not @has_comments(head, @at) and
         not keeps_lines
+
       @close head, true
       return { head, block, joinable, rule }
     unhandled() if written.length != 1
@@ -586,6 +599,7 @@ extend Walker
   try_value := (node: Try, before: CodeGap) ->
     var head = @take('try', before)
     @nested_block node.body, head
+
     # Each resumes at its keyword, as the block before it may end with a statement skipped.
     for clause in node.catches
       @resume_at @starts[clause.position] ? unhandled()

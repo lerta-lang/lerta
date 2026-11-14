@@ -76,6 +76,8 @@ In a literal, and in the lines of a `"""` literal but its interpolations:
 ### Blank lines
 
 - At most one in a row.
+- One before a comment on a line of its own, which starts a paragraph, before a statement or a member of a type, at the end of a block or at the end of the file; but not at the start of a block, after another such comment, or before an item, an argument, an arm or a clause (`when`, `else`, `catch`, `finally`) at its depth.
+- A comment covers its paragraph, up to the next blank line, which you put after the code that it covers.
 
 ### Spacing
 

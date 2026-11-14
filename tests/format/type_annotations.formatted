@@ -19,6 +19,7 @@ struct Point
   y := 0
   z := 1.5
   scale: Float? = 2.0
+
   # The type of a field is kept where it is wider than the value, for code that may assign to it.
   failure: Error = ValueError('none')
   sum := -> @x + @y
@@ -47,6 +48,7 @@ export make_error := (): Error -> ValueError('made')
 
 class Counter
   var count = 0
+
   # A method keeps the types of its parameters, which no function type is expected for.
   add := (n: Int) -> @count += n
 
@@ -94,6 +96,7 @@ struct Other
 type Statement = Item | Other
 statements: Statement[] = [Item(1)]
 other := (): Statement -> Other(2)
+
 # A member of a union is converted to it where the branches give the type, not where it is
 # written, so the type stays (fmt checks without it before it leaves it out, whatever it picks).
 chosen: Statement = flag then Item(1) else other()
@@ -109,6 +112,7 @@ drop()
 # A function that comes back to itself through one whose return type is inferred keeps its own.
 countdown := (n: Int): Int -> n <= 0 then 0 else step(n)
 step := (n: Int) -> countdown(n - 1)
+
 # Results of their own types give the return type together, but not those of an empty array.
 pick := (n: Int) ->
   return nil if n < 0
@@ -116,6 +120,7 @@ pick := (n: Int) ->
 none := (n: Int): Int[] ->
   return [] if n < 0
   [n]
+
 # A parameter of a function literal leaves out the type that the function type expected gives it.
 apply := (f: (Int) -> Int) -> f(1)
 print countdown(2) + (pick(1) ? 0) + none(1).length + apply((n) -> n)
@@ -128,11 +133,14 @@ print n + two() for n in Numbers()
 
 # A Binary literal of one byte takes the type Byte from where it is, and keeps it.
 mark: Byte = flag then b'a' else b'b'
+
 # A default gives its own type, but not another.
 scaled := (x: Float = 1, y: Int? = nil, z = 2) -> x * (y ? z).to_float()
+
 # A method that calls itself keeps its return type.
 class Steps
   down := (k: Int): Int -> k <= 0 then 0 else @down(k - 1)
+
 # The branches of a case, an if and a try give their type together, as a throw gives none.
 sign := (n: Int) ->
   case
@@ -178,12 +186,15 @@ class Ping
   ping := (n: Int): Int -> n <= 0 then 0 else pong(n - 1)
 pong := (n: Int): Int -> Ping().ping(n)
 print pong(2)
+
 # A Float literal gives its type too.
 shrink := (x = 0.5) -> x / 2.0
+
 # The type of Map() or Set() goes to its type arguments, but for an optional one.
 var sizes: Map<String, Int>
 widths: Map<String, Int>? = Map()
 names := Set<String>(['a'])
+
 # A literal that keeps its return type, which settles its Promise, keeps its parameters' types.
 settled := xs.map((x: Int): Promise<Int> -> x * 2)
 
@@ -223,10 +234,12 @@ class Sizer: Sized
   size := (n: Int) -> n
 three := (f: (Int, Int, Int) -> Int) -> f(1, 2, 3)
 print three((a, b, c) -> a + b + c)
+
 # A field's function keeps its parameters' types, which the checker does not record as inferable.
 struct Mapper
   f: (Int) -> Int = (x: Int) -> x
 widen := (f: (Int) -> Int?) -> f(1) ? 0
+
 # A return type that stays keeps the parameters' types, as `(x): Int? ->` does not parse.
 print widen((x: Int): Int? -> x)
 print identity([1]).length + outer() + Sizer().size(1) + Mapper().f(1)

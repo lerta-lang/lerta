@@ -9,11 +9,12 @@ import CompileError from '../errors'
 import lex, Lexed from '../lexer/tokens'
 import parse from '../parser/statement'
 import
-  BINARY_LITERALS, BLANK_LINES, CHAR_CONCATENATIONS, EMPTINESS_TESTS, MEMBERSHIP_TESTS, COMMENTS,
-  DEFAULT_COMPARISONS, DESTRUCTURED_VALUES, DOUBLE_NEGATIONS, ELSE_NIL, EMPTY_INITIAL_VALUES,
-  EXPECTED_TYPES, FOUND_TESTS, ITERABLE_ARGUMENTS, LAYOUT, MEMBERSHIP_LISTS, NIL_FIELDS, RANGE_ENDS,
-  REDUNDANT_CASTS, SEMICOLONS, SHORTHAND_ARGUMENTS, STRANDED_COMMENTS, StyleRule, TYPE_ANNOTATIONS,
-  UNBREAKABLE_LINES, UNION_IS_TESTS, UNUSED_IMPORTS, VALUE_DOUBLE_NEGATIONS, VALUES_ALONE
+  BINARY_LITERALS, BLANK_LINES, CHAR_CONCATENATIONS, COMMENT_BLANK_LINES, EMPTINESS_TESTS,
+  MEMBERSHIP_TESTS, COMMENTS, DEFAULT_COMPARISONS, DESTRUCTURED_VALUES, DOUBLE_NEGATIONS, ELSE_NIL,
+  EMPTY_INITIAL_VALUES, EXPECTED_TYPES, FOUND_TESTS, ITERABLE_ARGUMENTS, LAYOUT, MEMBERSHIP_LISTS,
+  NIL_FIELDS, RANGE_ENDS, REDUNDANT_CASTS, SEMICOLONS, SHORTHAND_ARGUMENTS, STRANDED_COMMENTS,
+  StyleRule, TYPE_ANNOTATIONS, UNBREAKABLE_LINES, UNION_IS_TESTS, UNUSED_IMPORTS,
+  VALUE_DOUBLE_NEGATIONS, VALUES_ALONE
 from './rules'
 import common_indentation, is_blank from '../lexer/string_literal'
 import applicable, applied, Edit from './edits'
@@ -51,6 +52,7 @@ export struct Parsed
   lexed: Lexed
   statements: Statement[]
   text: SourceTokens
+
   # The tree as parsed, which the formatter compares. It is dumped before the statements are
   # checked, as the checker changes them: it gives an init the result void.
   tree: String
@@ -64,6 +66,7 @@ struct LaidOut
   edits: Edit[]
   statements: StatementShape[]
   skipped: Set<Int>
+
   # The lines kept as they are written, or marked so (see KeptLines).
   kept: Set<Int>
 
@@ -79,10 +82,12 @@ export format_parsed := (parsed: Parsed, path: String, typed: Typed?) ->
   { source } := parsed
   first := rewrites_with(parsed, typed)
   laid := laid_out(parsed, typed)
+
   # The types left out must keep the types of the program, or they all stay (see rewritten_text).
   with_types := await rewritten_text(parsed, laid, first, path, true)
   text := with_types ? (await rewritten_text(parsed, laid, first, path, false))!
   kept_types := text.annotations_kept
+
   first_rewrites :=
     [edit for edit in first.edits when not kept_types or edit.rule != TYPE_ANNOTATIONS]
   edits := first_rewrites + laid.edits
@@ -90,6 +95,7 @@ export format_parsed := (parsed: Parsed, path: String, typed: Typed?) ->
   is_held := (at: Position) -> held.any((head) -> head.holds(at))
   layout := [finding for finding in laid.findings when not is_held(finding.at)]
   rewritten := [Finding(at: edit.at, rule: edit.rule) for edit in edits]
+
   # A `;` that a rewrite takes out is a gap that the layout decides too.
   # A line that a rewrite left to be done by hand may shorten is reported for that alone.
   by_hand := Set([edit.at.line for edit in edits when edit.change == nil])
@@ -110,6 +116,7 @@ long_lines := (source: String, formatted: String, left: Set<Int>) ->
     continue if i + 1 in left
     written := formatted_lines[line.trim()] ? continue
     continue if written.count() <= WIDTH
+
     # The source column of the formatted line's first past WIDTH, as its indentation changes.
     shift := leading_spaces(written) - leading_spaces(line)
     found.push { rule: UNBREAKABLE_LINES, at: { line: i + 1, column: max(WIDTH + 1 - shift, 1) } }
@@ -157,8 +164,10 @@ laid_out := (parsed: Parsed, typed: Typed?) ->
   kept := kept_lines(source, lexed)
   results := typed then result_calls(typed) else Set<Call>()
   walked := walk(statements, text, kept, results)
+
   # The walk skips the statements kept as they are written, which the lines leave alone.
   tokens := Tokens(source, text, comments: lexed.comments, kept: Set())
+
   edits := break_lines(walked, text, tokens)
   { decisions, texts } := lay_out(text, walked)
   stranded := [stranded_finding(text, index) for index in walked.stranded]
@@ -228,8 +237,10 @@ rewritten_text := (
   var current = parsed
   var last_rewrites = first
   var left_out_types = false
+
   # Whether the last round changed nothing, so that `last_rewrites` are those of `current`.
   var settled = false
+
   for round in 0..MAX_ROUNDS
     last_rewrites = await rewrites(current, path) if round > 0
     laid := round == 0 then first_laid else laid_out(current, last_rewrites.typed)
@@ -262,6 +273,7 @@ rewritten_text := (
 
 struct RewrittenText
   text: String
+
   # Whether the types whose values have them of their own are kept, as the program would not check
   # the same without them.
   annotations_kept: Bool
@@ -294,7 +306,11 @@ stranded_finding := (text: SourceTokens, index: Int) ->
   Finding(at: text.ending_comments[index]!.start, rule: STRANDED_COMMENTS)
 
 lay_out := (text: SourceTokens, walked: Walked) ->
-  layout := Layout(text, code_gaps: walked.gaps, skipped: walked.skipped)
+  layout := Layout
+    text
+    code_gaps: walked.gaps
+    skipped: walked.skipped
+    line_statements: walked.line_statements
   for gap at index in text.gaps
     layout.decide gap, index
     layout.decide_text text.tokens[index] if index < text.tokens.length
@@ -307,11 +323,14 @@ class Layout
     text: SourceTokens
     code_gaps: Map<Int, CodeGap>
     skipped: Set<Int>
+    line_statements: Set<Int>
   private
     decisions: Decision[] = []
     texts: String[] = []
+
     # The depth of the last line start.
     var depth = 0
+
     # The columns that the last line start moves the indentation of its source line by, which the
     # lines after it that keep their source text move by too, so that their blocks stay as deep as
     # they are under it. A block that the source indents by other than two spaces thus keeps its
@@ -324,10 +343,10 @@ class Layout
         case
           when index == 0 then { text: '', rule: LAYOUT }
           when index == tokens.length then { text: "\n", rule: ending_rule(gap) }
-          else @decide_before(tokens[index], gap)
+          else @decide_before(tokens[index], gap, index)
       @decisions.push decision
 
-    decide_before := (token: TextToken, gap: Gap): Decision ->
+    decide_before := (token: TextToken, gap: Gap, index: Int): Decision ->
       { code } := @text
       has_code := token.next_code < code.length
       code_gap := has_code then @code_gaps[token.next_code] else END
@@ -343,6 +362,8 @@ class Layout
           { rule, text: ' '.repeat(code_gap.count) }
         when LineStart
           next_column := has_code then code[token.next_code].column else 1
+          opens_block := code_gap.depth > @depth
+
           # A comment before a dedent indented deeper than the line after it, as at the end of a
           # block, stays in the block that its column reads as in, moved as the line before it is,
           # two spaces a level, the deeper of two that it is between, from that of the line before
@@ -354,7 +375,17 @@ class Layout
           else
             @depth = code_gap.depth
           @shift = 2 * @depth - token.line_indentation
-          line_feed(gap, 2 * @depth, code_gap.rule)
+          decision := line_feed(gap, 2 * @depth, code_gap.rule)
+          return decision if not comment or opens_block
+          ends_block := @depth > code_gap.depth
+          @starts_paragraph(token, index, ends_block) then blank_before(decision) else decision
+
+    # Whether the own-line comment at `index` starts a paragraph (see Blank lines): not after
+    # another, which it continues, but at the end of its block or of the source, or before a
+    # statement or a member of a type, rather than an item, an arm or a clause.
+    starts_paragraph := (token: TextToken, index: Int, ends_block: Bool) ->
+      return false if @text.tokens[index - 1].comment?.own_line == true
+      ends_block or token.next_code == @text.code.length or token.next_code in @line_statements
 
     # A gap that the walk does not decide keeps its source text, spaces at the ends of lines too,
     # unreported, as the walk vouches only for the statements that it handles; but the indentation
@@ -379,6 +410,11 @@ class Layout
 
 # The end of the source starts a line at depth 0, which a comment before it is indented by.
 END := LineStart(0)
+
+# The decision with a blank line before its line, as before a comment that starts a paragraph.
+blank_before := (decision: Decision): Decision ->
+  return decision if decision.text.starts_with("\n\n")
+  { text: "\n" + decision.text, rule: COMMENT_BLANK_LINES }
 
 ending_rule := (gap: Gap) -> line_feeds(gap.text) > 1 then BLANK_LINES else LAYOUT
 
@@ -412,6 +448,7 @@ indented := (text: String, columns: Int) ->
 # The text with its lines after the first moved by `shift` columns, those that are not blank.
 shifted_lines := (text: String, shift: Int) ->
   lines := text.split("\n")
+
   # One shift for every line, no more to the left than the lines share, keeps the literal's value.
   moved := max(shift, -common_indentation(lines[1..]))
   [lines[0], [shifted(line, moved) for line in lines[1..]]...].join("\n")

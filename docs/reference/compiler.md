@@ -264,7 +264,7 @@ Checks that each file is in the [style](style.md). What of the style it does not
 
 #### What it keeps
 
-- The comments, and the blank lines, at most one in a row.
+- The comments, and the blank lines, at most one in a row, adding one before a comment that starts a paragraph (see [Blank lines](style.md#blank-lines)).
 - The spelling of literals, such as `0xFF` and the escapes of a string, but `'...'` for a string that can be written so.
 - The names of a destructuring.
 
