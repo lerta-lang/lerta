@@ -20,6 +20,12 @@ syn match lertaControl "\%(\<for\s\+\%(\h\w*\|([^)]*)\)\%(\s\+at\s\+\h\w*\)\=\s\
 syn match lertaControl "\%(\<for\s\+\%(\h\w*\|([^)]*)\)\%(\s\+at\s\+\h\w*\)\=\s\+in\s.*\)\@<=\<when\>\ze\s"
 syn match lertaControl "\%(^\s*\)\@<=when\>\ze\s"
 syn match lertaControl "\%(\<for\s\+\%(\h\w*\|([^)]*)\)\s\+\)\@<=at\>\ze\s\+\h\w*\s\+in\>"
+" `private`, `weak` and `default` are not keywords either: `private` before a member, `weak`
+" before `var`, a field, a declaration or a function literal, and `default` before the operand of
+" a field, not before a binary operator, so that `default - 1` stays a subtraction.
+syn match lertaStorage "\%(^\s*\)\@<=private\ze\s\+\h"
+syn match lertaStorage "[.@]\@<!\<weak\ze\s\+\%(var\>\|\h\w*\s*:\|(\|->\)"
+syn match lertaStorage "\%([^=!<>]=\s*\)\@<=default\ze\s\+\%(\%(and\|or\|not\s\+in\|is\|as\|in\|if\|unless\|then\|for\|while\|until\|when\)\>\)\@!\%(-\S\|[^-+*/%<>=!&|^[:space:]]\)"
 syn keyword lertaBoolean true false nil
 syn keyword lertaWordOperator and or not
 syn keyword lertaControl if else then while unless until for break continue return case throw try catch finally yield await import export
