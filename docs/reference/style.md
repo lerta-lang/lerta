@@ -303,7 +303,7 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 - A two-way `case` without `else` that handles every type or member of its subject (see [case with a subject](control-flow.md#case-with-a-subject)) stays a `case`.
   - Why: a type or member added later then fails to compile, where an `if` would take it to `else`.
 - A two-way value whose condition and values have two leaves each at most (see [Postfix forms](#postfix-forms)) and that fits on one line is `c then a else b`; otherwise it is an `if`, with `else nil` for a `then` without `else`. A chain of them, `a then x else b then y else z`, is a `case`.
-  - Where the value is the whole of a `return`, its `if` or its `case` returns in each branch.
+  - Where the value is the whole of a `return`, its `if` or its `case` goes on the lines below `return`, one level deeper, as below `x :=`.
   - Where it is a body on the line of `->` or of an arm, it goes in a block below that line, as a postfix form whose body has more than three leaves does; inside brackets, those that close after it go on the line below the block.
   - Where no block can take the value, as in an argument, name it first, by hand: `lerta fmt` reports it.
 - An arm whose body is one statement that its line can hold (see [case without a subject](control-flow.md#case-without-a-subject)) and that fits on it, all of it, is written on it, `when 1 then 'one'` or `else pass`, and otherwise as a block, as is one of a `'''` literal.

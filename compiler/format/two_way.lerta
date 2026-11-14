@@ -61,20 +61,21 @@ export long_two_way_edit := (tokens: Tokens, statement: Statement): Edit? ->
   closes := (at: Int) -> tokens.code[at].kind in [')', ']', '}']
   return tokens.report(rule, at) unless [closes(i) for i in (parts.last + 1)..=last].all((c) -> c)
 
-  # A `return` goes into each branch, as it takes no value of blocks.
-  returns := statement is Return
-  first := returns then parts.first - 1 else parts.first
-
   # The block goes one level deeper than the line of the value, which the layout then indents as
-  # its rules have it. The statement on the line of `->` or of an arm's `then` or `else`, where no
-  # `if` can start, goes in a block below it, as a body that its line cannot hold does.
+  # its rules have it. After `return`, or for a statement on the line of `->` or of an arm's `then`
+  # or `else`, where no `if` can start, it goes on the lines below, as a body that its line cannot
+  # hold does.
   line_columns := tokens.line_indentation(at.line) ? 0
-  var from = tokens.start(first)
+  var from = at
   var lead = ''
   var columns = line_columns
-  on_head_line := first > 0 and tokens.code[first - 1].end_line == at.line
-  if on_head_line and (returns or statement is Conditional)
-    head := first - 1
+  head := parts.first - 1
+  on_head_line := head >= 0 and tokens.code[head].end_line == at.line
+  if statement is Return
+    from = tokens.end(head)
+    columns = line_columns + 2
+    lead = "\n" + ' '.repeat(columns)
+  else if on_head_line and statement is Conditional
     return tokens.report(rule, at) unless tokens.code[head].kind in HEAD_ENDS
     after_arm := tokens.is_kind(head, 'then')
     from = tokens.end(after_arm then head - 1 else head)
@@ -82,20 +83,18 @@ export long_two_way_edit := (tokens: Tokens, statement: Statement): Edit? ->
     lead = "\n" + ' '.repeat(columns)
   inner := "\n" + ' '.repeat(columns + 2)
   slice := (span: Span) -> tokens.slice(tokens.start(span.first), tokens.end(span.last))
-  prefix := returns then 'return ' else ''
-  value := (span: Span) -> prefix + slice(span)
-  otherwise := prefix + (parts.otherwise then slice(parts.otherwise) else 'nil')
+  otherwise := parts.otherwise then slice(parts.otherwise) else 'nil'
   written :=
     if rule == CHAINED_VALUES
       arms := [
-        "#{inner}when #{slice(condition)} then #{value(parts.values[i])}"
+        "#{inner}when #{slice(condition)} then #{slice(parts.values[i])}"
         for condition at i in parts.conditions
       ]
       "#{lead}case#{arms.join()}#{inner}else #{otherwise}"
     else
       outer := "\n" + ' '.repeat(columns)
       condition := slice(parts.conditions[0])
-      "#{lead}if #{condition}#{inner}#{value(parts.values[0])}#{outer}else#{inner}#{otherwise}"
+      "#{lead}if #{condition}#{inner}#{slice(parts.values[0])}#{outer}else#{inner}#{otherwise}"
 
   # The brackets after it go back to the line's depth below the block.
   closing :=
