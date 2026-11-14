@@ -362,6 +362,5 @@ These words are not keywords. Each acts as one only where it is written so, and 
 | `as` | also in an [import](modules.md), an [export](modules.md#exports) or an [extern](functions.md#c-functions) |
 | `from` | in an [import](modules.md) or an [export](modules.md#exports) |
 | `type` | before an alias's name and `=` (see [unions](types.md#unions)) |
-| `default` | before an operand in a field (see [members](objects.md#members)): `default -1` is a default, and `default - 1` a subtraction |
 | `private` | before a member, a name or `var` in a class or struct, or alone before an indented block of members (see [private members](objects.md#private-members)) |
 | `weak` | before a function literal, a field or a declaration (`name :=`, `name:` or `var`) (see [weak function literals](functions.md#weak-function-literals), [weak fields and locals](objects.md#weak-references)); a function named `weak` is called with parentheses |

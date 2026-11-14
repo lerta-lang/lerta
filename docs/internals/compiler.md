@@ -70,7 +70,7 @@
 - For each number of arguments that a call may give, it has an entry, `<symbol>.given<k>`, which computes the defaults of the others and calls it. A call that leaves arguments out calls the entry.
   - An instance of a generic function has them only if a call leaves arguments out, as only such a call has its defaults checked (`defaults_checked`).
 - The function's value and the itabs refer to the function itself, which a default does not change.
-- A constructor instead takes, after each argument with a [`default`](../reference/objects.md#members), an `i1` of whether it is given, and computes the default of one not given in its place among the initializers.
+- A constructor instead takes, after each argument with a default (see [members](../reference/objects.md#members)), an `i1` of whether it is given, and computes the default of one not given in its place among the initializers.
 
 ## Formatter
 

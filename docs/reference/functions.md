@@ -43,7 +43,7 @@ A parameter of a top-level function or a method may have a default, `name: Type 
   - `total(['a'])` is an error at the call, `expected String, got Int (in the defaults of total<String>)`.
 - A default belongs to the declaration, not to the function's type: a function used as a value takes every argument.
 - A function literal elsewhere cannot have defaults so far.
-- For a class's or struct's constructor arguments, see [`default`](objects.md#members).
+- For a class's or struct's constructor arguments, see [members](objects.md#members).
 
 ### Variadic parameters
 
@@ -59,7 +59,7 @@ The last parameter of a top-level function or a method may be variadic, `rest: T
 
 ### A last struct parameter
 
-When the last parameter is of a struct type, a call may give it as named arguments, which construct the struct as a call of its name does, or leave it out, which constructs it from none. With a struct `Options` whose members are `cwd: String?` and `count := default 1`, and `run := (command: String, args: String..., options: Options)`:
+When the last parameter is of a struct type, a call may give it as named arguments, which construct the struct as a call of its name does, or leave it out, which constructs it from none. With a struct `Options` whose members are `cwd: String?` and `count := 1`, and `run := (command: String, args: String..., options: Options)`:
 
 | Call | Is |
 |---|---|

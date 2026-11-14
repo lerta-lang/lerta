@@ -15,7 +15,7 @@ import private_block_edits from './private_blocks'
 import cast_of from './precedence'
 import
   BINARY_LITERALS, CAST_FALLBACKS, ELSE_NIL, EMPTY_INITIAL_VALUES, ESCAPES,
-  FUNCTIONS_WITHOUT_PARAMETERS, LAYOUT, NIL_DEFAULTS, NIL_INITIAL_VALUES, SEMICOLONS, SHORTHAND,
+  FUNCTIONS_WITHOUT_PARAMETERS, LAYOUT, NIL_FIELDS, NIL_INITIAL_VALUES, SEMICOLONS, SHORTHAND,
   STRING_LITERALS, TWO_WAY_VALUES
 from './rules'
 import with_ascii_escapes from './escapes'
@@ -139,7 +139,7 @@ statement_edits := (tokens: Tokens, statement: Statement): Edit?[] ->
     when TypeDeclaration
       [
         unneeded_pass(tokens, statement)
-        [nil_default(tokens, m) for m in statement.members]...
+        [nil_field(tokens, statement, m) for m in statement.members]...
         private_block_edits(tokens, statement)...
       ]
     when For then [counted_range(tokens, statement.iterable)]
@@ -282,18 +282,19 @@ nil_initial_value := (tokens: Tokens, declaration: Declaration) ->
   change := Change(from: tokens.end(nil_at - 2), to: tokens.end(nil_at), text: '')
   tokens.edit(NIL_INITIAL_VALUES, [change])
 
-# `x: T?` for `x: T? = default nil` of a field (see Nil initial values), which takes nil where
-# its argument is left out; but not where the `?` is not written on the type itself, as `A | B?`
-# or an alias of an optional type: the formatter cannot tell it optional.
-nil_default := (tokens: Tokens, member: MemberDeclaration) ->
-  { type, value, has_default } := member
+# `x: T?` for `x: T? = nil` of a field that is nil without it (see Nil initial values): a
+# constructor argument, of a struct or in `args`, which takes nil where it is left out, or a
+# class's `var`; but not where the `?` is not written on the type itself, as `A | B?` or an alias
+# of an optional type: the formatter cannot tell it optional.
+nil_field := (tokens: Tokens, node: TypeDeclaration, member: MemberDeclaration) ->
+  { type, value } := member
   written := type ? return nil
-  return nil if not written.optional or not has_default or value is not NilLiteral
+  is_nil_without := node.is_struct or member.in_args or member.is_mutable()
+  return nil if not written.optional or not is_nil_without or value is not NilLiteral
   nil_at := tokens.at(value.position) ? return nil
-  is_written := tokens.is_kind(nil_at, 'nil') and tokens.is_word(nil_at - 1, 'default')
-  return nil if not is_written or not tokens.is_kind(nil_at - 2, '=')
-  change := Change(from: tokens.end(nil_at - 3), to: tokens.end(nil_at), text: '')
-  tokens.edit(NIL_DEFAULTS, [change])
+  return nil if not tokens.is_kind(nil_at, 'nil') or not tokens.is_kind(nil_at - 1, '=')
+  change := Change(from: tokens.end(nil_at - 2), to: tokens.end(nil_at), text: '')
+  tokens.edit(NIL_FIELDS, [change])
 
 # `xs: T[]` for `xs: T[] = []`, and `m: Map<K, V>` for `m: Map<K, V> = Map()` or `m := Map<K, V>()`
 # of a const, or `var m = Map<K, V>()` of a `var`, and so for a Set (see Empty initial values).

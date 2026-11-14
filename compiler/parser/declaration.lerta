@@ -8,9 +8,7 @@ import
 from '../ast'
 import accept_pass_block from './compound'
 import parse_identifier, parse_value from './expression'
-import
-  at_destructuring, at_spaced_operand, parse_destructuring_statement, parse_statement
-from './statement'
+import at_destructuring, parse_destructuring_statement, parse_statement from './statement'
 import Token from '../lexer/tokens'
 import TokenStream from './token_stream'
 import
@@ -258,9 +256,9 @@ parse_member_modifier := (tokens: TokenStream) ->
   tokens.next() if is_weak_var
   modifier
 
-# `[modifier] name: Type[ = [default] value]`, `modifier name = [default] value` or
-# `name := [default] value`, as a local is declared, the modifier `var`, `weak` or `weak var`. A
-# weak field's type may be `Type!`, as a cast's is.
+# `[modifier] name: Type[ = value]`, `modifier name = value` or `name := value`, as a local is
+# declared, the modifier `var`, `weak` or `weak var`. A weak field's type may be `Type!`, as a
+# cast's is.
 parse_member := (tokens: TokenStream) ->
   token := tokens.peek()
   private := at_private(tokens) and tokens.accept_word('private')
@@ -282,25 +280,10 @@ parse_member := (tokens: TokenStream) ->
       when type == nil then "':' or '='"
       else "'='"
   tokens.expect '=', expected if has_value and not is_const
-  has_default := has_value and at_default(tokens)
-  tokens.next() if has_default
   value := has_value then parse_value(tokens)
-  MemberDeclaration(
-    name
-    modifier
-    type
-    value
-    has_default
-    throws
-    private
-    position: token.position()
-  )
+  MemberDeclaration(name, modifier, type, value, throws, private, position: token.position())
 
 # `private` marks a member when a name, `var` or `weak` follows it, as a field may be named
 # `private` too.
 at_private := (tokens: TokenStream) ->
   tokens.at_word('private') and tokens.peek_at(1).kind in [IDENTIFIER, 'var']
-
-# `default` marks a default when an operand follows it, as the argument of a call without
-# parentheses would.
-at_default := (tokens: TokenStream) -> tokens.at_word('default') and at_spaced_operand(tokens, 1)

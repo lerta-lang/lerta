@@ -10,7 +10,7 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
 - **Fix suggestions** in errors of a [call without parentheses](../reference/syntax.md#calls):
   - `f g x` suggests `f g(x)`.
   - A callee that is not a name with `.name`s, as `xs[i].push x`, suggests `xs[i].push(x)`.
-  - An undefined name that is a word only in its place, as `default` in `default - 1`, says so.
+  - An undefined name that is a word only in its place, as `args` alone in a method, says so.
 - **Values on the next line.** An `if` or a `case` value may start on the next line, one level deeper, as it may after `=`:
   - as the argument of a call without brackets (`print`, then `case` on the next line);
   - after the `then` of a `case` arm.

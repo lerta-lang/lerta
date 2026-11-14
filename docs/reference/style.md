@@ -327,7 +327,7 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 
 ### Type bodies
 
-- Write type-only fields (constructor arguments) first, then those with a `default`.
+- Write the constructor arguments of a type alone first, then those with a value.
 - Declare a class's field `var` only if it is assigned.
 
 ### Private blocks
@@ -353,7 +353,7 @@ class Counter
 ### Nil initial values
 
 - Write `var found: String?`, not `var found: String? = nil`.
-- Write a field `parent: Node?`, not `parent: Node? = default nil`: its argument may be left out either way.
+- Write a field `parent: Node?`, not `parent: Node? = nil`, where it is nil either way: a constructor argument, of a struct or in `args`, which may be left out, or a class's `var`.
 
 ### Empty initial values
 

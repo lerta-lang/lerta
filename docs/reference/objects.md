@@ -32,17 +32,16 @@ The members of a type, one per line, are declared as locals are (see [declaratio
 
 | Declaration | Member |
 |---|---|
-| `name: Type` | A field set by a constructor argument. If `Type` is optional, the argument may be left out and the field is nil. |
-| `name := value`, `name: Type = value` | Of a struct, and in a class's `args`: a constructor argument that may be left out, whose value is then computed. Elsewhere in a class: a field computed at construction, which is not a constructor argument. |
-| `name := default value`, `name: Type = default value` | Of a class without `args`: a constructor argument that may be left out; the value is then computed as an initializer. `default` is not a [keyword](syntax.md#contextual-words). |
+| `name: Type` | Of a struct, and in a class's `args`: a field set by a constructor argument. If `Type` is optional, the argument may be left out and the field is nil. |
+| `name := value`, `name: Type = value` | Of a struct, and in a class's `args`: a constructor argument that may be left out, whose value is then computed, its default. Elsewhere in a class: a field computed at construction, which is not a constructor argument. |
 | `args` alone, before an indented block of fields | Of a class, on the first line of its body: the fields in the block are its constructor arguments, and its other fields are computed. `args` is not a [keyword](syntax.md#contextual-words). |
 | `var` before any of the above | A field of a class that can be assigned (see [mutability](#mutability)). |
 | `weak name: Type?`, `weak name: Type!`, either with `weak var` | A [weak field](#weak-references). |
-| `private` before any of the above or below | A member that only the code of its module reaches (see [private members](#private-members)). |
+| `private` before any of the above or below | A member of a class that only the code of its module reaches (see [private members](#private-members)). |
 | `name := (params) -> body` | A method (see below). |
 | `pass` alone | No members: a type without them, as an empty struct (see [pass](syntax.md#pass)). |
 
-- A class that takes constructor arguments declares them in `args`; one without `args` takes its fields of a type alone, and those with `default`, as a struct's are taken. Outside `args`, a field of a type alone is an error, `a field outside 'args' is no constructor argument: give it a value`, but a `var` of an optional type, which starts nil as a local does. A field that its interface asks for is declared in `args` too.
+- A class that takes constructor arguments declares them in `args`, and one without `args` takes none. Outside `args`, a field of a type alone is an error, `a field outside 'args' is no constructor argument: give it a value`, but a `var` of an optional type, which starts nil as a local does. A field that its interface asks for is declared in `args` too: `A does not declare 'message' of Error: declare it in 'args'`.
   - A function literal in `args` is the value of a field, not a method: a function field, not supported yet (see [the roadmap](../roadmap/objects.md#classes-and-structs)).
   - Why: a class's arguments are what its user gives, and its other fields its own state; `args` sets the first apart on the first lines. A struct is its fields, so each is an argument.
 - A field may hold a function (`on_click: () -> void`); `b.on_click()` calls it (see [function values](functions.md#function-values)).
@@ -63,10 +62,9 @@ export class Counter
 - `private` alone on a line, before an indented block of members, makes each of them private, as `private` before each would (see [private blocks](style.md#private-blocks)). A member in the block is not marked `private` again.
 - A private member is reached only by the code of the module that declares its type: there, by any code, as a module function or another type's method; elsewhere, not at all, neither read, assigned, called nor taken as a value: `'count' is private to the module of Counter`. A module keeps its members as it keeps the names it does not export.
   - Why the module, not the type: a module's functions and helper types work with its types' state, as a constructing function or a type's `equals` with another object's.
-- A private field is computed at construction, unless it is in `args`: it is no constructor argument, and takes no `default`. A spread copy computes it again. A struct's is computed too.
-  - One in `args` is an argument that any module gives, as `args` says what the class takes; it is private only to read, assign and call.
+- A struct's members are public: `a struct's members are public: they cannot be private`. A struct is its fields, which its constructor takes.
+- A private field in `args` is an argument that any module gives, as `args` says what the class takes; it is private only to read, assign and call.
 - It satisfies no member of an interface (see [satisfying an interface](#satisfying-an-interface)), and an interface member cannot be private; nor can a method of an extend, whose module is not its type's. A type with a private field is not [Codable](std.md#codable).
-- A struct's `to_literal` and `to_string` by its fields (see [Literal](builtins.md#literal)) still write the private ones, which `print` and `dbg` show: they only show the value, for debugging, and give no way to read or set it.
 
 #### Methods
 
@@ -87,7 +85,7 @@ export class Counter
   - Fields that are not arguments, a class's, are computed again. A struct's field with an initializer is an argument, so the spread takes its value, computed from the fields of `p`: one computed from others is a method instead, `sum := -> @x + @y`.
   - For a class, it constructs a new object, which shares what the fields hold.
 - **Order.** The arguments given are assigned first. Then the initializers, and the defaults of the arguments left out, run in declaration order; each sees the arguments and the fields before it. Then `init` runs.
-- A class's field with an initializer is not an argument, unless it is in `args`, or marked `default` in a class without `args`, so that what it computes cannot be overridden from outside. Giving it is an error that suggests `args`.
+- A class's field with an initializer is not an argument, unless it is in `args`, so that what it computes cannot be overridden from outside. Giving it is an error that suggests `args`.
 - A field is computed once. One of a class whose initializer reads a `var` field keeps the value that field had then, which a warning tells, suggesting a method, `double := -> @count * 2`, that reads it each time. Not an initializer of a `var` field or a default, which only start from it, nor a function literal in an initializer, which reads it when called.
 - Where a struct is expected, `{ x: 1, y: 2 }` constructs it too (see [anonymous structs](types.md#anonymous-structs)).
 
@@ -338,7 +336,7 @@ print shape.area() for shape in shapes
 ### Declaring an interface
 
 - `struct IndexError: Error` or `class Counter: Source<Int>` names an interface that the type satisfies, checked where the type is declared.
-- Each member of the interface that the type does not declare becomes a const field of the member's type, a constructor argument, before the type's own fields. So `struct IndexError: Error`, without a body, declares a struct with a `message: String`.
+- Each member of the interface that a struct does not declare becomes a const field of the member's type, a constructor argument, before the struct's own fields. So `struct IndexError: Error`, without a body, declares a struct with a `message: String`. A class declares each in `args` (see [members](#members)).
 - But a member of a function type, a method, must be declared, as a method or as a field: one left out is an error where the type is declared, `Square does not declare 'area', a method of Shape`, which suggests a field `area: () -> Int` for a function that the constructor takes.
   - Why: a method left out would otherwise be a field that the constructor takes, so the error would come only where the type is constructed, as a missing argument.
 - A method of an extend of the type cannot stand for such a member.

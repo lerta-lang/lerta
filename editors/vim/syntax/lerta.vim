@@ -20,14 +20,12 @@ syn match lertaControl "\%(\<for\s\+\%(\h\w*\|([^)]*)\)\%(\s\+at\s\+\h\w*\)\=\s\
 syn match lertaControl "\%(\<for\s\+\%(\h\w*\|([^)]*)\)\%(\s\+at\s\+\h\w*\)\=\s\+in\s.*\)\@<=\<when\>\ze\s"
 syn match lertaControl "\%(^\s*\)\@<=when\>\ze\s"
 syn match lertaControl "\%(\<for\s\+\%(\h\w*\|([^)]*)\)\s\+\)\@<=at\>\ze\s\+\h\w*\s\+in\>"
-" `private`, `weak` and `default` are not keywords either: `private` before a member, `weak`
-" before `var`, a field, a declaration or a function literal, and `default` before the operand of
-" a field, not before a binary operator, so that `default - 1` stays a subtraction.
+" `private`, `args` and `weak` are not keywords either: `private` before a member or alone before
+" its block, `args` alone before the block of a class's constructor arguments, and `weak` before
+" `var`, a field, a declaration or a function literal.
 syn match lertaStorage "\%(^\s*\)\@<=private\ze\%(\s\+\h\|\s*$\)"
-" `args` alone on its line opens the block of a class's constructor arguments.
 syn match lertaStorage "^\s\+\zsargs\ze\s*$"
 syn match lertaStorage "[.@]\@<!\<weak\ze\s\+\%(var\>\|\h\w*\s*:\|(\|->\)"
-syn match lertaStorage "\%([^=!<>]=\s*\)\@<=default\ze\s\+\%(\%(and\|or\|not\s\+in\|is\|as\|in\|if\|unless\|then\|for\|while\|until\|when\)\>\)\@!\%(-\S\|[^-+*/%<>=!&|^[:space:]]\)"
 syn keyword lertaBoolean true false nil
 syn keyword lertaWordOperator and or not
 syn keyword lertaControl if else then while unless until for break continue return case throw try catch finally yield await import export
