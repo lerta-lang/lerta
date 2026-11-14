@@ -21,3 +21,4 @@ When a feature is implemented, its description moves to [the reference](../refer
 Questions of one area are in its file. These span areas:
 
 - The scope of runtime type information (whether to keep field names).
+- The style of the tour (see [follow-ups](#follow-ups)): short sentences and examples that its tests run, the reasons staying in the reference.

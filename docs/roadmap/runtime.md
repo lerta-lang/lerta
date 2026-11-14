@@ -45,7 +45,9 @@ These apply when a value in statement position is not captured, beyond [the refe
 
 What is implemented, `throw` of `Error` values and `try`/`catch`/`finally`, is in [the reference](../reference/errors.md#exceptions). Planned:
 
-- No `throws` annotation is needed; if written, it is type-checked. No `try` is attached to calls (as in Swift).
+- No `try` is attached to calls (as in Swift).
+- **No `throws` annotation.** Why: an overflow or an index out of range throws, so nearly every function may throw, and an annotation would say little.
+- **`catch` without a type does not take a `CancelledError`.** A `catch` that should, as for cleanup, names it: `catch e: CancelledError`. Why: a loop that retries, or that logs an error and goes on, would otherwise keep `timeout` and Ctrl-C from ending its work.
 
 ## Memory management
 
@@ -133,4 +135,5 @@ The size classes of the allocator ([internals](../internals/memory.md#allocation
 ## Open questions
 
 - Whether stack overflow should be an exception that can be caught, instead of a panic. That needs the remaining stack checked at function entry instead of [the guard page](../internals/execution.md#stack-overflow), as on the targets without one, such as [microcontrollers](#platforms). Catching it then works like any throw, since the handler runs after unwinding.
+- Whether a build without `-O` checks each float operation for NaN by default, as [`--eager-nan-checks`](../reference/compiler.md#--eager-nan-checks) does, so that a NaN is reported where it is made. Against: whether a NaN never used throws would then differ by build.
 - How to pass values to workers (candidates: deep copy only + sharing immutable `Binary` / run-time moves like JS transfer).

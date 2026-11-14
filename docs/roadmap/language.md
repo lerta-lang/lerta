@@ -67,6 +67,7 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
   - Gain: `for (k, v) in m` and a `Position` of a line and a column allocate nothing. They cannot be changed, so the representation does not show in what a program does.
   - In a union, such a value is still held in a box (see [internals](../internals/representation.md#objects)).
   - Counted before trying: of the 10.9M objects that the compiler's own `dump-llvm` allocates, such values are about 0.6M, against 4.8M strings and 2.3M arrays; less than 1% of its instructions by the cost of an allocation. The benchmarks in `bench/` allocate almost none (`bench/binary_trees` a class).
+  - A benchmark of many small structs in `bench/` (vector arithmetic, tokens with a `Position`, iterating a map's entries) would measure the gain, which the present ones cannot.
   - It waits until a program shows the need, as it touches every place that takes a value for one word: the IR types, reference counting, array items, map keys, union tests, equality and hashing.
 
 ## Numeric types
@@ -92,4 +93,7 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
 - How an Iter gives an item in one call rather than two (`has_next` and `next`, each through a pointer to code now; see [internals](../internals/iteration.md#iter)):
   - `next` giving the item with whether there was one, as Rust's `Option` and Swift's optional. Its `{ i1, T }` in IR can be that for the Iters the compiler generates, but an Iter written in Lerta, `{ has_next, next }`, cannot write `next: () -> T?` for an `Iter<T?>`.
   - Or the end signalled as an exception, as Python's `StopIteration`, which the check after each call that Lerta has anyway would carry.
+- A literal of an empty map, such as `{:}`, so that `to_literal` of one reads back: it gives `{}` now, an empty anonymous struct.
+- Whether a local declared with an array type alone, `names: String[]`, stays an empty array, while a field so declared is a required argument.
+- Which uses of the same tokens in different constructs could be removed, listed with the summary of the grammar ([follow-ups](README.md#follow-ups)). `?`, of `T?`, `x ? y`, `x?.y` and `as T ? y`, stays: each is about nil.
 - Whether `as` also widens a value to a type it fits, as Swift's `nil as String?` or `x as Shape`, for a value in the middle of an expression. A `const` with a type annotation does it now. It would sit beside the casts that may fail, `as T?` and `as T!`, which `as T` alone is not allowed to be.

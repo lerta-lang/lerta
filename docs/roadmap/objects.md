@@ -6,6 +6,9 @@ The planned design of classes and structs, interfaces, generics and equality.
 
 - Small structs as values, large ones still shared by reference counting: see [small values unboxed](language.md#types).
 - **Function fields.** A function literal member declared `var`, `var on_hover = -> log 'hover'`, is a function field held per instance, so that it can be replaced (class only). One declared with `:=` stays a method, except in `args`, where it is a function field that a constructor may replace, as a callback. The difference in representation follows from whether reassignment is allowed.
+- **Derived fields.** A struct's field whose initializer reads `@`, `area := @r * @r * PI`, is not a constructor argument, and a spread computes it again, as a class's computed field. One that does not read `@`, `step := 1`, stays an argument with a default.
+  - Why: now `Circle(r: 2, area: 1)` is allowed, and `Circle(c..., r: 10)` keeps the `area` of `c`, so a field computed from others can disagree with them, and `==` compares that.
+  - To settle with it: what `to_literal`, `==` and std:json do with such a field.
 - **Constructors as functions.** Constructing a class or struct, `Circle(r: 1)`, is also a call to a constructor that takes an anonymous struct with the type-only fields.
 - **Definite assignment.** Definite assignment analysis replaces the rule that an initializer may read only the fields set before it through `@` ([the reference](../reference/objects.md#members)). `@` still cannot leak before all the fields are initialized, but an initializer may use it otherwise, as by calling a method that reads only those fields.
 - **Static members,** called on the type, as `Date.parse(text)`.
@@ -29,6 +32,7 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 
 ## Open questions
 
+- Optional types do not nest (`T?` is `T | nil`), which is the common cause of several limits: an optional type argument of a generic body (below), a `Map` whose value type is optional, `first` and `find` missing for optional items, and an Iter that gives an item in two calls ([language](language.md#open-questions)). Whether to settle them together by a representation inside the compiler of whether there is a value besides the value, the surface staying flat.
 - Of generic bodies, checked at definition (see [generic functions](../reference/functions.md#generic-functions)):
   - whether an optional type argument stays allowed, which a type that the body writes may not take, as a `Set<T>`'s key;
   - whether a `Numeric` bound, under which a number literal is a `T`, is worth a new implicit conversion. It would also settle `sum` of [Iterables](../reference/types.md#iter), whose default `zero` of `0` is an error for a `String[]` now: `sum()` fails to compile where `sum('')` is needed.

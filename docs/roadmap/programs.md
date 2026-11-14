@@ -143,6 +143,7 @@ The rest of [`lerta lsp`](../reference/compiler.md#lsp):
 - Whether the runtime checks keep running `script` for a terminal, or `std:process` gives one (a pty).
 - Whether `remainder` of [std:math](../reference/std.md#stdmath) is renamed, as it is C's `fmod` rather than its `remainder`.
 - Whether `listen_tcp` takes a default host, as `ServerOptions.host` of std:http has, `'127.0.0.1'`.
+- Whether a handler of std:http that throws prints the error's trace besides answering 500, which it does without a word now.
 
 ### Compiler and FFI
 
@@ -155,8 +156,10 @@ The rest of [`lerta lsp`](../reference/compiler.md#lsp):
 - What a C function declared to return `Float` does when it returns NaN: throw at the boundary, as an operation does, or leave it to the caller.
 - How to keep the repository small as the seed is refreshed (`seed/minilerta.ll`, see [bootstrap](../internals/architecture.md#bootstrap)): refreshing only at milestones, or keeping the seed outside the history, as with Git LFS or as a release asset.
 - How to hold type information for separate compilation (interface files).
+- Whether an exported function must write its return type, which `fmt --fix` could insert, at least when it returns a `Promise`, an `Iter` or an optional. Why: an `await` or a `yield` in a body changes the function's type, so its signature does not show whether it is async; the style now leaves an inferable type out.
 
 ### Tools
 
+- The order of the tools for packages: exported return types (above), doc comments, `lerta test`, then package management.
 - The package management approach (npm style vs Go's minimal version selection).
 - The formatter's configuration file, such as the line length. A file holding one bracketless literal, checked as the named arguments of a configuration type, reads like YAML without being run. Decide it with the package manifest, which has the same need.
