@@ -1,0 +1,168 @@
+# Comprehensions in the form that their leaves ask for (see Comprehensions in style.md): one whose
+# element or a condition has more than COMPREHENSION_LEAVES is written with its `for` first, and one
+# with its `for` first whose block is one short value is written on one line. The first is written
+# so where the comprehension is the whole value of a statement or an item alone on its line, and
+# reported elsewhere; the second wherever its line can hold it.
+import Call, Comprehension, Expression, For, FunctionLiteral, If, Yield from '../ast'
+import Change from './edits'
+import TokenKind from '../lexer/tokens'
+import COMPREHENSION_LEAVES, leaves, Span from './leaves'
+import WIDTH from './lines'
+import COMPREHENSION_FORMS, SHORT_COMPREHENSIONS from './rules'
+import Tokens from './tokens'
+
+# The comprehension on one line written with its `for` first where it is long, or reported: where
+# it is alone on its line, after its name if it is a named item, or in `wholes`, the whole value of
+# a statement that starts its line.
+export comprehension_edit := (
+  tokens: Tokens, comprehension: Comprehension, wholes: Set<Expression>
+) ->
+  return nil if comprehension.spread
+  open := tokens.at(comprehension.position) else return nil
+  if comprehension.prefix
+    return prefix_edit(tokens, open, comprehension.element)
+  parts := one_line_parts(tokens, open) else return nil
+  return nil unless is_long(tokens, parts.element, parts.conditions)
+  at := tokens.start(open)
+  ends_line := tokens.line_end(open) == parts.close
+  named := tokens.is_kind(open - 1, ':')
+  line_start := named then open - 2 else open
+  after_comma := tokens.is_kind(line_start - 1, ',')
+  alone := line_start in tokens.text.line_starts and not after_comma and ends_line
+  placed := alone or (comprehension in wholes and ends_line)
+  return tokens.report(COMPREHENSION_FORMS, at) if parts.fors > 1 or not placed
+  columns := tokens.line_indentation(at.line) else 0
+  slice := (span: Span) -> tokens.slice(tokens.start(span.first), tokens.end(span.last))
+  header := slice(parts.header)
+  element := slice(parts.element)
+
+  # The layout keeps the lines of one with its `for` first as they are written, and breaks none.
+  too_wide := columns + 2 + header.count() > WIDTH or columns + 4 + element.count() > WIDTH
+  return tokens.report(COMPREHENSION_FORMS, at) if too_wide
+  line := (depth: Int, text: String) -> "\n#{' '.repeat(columns + depth)}#{text}"
+  text :=
+    tokens.spelling(open)
+    line(2, header)
+    line(4, element)
+    line(0, tokens.spelling(parts.close))
+  tokens.edit_at(
+    COMPREHENSION_FORMS
+    at
+    [{ text: text.join(), from: at, to: tokens.end(parts.close) }]
+  )
+
+# The comprehension in parentheses with its `for` first, which the parser makes a call of a function
+# that yields, written on one line where it is short.
+export lazy_prefix_edit := (tokens: Tokens, call: Call) ->
+  function := call.callee as FunctionLiteral else return nil
+  return nil if not function.yields or not call.args.is_empty()
+  open := tokens.at(call.position) else return nil
+  return nil unless tokens.is_kind(open, '(')
+  element := yielded_element(function) else return nil
+  prefix_edit(tokens, open, element)
+
+# The element that the function made of a comprehension yields: the value of the `yield` that ends
+# the body of its `for`, inside the `if` of the condition if it has one.
+yielded_element := (function: FunctionLiteral): Expression? ->
+  loop := function.body.first() as For else return nil
+  last := loop.body.last() else return nil
+  yielded := (last as If?)?.then_body.last() else last
+  (yielded as Yield?)?.value
+
+# The tokens of a comprehension on one line: the bracket that closes it, its element, its header
+# from its first `for` up to that bracket, its conditions, and how many `for`s it has.
+struct OneLineParts
+  close: Int
+  element: Span
+  header: Span
+  conditions: Span[]
+  fors: Int
+
+# Those of the comprehension whose bracket opens at `open`; nil where it spans lines.
+one_line_parts := (tokens: Tokens, open: Int): OneLineParts? ->
+  close := tokens.matching(open) else return nil
+  return nil if tokens.line_end(open) == nil or tokens.code[close].line != tokens.code[open].line
+  keywords := header_keywords(tokens, open + 1, close - 1)
+  fors := [
+    for at in keywords when tokens.is_kind(at, 'for')
+      at
+  ]
+  first_for := fors.first() else return nil
+  {
+    close
+    element: { first: open + 1, last: first_for - 1 }
+    header: { first: first_for, last: close - 1 }
+    conditions: conditions_of(tokens, keywords, close - 1)
+    fors: fors.length
+  }
+
+# The comprehension at `open` with its `for` first written on one line, where its block is one value
+# on one line, which neither skips nor ends, that is short and that the line can hold, and no
+# comment is inside. A call without parentheses, which only a statement may be, keeps the block.
+prefix_edit := (tokens: Tokens, open: Int, element: Expression) ->
+  return nil if is_bare_call(tokens, element)
+  header_first := open + 1
+  return nil unless tokens.is_kind(header_first, 'for')
+  close := tokens.matching(open) else return nil
+
+  # A comment inside would have no place on the line.
+  first_line := tokens.code[open].line
+  close_line := tokens.code[close].line
+  return nil if tokens.comments.any((comment) -> comment.line in first_line..close_line)
+  header_last := tokens.line_end(header_first) else return nil
+  body: Span = { first: header_last + 1, last: close - 1 }
+  return nil if body.first > body.last or tokens.line_end(body.first) != body.last
+  jumps := [
+    for at in body.first..=body.last when tokens.code[at].kind in JUMPS
+      at
+  ]
+  return nil unless jumps.is_empty()
+  keywords := header_keywords(tokens, header_first, header_last)
+  return nil if is_long(tokens, body, conditions_of(tokens, keywords, header_last))
+  slice := (span: Span) -> tokens.slice(tokens.start(span.first), tokens.end(span.last))
+  header: Span = { first: header_first, last: header_last }
+  closing := tokens.spelling(close)
+  text := "#{tokens.spelling(open)}#{slice(body)} #{slice(header)}#{closing}"
+  at := tokens.start(open)
+  { line } := tokens.code[close]
+  after := tokens.end_of_line(line).column - tokens.end(close).column
+  return nil if at.column - 1 + text.count() + after > WIDTH
+  tokens.edit_at(SHORT_COMPREHENSIONS, at, [{ text, from: at, to: tokens.end(close) }])
+
+is_bare_call := (tokens: Tokens, element: Expression) ->
+  call := element as Call else return false
+  positions := [
+    call.args.map((arg) -> arg.position)...
+    call.named_args.map((n) -> n.name.position)...
+  ]
+  first := positions.first() else return false
+  at := tokens.at(first) else return false
+  not tokens.is_kind(at - 1, '(')
+
+# The `for`s and `when`s outside brackets from `first` up to `last`.
+header_keywords := (tokens: Tokens, first: Int, last: Int) ->
+  found: Int[]
+  var depth = 0
+  for at in first..=last
+    { kind } := tokens.code[at]
+    depth += 1 if kind in ['(', '[', '{']
+    depth -= 1 if kind in [')', ']', '}']
+    found.push at if depth == 0 and (kind == 'for' or tokens.is_word(at, 'when'))
+  found
+
+# The condition after each `when` among the keywords, up to the next of them or `last`.
+conditions_of := (tokens: Tokens, keywords: Int[], last: Int): Span[] ->
+  [
+    for keyword at i in keywords when tokens.is_word(keyword, 'when')
+      end := if i + 1 < keywords.length
+        keywords[i + 1] - 1
+      else
+        last
+      { first: keyword + 1, last: end }
+  ]
+
+is_long := (tokens: Tokens, element: Span, conditions: Span[]) ->
+  long := (span: Span) -> leaves(tokens.code, span) > COMPREHENSION_LEAVES
+  long(element) or conditions.any(long)
+
+JUMPS: TokenKind[] = ['continue', 'break', 'return', 'yield', 'await']

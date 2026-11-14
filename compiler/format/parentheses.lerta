@@ -5,7 +5,7 @@ import
   ArrayLiteral, Assignment, Await, BinaryOperation, Binding, Call, Case, Cast, Coalesce,
   Comprehension, Conditional, Declaration, Expression, FloatLiteral, FunctionLiteral, Identifier,
   If, Index, IntegerLiteral, IsTest, MapLiteral, Member, Range, Statement, This, UnaryOperation,
-  Unwrap
+  Unwrap, Yield
 from '../ast'
 import CLOSING_BRACKETS from '../lexer/tokens'
 import Place, places_of from './places'
@@ -163,8 +163,11 @@ is_parenthesized := (tokens: Tokens, open: Int, expression: Expression, operands
     not starts_with_own(tokens, open, expression)
 
 # Whether the `(` at `open` is the expression's own: that of a tuple, of a lazy comprehension, or of
-# the parameters of a function, which `->` or its return type follows.
-starts_with_own := (tokens: Tokens, open: Int, expression: Expression) ->
+# the parameters of a function, which `->` or its return type follows. The `yield` of an element,
+# which the parser makes, has the element's.
+starts_with_own := (tokens: Tokens, open: Int, expression: Expression): Bool ->
+  if expression is Yield and expression.of_element
+    return starts_with_own(tokens, open, expression.value)
   return starts_with_parenthesis(expression) unless expression is FunctionLiteral
   close := tokens.matching(open) else return true
   tokens.is_kind(close + 1, '->') or tokens.is_kind(close + 1, ':')

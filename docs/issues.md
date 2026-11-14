@@ -31,3 +31,15 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - Where: the rounds of rewrites in `compiler/format/format.lerta` compare the tree of the text written with that of the edits whose rules are in `TREE_CHANGES` alone, so an edit of one of those rules is checked only in that it parses.
 - How to see it: an argument block written after a callee that is a call, as `mk(a)(x, c then ... else ...)` written `mk(a)` with `x` and an `if` in a block below, parses as `mk(a, x, ...)`; the formatter wrote it so until the rewrite of long arguments learned to report such a callee.
 - How to fix it: check each tree-changing rewrite against the tree that it is meant to make, as by type-checking the result or by comparing the trees outside the spans that the rewrite changes.
+
+## An Iter comprehension with its for first is slower than one on a line
+
+- Where: the parser makes a comprehension in parentheses with its `for` first a call of a function that yields (`prefix_iter` in `compiler/parser/compound.lerta`), while one on a line is an Iter of its own functions; the style writes one with a long part with its `for` first (see [Comprehensions](reference/style.md#comprehensions)).
+- How to see it: such a comprehension takes about 1.8 times the instructions of the same one on a line; `bench/iter/main.lerta` keeps its one on a line with `# fmt: skip` for that.
+- How to fix it: make the Iter of a comprehension with its `for` first as that of one on a line where its block is one value, or make a function that yields as fast.
+
+## A comprehension with its for first keeps the spacing it is written with
+
+- Where: the walk of `compiler/format/walk_expressions.lerta` lays out a comprehension with its `for` first as it is written, and the rewrite that writes one so (see [Comprehensions](reference/style.md#comprehensions)) takes the text of its parts as they are.
+- How to see it: `lerta fmt --fix` writes `[x for x in xs  when x > n + 1]` with its `for` first as `for x in xs  when x > n + 1`, two spaces before `when` (see `tests/format/range_tests`).
+- How to fix it: lay out the header and the block of a comprehension with its `for` first as those of a `for` statement.

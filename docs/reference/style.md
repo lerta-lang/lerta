@@ -177,6 +177,12 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 
 - Construct a value from another of its type with a spread, `Point(p..., x: 1)`, not by copying its fields one by one, `Point(x: 1, y: p.y, z: p.z)`.
 
+### Comprehensions
+
+- A comprehension whose element and conditions have two leaves each at most (see [Postfix forms](#postfix-forms)) is written on one line, `[f(x) for x in xs when x]`, and one with a part of more leaves with its `for` first (see [comprehensions with the for first](control-flow.md#comprehensions-with-the-for-first)), its element in the block below. A comprehension in parentheses, which is an `Iter`, is written the same way.
+  - One with its `for` first whose block is that one value, which neither `continue`s nor `break`s, and that fits on one line goes on one line.
+  - Where the comprehension is the whole value of a statement, or an item alone on its line, `lerta fmt` writes it with its `for` first; elsewhere, as in an argument or before a method, name it first, by hand, as it reports it. So does one with more `for`s on one line.
+
 ### Expected types
 
 - Where an enum is expected, write its member alone (`kind == INTEGER`, not `kind == TokenKind.INTEGER`; see [enums](types.md#enums)), unless a name in scope takes the member's name.

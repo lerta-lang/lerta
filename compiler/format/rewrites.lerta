@@ -32,6 +32,7 @@ import Tokens from './tokens'
 import annotating_of, annotation_edits, annotation_statement_edits from './annotations'
 import typed_edits, typed_statement_edits, Typed from './typed'
 import union_test_edits from './union_tests'
+import comprehension_edit, lazy_prefix_edit from './comprehensions'
 import argument_values, long_argument_edits, whole_call from './argument_block'
 import long_two_way_edit, long_two_way_report, whole_value from './two_way'
 import returned_branches from './returned_branches'
@@ -99,6 +100,9 @@ class Rewriting
     # two_way.lerta).
     taken := Set<Expression>()
 
+    # The comprehensions that are the whole value of a statement that starts its line.
+    whole_comprehensions := Set<Expression>()
+
     # The last statements of functions, which give their results.
     ends_functions := Set<Statement>()
 
@@ -110,6 +114,10 @@ class Rewriting
   # What a statement tells the rewrites of others, before they are found.
   prepare_statement := (statement: Statement): void ->
     @taken.add value if value := whole_value(statement)
+    if comprehension := whole_value(statement) as Comprehension?
+      { line, column } := statement.position
+      starts_line := column == (@tokens.line_indentation(line) else 0) + 1
+      @whole_comprehensions.add comprehension if starts_line
     if call := whole_call(statement)
       for value in argument_values(call)
         @taken.add value if value is Conditional
@@ -137,8 +145,17 @@ class Rewriting
       when Conditional then [else_nil(tokens, value), long_two_way_report(tokens, value, @taken)]
       when FunctionLiteral then [without_parameters(tokens, value)]
       when UnaryOperation then value in @claimed then [] else [@negation_edit(value)]
-      when RecordLiteral then [shorthand(tokens, field.name, field.value) for field in value.fields]
-      when Comprehension then [counted_range(tokens, value.iterable)]
+      when RecordLiteral
+        [
+          for field in value.fields
+            shorthand(tokens, field.name, field.value)
+        ]
+      when Comprehension
+        [
+          counted_range(tokens, value.iterable)
+          comprehension_edit(tokens, value, @whole_comprehensions)
+        ]
+      when Call then [lazy_prefix_edit(tokens, value)]
       when Index then index_ranges(tokens, value)
       else []
 
@@ -175,11 +192,11 @@ class Rewriting
       when Call, Throw then long_arguments
       when If, Case then [returned_branches(tokens, statement, statement in @ends_functions)]
       when TypeDeclaration
-        [
-          unneeded_pass(tokens, statement)
-          [nil_field(tokens, statement, m) for m in statement.members]...
-          private_block_edits(tokens, statement)...
+        nil_fields := [
+          for member in statement.members
+            nil_field(tokens, statement, member)
         ]
+        [unneeded_pass(tokens, statement), nil_fields..., private_block_edits(tokens, statement)...]
       when For then [counted_range(tokens, statement.iterable)]
       else []
 
