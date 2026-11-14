@@ -157,7 +157,7 @@ A callee followed by an indented block gives the block as the call's arguments, 
 - It is written as a statement, or as a whole value where a block literal may be: after `=`, `key:` or a `return`, and as the operand of `throw` or `yield`.
 - A callee inside an operation, as in `1 + f` or `await f`, takes no block.
 - Its items are separated as a literal's are, with the positional arguments before the named ones (`name: value`, see [anonymous structs](types.md#anonymous-structs)), and `xs...` a spread. A key that is not a name is an error.
-- A positional item is an expression, as on the line, that may take a block of arguments of its own and the member lines below it. An `if` is not one, but `c then a else b` is.
+- A positional item is an expression, as on the line, that may take a block of arguments of its own and the member lines below it.
 - Named arguments are all on the line or all in the block.
 
 ## Declarations and assignment

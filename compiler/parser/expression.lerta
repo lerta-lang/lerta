@@ -9,7 +9,6 @@ import TokenKind from '../lexer/tokens'
 import at_block, parse_block_literal, starts_member from './block_literal'
 import integer_literal, parse_primary from './primary'
 import parse_element, spread_of from './compound'
-import parse_if from './statement'
 import TokenStream from './token_stream'
 import at_type_arguments, parse_cast_type, parse_tested_type, parse_type_arguments from './type'
 
@@ -41,20 +40,9 @@ export struct LoopHeader
 
 export parse_expression := (tokens: TokenStream) -> tokens.nested(-> parse_conditional(tokens))
 
-# The value after `=` or `key:`, which may be a literal in an indented block on the next lines.
-parse_if_value := (tokens: TokenStream) ->
-  if_expression := parse_if(tokens)
-  if if_expression.else_body.is_empty()
-    tokens.fail if_expression.position, 'an if without an else gives no value'
-  if_expression
-
-# A value that may take lines: a block literal, an `if` (see if_value) or an expression.
+# A value that may take lines: a block literal or an expression.
 export parse_value := (tokens: TokenStream): Expression ->
-  value: Expression =
-    case
-      when at_block(tokens) then parse_block_literal(tokens)
-      when tokens.peek().kind == 'if' then parse_if_value(tokens)
-      else parse_call_value(tokens)
+  value := at_block(tokens) then parse_block_literal(tokens) else parse_call_value(tokens)
   continue_with_members(tokens, value)
 
 # An expression, which is a call when it is a callee followed by its arguments in an indented block;

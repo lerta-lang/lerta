@@ -59,10 +59,9 @@ until n >= 10
 
 ### if as a value
 
-- An `if` with an `else` gives a value, that of the branch taken, as a [`case`](#case-without-a-subject) does: `label := if v := m[key]`, followed by the branches on the lines below.
-- It is written where a block literal may be (see [bracketless blocks](syntax.md#bracketless-blocks)), on the same line or the next, and as the last statement of a block.
-- If any branch gives no value, as a block ending with an assignment, the `if` gives none either and is a statement.
-- An `if` without an `else` never gives a value.
+- An `if` is an expression, as a [`case`](#case-without-a-subject) is, wherever an expression may start, with its branches on the lines below: `label := if v := m[key]`, an argument in a block, an operand.
+- Its value is that of the branch taken. If any branch gives no value, as a block ending with an assignment, its type is `void`, as no union holds `void`; so is that of an `if` without an `else`, whose missing branch gives none. A `void` value is an error where a value is used.
+- On the line of a statement, after its value, `if` starts a [postfix form](#postfix-forms), not an expression: `print x if done`, `return if x == nil`.
 - Why there is no `then` statement: see [then and else](#then-and-else).
 
 ### break, continue and return

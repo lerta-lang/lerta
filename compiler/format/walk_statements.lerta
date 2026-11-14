@@ -112,16 +112,17 @@ extend Walker
       when Call then @call_statement(statement, before)
       else @expression(statement, before)
 
-  # An `if`, which may be the whole body of an `else`, written `else if` or in the block of `else`,
-  # whose postfix form would read as the else's.
-  if_statement := (node: If, before: CodeGap, in_else = false): void ->
+  # An `if`, which keeps its block form where `kept` says: as the whole body of an `else`, written
+  # `else if` or in the block of `else`, whose postfix form would read as the else's, and as an
+  # expression, which no postfix form is.
+  if_statement := (node: If, before: CodeGap, kept = false): void ->
     return @nil_safe(node, before) if node.nil_safe
     if is_written_postfix(node)
       @postfix_form postfix_body(node), before, -> @postfix_head(node.condition, ['if', 'unless'])
       return
     keyword := @code[@at].kind
     unhandled() unless keyword in ['if', 'unless']
-    alone := in_else or @at in @alone_in_else
+    alone := kept or @at in @alone_in_else
     head := @take(keyword, before)
     @condition node.condition, keyword
     @nested_block node.then_body, head
