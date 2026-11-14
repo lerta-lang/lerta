@@ -25,8 +25,8 @@ is_chained := (conditional: Conditional) ->
 export long_two_way_report := (tokens: Tokens, conditional: Conditional, taken: Set<Expression>) ->
   taken.add link for link in chain_of(conditional)[1..]
   return nil if conditional in taken
-  parts := parts_of(tokens, conditional) ? return nil
-  rule := rule_of(tokens, parts) ? return nil
+  parts := parts_of(tokens, conditional) else return nil
+  rule := rule_of(tokens, parts) else return nil
   tokens.report(rule, tokens.start(parts.first))
 
 # The rule that the value breaks, if it breaks one.
@@ -48,14 +48,14 @@ export whole_value := (statement: Statement): Expression? ->
 # The whole value of the statement written as an `if` or a `case` in its place, where the statement
 # is on one line.
 export long_two_way_edit := (tokens: Tokens, statement: Statement): Edit? ->
-  conditional := whole_value(statement) as Conditional ? return nil
-  parts := parts_of(tokens, conditional) ? return nil
-  rule := rule_of(tokens, parts) ? return nil
+  conditional := whole_value(statement) as Conditional else return nil
+  parts := parts_of(tokens, conditional) else return nil
+  rule := rule_of(tokens, parts) else return nil
   at := tokens.start(parts.first)
 
   # Parentheses around the whole value, which the rewrite of Parentheses takes out, go first.
   return tokens.report(rule, at) if is_wrapped(tokens, parts.first)
-  last := tokens.line_end(parts.first) ? return tokens.report(rule, at)
+  last := tokens.line_end(parts.first) else return tokens.report(rule, at)
 
   # Only the brackets that close around a body on the line of `->` may follow the value.
   closes := (at: Int) -> tokens.code[at].kind in [')', ']', '}']
@@ -65,7 +65,7 @@ export long_two_way_edit := (tokens: Tokens, statement: Statement): Edit? ->
   # its rules have it. After `return`, or for a statement on the line of `->` or of an arm's `then`
   # or `else`, where no `if` can start, it goes on the lines below, as a body that its line cannot
   # hold does.
-  line_columns := tokens.line_indentation(at.line) ? 0
+  line_columns := tokens.line_indentation(at.line) else 0
   var from = at
   var lead = ''
   var columns = line_columns
@@ -118,8 +118,8 @@ struct Parts
 # nil where they are not one for each link, as where a value spans lines or is parenthesized.
 parts_of := (tokens: Tokens, conditional: Conditional): Parts? ->
   links := chain_of(conditional)
-  position := tokens.at(conditional.position) ? return nil
-  last := tokens.line_end(position) ? return nil
+  position := tokens.at(conditional.position) else return nil
+  last := tokens.line_end(position) else return nil
 
   # The value in parentheses has the position of the outer `(`, inside which its words are.
   var first = position
@@ -171,7 +171,10 @@ export is_long_two_way := (code: Token[], first: Int, last: Int) ->
     start = end + 1
   false
 
-# The `then`s and `else`s outside brackets from `first` up to `last`.
+# The `then`s and `else`s outside brackets from `first` up to `last`, or up to where the value ends
+# before it (see find_value_end). Only an `else` right after a `then` is the value's own: as the
+# value of a `then` holds a fallback only in parentheses, any other is a fallback's, in a condition
+# or in the last value.
 words_of := (code: Token[], first: Int, last: Int) ->
   found: Int[]
   var depth = 0
@@ -179,8 +182,10 @@ words_of := (code: Token[], first: Int, last: Int) ->
     { kind } := code[at]
     depth += 1 if kind in ['(', '[', '{']
     depth -= 1 if kind in [')', ']', '}']
-    return found if depth < 0
-    found.push at if depth == 0 and kind in ['then', 'else']
+    return found if depth < 0 or (depth == 0 and kind in VALUE_ENDS)
+    continue if depth != 0 or kind not in ['then', 'else']
+    after_then := not found.is_empty() and code[found.last()!].kind == 'then'
+    found.push at if kind == 'then' or after_then
   found
 
 # The last token of the value that starts at `start`, before a bracket that closes around it, a

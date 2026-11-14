@@ -270,7 +270,7 @@ optimized_runtime_check := ->
       )
     is_call := (line: String) ->
       words := line.split_whitespace()
-      opcode_index := words.find_index(is_call_opcode) ? return false
+      opcode_index := words.find_index(is_call_opcode) else return false
       words[(opcode_index + 1)..].any(names_retain)
 
     if lines.any(is_call)
@@ -333,7 +333,7 @@ dump_joined_literals_check := ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', JOINED_LITERALS])
     ir := dumped.result.stdout_text()
     reasons := expect_status(0, dumped.result.status)
-    body := function_body(ir.split("\n"), 'joined') ? return [reasons..., 'no function joined']
+    body := function_body(ir.split("\n"), 'joined') else return [reasons..., 'no function joined']
     reasons.push 'a call in joined' if body.any((line) -> 'call ' in line)
     joined_text :=
       'a text too long for a line of its own, which is split over lines, with an escape\09' +
@@ -349,7 +349,7 @@ dump_listed_check := ->
   Check(name: 'lerta dump-llvm makes no array for a test of a list of literals', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', LISTED])
     reasons := expect_status(0, dumped.result.status)
-    body := function_body(dumped.result.stdout_text().split("\n"), 'listed') ? return [
+    body := function_body(dumped.result.stdout_text().split("\n"), 'listed') else return [
       reasons...
       'no function listed'
     ]
@@ -414,8 +414,8 @@ dump_filled_length_check := ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
     reasons := expect_status(0, dumped.result.status)
     lines := dumped.result.stdout_text().split("\n")
-    body := function_body(lines, 'marked') ? return [reasons..., 'no function marked']
-    at := (text: String) -> body.find_index((line) -> text in line) ? -1
+    body := function_body(lines, 'marked') else return [reasons..., 'no function marked']
+    at := (text: String) -> body.find_index((line) -> text in line) else -1
     filled := at('@lerta_array_filled(')
     checked := at('load ptr, ptr @lerta_exception')
     assumed := at('call void @llvm.assume(')
@@ -481,7 +481,7 @@ dump_float_ranges_check := ->
         reasons.push "#{name} #{expected then 'does not check' else 'checks'} for NaN"
 
     # An operation of no tree checks alone: the division of calls checks, the subtraction does not.
-    spread := function_body(lines, 'spread') ? return [reasons..., 'no function spread']
+    spread := function_body(lines, 'spread') else return [reasons..., 'no function spread']
     count := spread.filter((line) -> ' = fcmp uno ' in line).count()
     reasons.push "spread checks for NaN #{count} times, not once" if count != 1
     reasons
@@ -530,7 +530,7 @@ dump_fixed_captures_check := ->
     unfixed := [i for i in captures when '!invariant.group' not in lines[i + 1]]
     reasons.push 'no capture read' if captures.length < 2
     reasons.append ["not read as fixed: #{lines[i + 1].trim()}" for i in unfixed]
-    body := function_body(lines, 'rounds') ? return [reasons..., 'no function rounds']
+    body := function_body(lines, 'rounds') else return [reasons..., 'no function rounds']
     stack := [line.trim().split(' = ')[0] for line in body when ' = alloca {' in line]
     is_laundered := (place: String) ->
       body.any((line) -> "@llvm.launder.invariant.group.p0(ptr #{place})" in line)
@@ -549,7 +549,7 @@ dump_item_tag_check := ->
   Check(name: 'lerta dump-llvm tags the loads and stores of items', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', ITEM_WRITES])
     lines := dumped.result.stdout_text().split("\n")
-    tagged := alias_tag_of(lines, 'lerta item') ? return ['the tag of items is not defined once']
+    tagged := alias_tag_of(lines, 'lerta item') else return ['the tag of items is not defined once']
     root := await clang_tbaa_root(dumped.cwd)
     has_root := lines.any((line) -> line.ends_with(" = #{root}"))
     return ["no node of clang's root of type-based alias analysis, #{root}"] unless has_root
@@ -584,11 +584,11 @@ dump_field_tag_check := ->
   Check(name: 'lerta dump-llvm tags fields, top-level values and the exception', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', FIELD_WRITES])
     lines := dumped.result.stdout_text().split("\n")
-    body := function_body(lines, 'move') ? return ['no function move']
+    body := function_body(lines, 'move') else return ['no function move']
     undefined := (name: String) -> ["the tag of #{name} is not defined once"]
-    float := alias_tag_of(lines, 'lerta float') ? return undefined('lerta float')
-    top_level := alias_tag_of(lines, 'lerta top level') ? return undefined('lerta top level')
-    pointer := alias_tag_of(lines, 'any pointer') ? return undefined('any pointer')
+    float := alias_tag_of(lines, 'lerta float') else return undefined('lerta float')
+    top_level := alias_tag_of(lines, 'lerta top level') else return undefined('lerta top level')
+    pointer := alias_tag_of(lines, 'any pointer') else return undefined('any pointer')
     value := (name: String) -> "ptr @\"lerta.value../field_writes.lerta.#{name}"
     accesses :=
       { access: 'load double, ptr %', tagged: float }
@@ -627,7 +627,7 @@ clang_tbaa_root := (cwd: String) ->
   args := ['-O1', '-S', '-emit-llvm', '-o', '-', 'load.c']
   compiled := await run_command('clang', args, cwd)
   lines := compiled.stdout_text().split("\n")
-  root := lines.find((line) -> line.ends_with('TBAA"}')) ? return "none in clang's IR"
+  root := lines.find((line) -> line.ends_with('TBAA"}')) else return "none in clang's IR"
   root.split(' = ')[1]
 
 # The alias tag's nodes and those of the debug information share the module's numbers.
@@ -741,7 +741,7 @@ has_debug_info := (executable: String) ->
 source_line_number := (text: String) -> text.is_digits() then text.parse_int()
 
 tool_on_path := (name: String) ->
-  path := env('PATH') ? return nil
+  path := env('PATH') else return nil
   separator := host_platform == 'windows' then ';' else ':'
   for directory in path.split(separator)
     candidate := "#{directory}/#{name}#{host_executable_suffix}"
@@ -756,8 +756,8 @@ run_dwarfdump := (command: String, path: String) ->
 
 line_table_rows := (path: String) ->
   for tool in ['dwarfdump', 'llvm-dwarfdump']
-    command := tool_on_path(tool) ? continue
-    result := await run_dwarfdump(command, path) ? continue
+    command := tool_on_path(tool) else continue
+    result := await run_dwarfdump(command, path) else continue
     continue if result.status != 0
     rows: Int[]
     for line in result.stdout_text().lines()

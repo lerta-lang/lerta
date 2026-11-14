@@ -12,7 +12,7 @@ import Token from '../lexer/tokens'
 # A declaration of those that a destructuring stands for, whose position need not be where its line
 # starts: the one of the value, whose name cannot be written, or one of a name from it.
 export is_destructuring_part := (statement: Statement) ->
-  { name, value } := statement as Declaration ? return false
+  { name, value } := statement as Declaration else return false
   from_holder := value is Member and is_holder(value.object)
   is_holder(name) or value is TupleItem or from_holder
 
@@ -31,7 +31,7 @@ export is_tuple_holder := (statement: Statement) ->
 
 # Whether the declaration is `name: T[]`, whose value, `[]`, is written as its type, where it is.
 export is_written_as_type := (declaration: Declaration) ->
-  type := declaration.type ? return false
+  type := declaration.type else return false
   declaration.value.position.compare(type.position) == EQUAL
 
 # The name of what holds a value that a destructuring takes apart, which cannot be written.
@@ -166,7 +166,7 @@ ends_open := (node: Statement): Bool ->
   case node
     when Assignment then ends_open(node.value)
     when Return
-      value := node.value ? return false
+      value := node.value else return false
       ends_open(value)
     when Throw then ends_open(node.message)
     when Yield then ends_open(node.value)
@@ -176,11 +176,11 @@ ends_open := (node: Statement): Bool ->
     when Coalesce then ends_open(node.fallback)
     when Conditional then ends_open(node.without_else then node.then_value else node.else_value)
     when Range
-      end := node.end ? return false
+      end := node.end else return false
       ends_open(end)
     when Call
       values := node.args + [named.value for named in node.named_args]
-      last := values.last() ? return false
+      last := values.last() else return false
       ends_open(last)
     when FunctionLiteral, Case, Try then true
     when If then not node.nil_safe
@@ -188,7 +188,7 @@ ends_open := (node: Statement): Bool ->
 
 # A call whose callee could take its arguments without parentheses, or in a block.
 export is_block_call := (node: Expression) ->
-  call := node as Call ? return false
+  call := node as Call else return false
   has_arguments := not call.args.is_empty() or not call.named_args.is_empty()
   has_arguments and call.type_args.is_empty() and is_command_callee(call.callee)
 
@@ -210,7 +210,7 @@ is_shorthand := (field: NamedValue) ->
 # Whether the literal is written in a block without brackets, whose position is that of its first
 # item (see parse_block_literal), where one in brackets is that of its opening bracket.
 export is_written_in_block := (literal: Expression) ->
-  first := first_item_position(literal) ? return false
+  first := first_item_position(literal) else return false
   first.compare(literal.position) == EQUAL
 
 first_item_position := (literal: Expression) ->
@@ -218,7 +218,7 @@ first_item_position := (literal: Expression) ->
     when ArrayLiteral then literal.elements.first()?.position
     when MapLiteral then literal.entries.first()?.key.position
     when RecordLiteral
-      spread := literal.spread ? return literal.fields.first()?.name.position
+      spread := literal.spread else return literal.fields.first()?.name.position
       spread.position
     else nil
 

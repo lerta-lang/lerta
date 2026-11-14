@@ -38,7 +38,7 @@ require_names := (failure: String, paths: String...) ->
 export read_file := (path: String) ->
   failure := 'cannot read file: '
   require_names failure, path
-  await lerta_read_file(path) ? throw IOError("#{failure}#{path}")
+  await lerta_read_file(path) else throw IOError("#{failure}#{path}")
 
 # The contents of a file as text, or nil if they are not valid UTF-8.
 export read_text := (path: String) -> (await read_file(path)).text()
@@ -97,7 +97,7 @@ class FileWriter
   # The file is closed even if the rest cannot be written, or the end is cancelled, after the write
   # under way.
   end := ->
-    @ending = @ending ? @close_out()
+    @ending = @ending else @close_out()
     await @ending!
 
   private close_out := ->
@@ -145,15 +145,15 @@ kind_at := (path: String) -> stat(path)?.kind
 export real_path := (path: String) ->
   failure := "cannot resolve path: #{path}"
   require_names 'cannot resolve path: ', path
-  path_text(lerta_resolve_path(path) ? throw IOError(failure), failure)
+  path_text(lerta_resolve_path(path) else throw IOError(failure), failure)
 
 export make_temp_dir := ->
   failure := 'cannot make a temporary directory'
-  path_text(lerta_make_temp_dir() ? throw IOError(failure), failure)
+  path_text(lerta_make_temp_dir() else throw IOError(failure), failure)
 
 # A path that the system gives, which a String holds only if it is UTF-8.
 path_text := (bytes: Binary, failure: String) ->
-  bytes.text() ? throw IOError("#{failure}, as its path is not valid UTF-8")
+  bytes.text() else throw IOError("#{failure}, as its path is not valid UTF-8")
 
 # A path whose last part is `.` or `..` is refused before anything is removed, as the directory it
 # names cannot be removed by it, though what is in it could be.
@@ -271,7 +271,7 @@ struct StandardOutput
 
 # Set to a value that is not empty, as NO_COLOR and FORCE_COLOR are read.
 is_set := (name: String) ->
-  value := lerta_env(name) ? return false
+  value := lerta_env(name) else return false
   not value.is_empty()
 
 export stdout := StandardOutput(1)
@@ -285,12 +285,12 @@ export class Buffer
   var binary = b''
   private var ended = false
 
-  init := -> throw ValueError("a negative limit of a buffer: #{@limit!}") if @limit ? 0 < 0
+  init := -> throw ValueError("a negative limit of a buffer: #{@limit!}") if @limit else 0 < 0
 
   write := (data: String | Binary): Promise ->
     throw IOError('cannot write to a buffer that has ended') if @ended
     bytes := bytes_of(data)
-    if bytes.length > (@limit ? INT_MAX) - @binary.length
+    if bytes.length > (@limit else INT_MAX) - @binary.length
       throw IOError("more than #{@limit!} bytes written to a buffer")
     @binary += bytes
 
@@ -367,7 +367,7 @@ class PipeWriter
 
   # On a system pipe, an end that a program has taken is ended as far as this program goes.
   private
-    writes_here := -> @system?.holds(WRITING) ? true
+    writes_here := -> @system?.holds(WRITING) else true
 
     # The chunks left are not read, and their writes fail.
     unread := ->
@@ -468,7 +468,7 @@ class SystemPipe
 
   write := (bytes: Binary) ->
     throw ended_pipe() if @ending
-    handle := @handle(WRITING) ? throw ended_pipe()
+    handle := @handle(WRITING) else throw ended_pipe()
     @writes += 1
     try
       await write_pipe(handle, bytes)
@@ -478,7 +478,7 @@ class SystemPipe
 
   read := ->
     await @turns.wait() while @reading
-    handle := @handle(READING) ? return nil
+    handle := @handle(READING) else return nil
     @reading = true
     try
       await read_pipe(handle)
@@ -552,9 +552,9 @@ export list_dir := (path: String) ->
   failure := 'cannot list directory: '
   require_names failure, path
   throw IOError(failure) if path.is_empty()
-  listed := lerta_dir_names(path) ? throw IOError("#{failure}#{path}")
+  listed := lerta_dir_names(path) else throw IOError("#{failure}#{path}")
   names := [
-    name.text() ? throw ValueError("a name is not valid UTF-8 in the directory: #{path}")
+    name.text() else throw ValueError("a name is not valid UTF-8 in the directory: #{path}")
     for name in listed
   ]
   names.sorted()
@@ -596,7 +596,7 @@ export class Reader
   read_exactly := (count: Int) ->
     throw ValueError("read a negative count of bytes: #{count}") if count < 0
     await @exclusive(->
-      bytes := await @part(count) ? return nil
+      bytes := await @part(count) else return nil
       if bytes.length < count
         # Left for the next read, as a read that throws leaves what it has taken.
         @taken = bytes
@@ -622,7 +622,7 @@ export class Reader
     # Whether a chunk is there to read, read in place of the one read up if needed.
     fill := ->
       return true if @start < @chunk.length
-      next := await @read_chunk() ? return false
+      next := await @read_chunk() else return false
       @chunk = next
       @start = 0
       true
@@ -641,7 +641,7 @@ export class Reader
 
     line := (max: Int) ->
       while await @fill()
-        end := @chunk.index_of(b"\n", @start) ? @chunk.length
+        end := @chunk.index_of(b"\n", @start) else @chunk.length
         @taken += @chunk[@start..end]
         @start = end
         throw LineTooLongError("a line is longer than #{max} bytes") if @taken.length > max
@@ -675,7 +675,7 @@ export class Reader
       bytes
 
     # All that is left: a part of INT_MAX bytes, as many as a read can ask for, reads to the end.
-    rest := -> await @part(INT_MAX) ? b''
+    rest := -> await @part(INT_MAX) else b''
 
 # A line that ended with "\n", without a "\r" before it.
 ended_line_text := (bytes: Binary) ->
@@ -687,6 +687,6 @@ ended_line_text := (bytes: Binary) ->
       bytes
   utf8_line(line)
 
-utf8_line := (bytes: Binary) -> bytes.text() ? throw ValueError('a line is not valid UTF-8')
+utf8_line := (bytes: Binary) -> bytes.text() else throw ValueError('a line is not valid UTF-8')
 
 export stdin := Reader(-> lerta_stdin_read())

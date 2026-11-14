@@ -64,12 +64,12 @@ export parameter_types := (
     if type_name := param.type
       type := resolve(program, resolver, type_name)
       inferable := type == unwritten
-      inferable_before := program.inferable_parameters[param.name] ? true
+      inferable_before := program.inferable_parameters[param.name] else true
       program.inferable_parameters[param.name] = inferable and inferable_before
       types.push param.variadic then ArrayType(type) else type
       continue
     message := "the type of #{described_parameter(param.name)} must be written"
-    types.push unwritten ? fail(program, param.name.position, message)
+    types.push unwritten else fail(program, param.name.position, message)
   last_is_struct := ends_with_struct(resolver, literal, types)
   reject_misplaced_variadic program, literal, last_is_struct
   reject_struct_default program, literal, last_is_struct
@@ -82,7 +82,7 @@ export is_struct_type := (type: Type?) -> type is ObjectType and type.is_struct
 # Whether the last parameter is of a struct type as declared, not through a type parameter that an
 # instance binds to a struct, so that every instance of a generic function agrees.
 ends_with_struct := (resolver: Resolver, literal: FunctionLiteral, types: Type[]) ->
-  written := literal.params.last()?.type ? return false
+  written := literal.params.last()?.type else return false
   is_type_parameter := written is NamedType and written.name in resolver.type_parameters
   not is_type_parameter and is_struct_type(types.last())
 
@@ -93,7 +93,7 @@ reject_misplaced_variadic := (
   program: ProgramWide, literal: FunctionLiteral, last_is_struct: Bool
 ) ->
   params := literal.params
-  found := params.find_index(Parameter.variadic) ? return
+  found := params.find_index(Parameter.variadic) else return
   name := params[found].name
   last := params.length - 1
   is_placed := found == last or (found == last - 1 and last_is_struct)
@@ -107,7 +107,7 @@ reject_misplaced_variadic := (
 # neither do the others so far: a call would have to construct it at its place after the defaults.
 reject_struct_default := (program: ProgramWide, literal: FunctionLiteral, last_is_struct: Bool) ->
   return unless last_is_struct
-  param := literal.params.find((each) -> each.default != nil) ? return
+  param := literal.params.find((each) -> each.default != nil) else return
   value := param.default!
   if param == literal.params.last()
     reason := 'a call that leaves it out constructs it'
@@ -126,13 +126,13 @@ literal_type := (value: Expression?): Type? ->
 
 # The number of parameters that a call must give: those before the first with a default.
 export required_params := (literal: FunctionLiteral) ->
-  literal.params.find_index((param) -> param.default != nil) ? literal.params.length
+  literal.params.find_index((param) -> param.default != nil) else literal.params.length
 
 # The function's type, if its return type is written; otherwise only its body tells.
 export annotated_type := (
   program: ProgramWide, resolver: Resolver, literal: FunctionLiteral
 ): Type? ->
-  return_type := literal.return_type ? return nil
+  return_type := literal.return_type else return nil
   params := parameter_types(program, resolver, literal)
   FunctionType(params, result: resolve_result(program, resolver, return_type))
 
@@ -141,12 +141,12 @@ export reject_generic := (program: ProgramWide, literal: FunctionLiteral) ->
   fail program, literal.position, 'only a top-level function or a method can be generic so far'
 
 export reject_variadic := (program: ProgramWide, literal: FunctionLiteral) ->
-  param := literal.params.find(Parameter.variadic) ? return
+  param := literal.params.find(Parameter.variadic) else return
   message := 'only a top-level function or a method can be variadic so far'
   fail program, param.name.position, message
 
 export reject_defaults := (program: ProgramWide, literal: FunctionLiteral) ->
-  param := literal.params.find((each) -> each.default != nil) ? return
+  param := literal.params.find((each) -> each.default != nil) else return
   message := 'only a top-level function or a method can have a default so far'
   fail program, param.default!.position, message
 
@@ -186,13 +186,13 @@ export has_function := (shared: Shared, name: String) ->
   name in shared.functions.entries or name in shared.functions.generics
 
 export generic_function := (shared: Shared, name: String) ->
-  index := shared.functions.generics[name] ? return nil
+  index := shared.functions.generics[name] else return nil
   GenericRef(index, module_index: shared.index)
 
 # The type of the function of the module, checking its body first if the return type must be
 # inferred.
 export function_type_of := (program: ProgramWide, module_index: Int, name: String, at: Position) ->
-  entry := program.shared[module_index].functions.entries[name] ? return nil
+  entry := program.shared[module_index].functions.entries[name] else return nil
   if caller := program.functions_checked.last()
     program.calls[caller, default: []].push(entry.literal)
   return type if type := entry.type
@@ -200,7 +200,7 @@ export function_type_of := (program: ProgramWide, module_index: Int, name: Strin
   if entry.state == CHECKING
     fail program, at, "'#{name}' is recursive, so its return type must be written"
   check_entry program, module_index, entry
-  entry.type ? abort_part()
+  entry.type else abort_part()
 
 export check_all_functions := (shared: Shared) ->
   for entry in shared.functions.entries.values()

@@ -25,7 +25,7 @@ export render_markdown := (source: String, rewrite: (String) -> String) ->
   renderer := Renderer(rewrite)
   lines := [Line(text, number: index + 1) for text at index in source.lines()]
   html := renderer.blocks(lines, false)
-  title := renderer.title ? throw MarkdownError('no heading of level 1')
+  title := renderer.title else throw MarkdownError('no heading of level 1')
   Page(title, html, links: renderer.links, warnings: renderer.warnings)
 
 # A line of the source, the indentation of the blocks it is in taken off.
@@ -96,7 +96,7 @@ class Renderer
     body :=
       case language
         when '' then escape_html(code)
-        when 'lerta' then highlight(code) ? @unlexed(code, opening)
+        when 'lerta' then highlight(code) else @unlexed(code, opening)
         else fail(opening, "a code block of an unknown language: #{language}")
     class_attribute := language.is_empty() then '' else " class=\"language-#{language}\""
     "<pre><code#{class_attribute}>#{body}</code></pre>\n"
@@ -126,7 +126,7 @@ class Renderer
         base += '-'
       else if c.is_alphanumeric() or c in ['-', '_']
         base += c
-    var count = @slugs[base] ? 0
+    var count = @slugs[base] else 0
     var anchor = base
     while true
       anchor = count == 0 then base else "#{base}-#{count}"
@@ -159,7 +159,7 @@ class Renderer
     var loose = false
     var next = at
     while next < lines.length
-      marker := list_marker(lines[next].text) ? break
+      marker := list_marker(lines[next].text) else break
       break if marker.ordered != first.ordered
       end := item_end(lines, next, marker.width)
       item := lines[next..end]
@@ -226,7 +226,7 @@ class Renderer
   inline_part := (bytes: Binary, at: Int): (String, Int)? ->
     case bytes[at]
       when b'\'
-        escaped := bytes.get(at + 1) ? return nil
+        escaped := bytes.get(at + 1) else return nil
         throw InlineError('a hard line break') if escaped == b"\n"
         return nil unless is_ascii_punctuation(escaped)
         (escape_html(escaped.to_char().to_string()), at + 2)
@@ -241,7 +241,7 @@ class Renderer
       when b'*' then @emphasis(bytes, at)
       when b'[' then @link(bytes, at)
       else
-        unsupported := unsupported_inline(bytes, at) ? return nil
+        unsupported := unsupported_inline(bytes, at) else return nil
         throw InlineError(unsupported)
 
   emphasis := (bytes: Binary, at: Int): (String, Int)? ->
@@ -253,15 +253,15 @@ class Renderer
     tag := delimiter.length == 2 then 'strong' else 'em'
     start := at + delimiter.length
     return nil if start >= bytes.length or bytes[start] == b' '
-    end := closing_emphasis(bytes, start, delimiter) ? return nil
+    end := closing_emphasis(bytes, start, delimiter) else return nil
     ("<#{tag}>#{@inline(bytes.text(start, end)!)}</#{tag}>", end + delimiter.length)
 
   # A link, `[text](target)`.
   link := (bytes: Binary, at: Int): (String, Int)? ->
-    text_end := closing_bracket(bytes, at + 1) ? return nil
+    text_end := closing_bracket(bytes, at + 1) else return nil
     throw InlineError('a reference link') if bytes.occurs_at(text_end + 1, b'[')
     return nil unless bytes.occurs_at(text_end + 1, b'(')
-    target_end := bytes.index_of(b')', text_end + 2) ? return nil
+    target_end := bytes.index_of(b')', text_end + 2) else return nil
     target := bytes.text(text_end + 2, target_end)!
     throw InlineError('a link target with parentheses') if '(' in target
     throw InlineError('a link title') if ' ' in target
@@ -338,14 +338,14 @@ unsupported_block := (text: String) ->
 # the underline of a heading.
 is_rule := (text: String) ->
   bytes := text.trim().binary
-  first := bytes.first() ? return false
+  first := bytes.first() else return false
   first in [b'-', b'*', b'_', b'='] and
     bytes.length >= 3 and
     bytes.iter().all((byte) -> byte == first)
 
 # Why the text at `at` is Markdown that is not rendered, or nil.
 unsupported_inline := (bytes: Binary, at: Int) ->
-  next := bytes.get(at + 1) ? return nil
+  next := bytes.get(at + 1) else return nil
   case bytes[at]
     when b'!' then next == b'[' then 'an image'
     when b'<'
@@ -384,7 +384,7 @@ is_tag := (bytes: Binary, start: Int) ->
   return false unless bytes.get(name_start)?.is_letter() == true
   var end = name_start
   end += 1 while end < bytes.length and (is_word_byte(bytes[end]) or bytes[end] == b'-')
-  after := bytes.get(end) ? return false
+  after := bytes.get(end) else return false
 
   # `:` makes it an autolink, as `<https://lerta.org>`, which is not rendered either.
   after in [b' ', b'>', b'/', b':', b"\n"]
@@ -405,7 +405,7 @@ continues_paragraph := (text: String) ->
 # The cells of a table row, each trimmed, with `\|` read as a `|` of the cell, as on GitHub, also
 # in a code span.
 table_cells := (line: Line) ->
-  inner := line.text.trim().without_prefix('|')!.without_suffix('|') ? fail(
+  inner := line.text.trim().without_prefix('|')!.without_suffix('|') else fail(
     line
     'a table row needs a | at its end'
   )
@@ -446,7 +446,7 @@ code_span := (bytes: Binary, at: Int) ->
 
 # The offset after the code span at `at`, or after its backticks if nothing closes it.
 past_code := (bytes: Binary, at: Int) ->
-  (_, end) := code_span(bytes, at) ? return at + run_length(bytes, at, b'`')
+  (_, end) := code_span(bytes, at) else return at + run_length(bytes, at, b'`')
   end
 
 run_length := (bytes: Binary, at: Int, byte: Byte) ->

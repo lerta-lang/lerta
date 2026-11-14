@@ -112,7 +112,7 @@ class Server
       while true
         body :=
           try
-            await read_message() ? return
+            await read_message() else return
           catch error: ValueError | IOError
             print_error error.message
             exit 1
@@ -127,7 +127,7 @@ class Server
         catch error: JsonError
           return await respond_error(nil, PARSE_ERROR, error.message)
       try
-        await @dispatch(header.method ? '', header.id, body)
+        await @dispatch(header.method else '', header.id, body)
       catch error: JsonError
         if id := header.id
           await respond_error(id, INVALID_PARAMS, error.message)
@@ -174,7 +174,7 @@ class Server
             await respond_error(given, METHOD_NOT_FOUND, "no method #{method}")
 
     initialize := (request: Request<InitializeParams>) ->
-      encodings := request.params.capabilities.general?.position_encodings ? []
+      encodings := request.params.capabilities.general?.position_encodings else []
       @encoding = UTF32 if 'utf-32' in encodings
       encoding := @encoding == UTF32 then 'utf-32' else 'utf-16'
       capabilities := ServerCapabilities
@@ -191,7 +191,7 @@ class Server
     # program, whose positions its new text no longer has; the open documents that import it are
     # checked again, from its new text.
     set_text := (uri: String, text: String) ->
-      path := path_of_uri(uri) ? return
+      path := path_of_uri(uri) else return
       open_texts[text_key(path)] = text
       @uris[text_key(path)] = uri
       unless is_file(path)
@@ -202,9 +202,9 @@ class Server
 
     # Its importers' checks, which took its text, are made again, from the file.
     close := (uri: String) ->
-      path := path_of_uri(uri) ? return
+      path := path_of_uri(uri) else return
       open_texts.remove text_key(path)
-      files := @found[path]?.keys().to_array() ? []
+      files := @found[path]?.keys().to_array() else []
       @found.remove path
       @programs.remove path
       await @check(doc) for doc in @importers(path)
@@ -214,9 +214,9 @@ class Server
     # The types of the name at the position, as a block of Lerta, from the program of the document's
     # own check if it has one, or of another open document's that holds it.
     hover := (params: PositionParams) ->
-      path := path_of_uri(params.text_document.uri) ? return nil
-      program := @program_of(path) ? return nil
-      module_index := module_at(program, path) ? return nil
+      path := path_of_uri(params.text_document.uri) else return nil
+      program := @program_of(path) else return nil
+      module_index := module_at(program, path) else return nil
       at := await source_position(path, params.position, @encoding)
       lines := hover_lines(program, module_index, await read_source(path), at)
       return nil if lines.is_empty()
@@ -224,11 +224,11 @@ class Server
 
     # Where the name at the position is declared, if in a file that still writes it there.
     definition := (params: PositionParams) ->
-      path := path_of_uri(params.text_document.uri) ? return nil
-      program := @program_of(path) ? return nil
-      module_index := module_at(program, path) ? return nil
+      path := path_of_uri(params.text_document.uri) else return nil
+      program := @program_of(path) else return nil
+      module_index := module_at(program, path) else return nil
       at := await source_position(path, params.position, @encoding)
-      declared := definition_of(program, module_index, await read_source(path), at) ? return nil
+      declared := definition_of(program, module_index, await read_source(path), at) else return nil
       location := location_of(program, declared.module_index)
       return nil if is_standard_name(location)
       return nil unless is_written((await read_source(location)).split("\n"), declared.name)
@@ -238,9 +238,9 @@ class Server
     # What may be written where a name is being written, from a check of the document's text with
     # the checker's own name there (see complete.lerta), whose diagnostics are not published.
     completion := (params: PositionParams): Promise<CompletionItem[]> ->
-      path := path_of_uri(params.text_document.uri) ? return []
+      path := path_of_uri(params.text_document.uri) else return []
       key := text_key(path)
-      text := open_texts[key] ? return []
+      text := open_texts[key] else return []
       return [] unless is_file(path)
       at := await source_position(path, params.position, @encoding)
       lines := text.split("\n")
@@ -252,8 +252,8 @@ class Server
           await check_file(path, @encoding)
         finally
           open_texts[key] = text
-      program := checked.program ? return []
-      module_index := module_at(program, path) ? return []
+      program := checked.program else return []
+      module_index := module_at(program, path) else return []
       completion_items(program, module_index, program.completion)
 
     program_of := (path: String) ->
@@ -270,7 +270,7 @@ class Server
     # diagnostics of the files of its program, as of this check and of the last one. Its program is
     # kept if its modules cannot be loaded.
     check := (path: String) ->
-      before := @found[path]?.keys().to_array() ? []
+      before := @found[path]?.keys().to_array() else []
       checked := await check_file(path, @encoding)
       found := checked.by_path
       @found[path] = found
@@ -280,21 +280,21 @@ class Server
       await @publish(file) for file in files
 
     # The URI of the file as the client opened it, or else as the server writes one.
-    uri_of := (path: String) -> @uris[text_key(path)] ? uri_of_path(path)
+    uri_of := (path: String) -> @uris[text_key(path)] else uri_of_path(path)
 
     # Publishes the diagnostics that the open documents' checks found in the file, each once.
     publish := (file: String) ->
       diagnostics: Set<LspDiagnostic>
       for found in @found.values()
-        diagnostics.add each for each in found[file] ? []
+        diagnostics.add each for each in found[file] else []
       params := PublishDiagnosticsParams(uri: @uri_of(file), diagnostics: diagnostics.to_array())
       await notify('textDocument/publishDiagnostics', params)
 
 # The edit that writes the document in the style, of its whole text, or none if it is so already;
 # nil if it does not parse.
 formatting_edits := (uri: String, encoding: PositionEncoding) ->
-  path := path_of_uri(uri) ? return nil
-  text := open_texts[text_key(path)] ? return nil
+  path := path_of_uri(uri) else return nil
+  text := open_texts[text_key(path)] else return nil
   try
     formatted := (await format_source(text, path)).text
     none: TextEdit[]

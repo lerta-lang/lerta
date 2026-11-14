@@ -25,7 +25,7 @@ export written_type_edits := (
     when TypeDeclaration
       edits: Edit?[]
       for member in statement.members
-        value := member.value ? continue
+        value := member.value else continue
         if member.type == nil
           edits.push declared_type(tokens, member.name, value, facts)
       edits
@@ -34,7 +34,7 @@ export written_type_edits := (
 # `xs: E[] = [A, B]` for `xs := [E.A, E.B]`, and `x: E = c then A else B` for
 # `x := c then E.A else E.B`, of a variable or a field without a type.
 declared_type := (tokens: Tokens, name: Identifier, value: Expression, facts: NodeFacts) ->
-  type := facts.types[value] ? return nil
+  type := facts.types[value] else return nil
   array := type as ArrayType?
   of_items := value is ArrayLiteral and array != nil
   given :=
@@ -42,9 +42,9 @@ declared_type := (tokens: Tokens, name: Identifier, value: Expression, facts: No
       typed_parts all_given((value as ArrayLiteral!).elements), array!.element, facts, true
     else
       typed_parts given_values(value), type, facts, false
-  parts := given ? return nil
-  name_at := tokens.at(name.position) ? return nil
-  part_type := type_text(tokens, parts.first, parts.type) ? return nil
+  parts := given else return nil
+  name_at := tokens.at(name.position) else return nil
+  part_type := type_text(tokens, parts.first, parts.type) else return nil
   text := of_items then "#{part_type}[]" else part_type
 
   # `:=` goes into `: T =`; a `var`'s `=` stays after the type.
@@ -67,15 +67,15 @@ export written_return := (tokens: Tokens, function: FunctionLiteral, annotating:
   { unexpected, generic } := annotating.functions
   return nil if function not in unexpected or function in generic
   return nil unless function.type_params.is_empty()
-  { result } := facts.types[function] as FunctionType ? return nil
+  { result } := facts.types[function] as FunctionType else return nil
   last := function.body.last() as Expression?
-  results := [(facts.results[function] ? [])..., (last then [last] else [])...]
-  parts := typed_parts(all_given(results), result, facts, false) ? return nil
-  text := type_text(tokens, parts.first, parts.type) ? return nil
-  start := tokens.at(function.position) ? return nil
+  results := [(facts.results[function] else [])..., (last then [last] else [])...]
+  parts := typed_parts(all_given(results), result, facts, false) else return nil
+  text := type_text(tokens, parts.first, parts.type) else return nil
+  start := tokens.at(function.position) else return nil
   annotation: Change =
     if tokens.is_kind(start, '(')
-      close := tokens.matching(start) ? return nil
+      close := tokens.matching(start) else return nil
       { from: tokens.end(close), to: tokens.end(close), text: ": #{text}" }
     else
       { from: tokens.start(start), to: tokens.start(start), text: "(): #{text} " }
@@ -93,7 +93,7 @@ given_values := (value: Expression): Expression[] ->
   case value
     when Conditional then given_values(value.then_value) + given_values(value.else_value)
     when Case, If, Try
-      branches := branch_values(value) ? return [value]
+      branches := branch_values(value) else return [value]
       all_given(branches)
     else [value]
 
@@ -116,7 +116,7 @@ typed_parts := (values: Expression[], type: Type, facts: NodeFacts, items: Bool)
     # A function's last value may be among its results too.
     continue if not is_named(value) or named.last()?.position == value.position
     named.push value
-  first := named.first() ? return nil
+  first := named.first() else return nil
   enough :=
     if items and inner is ObjectType
       1
@@ -129,8 +129,8 @@ typed_parts := (values: Expression[], type: Type, facts: NodeFacts, items: Bool)
 
 # The type as the first value names it, `E` of `E.A` or `S` of `S(x: 1)`, made optional if it is.
 type_text := (tokens: Tokens, first: Expression, type: Type) ->
-  start := tokens.at(first.position) ? return nil
-  end := type_end(tokens, first) ? return nil
+  start := tokens.at(first.position) else return nil
+  end := type_end(tokens, first) else return nil
   named := tokens.slice(tokens.start(start), tokens.start(end))
   type is OptionalType then "#{named}?" else named
 
@@ -138,7 +138,7 @@ type_text := (tokens: Tokens, first: Expression, type: Type) ->
 type_end := (tokens: Tokens, value: Expression) ->
   case value
     when Member
-      name := tokens.at(value.name.position) ? return nil
+      name := tokens.at(value.name.position) else return nil
       name - 1
     when Call then after_callee(tokens, value)
     else nil
@@ -151,12 +151,12 @@ written := (tokens: Tokens, at: Position, annotation: Change, values: Expression
   for value in values
     case value
       when Member
-        start := tokens.at(value.position) ? return nil
-        name := tokens.at(value.name.position) ? return nil
+        start := tokens.at(value.position) else return nil
+        name := tokens.at(value.name.position) else return nil
         changes.push { from: tokens.start(start), to: tokens.start(name), text: '' }
       when Call
         record :=
-          record_changes(tokens, value) ? return tokens.report(EXPECTED_TYPES, value.position)
+          record_changes(tokens, value) else return tokens.report(EXPECTED_TYPES, value.position)
         changes.push each for each in record
       else return nil
   tokens.edit_at(EXPECTED_TYPES, at, changes)

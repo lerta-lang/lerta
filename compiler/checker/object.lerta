@@ -33,7 +33,7 @@ export constructed_type := (body: Body, callee: Expression) ->
   return nil unless callee is Identifier
   name := callee.name
   return nil if lookup(body, name) != nil or has_function(body.shared, name)
-  type := object_type(body.shared, name) ? return nil
+  type := object_type(body.shared, name) else return nil
   body.facts.types[callee] = type
   type
 
@@ -48,7 +48,7 @@ export struct_construction := (
 
 # The struct that the expected type is, or makes optional.
 export expected_struct := (expected: Type?) ->
-  type := inner_of_expected(expected) ? return nil
+  type := inner_of_expected(expected) else return nil
   if type is ObjectType and type.is_struct
     type
   else
@@ -58,7 +58,7 @@ export expected_struct := (expected: Type?) ->
 # inferred from the expected type's.
 export type_of_expected_construction := (body: Body, call: Call, expected: Type) ->
   info := info_of(body.program, inner_of(expected) as ObjectType!)
-  declared := info.generic?.type ? info.type
+  declared := info.generic?.type else info.type
   set_type(body, call, type_of_construction(body, call, declared, expected))
 
 export type_of_construction := (
@@ -122,7 +122,7 @@ required_fields := (info: ObjectInfo) ->
 # A construction from a value alone, `Error('failed')`, as that of the one argument that must be
 # given, by its name (see NodeFacts.replacements).
 positional_construction := (body: Body, call: Call, declared: ObjectType) ->
-  value := positional_value(body, call, declared) ? return nil
+  value := positional_value(body, call, declared) else return nil
   required := required_fields(info_of(body.program, declared))
   if required.length != 1
     message := "#{format_type(declared)} takes a value alone only where one argument must be given"
@@ -151,7 +151,7 @@ argument_field := (body: Body, info: ObjectInfo, arg: NamedValue) ->
   { name, position } := arg.name
   type := format_type(info.type)
   no_field := -> fail(body.program, position, "#{type} has no field '#{name}'")
-  field := info.field_named(name) ? no_field()
+  field := info.field_named(name) else no_field()
   return field if is_argument(field)
   if name in info.private_names
     fail body.program, position, "#{type}'s field '#{name}' is private, which no constructor gives"
@@ -205,7 +205,7 @@ constructed_instance := (
   for param in info.declaration.type_params
     name := param.name.name
     args.push
-      type_bindings[name] ? fail_cannot_infer(program, call.position, name, type_name, type_name)
+      type_bindings[name] else fail_cannot_infer(program, call.position, name, type_name, type_name)
   type := ObjectType(declared..., args)
   reject_invalid_instance program, body.resolver, type, call.position
   type
@@ -221,7 +221,7 @@ export method_owner := (body: Body, object_type: Type, name: String) ->
 # The type of the method `name` of an object, or nil if the type is no class or struct with that
 # method.
 export object_method_type := (body: Body, object_type: Type, name: Identifier) ->
-  owner := method_owner(body, object_type, name.name) ? return nil
+  owner := method_owner(body, object_type, name.name) else return nil
   module_index := info_of(body.program, owner).module_index
   function_type_of(body.program, module_index, method_key(owner.name, name.name), name.position)
 
@@ -240,7 +240,7 @@ export type_of_this := (body: Body, at: Expression) ->
 # A construction from a spread, `Point(p..., x: 1)`, as the construction of the arguments of p but
 # those written, read from p (see NodeFacts.replacements): a value of the type constructed.
 spread_construction := (body: Body, call: Call, declared: ObjectType): Call? ->
-  spread := spread_argument(body, call.args, 'a construction') ? return nil
+  spread := spread_argument(body, call.args, 'a construction') else return nil
   source := spread.iterable
   type := type_of(body, source)
   object := type as ObjectType?
@@ -270,7 +270,7 @@ read_field := (source: Expression, name: String) ->
 # fields from one, which reads nothing that the reads of its fields could change.
 spread_argument := (body: Body, items: Expression[], holder: String) ->
   spreads := [item for item in items when is_spread(item)]
-  first := spreads.first() ? return nil
+  first := spreads.first() else return nil
   if spreads.length > 1 or items[0] != first
     fail body.program, first.position, "a spread comes first in #{holder}, once"
   assert first is Comprehension
@@ -330,7 +330,7 @@ spread_record := (body: Body, record: RecordLiteral, spread: Comprehension) ->
   RecordLiteral(fields: copied + record.fields, position: record.position)
 
 expected_record_fields := (expected: Type?): RecordField[] ->
-  record := inner_of_expected(expected) ? return []
+  record := inner_of_expected(expected) else return []
   record is RecordType then record.fields else []
 
 # A construction's arguments are named, or names alone (see construction_arguments).

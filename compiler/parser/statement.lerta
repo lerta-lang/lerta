@@ -58,7 +58,7 @@ parse_program := (tokens: Token[], path: String, in_blocks: Bool) ->
 parse_statements := (tokens: TokenStream, end: TokenKind) ->
   statements: Statement[]
   errors := tokens.block_errors
-  before := errors?.length ? 0
+  before := errors?.length else 0
   at_end := -> tokens.peek().kind == end or tokens.peek().kind == EOF
   until at_end()
     if errors
@@ -150,7 +150,7 @@ export at_destructuring := (tokens: TokenStream) ->
 # `{ a, b } := value` or `(a, b) := value`, which only `:=` after the names tells from an
 # expression.
 at_bare_destructuring := (tokens: TokenStream, offset: Int) ->
-  closing := names_closing_offset(tokens, offset) ? return false
+  closing := names_closing_offset(tokens, offset) else return false
   tokens.peek_at(closing + 1).kind == ':='
 
 # The offset of the `}` or `)` that closes names to take apart, `{ a, b }` or `(a, b)`, at the
@@ -185,7 +185,7 @@ export parse_simple_statement := (tokens: TokenStream): Statement ->
       continue_with_members tokens, line_expression
   return parse_block_arguments(tokens, expression) if at_block_arguments(tokens, expression)
   return expression if is_command_call
-  operator := operator_at(tokens, ASSIGNMENT_OPERATORS, '=') ? return expression
+  operator := operator_at(tokens, ASSIGNMENT_OPERATORS, '=') else return expression
   parse_assignment(tokens, expression, operator)
 
 # The operand of `return`, `throw` or `yield` has taken the member lines after it already, and a
@@ -268,7 +268,7 @@ parse_declaration := (tokens: TokenStream) ->
     tokens.fail_here "a var without a type needs an initial value: #{OMITTED_VALUES}" if type == nil
     message := "expected '=': only a const whose type is written as #{types} starts empty"
     empty := empty_value(type)
-    value := empty ? (omits_value then NilLiteral(name.position) else tokens.fail_here(message))
+    value := empty else (omits_value then NilLiteral(name.position) else tokens.fail_here(message))
 
     # The type of an empty Map or Set goes to its type arguments, as the formatter writes it.
     written := value is Call then nil else type
@@ -287,7 +287,7 @@ empty_value := (type: TypeName): Expression? ->
   at := type.position
   if type is ArrayTypeName and not type.optional
     return ArrayLiteral(position: at, elements: [])
-  named := type as NamedType ? return nil
+  named := type as NamedType else return nil
   return nil if named.optional or named.name not in ['Map', 'Set']
   callee := Identifier(position: at, name: named.name)
   Call(callee, position: at, args: [], named_args: [], type_args: named.args, makes_builtin: true)
@@ -324,7 +324,7 @@ holding := (holder: Identifier, value: Expression): Statement ->
 
 parse_assignment := (tokens: TokenStream, target: Expression, operator: String) ->
   message := 'only a name, an indexed item or a field can be assigned to'
-  assigned := assignment_target(target) ? tokens.fail(target.position, message)
+  assigned := assignment_target(target) else tokens.fail(target.position, message)
   value := parse_value(tokens)
   Assignment(value, operator, target: assigned, position: target.position)
 

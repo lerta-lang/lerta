@@ -63,7 +63,7 @@ edges_of := (program: ProgramWide) ->
     for member in info.declaration.members
       # A method's own type parameters, which it has an instance for each of, do not count, nor do
       # the declaration's that they would shadow, which is reported apart.
-      method_params := [param.name.name for param in method_literal(member)?.type_params ? []]
+      method_params := [param.name.name for param in method_literal(member)?.type_params else []]
       for written in written_types(member)
         add_edges program, edges, declaration, method_params, written
 
@@ -71,7 +71,7 @@ edges_of := (program: ProgramWide) ->
     # the members use its type arguments or not, which is simpler than following them there.
     add_edges program, edges, declaration, [], info.declaration.satisfies
   for interface_info in program.interfaces.values()
-    written := interface_info.declaration ? continue
+    written := interface_info.declaration else continue
     continue if interface_info.type_params.is_empty()
     declaration := GenericDeclaration
       params: interface_info.type_params
@@ -91,7 +91,7 @@ add_edges := (
   is_parameter := (name: String) -> name in params or name in method_params
   for named in named_types_in(written)
     continue if named.args.is_empty() or is_parameter(named.name)
-    held := generic_symbol(named_type(shared, named.name)) ? continue
+    held := generic_symbol(named_type(shared, named.name)) else continue
     for arg at i in named.args
       for param at index in params
         continue if param in method_params or named_in(arg, param).is_empty()
@@ -108,7 +108,7 @@ add_edges := (
 vertex := (symbol: String, index: Int) -> "#{symbol} #{index}"
 
 generic_symbol := (named: Type?) ->
-  type := named ? return nil
+  type := named else return nil
   case type
     when ObjectType, InterfaceType then not type.args.is_empty() then type.symbol
     else nil
@@ -148,7 +148,7 @@ visit := (search: Search, vertex: String): void ->
   search.low[vertex] = number
   search.stack.push vertex
   search.on_stack.add vertex
-  for next in search.successors[vertex] ? []
+  for next in search.successors[vertex] else []
     if next not in search.order
       visit search, next
       lower search, vertex, search.low[next]!

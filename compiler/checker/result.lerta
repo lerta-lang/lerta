@@ -57,7 +57,7 @@ export check_last_statement := (body: Body, statement: Statement) ->
       check_discarded body, value, type
   else
     check_statement body, statement
-  result := context.annotated ? context.inferred ? void_type
+  result := context.annotated else context.inferred else void_type
   if not is_kind(result, 'void') and not gives_value and statement is not Return
     reject_missing_result body, statement, result
 
@@ -120,7 +120,7 @@ record_result := (body: Body, type: Type, at: Expression) ->
   if inferred == nil
     context.inferred = type
     return
-  context.inferred = unify(inferred, type) ? reject_result(body, inferred, type, at.position)
+  context.inferred = unify(inferred, type) else reject_result(body, inferred, type, at.position)
 
 reject_result := (body: Body, expected: Type, type: Type, at: Position) ->
   kind := body.context!.yields then 'a yielded value' else 'a return value'
@@ -130,7 +130,7 @@ reject_result := (body: Body, expected: Type, type: Type, at: Position) ->
 
 export check_return := (body: Body, return_expression: Return) ->
   outside := -> fail(body.program, return_expression.position, "'return' outside a function")
-  context := body.context ? outside()
+  context := body.context else outside()
   value := return_expression.value
   if context.yields
     return if value == nil
@@ -140,7 +140,7 @@ export check_return := (body: Body, return_expression: Return) ->
       type_of_result body, value
     else
       void_type
-  record_result body, type, value ? return_expression
+  record_result body, type, value else return_expression
 
 # A promise's value, once it is settled. What waits for it is the top-level code, which the module
 # records, or a function that awaits, which its parser marks as such unless the `await` runs
@@ -207,7 +207,7 @@ export finish_function_type := (context: FunctionContext, params: Type[], facts:
   if promise := undecided_promise(context)
     decide_settling context, true, promise
   unknown := context.yields then nil_type else void_type
-  result := context.annotated ? context.inferred ? unknown
+  result := context.annotated else context.inferred else unknown
   for each in context.results
     is_converted := not is_kind(each.type, 'never') and each.type != result
     facts.conversions[each.value] = result if is_converted

@@ -55,7 +55,7 @@ export read_rest_of_request := (
 
   # HTTP/1.0 came before Host, which HTTP/1.1 requires.
   throw bad_request() if hosts.length > 1 or (hosts.is_empty() and version == 'HTTP/1.1')
-  host := hosts.first() ? address
+  host := hosts.first() else address
   throw bad_request() unless is_host(host)
 
   length := content_length(headers)
@@ -70,10 +70,10 @@ export read_rest_of_request := (
   body := BodyChunks(chunks, deadline, seconds: body_timeout)
 
   # HTTP/1.0 has no 100 Continue.
-  expects := (headers.get('expect') ? '').to_lower() == '100-continue'
+  expects := (headers.get('expect') else '').to_lower() == '100-continue'
   body.continue_on = socket if expects and version == 'HTTP/1.1' and (chunked or length > 0)
 
-  url := url_of(host, target) ? throw bad_request()
+  url := url_of(host, target) else throw bad_request()
   request := Request(method, url, headers, body: Reader(-> await body.next()))
   Incoming(request, body, keep_alive: keeps_alive(version, headers), chunked: version == 'HTTP/1.1')
 
@@ -92,7 +92,7 @@ bad_request := -> RequestError(status: 400, message: 'bad request')
 # after the body of the request before; nil if none does.
 export read_request_line := (reader: Reader, options: ServerOptions, deadline: Deadline) ->
   read := ->
-    line := await read_limited_line(reader, options.max_line, 414) ? return nil
+    line := await read_limited_line(reader, options.max_line, 414) else return nil
     if line.is_empty()
       await read_limited_line(reader, options.max_line, 414)
     else
@@ -108,7 +108,7 @@ read_headers := (reader: Reader, options: ServerOptions) ->
     return headers if line.is_empty()
     if headers.fields.length == options.max_fields
       throw RequestError(status: 431, message: 'too many fields')
-    (name, value) := line.split_once(':') ? throw bad_request()
+    (name, value) := line.split_once(':') else throw bad_request()
     headers.append name, value.trim()
   throw bad_request()
 
@@ -118,7 +118,7 @@ read_limited_line := (reader: Reader, max: Int, status: Int) ->
   too_long := -> RequestError(status, message: 'line too long')
   line :=
     try
-      await reader.read_line(min(max, INT_MAX - 1) + 1) ? return nil
+      await reader.read_line(min(max, INT_MAX - 1) + 1) else return nil
     catch _: LineTooLongError
       throw too_long()
   throw too_long() if line.binary.length > max
@@ -127,7 +127,7 @@ read_limited_line := (reader: Reader, max: Int, status: Int) ->
 # Whether the body comes in chunks. Another coding is not implemented; a Content-Length besides
 # chunks could tell another end to a proxy before the server, and HTTP/1.0 has no chunks.
 is_chunked := (headers: Headers, version: String) ->
-  coding := headers.get('transfer-encoding') ? return false
+  coding := headers.get('transfer-encoding') else return false
   throw bad_request() if 'content-length' in headers or version == 'HTTP/1.0'
   names := [each.trim().to_lower() for each in coding.split(',')]
 
@@ -144,11 +144,11 @@ is_chunked := (headers: Headers, version: String) ->
   true
 
 content_length := (headers: Headers) ->
-  text := headers.get('content-length') ? return 0
+  text := headers.get('content-length') else return 0
 
   # Digits alone, as parse_int would also take a sign.
   throw bad_request() unless text.is_digits()
-  text.parse_int() ? throw bad_request()
+  text.parse_int() else throw bad_request()
 
 # Whether a Host names a host and a port alone, so that it cannot change the path of the URL.
 is_host := (host: String) -> is_visible(host) and not host.any((c) -> c in NOT_IN_HOST)
@@ -197,7 +197,7 @@ export class BodyChunks
     chunk
 
   send_continue := ->
-    socket := @continue_on ? return
+    socket := @continue_on else return
     @continue_on = nil
     await socket.write(CONTINUE)
 

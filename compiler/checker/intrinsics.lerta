@@ -63,10 +63,10 @@ export declare_intrinsics := (shared: Shared, statements: Statement[]) ->
 # The type of an intrinsic value, which must be the one that the compiler gives it; nil for a
 # function.
 declared_type := (shared: Shared, statement: Intrinsic) ->
-  type_name := statement.type ? return nil
+  type_name := statement.type else return nil
   program := shared.program
   type := resolve(program, module_resolver(shared.index), type_name)
-  expected := VALUE_INTRINSICS[statement.name.name] ? return type
+  expected := VALUE_INTRINSICS[statement.name.name] else return type
   unless expected.fits(type)
     fail program, type_name.position, "intrinsic '#{statement.name.name}' is #{expected.described}"
 
@@ -97,7 +97,7 @@ export type_of_intrinsic_call := (body: Body, call: Call, name: String, expected
       when 'print_trace' then { statements: [traced(body, call)], value: nil }
       else debugged(body, call, expected)
   body.facts.intrinsic_calls[call] = code
-  value := code.value ? return void_type
+  value := code.value else return void_type
   type_of(body, value)
 
 reject_named_arguments := (body: Body, call: Call, name: String) ->
@@ -202,7 +202,7 @@ class Held
         else
           name := "#{@prefix}.#{label}"
           facts := @body.facts
-          type := facts.types[operand] ? type_of(@body, operand)
+          type := facts.types[operand] else type_of(@body, operand)
           facts.conversions.remove operand
           @declarations.push held_local(@body, name, operand, type)
           named name, operand.position
@@ -240,7 +240,7 @@ debugged := (body: Body, call: Call, expected: Type?) ->
     message := "dbg takes a value, not one of type #{format_type(held_type)}"
     fail body.program, call.args[0].position, message
 
-  shown := literal_text(body, named(name, at)) ? text(
+  shown := literal_text(body, named(name, at)) else text(
     "<#{format_type(type_of(body, named(name, at)))}>"
     at
   )
@@ -278,7 +278,7 @@ runtime_call := (body: Body, symbol: String, arg: Expression, type: FunctionType
 # literal_text).
 operand_text := (body: Body, shown: Shown): Expression ->
   at := shown.value.position
-  literal := literal_text(body, shown.value) ? return text('', at)
+  literal := literal_text(body, shown.value) else return text('', at)
   concatenation(label_text(shown.label, at), literal)
 
 label_text := (label: String, at: Position) -> text("\n  #{label}: ", at)
@@ -338,7 +338,7 @@ quoted_call := (body: Body, call: Call) ->
   program := shared.program
   module := program.modules[shared.index]
   location := module_location(program.entry_path, shared.path)
-  tokens := shared.source_tokens ? lex(module.source, location).tokens
+  tokens := shared.source_tokens else lex(module.source, location).tokens
   shared.source_tokens = tokens
   "#{location}:#{at.line}:#{at.column}: #{code_at(module.source, tokens, at)}"
 
@@ -347,7 +347,7 @@ quoted_call := (body: Body, call: Call) ->
 code_at := (source: String, tokens: Token[], at: Position) ->
   starts_there := (token: Token) ->
     token.line == at.line and token.column == at.column and token.kind not in LINE_ENDS
-  start := tokens.find_index(starts_there) ? return ''
+  start := tokens.find_index(starts_there) else return ''
   last := tokens[last_of_code(tokens, start)]
   lines := source.lines()
   if last.end_line == at.line

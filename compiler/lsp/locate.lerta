@@ -40,7 +40,7 @@ export location_of := (program: ProgramWide, module_index: Int) ->
 export hover_lines := (program: ProgramWide, module_index: Int, source: String, at: Position) ->
   lines: Set<String>
   for candidate in candidates_at(program, module_index, source, at)
-    type := candidate.type ? continue
+    type := candidate.type else continue
     lines.add "#{candidate.name.name}: #{format_type(type)}"
   lines.to_array()
 
@@ -120,7 +120,7 @@ add_reexported_names := (add: AddCandidate, program: ProgramWide, module_index: 
     continue unless reexport.exported
     exporter := module.imported[reexport]!
     for exported in reexport.names
-      ref := export_ref(program, exporter, exported.name.name) ? continue
+      ref := export_ref(program, exporter, exported.name.name) else continue
       names := [exported.name]
       names.push alias if alias := exported.alias
       for name in names
@@ -144,7 +144,7 @@ name_declaration := (
       { module_index: info.module_index, name: info.declaration.name }
     when ExternReference then top_level_declaration(program, reference.module_index, reference.name)
     else
-      local := facts.local_declarations[name] ? return nil
+      local := facts.local_declarations[name] else return nil
       { module_index, name: local }
 
 # A top-level value, a function, a generic function, a type or an extern of the module, by its
@@ -157,7 +157,7 @@ top_level_declaration := (program: ProgramWide, module_index: Int, name: String)
   is_generic := (each: GenericFunction) -> each.name.name == name and each.receiver == nil
   return declared(generic.name) if generic := shared.generics.find(is_generic)
   return declared(info.declaration.name) if info := shared.objects[name]
-  imported := shared.imports.names[name] ? return nil
+  imported := shared.imports.names[name] else return nil
   imported.source is ExportRef then nil else declared(imported.name)
 
 # The field or method that the member reads or calls, or the field that it assigns, for which the
@@ -165,7 +165,7 @@ top_level_declaration := (program: ProgramWide, module_index: Int, name: String)
 member_declaration := (program: ProgramWide, facts: NodeFacts, member: Member) ->
   name := member.name.name
   object_type := facts.types[member.object]
-  target := facts.members[member] ? return member_of_type(program, object_type, name)
+  target := facts.members[member] else return member_of_type(program, object_type, name)
   case target
     when Method
       source := target.source
@@ -184,8 +184,8 @@ member_declaration := (program: ProgramWide, facts: NodeFacts, member: Member) -
 
 # The member of the enum by its name, as its declaration writes it.
 enum_member_declaration := (program: ProgramWide, type: Type, name: String) ->
-  enum_type := type as EnumType ? return nil
-  (module_index, declaration) := enum_statement(program, enum_type) ? return nil
+  enum_type := type as EnumType else return nil
+  (module_index, declaration) := enum_statement(program, enum_type) else return nil
   for each in declaration.members
     if each is Identifier and each.name == name
       return Declared(module_index, name: each)
@@ -208,7 +208,7 @@ type_declaration := (program: ProgramWide, type: Type): Declared? ->
       info := info_of(program, type)
       { module_index: info.module_index, name: info.declaration.name }
     when EnumType
-      (module_index, declaration) := enum_statement(program, type) ? return nil
+      (module_index, declaration) := enum_statement(program, type) else return nil
       { module_index, name: declaration.name }
     when InterfaceType then interface_declaration(program, type)
     else nil
@@ -217,7 +217,7 @@ type_declaration := (program: ProgramWide, type: Type): Declared? ->
 # is it.
 enum_statement := (program: ProgramWide, type: EnumType) ->
   declares := (shared: Shared) -> shared.enums[type.name]?.symbol == type.symbol
-  module_index := program.shared.find(declares)?.index ? return nil
+  module_index := program.shared.find(declares)?.index else return nil
   for statement in program.modules[module_index].program
     if statement is EnumDeclaration and statement.name.name == type.name
       return (module_index, statement)
@@ -226,7 +226,7 @@ enum_statement := (program: ProgramWide, type: EnumType) ->
 # The interface's declaration, in the module whose own interface of its name is it.
 interface_declaration := (program: ProgramWide, type: InterfaceType) ->
   declares := (shared: Shared) -> shared.interfaces[type.name]?.type.symbol == type.symbol
-  module_index := program.shared.find(declares)?.index ? return nil
+  module_index := program.shared.find(declares)?.index else return nil
   for statement in program.modules[module_index].program
     if statement is InterfaceDeclaration and statement.name.name == type.name
       return Declared(module_index, name: statement.name)
@@ -239,12 +239,12 @@ written_name := (type_name: NamedType) ->
 
 # The member of the type by its name, if the type is a class or a struct.
 member_of_type := (program: ProgramWide, type: Type?, name: String) ->
-  object_type := type as ObjectType ? return nil
+  object_type := type as ObjectType else return nil
   declared_member(program, object_type, name)
 
 declared_member := (program: ProgramWide, type: ObjectType, name: String) ->
   info := info_of(program, type)
-  member := info.declaration.members.find((each) -> each.name.name == name) ? return nil
+  member := info.declaration.members.find((each) -> each.name.name == name) else return nil
   Declared(module_index: info.module_index, name: member.name)
 
 # Whether the source, as its lines, writes the name at its position, rather than the parser or the

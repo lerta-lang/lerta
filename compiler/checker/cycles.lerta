@@ -20,9 +20,9 @@ THIS := '@'
 # Warns if storing the value at the target, already checked, makes such a cycle, and records a
 # parameter of a method that the method so keeps.
 export warn_if_cycle := (body: Body, target: Expression, value: Expression) ->
-  holder := holder_of(body, target) ? return
+  holder := holder_of(body, target) else return
   record_kept body, holder, value
-  literal := capturing_literal(body, value, holder) ? return
+  literal := capturing_literal(body, value, holder) else return
   warn body.shared, literal.position, cycle_message(body, holder)
 
 # Does the same for the arguments of a method that keeps them: a builtin's at once, and those of
@@ -36,8 +36,8 @@ export warn_if_kept := (
       warn_if_cycle body, member.object, args[0]
     return
   return unless source is OwnMethod
-  callee := method ? return
-  holder := holder_of(body, member.object) ? return
+  callee := method else return
+  holder := holder_of(body, member.object) else return
   kept := body.program.kept_arguments
   for arg at place in args
     param :=
@@ -87,15 +87,15 @@ find_local := (body: Body, name: String): Local? ->
 # A method keeps the parameter that it stores where its object holds it.
 record_kept := (body: Body, holder: String, value: Expression) ->
   return if holder != THIS
-  place := parameter_place(body, value) ? return
+  place := parameter_place(body, value) else return
   body.program.kept_arguments.kept.add (body.context!.literal, place)
 
 # The place of the parameter of the method being checked that the value names, if it names one.
 parameter_place := (body: Body, value: Expression): Int? ->
   return nil if body.self == nil or body.enclosing != nil
-  identifier := value as Identifier ? return nil
-  literal := body.context?.literal ? return nil
-  local := body.scopes.lookup_local(identifier.name) ? return nil
+  identifier := value as Identifier else return nil
+  literal := body.context?.literal else return nil
+  local := body.scopes.lookup_local(identifier.name) else return nil
   [param.name for param in literal.params].index_of(local.original().identifier)
 
 # What holds the place that the target reaches, if a function literal could capture it: `@`, or a
@@ -105,7 +105,7 @@ holder_of := (body: Body, target: Expression): String? ->
   case target
     when This then THIS
     when Identifier
-      local := find_local(body, target.name) ? return nil
+      local := find_local(body, target.name) else return nil
       return THIS if local.is_this
       not local.mutable and not local.weak then target.name
     when Member
@@ -118,11 +118,11 @@ holder_of := (body: Body, target: Expression): String? ->
     else nil
 
 is_weak_field := (body: Body, member: Member) ->
-  object_type := body.facts.types[member.object] as ObjectType ? return false
+  object_type := body.facts.types[member.object] as ObjectType else return false
   info_of(body.program, object_type).field_named(member.name.name)?.weak == true
 
 captures_holder := (body: Body, literal: FunctionLiteral, holder: String) ->
-  captures := body.facts.captures[literal] ? []
+  captures := body.facts.captures[literal] else []
   is_holder := (capture: Capture) ->
     if holder == THIS
       capture.is_this

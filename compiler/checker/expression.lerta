@@ -58,7 +58,7 @@ export type_of := (body: Body, expression: Expression, expected: Type? = nil) ->
 # The type that a literal takes where the type is expected, as an Int8 where an `Int8 | String` is:
 # the union's one integer member, or one float member, if it has only one.
 literal_hint := (expression: Expression, expected: Type?) ->
-  type := inner_of_expected(expected) ? return nil
+  type := inner_of_expected(expected) else return nil
   return type unless type is UnionType
   of_kind := (is_kind_of: (Type) -> Bool) ->
     members := [member for member in type.members when is_kind_of(member)]
@@ -93,7 +93,7 @@ compute_type := (body: Body, expression: Expression, expected: Type?): Type ->
     when StringLiteral
       if wants_character
         return integer_literal(program, expression, literal_kind!)
-      type_of_literal_member(body, expression, expected) ? string_type
+      type_of_literal_member(body, expression, expected) else string_type
     when Interpolation
       byte_literal := wants_byte and binary_literal_bytes(expression) != nil
       if byte_literal
@@ -194,7 +194,7 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
     is_plain_struct := object_type.is_struct and object_type.args.is_empty()
     if is_plain_struct and has_record_arguments(body, call, object_type)
       facts.record_constructions.add call
-    struct_type := expected_struct(expected) ? return type
+    struct_type := expected_struct(expected) else return type
     if type == struct_type and has_record_arguments(body, call, object_type)
       facts.recordable.add call
     return type
@@ -218,7 +218,7 @@ contains_of_char := (body: Body, call: Call, callee: Member): Call? ->
   container := type_of(body, callee.object)
   return nil unless is_kind(container, 'String')
   part := call.args[0]
-  text := char_as_text(container, type_of(body, part), part) ? return nil
+  text := char_as_text(container, type_of(body, part), part) else return nil
   Call(call..., args: [text])
 
 export reject_type_arguments := (body: Body, call: Call) ->
@@ -277,7 +277,7 @@ check_interface_member := (
 # The type that a local or a path of fields that the value names was declared with, before
 # narrowing (see narrowing), so that it can be tested for any member of it.
 export unnarrowed_type := (body: Body, value: Expression, type: Type) ->
-  narrowable(body, value)?.declared ? type
+  narrowable(body, value)?.declared else type
 
 # Records the type of a node, which type_of may not compute, such as a type pattern.
 export set_type := (body: Body, node: Node, type: Type) ->

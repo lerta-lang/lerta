@@ -105,7 +105,7 @@ export select := (title: String, checks: Check[]) ->
     check
     for check in checks
     when is_named(check.name, options().patterns) and
-      options().only?.contains(key(title, check.name)) ? true
+      options().only?.contains(key(title, check.name)) else true
   ]
   for check in selected
     selected_keys.push key(title, check.name)
@@ -219,7 +219,7 @@ class ChecksRun
           print "#{@suites[entry.suite].title}: the suite could not run its checks: #{error}"
         return
       ran_keys.push @key_of(entry)
-      reasons := result.reasons ? return
+      reasons := result.reasons else return
       tally.run_count += 1
       if reasons.is_empty()
         unless options().quiet
@@ -237,10 +237,10 @@ class ChecksRun
       try
         await ready if ready := @suites[entry.suite].ready
       catch error
-        tally.setup_error = tally.setup_error ? error.message
+        tally.setup_error = tally.setup_error else error.message
       if tally.setup_error
         return Result(reasons: nil, duration: 0.0)
-      tally.started = tally.started ? milliseconds()
+      tally.started = tally.started else milliseconds()
       result := await run_in_slot(entry.check)
       tally.finished = max(tally.finished, milliseconds())
       result
@@ -261,7 +261,7 @@ class ChecksRun
         result := await run_one(entry.check)
 
         # A check that does not apply now did not pass either.
-        reasons := result.reasons ? ['did not apply when run once more']
+        reasons := result.reasons else ['did not apply when run once more']
 
         if reasons.is_empty()
           # Shown even with quiet, as the end of the FAIL? that was shown.
@@ -285,7 +285,7 @@ class ChecksRun
           continue
         failed := tally.failed
         failed_suites += 1 unless failed.is_empty()
-        total := format_duration(tally.finished - (tally.started ? tally.finished))
+        total := format_duration(tally.finished - (tally.started else tally.finished))
         flaky := tally.flaky_count > 0 then ", #{tally.flaky_count} flaky" else ''
         passed := tally.run_count - failed.length
         print "#{suite.title}: #{passed} passed, #{failed.length} failed#{flaky} in #{total}"
@@ -299,7 +299,7 @@ class ChecksRun
 # as flaky.
 export run_checks := (suites: SuiteChecks[]) ->
   entries: Entry[] = [{ check, suite: i } for suite at i in suites for check in suite.checks]
-  name_width := min((width(entry.check.name) for entry in entries).max() ? 0, MAX_NAME_WIDTH)
+  name_width := min((width(entry.check.name) for entry in entries).max() else 0, MAX_NAME_WIDTH)
   tallies := [Tally() for _ in suites]
   run := ChecksRun(suites, entries, name_width, tallies)
   await run.run_all()

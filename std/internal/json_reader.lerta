@@ -67,8 +67,8 @@ export class JsonReader
 
   # A number that `parse` reads as what `expected` names, as `an Int8`, or gives nil for.
   private read_number := <T>(expected: String, parse: (String) -> T?): T ->
-    number := @number() ? @fail_expected(expected)
-    value := parse(number) ? @fail("expected #{expected}, found #{number}")
+    number := @number() else @fail_expected(expected)
+    value := parse(number) else @fail("expected #{expected}, found #{number}")
     @at += number.binary.length
     value
 
@@ -84,7 +84,7 @@ export class JsonReader
 
   # Its digits are read on their own, as a UInt64 may be above the largest Int.
   read_uint64 := ->
-    number := @number() ? @fail_expected('a UInt64')
+    number := @number() else @fail_expected('a UInt64')
     out_of_range := -> @fail("expected a UInt64, found #{number}")
     var value: UInt64 = 0
     for byte in number.binary
@@ -118,7 +118,7 @@ export class JsonReader
     # The bytes from `start` up to an escape or the end need no change, and are taken whole.
     var text = ''
     var start = @at
-    while @peek() ? @fail('a string that does not end') != b'"'
+    while @peek() else @fail('a string that does not end') != b'"'
       byte := @bytes[@at]
       @fail "a control character in a string, #{byte_text(byte)}" if byte < 0x20
       if byte == b'\'
@@ -181,7 +181,7 @@ export class JsonReader
       @begin_object()
       @skip_value() while @next_key() != nil
     else if not @read_literal('null') and not @read_literal('true') and not @read_literal('false')
-      number := @number() ? @fail_expected('a value')
+      number := @number() else @fail_expected('a value')
       @at += number.binary.length
 
   # The kind of the value where the reader is, by the first byte that it can be told by, as one of
@@ -189,7 +189,7 @@ export class JsonReader
   # KIND_OTHER, as no member of a union is either.
   peek_kind := ->
     @skip_space()
-    byte := @peek() ? return KIND_OTHER
+    byte := @peek() else return KIND_OTHER
     case
       when byte in [b't', b'f'] then KIND_BOOL
       when byte == b'-' or byte.is_digit() then KIND_NUMBER
@@ -245,10 +245,10 @@ export class JsonReader
 
     # Reads the escape after a backslash in a string, as the Char it gives.
     read_escape := ->
-      byte := @peek() ? @fail('a string that does not end')
+      byte := @peek() else @fail('a string that does not end')
       @at += 1
       return @read_escaped_char() if byte == b'u'
-      escaped := unescaped(byte) ? @fail("an escape that is not JSON, \\#{byte_text(byte)}")
+      escaped := unescaped(byte) else @fail("an escape that is not JSON, \\#{byte_text(byte)}")
       escaped.to_char()
 
     # A surrogate pair is one Char, written as two escapes.
@@ -265,7 +265,7 @@ export class JsonReader
     read_hex_unit := ->
       var code = 0
       for _ in 0..4
-        digit := (@peek() ? 0).hex_value() ? @fail('an escape \u without four hex digits')
+        digit := (@peek() else 0).hex_value() else @fail('an escape \u without four hex digits')
         code = code * 16 + digit
         @at += 1
       code
@@ -304,7 +304,7 @@ export class JsonReader
   # What is where the reader is, as an error says it.
   private found := ->
     @skip_space()
-    byte := @peek() ? return 'the end of the text'
+    byte := @peek() else return 'the end of the text'
     return number if number := @number()
     for literal in ['null', 'true', 'false']
       return literal if @bytes.occurs_at(@at, literal.binary)
@@ -347,5 +347,5 @@ MAX_UINT64 := ZERO.wrapping_sub(ONE)
 # The Float32 nearest to the number, or nil where it is beyond the finite ones, as JSON holds no
 # infinity.
 finite_float32 := (number: String) ->
-  value := number.parse_float()?.to_float32() ? return nil
+  value := number.parse_float()?.to_float32() else return nil
   is_finite(value.to_float()) then value

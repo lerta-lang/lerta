@@ -29,7 +29,7 @@ extern lerta_current_dir: () -> Binary?
 
 NOT_UTF8 := 'a command-line argument is not valid UTF-8'
 
-export argv := [argument.text() ? throw ValueError(NOT_UTF8) for argument in lerta_argv()]
+export argv := [argument.text() else throw ValueError(NOT_UTF8) for argument in lerta_argv()]
 
 # Where a program's output or errors go, besides a Writer or a Pipe: dropped, or, for its errors
 # alone, where its output goes, as `2>&1` does.
@@ -70,7 +70,7 @@ export run := (command: String, args: String..., options: RunOptions) ->
 
   # A program cannot start with a text that holds a NUL byte, as it cannot without its command; a
   # name that holds one is no name, which check_options refuses.
-  texts := [command, args..., cwd ? '', env.values()...]
+  texts := [command, args..., cwd else '', env.values()...]
   throw IOError("cannot run: #{command}") if texts.any(holds_nul)
 
   changes_env := not env.is_empty() or not unset_env.is_empty()
@@ -88,7 +88,7 @@ export run := (command: String, args: String..., options: RunOptions) ->
     stream_of(errors.pipe, errors.file, options.stderr)
 
   # Rounded up, so as not to kill early.
-  kill_milliseconds := ceil(kill_after * 1000.0).to_int() ? INT_MAX
+  kill_milliseconds := ceil(kill_after * 1000.0).to_int() else INT_MAX
 
   pointer := lerta_program_run([command, args...], cwd, program_env, streams, kill_milliseconds)
   throw IOError("cannot run: #{command}") if pointer == 0
@@ -162,7 +162,7 @@ class Copies
     var outputs_given_up = false
 
   # The first error tells why the run fails; the later ones follow from it as often as not.
-  fail := (error: Error) -> @error = @error ? error
+  fail := (error: Error) -> @error = @error else error
 
 pipe_of := (stream: String, command: String) ->
   Handle(lerta_pipe_new("the #{stream} of #{command}"))
@@ -218,7 +218,7 @@ stream_of := (pipe: Handle?, file: Int?, output: Output | Writer | Pipe? = nil) 
   return -1 - file if file
   return DISCARDED if is_output(output, DISCARD)
   return AS_STDOUT if is_output(output, STDOUT)
-  pipe?.pointer ? 0
+  pipe?.pointer else 0
 
 DISCARDED := 1
 AS_STDOUT := 2
@@ -329,7 +329,7 @@ env_with := (set: Map<String, String>, unset: String[]) ->
 # The name of a variable's NAME=VALUE, up to its first `=`. Windows names some of its own variables
 # with a leading `=`, which no name given to run holds, so they are kept, as they should be.
 env_name := (entry: Binary) ->
-  end := entry.index_of(b'=') ? entry.length
+  end := entry.index_of(b'=') else entry.length
   entry[..end]
 
 check_options := (options: RunOptions) ->
@@ -351,7 +351,7 @@ export env := (name: String) ->
   return nil if '=' in name or holds_nul(name)
   value := lerta_env(name)
   return nil unless value
-  value.text() ? throw ValueError("the environment variable #{name} is not valid UTF-8")
+  value.text() else throw ValueError("the environment variable #{name} is not valid UTF-8")
 
 export Platform, platform from './internal/platform'
 
@@ -360,12 +360,12 @@ export intrinsic optimized: Bool
 
 # The last name of the path that the program was started by, as a usage message names it: without
 # `.exe` on Windows, where `\` separates names too.
-export program := program_name(lerta_program_path().text() ? throw ValueError(NOT_UTF8))
+export program := program_name(lerta_program_path().text() else throw ValueError(NOT_UTF8))
 
 # The absolute path of the program's executable file, as the system tells it, through which the
 # program may run itself again.
 export executable := ->
-  lerta_executable()?.text() ? throw IOError('cannot read the path of the program')
+  lerta_executable()?.text() else throw IOError('cannot read the path of the program')
 
 program_name := (path: String) ->
   return path.split('/').last()! unless platform == 'windows'
@@ -391,5 +391,5 @@ MAX_PROCESS_ID := 2147483647
 # The absolute path of the current directory, which the paths of the program start from.
 export cwd := ->
   failure := 'cannot read the current directory'
-  path := lerta_current_dir() ? throw IOError(failure)
-  path.text() ? throw IOError("#{failure}, as its path is not valid UTF-8")
+  path := lerta_current_dir() else throw IOError(failure)
+  path.text() else throw IOError("#{failure}, as its path is not valid UTF-8")

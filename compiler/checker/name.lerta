@@ -32,7 +32,7 @@ export lookup := (body: Body, name: String) ->
 # The declaration of the top-level function written in Lerta that the callee names, if it does, as
 # type_of_identifier finds it.
 export named_function_literal := (body: Body, callee: Expression): FunctionLiteral? ->
-  (literal, _) := named_function(body, callee) ? return nil
+  (literal, _) := named_function(body, callee) else return nil
   literal
 
 # The same, with the module that declares it.
@@ -99,7 +99,7 @@ export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Boo
   unseen_hint := unseen_self_hint(body, name) + unseen_part_hint(body, name)
   hint := is_nil_name then ': write `nil`' else unseen_hint
   undefined_name := -> fail(program, position, "undefined name '#{name}'#{hint}")
-  builtin := builtin_export(shared, name) ? undefined_name()
+  builtin := builtin_export(shared, name) else undefined_name()
   type_of_export(body, builtin, identifier, is_callee)
 
 # A local function read before its declaration: its closure is made where it is read, with what the
@@ -107,26 +107,26 @@ export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Boo
 record_local_function_use := (body: Body, identifier: Identifier, literal: FunctionLiteral) ->
   record_reference body, identifier, LocalFunction(literal)
   uses := body.facts.local_function_uses
-  uses[literal] = [(uses[literal] ? [])..., { reader: body, name: identifier }]
+  uses[literal] = [(uses[literal] else [])..., { reader: body, name: identifier }]
 
 # Why a local function does not see its own name in its body, or in a function literal in it: its
 # type is not written.
 unseen_self_hint := (body: Body, name: String): String ->
-  literal := body.context?.literal ? return ''
+  literal := body.context?.literal else return ''
   declared := body.facts.local_function_names[literal]
   if declared?.name == name
     return '; a local function sees itself only where its return type is written'
-  enclosing := body.enclosing ? return ''
+  enclosing := body.enclosing else return ''
   unseen_self_hint(enclosing, name)
 
 # Why a default, or a function literal in it, does not see a name of a parameter taken apart: the
 # names are declared as the body starts, after the defaults are computed.
 unseen_part_hint := (body: Body, name: String): String ->
-  literal := body.context?.literal ? return ''
+  literal := body.context?.literal else return ''
   for param in literal.params
     if param.parts.any((part) -> part.name == name)
       return '; a default cannot read the names of a parameter taken apart'
-  enclosing := body.enclosing ? return ''
+  enclosing := body.enclosing else return ''
   unseen_part_hint(enclosing, name)
 
 # `name.export` of a module imported as `name`, where no local takes the name, as the name that the
@@ -139,7 +139,7 @@ export qualified_name := (body: Body, member: Member): Identifier? ->
   return nil if object is not Identifier or lookup(body, object.name) != nil
   if member.name.name == COMPLETION_NAME
     probe_module body, imported.module_index if imported := body.shared.imports.modules[object.name]
-  qualified := qualified_import(body.shared, object.name, member.name) ? return nil
+  qualified := qualified_import(body.shared, object.name, member.name) else return nil
   name := Identifier(member.name..., name: qualified)
   body.facts.replacements[member] = name
   name
@@ -175,7 +175,7 @@ export intrinsic_named := (body: Body, callee: Expression) ->
   name := callee.name
   return nil if lookup(body, name) != nil or has_function(shared, name)
   return nil if body.sees_top_level and name in shared.top_level.names
-  exported := export_named(shared, name) as IntrinsicExport ? return nil
+  exported := export_named(shared, name) as IntrinsicExport else return nil
 
   # A value is read, and so called as any value is.
   return nil if exported.type
@@ -185,7 +185,7 @@ export intrinsic_named := (body: Body, callee: Expression) ->
 
 # The export that the name is imported by, or else that of std:builtins of the name, if any.
 export_named := (shared: Shared, name: String) ->
-  imported := shared.imports.names[name] ? return builtin_export(shared, name)
+  imported := shared.imports.names[name] else return builtin_export(shared, name)
   imported_export(shared.program, imported)
 
 # A generic function is called through generic_callee, so here it is used as a value. A value
@@ -197,7 +197,7 @@ type_of_export := (body: Body, exported: Export, identifier: Identifier, is_call
     when InterfaceExport then fail(body.program, position, "'#{name}' is an interface")
     when GenericExport then fail_only_called(body, identifier)
     when IntrinsicExport
-      type := exported.type ? fail(body.program, position, "'#{name}' can only be called")
+      type := exported.type else fail(body.program, position, "'#{name}' can only be called")
       body.facts.intrinsic_values[identifier] = exported.name
       type
     when ExternExport
@@ -215,7 +215,7 @@ type_of_export := (body: Body, exported: Export, identifier: Identifier, is_call
       { module_index } := exported
       record_reference body, identifier, TopLevelValue(module_index, name: exported.name)
       record_name_constant body, identifier, exported.constant
-      exported.type ? panic('the type of an imported value is not known')
+      exported.type else panic('the type of an imported value is not known')
 
 fail_only_called := (body: Body, identifier: Identifier) ->
   message := "'#{identifier.name}' can only be called so far, not used as a value"

@@ -26,7 +26,7 @@ export struct PlatformBuild
 export described_build := (description: String, system: String) ->
   path := description_path(system)
   values := variables_of(description, path)
-  value := (variable: String) -> values[variable] ? throw CompileError("#{path}: no #{variable}")
+  value := (variable: String) -> values[variable] else throw CompileError("#{path}: no #{variable}")
   platform_sources := value('PLATFORM_SOURCES')
   is_platform_file := (source: String) -> source.starts_with('platform_') and source.ends_with('.c')
   if stray := platform_sources.find((source) -> not is_platform_file(source))
@@ -69,7 +69,7 @@ variables_of := (description: String, path: String) ->
 
 # The system of a target triple, as `platform` names the host's: one of SYSTEMS.
 export target_system := (target: String?) ->
-  triple := target ? return platform.to_string()
+  triple := target else return platform.to_string()
   parts := triple.split('-')
   has_part := (prefix: String) -> parts.any((part) -> part.starts_with(prefix))
   return 'windows' if is_mingw(triple)
@@ -77,6 +77,6 @@ export target_system := (target: String?) ->
 
   # A Linux target's environment, after `linux`, is left out for glibc, or names glibc or musl.
   if at := parts.index_of('linux')
-    environment := parts.get(at + 1) ? 'gnu'
+    environment := parts.get(at + 1) else 'gnu'
     return 'linux' if environment.starts_with('gnu') or environment.starts_with('musl')
   throw CompileError("not a target that the runtime is built for: #{triple}")

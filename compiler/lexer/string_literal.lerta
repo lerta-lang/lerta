@@ -64,7 +64,7 @@ export scan_multiline := (lines: SourceLine[], first: Int, start: Int) ->
 # The least of the leading spaces of the lines that are not blank, which a `"""` or `'''` literal
 # leaves out of each.
 export common_indentation := (lines: String[]) ->
-  (leading_spaces(line) for line in lines when not is_blank(line)).min() ? 0
+  (leading_spaces(line) for line in lines when not is_blank(line)).min() else 0
 
 # Whether the line of a `"""` or `'''` literal is blank, which makes it empty, whatever its
 # indentation.
@@ -86,7 +86,7 @@ closing_quotes := (line: SourceLine) ->
     return i if line.bytes.occurs_at(i, b'"""')
     if line.bytes.occurs_at(i, b'#{')
       brace := find_interpolation_end(line, i + 2)
-      i = (brace ? line.fail('unterminated interpolation', i)) + 1
+      i = (brace else line.fail('unterminated interpolation', i)) + 1
     else
       i +=
         if line.bytes[i] == b'\'
@@ -132,7 +132,7 @@ read_template := (
         plain = i
       when c == b'#' and line.bytes.occurs_at(i + 1, b'{')
         brace := find_interpolation_end(line, i + 2)
-        close := brace ? line.fail('unterminated interpolation', i)
+        close := brace else line.fail('unterminated interpolation', i)
         template.bytes += line.bytes[plain..i]
         source := line.text(i + 2, close)
         template.add_code { source, line: line.number, column: line.column(i + 2) }
@@ -144,16 +144,16 @@ read_template := (
 
 # A `\xHH` escape gives any byte in a Binary literal, and an ASCII one, up to `\x7F`, in a String.
 read_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
-  kind := line.bytes.get(start + 1) ? 0
+  kind := line.bytes.get(start + 1) else 0
   simple := simple_escape(kind)
   if simple
     return { value: simple.binary, end: start + 2 }
   if kind == b'x'
     return read_byte_escape(line, start, is_binary)
   line.fail 'invalid escape sequence', start unless line.bytes.occurs_at(start + 1, b'u{')
-  close := line.index_of(b'}', start + 3) ? line.fail('invalid unicode escape', start)
+  close := line.index_of(b'}', start + 3) else line.fail('invalid unicode escape', start)
   digits := line.bytes[(start + 3)..close]
-  char := parse_char(digits) ? line.fail('invalid unicode escape', start)
+  char := parse_char(digits) else line.fail('invalid unicode escape', start)
   { value: char.to_string().binary, end: close + 1 }
 
 read_byte_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
@@ -163,7 +163,7 @@ read_byte_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
       line.bytes[(start + 2)..end]
     else
       b''
-  value := parse_byte(digits) ? line.fail('invalid byte escape', start)
+  value := parse_byte(digits) else line.fail('invalid byte escape', start)
   if not is_binary and not value <= 0x7F
     line.fail 'a String takes \x00 to \x7F, and other characters as \u{...}', start
   { value: [value].to_binary(), end }
@@ -171,8 +171,8 @@ read_byte_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
 # The Byte that 2 hexadecimal digits give, or nil if they give none.
 export parse_byte := (digits: Binary) ->
   return nil if digits.length != 2
-  high := digits[0].hex_value() ? return nil
-  low := digits[1].hex_value() ? return nil
+  high := digits[0].hex_value() else return nil
+  low := digits[1].hex_value() else return nil
   (high << 4 | low).to_byte()
 
 simple_escape := (kind: Byte) ->
@@ -191,7 +191,7 @@ export parse_char := (digits: Binary) ->
   return nil if digits.is_empty() or digits.length > 6
   var value = 0
   for digit in digits
-    digit_value := digit.hex_value() ? return nil
+    digit_value := digit.hex_value() else return nil
     value = value << 4 | digit_value
   value.to_char()
 
@@ -222,7 +222,7 @@ export find_interpolation_end := (line: SourceLine, start: Int) ->
     else
       case byte
         when b'"' then level.string_start = i
-        when b"'" then i = line.index_of(b"'", i + 1) ? return nil
+        when b"'" then i = line.index_of(b"'", i + 1) else return nil
         when b'{' then level.braces += 1
         when b'}'
           if level.braces > 0

@@ -41,16 +41,16 @@ export add_enums := (shared: Shared, declarations: EnumDeclaration[]) ->
 # The enum of the name, of the module, imported or of std:builtins.
 export enum_type := (shared: Shared, name: String) ->
   return own if own := shared.enums[name]
-  exported := imported_type(shared, name) ? builtin_type(shared, name) ? return nil
+  exported := imported_type(shared, name) else builtin_type(shared, name) else return nil
   exported.type as EnumType?
 
 # `E.MEMBER`, where no local takes the name of the enum E.
 export type_of_qualified_member := (body: Body, member: Member, expected: Type?): Type? ->
-  type := qualifying_enum(body, member) ? return nil
+  type := qualifying_enum(body, member) else return nil
   { name, position } := member.name
   probe_enum body, type if name == COMPLETION_NAME
   no_member := -> fail(body.program, position, "#{type.name} has no member '#{name}'")
-  record_member body, member, EnumValue(name_index(type, name) ? no_member())
+  record_member body, member, EnumValue(name_index(type, name) else no_member())
   where_expected := expected_enum(expected)?.symbol == type.symbol
   alone := not is_name_taken(body, name)
   body.facts.alone_members.add member if alone
@@ -115,9 +115,9 @@ qualifying_enum := (body: Body, member: Member) ->
   enum_type(body.shared, object.name)
 
 export type_of_elided_member := (body: Body, identifier: Identifier, expected: Type?): Type? ->
-  type := expected_enum(expected) ? return nil
+  type := expected_enum(expected) else return nil
   name := identifier.name
-  index := name_index(type, name) ? return nil
+  index := name_index(type, name) else return nil
   if is_name_taken(body, name)
     message := "'#{name}' names something else here; write #{type.name}.#{name}"
     fail body.program, identifier.position, message
@@ -125,7 +125,7 @@ export type_of_elided_member := (body: Body, identifier: Identifier, expected: T
   type
 
 export type_of_literal_member := (body: Body, literal: StringLiteral, expected: Type?): Type? ->
-  type := expected_literal_enum(expected) ? return nil
+  type := expected_literal_enum(expected) else return nil
   text := literal.value
   no_member := ->
     hint :=
@@ -135,7 +135,7 @@ export type_of_literal_member := (body: Body, literal: StringLiteral, expected: 
         ''
     fail body.program, literal.position, "'#{text}' is not a member of #{type.name}#{hint}"
   is_literal_of_text := (member: EnumMember) -> not member.is_name and member.text == text
-  index := type.members.find_index(is_literal_of_text) ? no_member()
+  index := type.members.find_index(is_literal_of_text) else no_member()
   body.facts.enum_literals[literal] = index
   type
 

@@ -7,13 +7,13 @@ import RETURNED_BRANCHES from './rules'
 import Tokens from './tokens'
 
 export returned_branches := (tokens: Tokens, statement: Statement, ends_function: Bool): Edit? ->
-  branches := branches_of(statement) ? return nil
+  branches := branches_of(statement) else return nil
   returns: Return[]
   for branch in branches
-    returned := branch as Return ? return nil
+    returned := branch as Return else return nil
     return nil if returned.value == nil
     returns.push returned
-  start := tokens.text.statement_start(statement) ? return nil
+  start := tokens.text.statement_start(statement) else return nil
   last := statement_end(tokens, start, statement is If)
 
   # Lines moved deeper would change the value of a `"""` or `'''` literal.
@@ -26,14 +26,14 @@ export returned_branches := (tokens: Tokens, statement: Statement, ends_function
   # deeper.
   unless ends_function
     head_line := tokens.code[start].line
-    columns := tokens.line_indentation(head_line) ? 0
+    columns := tokens.line_indentation(head_line) else 0
     changes.push { from: at, to: at, text: "return\n#{' '.repeat(columns + 2)}" }
     for line in (head_line + 1)..=block_end(tokens, tokens.code[last].end_line, columns)
       continue unless tokens.line_indentation(line)
       line_start := Position(line, column: 1)
       changes.push { from: line_start, to: line_start, text: '  ' }
   for returned in returns
-    keyword := tokens.at(returned.position) ? return nil
+    keyword := tokens.at(returned.position) else return nil
     changes.push { from: tokens.start(keyword), to: tokens.start(keyword + 1), text: '' }
   sorted := changes.sorted((a, b) -> a.from.compare(b.from))
   tokens.edit_at(RETURNED_BRANCHES, at, sorted)
@@ -47,10 +47,10 @@ branches_of := (statement: Statement): Statement[]? ->
       return nil if statement.else_body.length != 1
       otherwise := statement.else_body[0]
       inner: Statement[]? = otherwise is If then branches_of(otherwise) else [otherwise]
-      rest := inner ? return nil
+      rest := inner else return nil
       [statement.then_body[0], rest...]
     when Case
-      otherwise := statement.otherwise ? return nil
+      otherwise := statement.otherwise else return nil
       bodies := [arm.body for arm in statement.arms] + [otherwise]
       return nil if bodies.any((body) -> body.length != 1)
       [body[0] for body in bodies]
@@ -75,5 +75,5 @@ statement_end := (tokens: Tokens, start: Int, continues_with_else: Bool) ->
 block_end := (tokens: Tokens, end_line: Int, columns: Int) ->
   comment_lines := Set([comment.line for comment in tokens.comments when comment.own_line])
   var last = end_line
-  last += 1 while last + 1 in comment_lines and tokens.line_indentation(last + 1) ? 0 > columns
+  last += 1 while last + 1 in comment_lines and tokens.line_indentation(last + 1) else 0 > columns
   last

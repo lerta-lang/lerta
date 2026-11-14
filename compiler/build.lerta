@@ -70,7 +70,7 @@ build_then := (request: BuildRequest, run_args: String[]?) ->
 # The output would replace a file that the build reads, which another path may name: a module,
 # whose key is its real path, or a linked file.
 reject_input_as_output := (request: BuildRequest, program: ProgramWide) ->
-  output := request.output ? return
+  output := request.output else return
   return unless is_file(output)
   real_output := real_path(output)
   linked := [real_path(file) for file in request.linked_files when is_file(file)]
@@ -80,7 +80,7 @@ reject_input_as_output := (request: BuildRequest, program: ProgramWide) ->
 
 # clang compiles Objective-C for other systems too, but links it only with Apple's runtime.
 reject_objective_c_off_macos := (request: BuildRequest) ->
-  file := request.linked_files.find((file) -> file.ends_with('.m')) ? return
+  file := request.linked_files.find((file) -> file.ends_with('.m')) else return
   return if target_system(request.kind.target) == 'macos'
   throw CompileError("'#{file}' is Objective-C, which links only for macOS")
 
@@ -99,7 +99,7 @@ build_in_dir := (request: BuildRequest, program: ProgramWide, dir: String, run_a
   if request.source_lines and target_system(request.kind.target) == 'macos'
     return 1 if (await run('dsymutil', executable, cwd: real_path(dir))).code != 0
 
-  program_args := run_args ? return 0
+  program_args := run_args else return 0
   (await run(executable, program_args...)).code
 
 # Links an executable for each of UNIVERSAL_TRIPLES, from objects in a directory of its own under
@@ -110,7 +110,7 @@ build_universal := (request: BuildRequest, program: ProgramWide, dir: String) ->
     make_dir join(dir, triple)
     kind: BuildKind = { request.kind..., target: triple }
     slice_request: BuildRequest = { request..., output: join(dir, "#{triple}/program"), kind }
-    slice := await link_executable(slice_request, program, dir, "#{triple}/") ? return nil
+    slice := await link_executable(slice_request, program, dir, "#{triple}/") else return nil
     slices.push slice
   executable := executable_path(request, dir)
   return nil if (await run('lipo', '-create', '-output', executable, slices...)).code != 0
@@ -129,7 +129,7 @@ executable_path := (request: BuildRequest, dir: String) ->
 # The source's file name without `.lerta`, or `program` for a source without a file.
 program_name := (source: String) ->
   name := base_name(source)
-  stem := name.without_suffix(SOURCE_EXTENSION) ? name
+  stem := name.without_suffix(SOURCE_EXTENSION) else name
   is_given := source == STDIN_NAME
   is_given or stem.is_empty() then 'program' else stem
 
@@ -137,7 +137,7 @@ program_name := (source: String) ->
 # to it start with `prefix`, and link it there; the executable's path, or nil if clang fails.
 link_executable := (request: BuildRequest, program: ProgramWide, dir: String, prefix: String) ->
   { kind } := request
-  runtime := await cached_runtime(kind, dir) ? return nil
+  runtime := await cached_runtime(kind, dir) else return nil
   { function_attributes, coro_end_type } := runtime
   { traces, source_lines, eager_nan_checks } := request
   modules := generate
@@ -153,7 +153,8 @@ link_executable := (request: BuildRequest, program: ProgramWide, dir: String, pr
       system: target_system(kind.target)
     }
   flags := build_flags(kind)
-  objects := await compile_modules({ program, modules, runtime, flags }, dir, prefix) ? return nil
+  objects :=
+    await compile_modules({ program, modules, runtime, flags }, dir, prefix) else return nil
 
   # The linked C and Objective-C files may include the runtime's header.
   compiles_c := request.linked_files.any((file) -> file.ends_with('.c') or file.ends_with('.m'))
@@ -188,7 +189,7 @@ link_executable := (request: BuildRequest, program: ProgramWide, dir: String, pr
     objects...
     flags...
     include_flags...
-    (lto_flags ? [])...
+    (lto_flags else [])...
     lto_objects...
     [real_path(object) for object in runtime.objects]...
     [link_path(cwd, file) for file in request.linked_files]...

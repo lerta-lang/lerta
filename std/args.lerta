@@ -46,17 +46,17 @@ export parse_command := <C: Enum, S: Codable>(args: String[], spec: S): (C, Stri
   commands := members<C>()
   helps := read_spec(spec, [command.to_string() for command in commands], ['help'])
   rows := [
-    (option_name(command.to_string()), helps[command.to_string()]?.help ? '')
+    (option_name(command.to_string()), helps[command.to_string()]?.help else '')
     for command in commands
   ]
   text :=
     ["usage: #{program} <command> [<argument>...]", '', 'commands:', table(rows)...].join("\n")
-  first := args.first() ? exit_with(text, 'missing the command')
+  first := args.first() else exit_with(text, 'missing the command')
   if first == '-h' or first == '--help'
     print text
     exit 0
   command := commands.find((each) -> option_name(each.to_string()) == first)
-  (command ? exit_with(text, "unknown command '#{first}'"), args[1..])
+  (command else exit_with(text, "unknown command '#{first}'"), args[1..])
 
 exit_with := (usage: String, message: String) ->
   print_error "#{program}: #{message}"
@@ -168,7 +168,7 @@ class Form<T: Codable>
 form_of := <T: Codable, S: Codable>(spec: S, command: String?) ->
   fields := fields_of<T>()
   specs := read_spec(spec, [field.name for field in fields], SPEC_KEYS)
-  parts := [Part(field, spec: specs[field.name] ? FieldSpec()) for field in fields]
+  parts := [Part(field, spec: specs[field.name] else FieldSpec()) for field in fields]
   check_parts parts
   Form<T>(parts, command)
 
@@ -233,7 +233,7 @@ asks_for_help := (parts: Part[], args: String[]) ->
     continue if not arg.starts_with('-') or arg == '-'
     (option, inline) := split_inline_value(arg)
     return true if inline == nil and option in ['-h', '--help']
-    part := options[option] ? continue
+    part := options[option] else continue
     i += 1 if inline == nil and part.field.kind != SWITCH
   false
 
@@ -244,11 +244,11 @@ sort_arguments := (parts: Part[], args: String[]): Given[] ->
   add := (part: Part, text: String) ->
     name := part.field.name
     throw ArgsError("#{part.label()} is given twice") if name in texts and not part.field.list
-    texts[name] = [(texts[name] ? [])..., text]
+    texts[name] = [(texts[name] else [])..., text]
   positionals := [part for part in parts when part.spec.positional]
   var next = 0
   add_positional := (text: String) ->
-    part := positionals.get(next) ? throw ArgsError("unexpected argument '#{text}'")
+    part := positionals.get(next) else throw ArgsError("unexpected argument '#{text}'")
     add part, text
     next += 1 unless part.field.list
   var i = 0
@@ -264,18 +264,18 @@ sort_arguments := (parts: Part[], args: String[]): Given[] ->
       break
     if arg.starts_with('-') and arg != '-'
       (option, inline) := split_inline_value(arg)
-      part := options[option] ? throw ArgsError("unknown option #{option}")
+      part := options[option] else throw ArgsError("unknown option #{option}")
       if part.field.kind == SWITCH
         throw ArgsError("#{option} takes no value") if inline != nil
         add part, 'true'
       else
-        value := inline ? args.get(i) ? throw ArgsError("#{option} needs a value")
+        value := inline else args.get(i) else throw ArgsError("#{option} needs a value")
         i += 1 if inline == nil
         add part, value
     else
       add_positional arg
   [
-    { field: part.field, texts: texts[part.field.name] ? [] }
+    { field: part.field, texts: texts[part.field.name] else [] }
     for part in parts
     when part.field.name in texts or part.is_given_always()
   ]
@@ -283,7 +283,7 @@ sort_arguments := (parts: Part[], args: String[]): Given[] ->
 # A long option and the value that follows its `=`, as `--jobs=4`, or the option alone.
 split_inline_value := (arg: String): (String, String?) ->
   return (arg, nil) unless arg.starts_with('--')
-  (option, value) := arg.split_once('=') ? return (arg, nil)
+  (option, value) := arg.split_once('=') else return (arg, nil)
   (option, value)
 
 # The usage of a positional argument: `<file>`, with `...` for a list, in brackets if it may be left
@@ -301,9 +301,9 @@ option_row := (part: Part) ->
   value := field.kind == SWITCH then '' else " <#{part.value_name()}>"
   shown := field.shown_default
   default := shown then " (default: #{shown})" else ''
-  ("#{short}#{part.option()}#{value}", "#{spec.help ? ''}#{default}".trim_start())
+  ("#{short}#{part.option()}#{value}", "#{spec.help else ''}#{default}".trim_start())
 
 # Rows of two columns, the first padded to the widest.
 table := (rows: (String, String)[]) ->
-  width := [char_count(left) for (left, _) in rows].max() ? 0
+  width := [char_count(left) for (left, _) in rows].max() else 0
   ["  #{left.pad_end(width)}  #{right}".trim_end() for (left, right) in rows]

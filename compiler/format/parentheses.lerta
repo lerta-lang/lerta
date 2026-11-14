@@ -73,7 +73,7 @@ class ParenthesesWalk
     # The expression in its place, in the order of the source.
     visit := (value: Expression) ->
       return if value in @unwritten
-      own := @operands[value] ? whole(value)
+      own := @operands[value] else whole(value)
       @check own unless value in @operands
       @operands_checked own
 
@@ -121,9 +121,9 @@ export unvisited_parts := (expression: Expression): Expression[] ->
 # but the innermost where one is needed.
 dropped := (tokens: Tokens, operand: Operand) ->
   { expression, level, last, clarified } := operand
-  open := tokens.at(expression.position) ? return nil
+  open := tokens.at(expression.position) else return nil
   return nil unless is_parenthesized(tokens, open, expression, operands_of(operand))
-  close := tokens.matching(open) ? return nil
+  close := tokens.matching(open) else return nil
   return nil if tokens.code[open].line != tokens.code[close].line
   var pairs = 1
   while tokens.is_kind(open + pairs, '(') and tokens.matching(open + pairs) == close - pairs
@@ -166,7 +166,7 @@ is_parenthesized := (tokens: Tokens, open: Int, expression: Expression, operands
 # the parameters of a function, which `->` or its return type follows.
 starts_with_own := (tokens: Tokens, open: Int, expression: Expression) ->
   return starts_with_parenthesis(expression) unless expression is FunctionLiteral
-  close := tokens.matching(open) ? return true
+  close := tokens.matching(open) else return true
   tokens.is_kind(close + 1, '->') or tokens.is_kind(close + 1, ':')
 
 # The operands of an expression that must bind more tightly than a whole value, or that the style
@@ -195,7 +195,7 @@ operands_of := (operand: Operand): Operand[] ->
     when MapLiteral then [map_key(entry.key) for entry in expression.entries]
     when Comprehension then comprehension_operands(expression)
     when If
-      binding := expression.condition as Binding ? return []
+      binding := expression.condition as Binding else return []
       if expression.nil_safe
         [part(binding.value, POSTFIX, last: false)]
       else

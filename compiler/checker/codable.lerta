@@ -36,7 +36,7 @@ is_codable_module := (shared: Shared) ->
 export reject_uncodable := (body: Body, type: Type, at: Position) ->
   { program } := body
   finder := PartFinder(program, at, bounds: body.resolver.bounds)
-  part := finder.uncodable_part(type, '$') ? return
+  part := finder.uncodable_part(type, '$') else return
   where := part.path == '$' then 'it' else part.path
   reason := "#{where} #{part.problem}"
   fail program, at, "#{format_type(type)} does not satisfy Codable: #{reason}"
@@ -97,7 +97,7 @@ class PartFinder
       for member in type.members
         return part if part := @uncodable_part(member, path)
         no_union := "has a member of type #{format_type(member)}, which no union holds so far"
-        kind := codable_kind(member) ? return { path, problem: no_union }
+        kind := codable_kind(member) else return { path, problem: no_union }
         if other := members_by_kind[kind]
           both := "#{format_type(other)} and #{format_type(member)}"
           problem := "has two members that are #{KIND_WORDS[kind]}, #{both}"
@@ -154,7 +154,8 @@ export type_of_codable_call := (body: Body, call: Call, direction: CodableDirect
     if encodes
       arg_types[1]
     else
-      written := call.type_args.first() ? fail(program, call.position, "#{callee.name}<T> needs T")
+      written :=
+        call.type_args.first() else fail(program, call.position, "#{callee.name}<T> needs T")
       resolve program, body.resolver, written
   reject_uncodable body, type, call.position
   record_reference body, callee, CodableConversion(type, direction)

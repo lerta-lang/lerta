@@ -24,7 +24,7 @@ export check_arguments := (
     fail program, call.position, "cannot call a value of type #{format_type(callee_type)}"
   params := callee_type.params
   packed := packed_arguments(body, call, declaration)
-  args := packed ? call.args
+  args := packed else call.args
   if gathers_per_instance(call, args, params)
     for arg at i in args
       expect_type body, arg, params[i]
@@ -58,7 +58,7 @@ export check_argument_count := (
 # for: `a<b, c>(d)`, without spaces, is one call with type arguments, while `a < b, c > d` is two
 # comparisons.
 comparisons_more := (arg: Expression) ->
-  { callee, args, type_args } := arg as Call ? return 0
+  { callee, args, type_args } := arg as Call else return 0
   names := type_args.all((type) -> type is NamedType and type.args.is_empty() and not type.optional)
   may_be := callee is Identifier and args.length == 1 and type_args.length > 1 and names
   may_be then type_args.length - 1 else 0
@@ -69,14 +69,14 @@ comparisons_more := (arg: Expression) ->
 # variadic parameter. A spread anywhere else is an error.
 export packed_arguments := (body: Body, call: Call, declaration: FunctionLiteral?) ->
   program := body.program
-  params := declaration?.params ? []
+  params := declaration?.params else []
   place := params.find_index(Parameter.variadic)
   packed :=
     if place != nil
       pack_from body, call, params, place
     else
       nil
-  if spread := (packed ? call.args).find(is_spread)
+  if spread := (packed else call.args).find(is_spread)
     fail
       program
       spread.position
@@ -96,13 +96,13 @@ pack_from := (body: Body, call: Call, params: Parameter[], place: Int) ->
   if count < place
     fail body.program, call.position, "expected at least #{place} argument(s), got #{count}"
   elements := call.args[place..]
-  position := elements.first()?.position ? call.position
+  position := elements.first()?.position else call.position
   [fixed..., ArrayLiteral(elements, position)]
 
 # Whether the call gathers named arguments, or none, into a last parameter of a type parameter
 # standing for itself, which only an instance tells to be a struct, an anonymous one or neither.
 gathers_per_instance := (call: Call, args: Expression[], params: Type[]) ->
-  last := inner_of(params.last() ? nil_type)
+  last := inner_of(params.last() else nil_type)
   return false if last is not TypeParameterType or not last.standing
   not call.named_args.is_empty() or args.length == params.length - 1
 
@@ -117,8 +117,8 @@ export gathered_of := (body: Body, call: Call, args: Expression[], params: Type[
 # argument of that parameter: an anonymous struct, or a construction of the struct, so that codegen,
 # which reads named arguments only as a construction, generates the call as any other.
 gathered_argument := (body: Body, call: Call, last_param: Type?): Expression ->
-  position := call.named_args.first()?.name.position ? call.position
-  type := inner_of(last_param ? nil_type)
+  position := call.named_args.first()?.name.position else call.position
+  type := inner_of(last_param else nil_type)
   if type is RecordType
     fields := [arg for arg in call.named_args]
     return RecordLiteral(fields, position)

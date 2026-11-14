@@ -108,7 +108,8 @@ DUMP_SPEC := { source: { positional: true } }
 # for `-`.
 entry_name := (arg: String) ->
   return arg unless arg == STDIN_NAME_ARG
-  text := (await stdin.read_all()).text() ? throw CompileError("#{STDIN_NAME} is not valid UTF-8")
+  text :=
+    (await stdin.read_all()).text() else throw CompileError("#{STDIN_NAME} is not valid UTF-8")
   given_sources[STDIN_NAME] = text
   STDIN_NAME
 
@@ -157,7 +158,7 @@ build_command := (args: String[]) ->
   arguments := parse_args<Build>(args, BUILD_SPEC, 'build')
   target := arguments.target then await build_target(arguments.target)
   request := build_request(arguments, target, usage_text)
-  output := arguments.output ? default_output(request.source, target, usage_text)
+  output := arguments.output else default_output(request.source, target, usage_text)
   await build({ request..., output, source: await entry_name(request.source) })
 
 # The program is built in the temporary directory, for the host.
@@ -172,7 +173,7 @@ run_command := (args: String[]) ->
 # The executable named after the source, which must have a name to take.
 default_output := (source: String, target: String?, usage_text: String) ->
   no_name := -> fail_usage("no name of an executable in #{source}: give -o", usage_text)
-  stem := base_name(source).without_suffix(SOURCE_EXTENSION) ? no_name()
+  stem := base_name(source).without_suffix(SOURCE_EXTENSION) else no_name()
   no_name() if stem.is_empty()
   "#{stem}#{executable_suffix(target)}"
 

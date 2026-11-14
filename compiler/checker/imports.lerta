@@ -111,7 +111,7 @@ export reexports_of := (module: Module) ->
     continue if statement is not Import or not statement.exported
     exporter := module.imported[statement]!
     for name in statement.names
-      local := (name.alias ? name.name).name
+      local := (name.alias else name.name).name
       unless local in reexported
         reexported[local] = { module_index: exporter, name: name.name.name }
   reexported
@@ -127,7 +127,7 @@ followed_export := (program: ProgramWide, ref: ExportRef, passed: Set<String>): 
   return ref if ref.name in shared.exported
   key := "#{ref.module_index} #{ref.name}"
   return nil unless passed.add(key)
-  next := shared.reexported[ref.name] ? return nil
+  next := shared.reexported[ref.name] else return nil
   followed_export(program, next, passed)
 
 # What the module exports under the name, besides its extends.
@@ -180,7 +180,7 @@ check_reexport := (shared: Shared, statement: Import, exporter: Int, reexported:
     { name } := exported
     unless export_ref(program, exporter, name.name)
       fail_no_export program, statement.module, name
-    local := exported.alias ? name
+    local := exported.alias else name
     is_twice := local.name in shared.exported or local.name in reexported
     fail_already_defined program, local if is_twice
     reexported.add local.name
@@ -198,14 +198,14 @@ add_import := (shared: Shared, statement: Import, exporter: Int) ->
   for imported in statement.names
     { name } := imported
     source :=
-      export_ref(program, exporter, name.name) ? fail_no_export(program, statement.module, name)
-    local := imported.alias ? name
+      export_ref(program, exporter, name.name) else fail_no_export(program, statement.module, name)
+    local := imported.alias else name
     fail_already_defined program, local if has_import(shared, local.name)
     names[local.name] = ImportedName(source, name: local, used: false, module: statement.module)
 
 # Whether the module imports a value by the name: a function, a `const` or an extern.
 export imports_value := (shared: Shared, name: String) ->
-  source := shared.imports.names[name]?.source ? return false
+  source := shared.imports.names[name]?.source else return false
   case source
     when ExternExport, IntrinsicExport then true
     when ExportRef
@@ -238,18 +238,18 @@ export has_import := (shared: Shared, name: String) ->
 # Imports the export that a written type's name `alias.export` names, so that the type is found by
 # that name, which this gives (see qualified_import).
 export import_qualified_type := (shared: Shared, type_name: NamedType) ->
-  (alias, name) := type_name.name.split_once('.') ? return nil
+  (alias, name) := type_name.name.split_once('.') else return nil
   qualified_import(shared, alias, Identifier(name, position: type_name.position))
 
 # The name that the export of a module imported as `alias` is imported by, `alias.export`, which
 # this imports on its first use, marking the module's import as used; nil if no module is imported
 # as `alias`. An export that the module does not have is an error.
 export qualified_import := (shared: Shared, alias: String, exported: Identifier) ->
-  imported := shared.imports.modules[alias] ? return nil
+  imported := shared.imports.modules[alias] else return nil
   imported.used = true
   program := shared.program
   name := exported.name
-  source := export_ref(program, imported.module_index, name) ? fail_no_export(
+  source := export_ref(program, imported.module_index, name) else fail_no_export(
     program
     imported.module
     exported
@@ -263,14 +263,14 @@ export qualified_import := (shared: Shared, alias: String, exported: Identifier)
 
 # The imported name, marked as used.
 export use_import := (shared: Shared, name: String) ->
-  imported := shared.imports.names[name] ? return nil
+  imported := shared.imports.names[name] else return nil
   imported.used = true
   imported
 
 # An imported type, marking its import as used.
 export imported_type := (shared: Shared, name: String) ->
-  imported := shared.imports.names[name] ? return nil
-  exported := imported_export(shared.program, imported) as TypeExport ? return nil
+  imported := shared.imports.names[name] else return nil
+  exported := imported_export(shared.program, imported) as TypeExport else return nil
   imported.used = true
   exported
 
@@ -278,10 +278,10 @@ export imported_type := (shared: Shared, name: String) ->
 # marks the import as used. One whose type is not known yet is left to
 # type_of_export, which reports it where it is used.
 export value_local := (shared: Shared, name: String) ->
-  imported := shared.imports.names[name] ? return nil
+  imported := shared.imports.names[name] else return nil
   return imported.local if imported.local
-  exported := imported_export(shared.program, imported) as ValueExport ? return nil
-  type := exported.type ? return nil
+  exported := imported_export(shared.program, imported) as ValueExport else return nil
+  type := exported.type else return nil
   imported.used = true
   local := Local(type, identifier: imported.name, used: true, constant: exported.constant)
   imported.local = local
@@ -289,8 +289,8 @@ export value_local := (shared: Shared, name: String) ->
 
 export builtin_export := (shared: Shared, name: String) ->
   program := shared.program
-  builtins := shared.imports.builtins ? return nil
-  ref := export_ref(program, builtins, name) ? return nil
+  builtins := shared.imports.builtins else return nil
+  ref := export_ref(program, builtins, name) else return nil
   export_of(program, ref.module_index, ref.name)
 
 # The module that declares what std:builtins exports under the name, which std:builtins may export
@@ -301,5 +301,5 @@ export builtins_declarer := (program: ProgramWide, name: String) ->
 
 # A class, struct, enum or alias that std:builtins exports.
 export builtin_type := (shared: Shared, name: String) ->
-  exported := builtin_export(shared, name) ? return nil
+  exported := builtin_export(shared, name) else return nil
   exported is TypeExport then exported

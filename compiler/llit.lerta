@@ -91,7 +91,7 @@ class LlitReader
     true
 
   read_bool := ->
-    literal := @value as BooleanLiteral ? @fail_expected('a Bool')
+    literal := @value as BooleanLiteral else @fail_expected('a Bool')
     @take()
     literal.value
 
@@ -103,7 +103,7 @@ class LlitReader
   # One above the largest Int is beyond what an integer literal holds.
   read_uint64 := ->
     value := @integer('a UInt64')
-    value.to_uint64() ? @fail_last("expected a UInt64, found #{value}")
+    value.to_uint64() else @fail_last("expected a UInt64, found #{value}")
 
   read_float := -> @number('a Float')
 
@@ -116,12 +116,12 @@ class LlitReader
     value
 
   read_string := ->
-    literal := @value as StringLiteral ? @fail_expected('a String')
+    literal := @value as StringLiteral else @fail_expected('a String')
     @take()
     literal.value
 
   read_binary := ->
-    literal := @value as Interpolation ? @fail_expected('a Binary')
+    literal := @value as Interpolation else @fail_expected('a Binary')
     @fail_expected 'a Binary' unless literal.binary
     @take()
     var bytes = b''
@@ -137,16 +137,16 @@ class LlitReader
     chars[0]
 
   read_member := (enum_name: String) ->
-    name := @value as Identifier ? @fail_expected("a member of #{enum_name}")
+    name := @value as Identifier else @fail_expected("a member of #{enum_name}")
     @take()
     name.name
 
   begin_array := ->
-    literal := @value as ArrayLiteral ? @fail_expected('an array')
+    literal := @value as ArrayLiteral else @fail_expected('an array')
     @begin_items literal
 
   begin_set := ->
-    literal := @value as ArrayLiteral ? @fail_expected('a set, as an array')
+    literal := @value as ArrayLiteral else @fail_expected('a set, as an array')
     @begin_items literal
 
   next_item := ->
@@ -157,7 +157,7 @@ class LlitReader
     true
 
   begin_tuple := (count: Int) ->
-    tuple := @value as TupleLiteral ? @fail_expected("a tuple of #{count} items")
+    tuple := @value as TupleLiteral else @fail_expected("a tuple of #{count} items")
     @take()
     if tuple.items.length != count
       @fail_last "expected a tuple of #{count} items, found #{tuple.items.length}"
@@ -170,7 +170,7 @@ class LlitReader
   # `Map()` is the empty map, which `{}` cannot write.
   begin_map := ->
     value := @value!
-    entries := map_entries(value) ? @fail_expected('a map')
+    entries := map_entries(value) else @fail_expected('a map')
     @take()
     values := [entry.value for entry in entries]
     keys := [entry.key for entry in entries]
@@ -183,7 +183,7 @@ class LlitReader
       return nil
     key := level.keys[level.at]
     text :=
-      key as StringLiteral ? @fail_at(key.position, "expected a String key, found #{found(key)}")
+      key as StringLiteral else @fail_at(key.position, "expected a String key, found #{found(key)}")
     @next_named(text.value, key.position, 'key')
 
   begin_entries := -> @begin_map()
@@ -203,7 +203,7 @@ class LlitReader
   fail_duplicate := -> @fail_last('the same as one before')
 
   begin_record := ->
-    record := @value as RecordLiteral ? @fail_expected('a struct')
+    record := @value as RecordLiteral else @fail_expected('a struct')
     @take()
     values := [field.value for field in record.fields]
     names := [field.name for field in record.fields]
@@ -270,15 +270,15 @@ class LlitReader
 
     # The integer to read, which the parser gives with its minus, if it is one that an Int holds.
     integer := (expected: String) ->
-      literal := @value as IntegerLiteral ? @fail_expected(expected)
-      value := literal.value ? @fail_expected(expected)
+      literal := @value as IntegerLiteral else @fail_expected(expected)
+      value := literal.value else @fail_expected(expected)
       @take()
       value
 
     # The number to read, an integer or not, which the parser gives with its minus.
     number := (expected: String) ->
       value := @value!
-      number := number_of(value) ? @fail_expected(expected)
+      number := number_of(value) else @fail_expected(expected)
       @take()
       number
 
@@ -308,7 +308,7 @@ number_of := (value: Expression) ->
 # The entries of a map literal, or none of `Map()`.
 map_entries := (value: Expression): MapEntry[]? ->
   return value.entries if value is MapLiteral
-  call := value as Call ? return nil
+  call := value as Call else return nil
   return nil if call.callee is not Identifier or call.callee.name != 'Map'
   no_args := call.args.is_empty() and call.named_args.is_empty() and call.type_args.is_empty()
   no_args then []
@@ -325,4 +325,4 @@ found := (value: Expression) ->
     when MapLiteral then 'a map'
     when RecordLiteral then 'a struct'
     when TupleLiteral then 'a tuple'
-    else number_text(value) ? 'an expression, which llit does not take'
+    else number_text(value) else 'an expression, which llit does not take'

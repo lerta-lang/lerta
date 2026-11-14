@@ -23,49 +23,49 @@ export struct Narrowable
 
 export narrowable := (body: Body, value: Expression): Narrowable? ->
   if value is Identifier
-    local := narrowable_local(body, value) ? return nil
+    local := narrowable_local(body, value) else return nil
     return { subject: local, current: local.type, declared: local.original().type }
-  path := field_path(body, value) ? return nil
-  current := body.facts.types[value] ? return nil
+  path := field_path(body, value) else return nil
+  current := body.facts.types[value] else return nil
   { current, subject: path, declared: path.declared }
 
 # A local that cannot be emptied as a weak one, nor be assigned where it is read: one that a
 # function literal or a method assigns may be assigned by it at any call (see
 # names_literals_assign).
 narrowable_local := (body: Body, name: Identifier) ->
-  local := lookup(body, name.name) ? return nil
+  local := lookup(body, name.name) else return nil
   origin := local.original()
   return nil if origin.weak or origin.assigned_by_literal
   local
 
 # A path of fields starts from a local that cannot be reassigned, whose paths no assignment ends.
 path_root := (body: Body, name: Identifier) ->
-  local := narrowable_local(body, name) ? return nil
+  local := narrowable_local(body, name) else return nil
   not local.original().mutable then local
 
 # The path of fields that a member reads, if each of them cannot change.
 field_path := (body: Body, value: Expression): FieldPath? ->
-  member := value as Member ? return nil
+  member := value as Member else return nil
   object := member.object
-  object_type := body.facts.types[object] ? return nil
+  object_type := body.facts.types[object] else return nil
   name := member.name
   return nil unless is_fixed_field(body, object_type, name.name)
-  declared := field_type_by_name(body, object_type, name) ? return nil
+  declared := field_type_by_name(body, object_type, name) else return nil
   path_from := (root: Local?, key: String) -> FieldPath(root, declared, key: "#{key}.#{name.name}")
   case object
     when This then path_from(nil, '@')
     when Identifier
-      local := path_root(body, object) ? return nil
+      local := path_root(body, object) else return nil
       path_from(local.original(), object.name)
     when Member
-      outer := field_path(body, object) ? return nil
+      outer := field_path(body, object) else return nil
       path_from(outer.root, outer.key)
     else nil
 
 # The narrower type that the member has where it is, if it reads a narrowed path.
 export narrowed_field_type := (body: Body, member: Member) ->
-  path := field_path(body, member) ? return nil
-  view := path_view(body, path.key) ? return nil
+  path := field_path(body, member) else return nil
+  view := path_view(body, path.key) else return nil
 
   # A local of the same name, defined in an inner scope, starts another path.
   view.root == path.root then view.type
@@ -74,5 +74,5 @@ export narrowed_field_type := (body: Body, member: Member) ->
 # the bodies around it.
 path_view := (body: Body, key: String): PathView? ->
   return view if view := body.scopes.lookup_path(key)
-  enclosing := body.enclosing ? return nil
+  enclosing := body.enclosing else return nil
   path_view(enclosing, key)

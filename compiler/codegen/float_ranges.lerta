@@ -145,7 +145,7 @@ analyze_try := (analysis: Analysis, expression: Try) ->
   blocks := [
     expression.body
     [clause.body for clause in expression.catches]...
-    expression.finally_body ? []
+    expression.finally_body else []
   ]
   forget_locals analysis, assigned_in_blocks(analysis, blocks)
   before := analysis.ranges.to_array()
@@ -157,7 +157,7 @@ analyze_case := (analysis: Analysis, expression: Case) ->
   if subject := expression.subject
     forget_assigned analysis, [subject]
     visit analysis, subject
-  blocks := [[arm.body for arm in expression.arms]..., expression.otherwise ? []]
+  blocks := [[arm.body for arm in expression.arms]..., expression.otherwise else []]
   forget_locals analysis, assigned_in_blocks(analysis, blocks)
   before := analysis.ranges.to_array()
   for block in blocks
@@ -188,8 +188,8 @@ follow := (analysis: Analysis, name: Identifier, range: FloatRange) ->
 
 # Notes a read of a local inside a loop that its declaration is outside of.
 note_read := (analysis: Analysis, identifier: Identifier) ->
-  local := analysis.facts.local_declarations[identifier] ? return
-  depth := analysis.declared_depths[local] ? return
+  local := analysis.facts.local_declarations[identifier] else return
+  depth := analysis.declared_depths[local] else return
   analysis.found.read_in_loops.add local if depth < analysis.loop_depth
 
 # The declaration of the followed local that the target names, if it is one: a local of the
@@ -197,12 +197,12 @@ note_read := (analysis: Analysis, identifier: Identifier) ->
 followed_local := (analysis: Analysis, target: Expression) ->
   return nil unless target is Identifier
   return nil unless analysis.facts.references[target] is ScopedLocal
-  local := analysis.facts.local_declarations[target] ? return nil
+  local := analysis.facts.local_declarations[target] else return nil
   followed := local not in analysis.facts.shared_vars and local not in analysis.top_level_values
   followed then local
 
 is_float_node := (analysis: Analysis, expression: Expression) ->
-  type := analysis.facts.types[expression] ? return false
+  type := analysis.facts.types[expression] else return false
   is_kind(type, 'Float')
 
 # Finds the operations of an expression whose value is not used, as a statement's.
@@ -220,7 +220,7 @@ found_of := (analysis: Analysis, expression: Expression): Found ->
       note_read analysis, expression
       local := followed_local(analysis, expression)
       range := local then analysis.ranges[local]
-      { range: range ? UNKNOWN, nan_free: true }
+      { range: range else UNKNOWN, nan_free: true }
     when UnaryOperation
       if expression.operator != '-' or not is_float_node(analysis, expression)
         return unknown_found(analysis, expression)
@@ -267,9 +267,9 @@ comprehension_found := (analysis: Analysis, comprehension: Comprehension) ->
 
 # `n.to_float()` of an integer of any integer type, which is finite.
 is_integer_to_float := (analysis: Analysis, call: Call) ->
-  member := call.callee as Member ? return false
-  method := analysis.facts.members[member] as Method ? return false
-  source := method.source as BuiltinMethod ? return false
+  member := call.callee as Member else return false
+  method := analysis.facts.members[member] as Method else return false
+  source := method.source as BuiltinMethod else return false
   source.member == INTEGER_TO_FLOAT
 
 # What is known of an expression of no float operation of its own: nothing, but that it is no NaN;
@@ -279,7 +279,7 @@ unknown_found := (analysis: Analysis, expression: Expression) ->
   Found(range: UNKNOWN, nan_free: true)
 
 literal_found := (text: String): Found ->
-  value := text.parse_float() ? return { range: UNKNOWN, nan_free: true }
+  value := text.parse_float() else return { range: UNKNOWN, nan_free: true }
   { range: constant_range(value), nan_free: true }
 
 constant_range := (value: Float) ->
@@ -304,7 +304,8 @@ binary_found := (analysis: Analysis, binary: BinaryOperation): Found ->
   # An operation whose range is not followed may give a NaN.
   square := is_square(analysis, binary)
   (range, nan_free) :=
-    operation(binary, left.range, right.range, square) ? return { range: UNKNOWN, nan_free: false }
+    operation(binary, left.range, right.range, square) else return
+      range: UNKNOWN, nan_free: false
 
   whole := nan_free and left.nan_free and right.nan_free
   analysis.found.alone.add binary if nan_free
@@ -366,7 +367,7 @@ product_bound := (left: FloatRange, right: FloatRange) ->
 # Only a division by a constant other than 0 is followed, which gives no NaN: a range tells no
 # least magnitude, so that a divisor of any other range may be 0.
 quotient := (left: FloatRange, divisor: Float?): (FloatRange, Bool)? ->
-  constant := divisor ? return nil
+  constant := divisor else return nil
   return nil if constant == 0.0
   bound :=
     if finite(left)
@@ -381,7 +382,7 @@ is_square := (analysis: Analysis, binary: BinaryOperation) ->
   return false if binary.operator != '*'
   { left, right } := binary
   return false if left is not Identifier or right is not Identifier
-  local := analysis.facts.local_declarations[left] ? return false
+  local := analysis.facts.local_declarations[left] else return false
   analysis.facts.local_declarations[right] == local
 
 # Narrows the ranges of the locals by the condition, which holds: each comparison that `and` joins
@@ -399,7 +400,7 @@ narrow := (analysis: Analysis, condition: Condition): void ->
   if constant := constant_of(right)
     narrow_comparison analysis, operator, left, constant
   else if constant := constant_of(left)
-    narrow_comparison analysis, MIRRORED[operator] ? '', right, constant
+    narrow_comparison analysis, MIRRORED[operator] else '', right, constant
 
 narrow_by_range := (analysis: Analysis, expression: Expression, range: Range) ->
   if constant := constant_of(range.start!)
@@ -425,8 +426,8 @@ narrow_comparison := (
   if operator in ['<=', '<']
     bound_by analysis, expression, constant
   else if operator in ['>=', '>'] and constant >= 0.0
-    local := followed_local(analysis, expression) ? return
-    range := analysis.ranges[local] ? UNKNOWN
+    local := followed_local(analysis, expression) else return
+    range := analysis.ranges[local] else UNKNOWN
     analysis.ranges[local] = { range..., nonnegative: true }
 
 # Bounds an expression that is at least 0, and at most the constant, through what it is made of:
@@ -436,8 +437,8 @@ bound_by := (analysis: Analysis, expression: Expression, constant: Float): void 
   return if constant >= INFINITY or constant < 0.0
   case expression
     when Identifier
-      local := followed_local(analysis, expression) ? return
-      range := analysis.ranges[local] ? UNKNOWN
+      local := followed_local(analysis, expression) else return
+      range := analysis.ranges[local] else UNKNOWN
       return unless range.nonnegative
       analysis.ranges[local] = { range..., bound: min(range.bound, constant) }
     when BinaryOperation
@@ -449,16 +450,16 @@ bound_by := (analysis: Analysis, expression: Expression, constant: Float): void 
         bound_by analysis, expression.left, constant
         bound_by analysis, expression.right, constant
       else if is_square(analysis, expression)
-        local := followed_local(analysis, expression.left) ? return
-        range := analysis.ranges[local] ? UNKNOWN
+        local := followed_local(analysis, expression.left) else return
+        range := analysis.ranges[local] else UNKNOWN
         root := constant + 1.0
         analysis.ranges[local] = { range..., bound: min(range.bound, root) }
     else pass
 
 is_nonnegative := (analysis: Analysis, expression: Expression) ->
   return true if expression is BinaryOperation and is_square(analysis, expression)
-  local := followed_local(analysis, expression) ? return false
-  (analysis.ranges[local] ? UNKNOWN).nonnegative
+  local := followed_local(analysis, expression) else return false
+  (analysis.ranges[local] else UNKNOWN).nonnegative
 
 # The locals that the blocks assign, at any depth, function literals' bodies included, by their
 # declarations' names. A block may be expressions too, to find the blocks they hold.
@@ -491,12 +492,12 @@ add_assigned := (analysis: Analysis, node: Statement, assigned: Set<Identifier>)
       each child for child in node.body
       for clause in node.catches
         each child for child in clause.body
-      each child for child in node.finally_body ? []
+      each child for child in node.finally_body else []
     when Case
       each subject if subject := node.subject
       for arm in node.arms
         each child for child in arm.body
-      each child for child in node.otherwise ? []
+      each child for child in node.otherwise else []
     when FunctionLiteral then each(child) for child in node.body
     when
       Pass, Import, TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern,

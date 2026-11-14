@@ -140,7 +140,7 @@ export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = f
       operands.push operand
       continue
     cell := local is SlotLocal then local.cell
-    owned := cell ? panic("the captured var '#{capture.name}' has no cell")
+    owned := cell else panic("the captured var '#{capture.name}' has no cell")
     emit_retain g.ir, owned.cell unless on_stack
     operands.push owned.cell
   if on_stack
@@ -209,7 +209,7 @@ captured_value := (g: Generator, local: CodegenLocal, capture: Capture) ->
 # A weak literal's `@`, captured as its box, is its object for the whole call, which does nothing if
 # the object is gone.
 hold_weak_this := (g: Generator, scope: Map<String, CodegenLocal>) ->
-  captured := scope['@'] ? return
+  captured := scope['@'] else return
   ir := g.ir
   object := emit_weak_object(ir, held_value(g, captured))
   gone_label := ir.fresh_label('weak.gone')
@@ -298,7 +298,7 @@ generate_function_body := (
     bind '(closure)', '%closure', type
 
   # A captured var is its cell, which the closure holds; the literal reads and writes through it.
-  captured := captures ? []
+  captured := captures else []
   slots := [capture_slot(capture) for capture in captured]
   for capture at i in captured
     { name, type, is_var } := capture
@@ -401,7 +401,7 @@ export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo)
   scope := g.locals.push()
   scope['@'] = ValueLocal(operand: object, type: info.type)
   for field in info.fields
-    value := field.value ? continue
+    value := field.value else continue
     compute := -> store_field(g, object, info, field, generate(g, value))
     if field.has_default
       emit_when ir, ir.negate(given(field)), compute
@@ -459,7 +459,7 @@ emit_return := (g: Generator, value: String, type: Type): void ->
 # in between, and which the read goes through, as a loop or a comprehension does or as the object
 # of a method, in the local's own scope, so that what the value reads by name is the same there.
 defers_to_read := (g: Generator, declaration: Declaration) ->
-  read := g.facts.lazy_reads[declaration.name] ? return nil
+  read := g.facts.lazy_reads[declaration.name] else return nil
 
   # A top-level value is read by functions too, which the checker counts no reads of.
   return nil if g.top_level_code and g.locals.depth() == 1

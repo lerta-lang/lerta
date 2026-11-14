@@ -21,7 +21,7 @@ export struct Annotating
 
 # Nil for a program that does not check.
 export annotating_of := (program: Statement[], typed: Typed?): Annotating? ->
-  known := typed ? return nil
+  known := typed else return nil
   { typed: known, functions: functions_of(program) }
 
 export annotation_edits := (tokens: Tokens, value: Expression, annotating: Annotating): Edit?[] ->
@@ -84,7 +84,7 @@ functions_of := (statements: Statement[]) ->
 # The types of the variables, the functions and the fields of the program, in their order, which
 # the types left out must keep (see rewritten_text); nil for a program that does not check.
 export declared_types := (statements: Statement[], typed: Typed?) ->
-  { program, facts } := typed ? return nil
+  { program, facts } := typed else return nil
   fields: Map<Identifier, Type>
   for info in program.infos.values()
     for field in info.fields
@@ -117,8 +117,8 @@ left_out_type := (
   return nil if has_expected_parts(value, facts)
   moves_to_type_arguments := collection != nil
   return nil unless declared_inferable({ name, value, moves_to_type_arguments }, facts, program)
-  name_at := tokens.at(name.position) ? return nil
-  value_at := tokens.at(value.position) ? return nil
+  name_at := tokens.at(name.position) else return nil
+  value_at := tokens.at(value.position) else return nil
   assign := value_at - 1
   return nil if not tokens.is_kind(name_at + 1, ':') or not tokens.is_kind(assign, '=')
   return nil if names_import(tokens, name_at + 2, assign, typed)
@@ -129,8 +129,8 @@ left_out_type := (
 
   changes := [change]
   if { call, type } := collection
-    callee := tokens.at(call.callee.position) ? return nil
-    type_at := tokens.at(type.position) ? return nil
+    callee := tokens.at(call.callee.position) else return nil
+    type_at := tokens.at(type.position) else return nil
     arguments := tokens.slice(tokens.start(type_at + 1), tokens.end(assign - 1))
     changes.push { from: tokens.end(callee), to: tokens.end(callee), text: arguments }
   tokens.edit_at(TYPE_ANNOTATIONS, tokens.start(name_at + 1), changes)
@@ -144,9 +144,9 @@ struct Collection
 # without type arguments, which takes those of the type then; an empty one only if the declaration
 # `keeps_empty` values.
 collection_call := (written: TypeName?, value: Expression, flags: { keeps_empty: Bool }) ->
-  type := written as NamedType ? return nil
-  call := value as Call ? return nil
-  callee := call.callee as Identifier ? return nil
+  type := written as NamedType else return nil
+  call := value as Call else return nil
+  callee := call.callee as Identifier else return nil
   return nil if type.optional or type.args.is_empty() or not call.type_args.is_empty()
   return nil if callee.name != type.name or callee.name not in ['Map', 'Set']
   is_empty := call.args.is_empty() and call.named_args.is_empty()
@@ -160,9 +160,9 @@ function_types := (
   tokens: Tokens, function: FunctionLiteral, typed: Typed, functions: Functions
 ): Edit?[] ->
   return [] if not function.type_params.is_empty() or function in functions.generic
-  open := tokens.at(function.position) ? return []
+  open := tokens.at(function.position) else return []
   return [] unless tokens.is_kind(open, '(')
-  close := tokens.matching(open) ? return []
+  close := tokens.matching(open) else return []
   returned := left_out_return(tokens, function, open, close, typed)
 
   # `(x): T ->` does not parse: a parameter without its type takes the return type with it.
@@ -180,11 +180,11 @@ left_out_parameter := (
   tokens: Tokens, function: FunctionLiteral, i: Int, close: Int, typed: Typed
 ) ->
   { name, default, variadic } := function.params[i]
-  return nil if variadic or not typed.program.inferable_parameters[name] ? false
+  return nil if variadic or not typed.program.inferable_parameters[name] else false
   return nil if default != nil and has_expected_parts(default, typed.facts)
-  name_at := tokens.at(name.position) ? return nil
+  name_at := tokens.at(name.position) else return nil
   return nil unless tokens.is_kind(name_at + 1, ':')
-  bound := parameter_bound(tokens, function.params, i, close) ? return nil
+  bound := parameter_bound(tokens, function.params, i, close) else return nil
   last :=
     if tokens.is_kind(bound - 1, ',')
       bound - 2
@@ -198,7 +198,7 @@ left_out_parameter := (
 # `)` of the list.
 parameter_bound := (tokens: Tokens, params: Parameter[], i: Int, close: Int) ->
   if value := params[i].default
-    value_at := tokens.at(value.position) ? return nil
+    value_at := tokens.at(value.position) else return nil
     return
       if tokens.is_kind(value_at - 1, '=')
         value_at - 1
@@ -215,11 +215,11 @@ left_out_return := (
   return nil if function.return_type == nil
   { facts, program } := typed
   last := function.body.last() as Expression?
-  results := [(facts.results[function] ? [])..., (last then [last] else [])...]
+  results := [(facts.results[function] else [])..., (last then [last] else [])...]
   return nil if results.any((value) -> has_expected_parts(value, facts))
   return nil unless return_inferable(function, last, facts, program)
   return nil unless tokens.is_kind(close + 1, ':')
-  arrow := arrow_after(tokens, close + 2) ? return nil
+  arrow := arrow_after(tokens, close + 2) else return nil
   return nil if names_import(tokens, close + 2, arrow, typed)
 
   # Without its parameters, the function is written without the `()`.
@@ -236,7 +236,7 @@ arrow_after := (tokens: Tokens, from: Int) ->
     return i if tokens.is_kind(i, '->')
     closing :=
       if tokens.code[i].kind in OPENING_BRACKETS
-        tokens.matching(i) ? return nil
+        tokens.matching(i) else return nil
       else
         i
     i = closing + 1
@@ -267,7 +267,7 @@ has_expected_parts := (value: Expression, facts: NodeFacts) ->
 # its type, nor of a weak one.
 left_out_field_type := (tokens: Tokens, member: MemberDeclaration, typed: Typed) ->
   { type, value } := member
-  given := value ? return nil
+  given := value else return nil
   return nil if type == nil or given is FunctionLiteral
   return nil if member.is_weak()
 

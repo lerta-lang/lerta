@@ -58,9 +58,9 @@ check_literal := (
     message := "expected #{expected}, got a function of #{count} parameter(s)"
     fail program, literal.position, message
   known := (type: Type?) ->
-    found := type ? return nil
+    found := type else return nil
     not is_pattern(found) then found
-  known_params := [known(type) for type in expected_params ? []]
+  known_params := [known(type) for type in expected_params else []]
   params := parameter_types(program, body.resolver, literal, known_params)
   return_type := literal.return_type
   annotated :=
@@ -85,15 +85,15 @@ check_literal := (
 # What a function literal declared as a local sees its name as in its body: itself, where its type
 # is written, on it or on the declaration, so that it is known before its body is checked.
 self_local := (body: Body, literal: FunctionLiteral, params: Type[], result: Type?) ->
-  name := body.facts.local_function_names[literal] ? return nil
-  written := result ? return nil
+  name := body.facts.local_function_names[literal] else return nil
+  written := result else return nil
   body.facts.sees_itself.add literal
   Local(identifier: name, used: true, type: FunctionType(params, result: written))
 
 # The type of `@` where the body is: in a method, or in a function literal written in one.
 this_type := (body: Body): Type? ->
   return self.type if self := body.self
-  enclosing := body.enclosing ? return nil
+  enclosing := body.enclosing else return nil
   this_type(enclosing)
 
 is_class_object := (type: Type?) -> (type as ObjectType?)?.is_struct == false
@@ -118,8 +118,8 @@ reject_weak_result := (program: ProgramWide, literal: FunctionLiteral, result: T
 # A local of an enclosing function, seen from a function literal, which captures its value; a
 # top-level value is not captured but read where it is.
 export captured := (body: Body, name: String): Local? ->
-  enclosing := body.enclosing ? return nil
-  local := enclosing.scopes.lookup_local(name) ? captured(enclosing, name) ? return nil
+  enclosing := body.enclosing else return nil
+  local := enclosing.scopes.lookup_local(name) else captured(enclosing, name) else return nil
 
   # A local function before its declaration is not captured, but made where it is read.
   return local if local.original().pending

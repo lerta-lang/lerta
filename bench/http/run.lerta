@@ -29,7 +29,7 @@ has_go := await is_found('go')
 run_checked := (label: String, command: Command, capture = false) ->
   (failure, output) := await run_failure(label, command, capture)
   fail failure if failure
-  output.text() ? fail("#{label} printed what is not UTF-8")
+  output.text() else fail("#{label} printed what is not UTF-8")
 
 # The command that runs the server in the language, built first if it is compiled; nil where the
 # language's compiler is missing.
@@ -62,7 +62,7 @@ measure := (label: String, port: String, path: String) ->
 
 load_count := (label: String, args: String[]) ->
   text := await run_checked(label, { program: LOAD, args }, true)
-  text.trim().parse_int() ? fail("#{label} printed no count: #{text}")
+  text.trim().parse_int() else fail("#{label} printed no count: #{text}")
 
 stop := (serving: Promise<Exit>) ->
   serving.cancel()
@@ -79,7 +79,7 @@ best_rate := (label: String, server: Command, path: String) ->
     serving := run(server.program, server.args..., stdout: output)
     var rate = 0.0
     try
-      port := await output.reader.read_line() ? fail("#{label}: the server printed no port")
+      port := await output.reader.read_line() else fail("#{label}: the server printed no port")
       rate = await measure(label, port.trim(), path)
     finally
       await stop(serving)

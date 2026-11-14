@@ -44,7 +44,7 @@ tested := (body: Body, condition: Condition): Tested? ->
       return nil unless is_equality_operator(operator)
       if value := nil_tested(condition.left, condition.right)
         return { value, condition_value: operator == '!=' }
-      value := value_tested(body, condition.left, condition.right) ? return nil
+      value := value_tested(body, condition.left, condition.right) else return nil
       { value, condition_value: operator == '==' }
     else nil
 
@@ -53,7 +53,7 @@ is_name_or_member := (value: Expression) -> value is Identifier | Member
 # The name or member that one side compares with a value on the other that cannot be nil.
 value_tested := (body: Body, left: Expression, right: Expression) ->
   cannot_be_nil := (operand: Expression) ->
-    type := body.facts.types[operand] ? return false
+    type := body.facts.types[operand] else return false
     not (type is OptionalType or is_kind(type, 'nil'))
   case
     when is_name_or_member(left) and cannot_be_nil(right) then left
@@ -81,7 +81,7 @@ export ends_with_jump := (statements: Statement[], is_never: (Expression) -> Boo
     finally_body := last.finally_body
     blocks.all(jumps) or (finally_body != nil and jumps(finally_body))
   else
-    expression := last as Expression ? return false
+    expression := last as Expression else return false
     is_never(expression)
 
 # A view of a local with a narrower type, which marks the local itself as used.
@@ -98,7 +98,7 @@ export narrowings_of := (body: Body, condition: Condition): ConditionNarrowings 
   if condition is BinaryOperation
     operator := condition.operator
     return narrowings_of_logical(body, condition) if operator in ['and', 'or']
-  tested_narrowings(body, condition) ? narrowings_only_where([], true)
+  tested_narrowings(body, condition) else narrowings_only_where([], true)
 
 # Both operands narrow where `a and b` holds, or where `a or b` does not.
 narrowings_of_logical := (body: Body, logical: BinaryOperation) ->
@@ -124,7 +124,7 @@ export where_right_operand := (body: Body, logical: BinaryOperation, check: () -
   body.awaiting_right_operands.add logical if body.awaits > awaits
 
 is_outer_var := (body: Body, narrowing: Narrowing) ->
-  subject := narrowing.subject as Local ? return false
+  subject := narrowing.subject as Local else return false
   body.scopes.is_outer_var(subject.identifier.name, subject.original())
 
 # Runs `check` with the narrowings, in a scope of their own.
@@ -144,8 +144,8 @@ export narrow := (body: Body, narrowings: Narrowing[]) ->
 
 # How a test such as `x != nil` or `x is T` narrows the local or the path it tests.
 tested_narrowings := (body: Body, condition: Condition) ->
-  test := tested(body, condition) ? return nil
-  value := narrowable(body, test.value) ? return nil
+  test := tested(body, condition) else return nil
+  value := narrowable(body, test.value) else return nil
   { subject } := value
   if is_type := test.is_type
     declared := inner_of(value.declared)

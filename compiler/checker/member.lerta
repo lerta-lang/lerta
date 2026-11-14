@@ -91,8 +91,8 @@ type_of_method := (body: Body, member: Member, receiver: Type, source: MethodSou
       if problem := union_method_problem(body, receiver, member.name)
         fail body.program, position, problem
       return common_field_type(body, receiver, member)
-    field_type(body, receiver, member) ? no_method()
-  method := from_source ? field()
+    field_type(body, receiver, member) else no_method()
+  method := from_source else field()
   record_member body, member, from_source then Method(source!) else Property(FIELD)
   set_type(body, member, method)
 
@@ -134,7 +134,7 @@ bound_method := (body: Body, type: TypeParameterType, name: String): MethodSourc
   BuiltinMethod(member: EQUALS, type: FunctionType(params: [type], result: bool_type))
 
 bound_member := (body: Body, type: TypeParameterType, name: String) ->
-  bound := body.resolver.bounds[type.name] ? return nil
+  bound := body.resolver.bounds[type.name] else return nil
   interface_member(body.program, bound, name, type)
 
 # The method of the name that every member of the union has, of one type, or nil.
@@ -167,7 +167,7 @@ find_union_method := (body: Body, union: UnionType, name: Identifier): UnionMeth
     of_member := "of #{member_name}, a member of #{format_type(union)}"
     failed := (problem: String) -> UnionMethods(members, problem, type: nil)
     missing := "'#{name.name}' is no method #{of_member}"
-    source := find_callable(body, member, name) ? return failed(missing)
+    source := find_callable(body, member, name) else return failed(missing)
     if generic_method(source) != nil
       return failed(generic_problem(source, name.name, of_member))
     type := method_type(body, member, source, name, nil)!
@@ -190,7 +190,7 @@ generic_problem := (source: MethodSource, name: String, of_member: String) ->
 # member of the type of the same name would make the call ambiguous.
 find_callable := (body: Body, receiver: Type, name: Identifier): MethodSource? ->
   own := callable(body, receiver, name)
-  extended := find_interface_extension(body, receiver, name) ? return own
+  extended := find_interface_extension(body, receiver, name) else return own
   if own != nil or field_type_by_name(body, receiver, name) != nil
     from := "from an extend of #{format_type(extended.bound!)} in #{extended.module_name}"
     gets := "has a member '#{name.name}', and gets a method of that name #{from}"
@@ -222,7 +222,7 @@ is_instance_body := (body: Body) ->
 # it.
 method_type := (body: Body, receiver: Type, source: MethodSource, name: Identifier, call: Call?) ->
   if generic := generic_method(source)
-    instance := receiver_instance(body, generic, receiver, name.position, call) ? return nil
+    instance := receiver_instance(body, generic, receiver, name.position, call) else return nil
     return instance.entry.type
   case source
     when OwnMethod then object_method_type(body, source.receiver, name)
@@ -234,10 +234,10 @@ method_type := (body: Body, receiver: Type, source: MethodSource, name: Identifi
 # given, calls a generic method.
 export find_member := (body: Body, type: Type, name: Identifier, call: Call? = nil): FoundMember? ->
   if source := find(body, type, name)
-    method := method_type(body, type, source, name, call) ? return nil
+    method := method_type(body, type, source, name, call) else return nil
     return { target: Method(source), type: method }
   if type is UnionType
-    common := common_field_type_by_name(body, type, name) ? return nil
+    common := common_field_type_by_name(body, type, name) else return nil
     return { target: Property(FIELD), type: common }
   if field := field_type_by_name(body, type, name)
     return { target: Property(FIELD), type: field }
@@ -309,7 +309,7 @@ export type_of_property := (body: Body, member: Member, expected: Type?): Type -
     return common_field_type(body, object_type, member)
   if field := field_type(body, object_type, member)
     record_member body, member, Property(FIELD)
-    return narrowed_field_type(body, member) ? field
+    return narrowed_field_type(body, member) else field
   if property := property_of(body, object_type, name)
     record_member body, member, property.target
     return property.type

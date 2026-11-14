@@ -53,7 +53,7 @@ instance_of_call := (
   program := body.program
   generic := generic_of(program, ref)
   packed := packed_arguments(body, call, generic.literal)
-  args := packed ? call.args
+  args := packed else call.args
   gathered := gathered_in_generic(body, call, args, generic)
   passed := gathered then [args..., gathered] else args
   check_argument_count
@@ -118,8 +118,8 @@ add_witnesses := (
 ): void ->
   { program } := body
   for (param, bound) in generic.type_params.zip(generic.bounds)
-    type := type_bindings[param.name.name] ? continue
-    written := bound ? continue
+    type := type_bindings[param.name.name] else continue
+    written := bound else continue
     bound_type := substitute(written, type_bindings) as InterfaceType!
     for member in members_for(program, bound_type, type)
       source := find_method(program, type, member.name, body.extensions)
@@ -129,7 +129,7 @@ add_witnesses := (
         if by_parts
           for method in extension_methods(program, program.parts_plans[by_parts.parts!])
             witnesses.methods.add method
-      ref := generic_method(source) ? continue
+      ref := generic_method(source) else continue
       key := "#{ref.module_index}.#{ref.index} #{type_key(type)}"
       continue unless witnesses.visited.add(key)
       add_witnesses body, generic_of(program, ref), receiver_bindings(program, ref, type), witnesses
@@ -145,7 +145,7 @@ generic_method := (source: MethodSource?) ->
 # The type arguments that the receiver of the generic method gives, matched against the type.
 receiver_bindings := (program: ProgramWide, ref: GenericRef, type: Type) ->
   type_bindings: Map<String, Type>
-  receiver := generic_of(program, ref).receiver ? return type_bindings
+  receiver := generic_of(program, ref).receiver else return type_bindings
   bind := (name: String, bound: Type) -> type_bindings[name] = bound
   infer receiver.type, type, bind
   type_bindings
@@ -158,7 +158,7 @@ type_arguments_of := (
   binding_of := (param: TypeParameter) ->
     name := param.name.name
     written := generic.receiver then "x.#{callee}" else callee
-    inferred[name] ? fail_cannot_infer(body.program, call.position, name, callee, written)
+    inferred[name] else fail_cannot_infer(body.program, call.position, name, callee, written)
   given := [binding_of(param) for param in generic.type_params]
   types := [each.type for each in given]
   reject_unsatisfied_bounds body, generic, types, [each.at for each in given]

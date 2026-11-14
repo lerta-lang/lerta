@@ -144,9 +144,9 @@ class Rewriting
   # check waits.
   negation_edit := (negation: UnaryOperation) ->
     tokens := @tokens
-    inner := negation.operand as UnaryOperation ? return negated_test(tokens, negation)
+    inner := negation.operand as UnaryOperation else return negated_test(tokens, negation)
     return negated_test(tokens, negation) if @typed?.facts.types[inner.operand] != bool_type
-    edit := double_negation(tokens, negation) ? return negated_test(tokens, negation)
+    edit := double_negation(tokens, negation) else return negated_test(tokens, negation)
     @claimed.add inner
     edit
 
@@ -178,7 +178,7 @@ class Rewriting
 # The last statement of the block, which gives its value, and those of the branches of an `if` or a
 # `case` that it is, which give that.
 add_ends := (ends: Set<Statement>, block: Statement[]): void ->
-  last := block.last() ? return
+  last := block.last() else return
   ends.add last
   case last
     when If
@@ -193,7 +193,7 @@ add_ends := (ends: Set<Statement>, block: Statement[]): void ->
 # written, each asked about after those inside it (see KeptLines).
 kept_lines := (program: Statement[], text: SourceTokens, kept: KeptLines) ->
   places_of program, { statement: (statement, next) ->
-    start := text.statement_start(statement) ? return
+    start := text.statement_start(statement) else return
     kept.keeps text.code[start].position(), next then text.first_position(next)
   }
   kept.kept
@@ -202,8 +202,8 @@ kept_lines := (program: Statement[], text: SourceTokens, kept: KeptLines) ->
 # type may leave out the body (see pass in docs/reference/syntax.md).
 unneeded_pass := (tokens: Tokens, node: TypeDeclaration) ->
   return nil if node.satisfies == nil or not node.members.is_empty()
-  head := tokens.at(node.position) ? return nil
-  last := tokens.line_end(head) ? return nil
+  head := tokens.at(node.position) else return nil
+  last := tokens.line_end(head) else return nil
   pass_at := last + 1
   return nil unless is_pass_body(tokens.code, head, pass_at)
 
@@ -219,7 +219,7 @@ unneeded_pass := (tokens: Tokens, node: TypeDeclaration) ->
 # its line as `c then a else b`, with its head (see Branches), where each part is on a line of its
 # own without a comment.
 two_way_value := (tokens: Tokens, value: Expression) ->
-  branch := value as If ? return nil
+  branch := value as If else return nil
   { then_body, else_body } := branch
 
   # A condition that binds a name is no operand.
@@ -227,18 +227,18 @@ two_way_value := (tokens: Tokens, value: Expression) ->
 
   return nil if then_body.length != 1 or else_body.length != 1
   return nil if not then_body.all(is_value) or not else_body.all(is_value)
-  if_at := tokens.at(branch.position) ? return nil
-  then_at := tokens.at(then_body[0].position) ? return nil
-  else_at := tokens.at(else_body[0].position) ? return nil
+  if_at := tokens.at(branch.position) else return nil
+  then_at := tokens.at(then_body[0].position) else return nil
+  else_at := tokens.at(else_body[0].position) else return nil
   return nil unless tokens.is_kind(else_at - 1, 'else')
   first_line := tokens.code[if_at].line
   last_line := tokens.code[else_at].end_line
   return nil if tokens.comments.any((comment) -> comment.line in first_line..=last_line)
 
   # Each part ends its line, as the next part, `else`, or a line no deeper than `else` follows.
-  condition_end := tokens.line_end(if_at + 1) ? return nil
-  then_end := tokens.line_end(then_at) ? return nil
-  else_end := tokens.line_end(else_at) ? return nil
+  condition_end := tokens.line_end(if_at + 1) else return nil
+  then_end := tokens.line_end(then_at) else return nil
+  else_end := tokens.line_end(else_at) else return nil
   after := else_end + 1
   ends_block :=
     after == tokens.code.length or tokens.code[after].column <= tokens.code[else_at - 1].column
@@ -262,9 +262,9 @@ two_way_value := (tokens: Tokens, value: Expression) ->
 # The column that a call without parentheses takes for them as a part of an operation: one, as its
 # `(` takes the place of the space after its callee.
 added_parentheses := (tokens: Tokens, statement: Statement) ->
-  call := statement as Call ? return 0
-  first := call.args.first()?.position ? call.named_args.first()?.name.position ? return 0
-  at := tokens.at(first) ? return 0
+  call := statement as Call else return 0
+  first := call.args.first()?.position else call.named_args.first()?.name.position else return 0
+  at := tokens.at(first) else return 0
   if tokens.is_kind(at - 1, '(')
     0
   else
@@ -296,9 +296,9 @@ single_quoted_text := (token: Token, written: String) ->
     when STRING then written.starts_with('"') then token.text
     when BINARY
       return nil unless written.starts_with('b"')
-      parts := token.parts ? return nil
+      parts := token.parts else return nil
       return '' if parts.is_empty()
-      part := parts[0] as TextPart ? return nil
+      part := parts[0] as TextPart else return nil
       parts.length == 1 then part.bytes.text()
     else nil
 
@@ -308,25 +308,26 @@ binary_literal := (tokens: Tokens, member: Member) ->
   { object } := member
   is_string := object is StringLiteral or (object is Interpolation and not object.binary)
   return nil unless is_string
-  start := tokens.at(object.position) ? return nil
+  start := tokens.at(object.position) else return nil
   var literal = start
   literal += 1 while tokens.is_kind(literal, '(')
   return nil if tokens.code[literal].end_line > tokens.code[literal].line
-  name := tokens.at(member.name.position) ? return nil
+  name := tokens.at(member.name.position) else return nil
   change :=
     Change(from: tokens.start(start), to: tokens.end(name), text: 'b' + tokens.spelling(literal))
   tokens.edit(BINARY_LITERALS, [change])
 
-# `x as T ? y` for `(x as T?) ? y` (see Cast fallbacks): the parentheses and the `?` inside them
-# left out; but not where the place of the fallback, written without parentheses, binds more tightly
-# than a comparison, as `x as T ? y` binds as one: `(x as T?) ? y as U` is `((x as T?) ? y) as U`.
+# `x as T else y` for `(x as T?) else y` (see Cast fallbacks): the parentheses and the `?` inside
+# them left out; but not where the place of the fallback, written without parentheses, binds more
+# tightly than a comparison, as `x as T else y` binds as one: `(x as T?) else y as U` is
+# `((x as T?) else y) as U`.
 cast_fallback := (tokens: Tokens, coalesce: Coalesce, tight: Set<Expression>) ->
-  cast := cast_of(coalesce) ? return nil
+  cast := cast_of(coalesce) else return nil
   return nil if coalesce in tight and coalesce.position == cast.position
-  open := tokens.at(cast.position) ? return nil
+  open := tokens.at(cast.position) else return nil
   return nil unless tokens.is_kind(open, '(')
-  close := tokens.matching(open) ? return nil
-  type := tokens.at(cast.type.position) ? return nil
+  close := tokens.matching(open) else return nil
+  type := tokens.at(cast.type.position) else return nil
 
   # Parentheses around the cast alone, not around what it casts, on one line.
   around := close > type and tokens.is_kind(close - 1, '?')
@@ -338,12 +339,12 @@ cast_fallback := (tokens: Tokens, coalesce: Coalesce, tight: Set<Expression>) ->
 # `c then x` for `c then x else nil` (see Else nil).
 else_nil := (tokens: Tokens, conditional: Conditional) ->
   return nil if conditional.without_else or conditional.else_value is not NilLiteral
-  value := tokens.at(conditional.else_value.position) ? return nil
+  value := tokens.at(conditional.else_value.position) else return nil
   word := value - 1
   return nil unless tokens.is_kind(word, 'else')
   last :=
     if tokens.is_kind(value, '(')
-      tokens.matching(value) ? return nil
+      tokens.matching(value) else return nil
     else
       value
   tokens.edit(ELSE_NIL, [{ from: tokens.end(word - 1), to: tokens.end(last), text: '' }])
@@ -352,10 +353,10 @@ else_nil := (tokens: Tokens, conditional: Conditional) ->
 # one that an alias or a union makes optional keeps its value.
 nil_initial_value := (tokens: Tokens, declaration: Declaration) ->
   { mutable, type, value } := declaration
-  written := type ? return nil
+  written := type else return nil
   optional := written is not UnionTypeName and written.optional
   return nil if not mutable or not optional or value is not NilLiteral or declaration.omits_value
-  nil_at := tokens.at(value.position) ? return nil
+  nil_at := tokens.at(value.position) else return nil
   return nil if not tokens.is_kind(nil_at, 'nil') or not tokens.is_kind(nil_at - 1, '=')
   change := Change(from: tokens.end(nil_at - 2), to: tokens.end(nil_at), text: '')
   tokens.edit(NIL_INITIAL_VALUES, [change])
@@ -366,10 +367,10 @@ nil_initial_value := (tokens: Tokens, declaration: Declaration) ->
 # of an optional type: the formatter cannot tell it optional.
 nil_field := (tokens: Tokens, node: TypeDeclaration, member: MemberDeclaration) ->
   { type, value } := member
-  written := type ? return nil
+  written := type else return nil
   is_nil_without := node.is_struct or member.in_args or member.is_mutable()
   return nil if not written.optional or not is_nil_without or value is not NilLiteral
-  nil_at := tokens.at(value.position) ? return nil
+  nil_at := tokens.at(value.position) else return nil
   return nil if not tokens.is_kind(nil_at, 'nil') or not tokens.is_kind(nil_at - 1, '=')
   change := Change(from: tokens.end(nil_at - 2), to: tokens.end(nil_at), text: '')
   tokens.edit(NIL_FIELDS, [change])
@@ -379,21 +380,21 @@ nil_field := (tokens: Tokens, node: TypeDeclaration, member: MemberDeclaration) 
 empty_initial_value := (tokens: Tokens, declaration: Declaration) ->
   return nil if declaration.weak
   { type, value } := declaration
-  start := tokens.at(value.position) ? return nil
-  name := tokens.at(declaration.name.position) ? return nil
+  start := tokens.at(value.position) else return nil
+  name := tokens.at(declaration.name.position) else return nil
   case value
     when ArrayLiteral
-      array := type as ArrayTypeName ? return nil
+      array := type as ArrayTypeName else return nil
       return nil if array.optional or not value.elements.is_empty()
       return nil if not tokens.is_kind(start, '[') or not tokens.is_kind(start + 1, ']')
       left_out(tokens, start - 1, start + 1)
     when Call
       return nil unless is_empty_collection(value)
-      close := empty_arguments_end(tokens, start) ? return nil
+      close := empty_arguments_end(tokens, start) else return nil
       if written := type
-        named := written as NamedType ? return nil
+        named := written as NamedType else return nil
         assign := start - 1
-        type_at := tokens.at(named.position) ? return nil
+        type_at := tokens.at(named.position) else return nil
 
         # A value of another type would not be the same.
         value_type := tokens.joined(start, close - 2)
@@ -415,7 +416,7 @@ left_out := (tokens: Tokens, assign: Int, last: Int) ->
   tokens.edit(EMPTY_INITIAL_VALUES, [change])
 
 is_empty_collection := (call: Call) ->
-  callee := call.callee as Identifier ? return false
+  callee := call.callee as Identifier else return false
   is_collection := callee.name in ['Map', 'Set']
   is_collection and call.args.is_empty() and call.named_args.is_empty()
 
@@ -434,7 +435,7 @@ empty_arguments_end := (tokens: Tokens, callee: Int) ->
 without_parameters := (tokens: Tokens, function: FunctionLiteral) ->
   has_signature := not function.params.is_empty() or function.return_type != nil
   return nil if has_signature or not function.type_params.is_empty()
-  var at = tokens.at(function.position) ? return nil
+  var at = tokens.at(function.position) else return nil
 
   # The parentheses that the literal is written in come before its `weak` and its own.
   at += 1 while tokens.is_kind(at, '(') and not tokens.is_kind(at + 1, ')')
@@ -448,8 +449,8 @@ without_parameters := (tokens: Tokens, function: FunctionLiteral) ->
 # `{ x }` for `{ x: x }` (see Shorthand).
 shorthand := (tokens: Tokens, name: Identifier, value: Expression) ->
   return nil if value is not Identifier or value.name != name.name
-  name_at := tokens.at(name.position) ? return nil
-  value_at := tokens.at(value.position) ? return nil
+  name_at := tokens.at(name.position) else return nil
+  value_at := tokens.at(value.position) else return nil
   return nil if value_at == name_at or not tokens.is_kind(value_at, IDENTIFIER)
   change := Change(from: tokens.start(name_at), to: tokens.end(value_at), text: name.name)
   tokens.edit(SHORTHAND, [change])

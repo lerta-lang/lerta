@@ -119,7 +119,7 @@ write_field := (writer: Writer, field: Field, indent: String): void ->
         write_items writer, value.items, indent + INDENT
 
 scalar_text := (writer: Writer, scalar: Scalar) ->
-  writer.positions then scalar.text else scalar.positionless ? scalar.text
+  writer.positions then scalar.text else scalar.positionless else scalar.text
 
 node := (kind: String, of: Node, fields: Field[]) ->
   Group(fields, head: { kind, position: of.position, node: of })
@@ -731,7 +731,7 @@ export dump_tokens := (tokens: Token[]) -> [dump_token(token) for token in token
 dump_token := (token: Token) ->
   spacing := token.spaced then 'spaced' else 'joined'
   line := "#{token.line}:#{token.column} #{spacing} #{token.kind} #{quote(token.text)}\n"
-  parts := token.parts ? return line
+  parts := token.parts else return line
   line + [dump_part(part) for part in parts].join()
 
 dump_part := (part: TemplatePart) ->
@@ -763,13 +763,13 @@ quote_bytes := (bytes: Binary) ->
 export dump_checked := (program: ProgramWide) ->
   dump_module := (shared: Shared) ->
     module := program.modules[shared.index]
-    header := "module #{module.display_path ? program.entry_path}\n"
+    header := "module #{module.display_path else program.entry_path}\n"
     header + dump_annotated(module.program, (node) -> type_annotation(shared, node))
   is_shown := (shared: Shared) -> not is_standard_module(program.modules[shared.index])
   [dump_module(shared) for shared in program.shared when is_shown(shared)].join()
 
 type_annotation := (shared: Shared, node: Node) ->
-  type := shared.facts.types[node] ? return ''
+  type := shared.facts.types[node] else return ''
   converted := shared.facts.conversions[node]
   conversion := converted then " => #{format_type(converted)}" else ''
   " : #{format_type(type)}#{conversion}"

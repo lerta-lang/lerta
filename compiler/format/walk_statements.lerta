@@ -130,7 +130,7 @@ extend Walker
       @block_form head, node.then_body unless alone
       return
     first := node.else_body[0]
-    @resume_at (@starts[first.position] ? unhandled()) - 1
+    @resume_at (@starts[first.position] else unhandled()) - 1
     else_at := @take('else', LineStart(@depth))
     if first is If and @at not in @line_starts
       @if_statement first, ONE, true
@@ -143,7 +143,7 @@ extend Walker
     # Nor a comment after the `if` in the block, as deep as the `if`, which would go into the block
     # of its last branch; one deeper is in that block already.
     after_if := (column: Int) -> column > @indentation_of(else_at) and column <= @code[if_at].column
-    trails := (@own_line_comments[@at] ? []).any(after_if)
+    trails := (@own_line_comments[@at] else []).any(after_if)
     joins_if := if_alone and not @has_comments(else_at, if_at) and not trails
 
     @shapes.push BlockShape(block..., joins_if, head: else_at)
@@ -215,7 +215,7 @@ extend Walker
       guard
       stacked
       body: body_shape
-      head_last: (guard ? @at) - 1
+      head_last: (guard else @at) - 1
       last: @at - 1
       postfix: true
       shapes: @shapes
@@ -227,7 +227,7 @@ extend Walker
   # to move (see PostfixShape).
   block_form := (head: Int, body: Statement[]) ->
     block := @shapes.last() as BlockShape!
-    statement := block.statements.first() ? return
+    statement := block.statements.first() else return
     written := written_statements(body)
     one := written.length == 1 and block.statements.length == 1
     return if not one or not takes_postfix(written[0]) or @has_comments(head, statement.end)
@@ -319,7 +319,7 @@ extend Walker
   # on its first line.
   type_members := (node: TypeDeclaration, head: Int) ->
     { members } := node
-    args_at := node.args_position ? return @members(members, head)
+    args_at := node.args_position else return @members(members, head)
     args := [member for member in members when member.in_args]
     others := groups_of([member for member in members when not member.in_args])
     position := (i: Int) ->
@@ -384,7 +384,7 @@ extend Walker
   # Whether the union is written on the lines below `=`, more than one, which the parser joins
   # without `|` between them (see parse_aliased_type).
   is_on_lines := (union: UnionTypeName) ->
-    starts_line := (member: UnionMember) -> @starts[member.position] ? -1 in @line_starts
+    starts_line := (member: UnionMember) -> @starts[member.position] else -1 in @line_starts
     @at in @line_starts and union.members[1..].any(starts_line)
 
   # The members of a union on the lines below `=`, one level deeper, as they are written on them,
@@ -507,7 +507,7 @@ extend Walker
       @take ':', NONE
       @type type, ONE
       @take '!', NONE if member.throws
-    value := member.value ? return
+    value := member.value else return
     is_const := member.modifier == nil and member.type == nil
     assign := @take(is_const then ':=' else '=', ONE)
     @value assign, value, true
@@ -632,7 +632,7 @@ extend Walker
 
     # Each resumes at its keyword, as the block before it may end with a statement skipped.
     for clause in node.catches
-      @resume_at @starts[clause.position] ? unhandled()
+      @resume_at @starts[clause.position] else unhandled()
       head = @take('catch', LineStart(@depth))
       @take IDENTIFIER, ONE
       if type := clause.type
@@ -640,7 +640,7 @@ extend Walker
         @type type, ONE
       @nested_block clause.body, head
     if body := node.finally_body
-      @resume_at (@starts[body[0].position] ? unhandled()) - 1
+      @resume_at (@starts[body[0].position] else unhandled()) - 1
       head = @take('finally', LineStart(@depth))
       @nested_block body, head
 
@@ -662,7 +662,7 @@ extend Walker
         @take 'then', ONE
       else
         nil
-    body := @body(then_at ? start, arm.body, BRANCHES)
+    body := @body(then_at else start, arm.body, BRANCHES)
     ArmShape(
       start
       then_at
@@ -687,7 +687,7 @@ struct MemberGroup
   members: MemberDeclaration[]
   private_block: Position?
 
-  position := -> @private_block ? @members[0].position
+  position := -> @private_block else @members[0].position
 
 # The members in their order, those of a `private` block together.
 groups_of := (members: MemberDeclaration[]) ->

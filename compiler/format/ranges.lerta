@@ -11,11 +11,11 @@ import Tokens from './tokens'
 # are integers; in one that a test takes, where the types tell (see typed.lerta), as it may hold
 # Floats, which `a..=b` would not count alike.
 export counted_range := (tokens: Tokens, iterable: Expression) ->
-  range := iterable as Range ? return nil
+  range := iterable as Range else return nil
   return nil if range.inclusive
-  end := range.end ? return nil
+  end := range.end else return nil
   return nil unless counted_end(end)
-  end_at := tokens.at(end.position) ? return nil
+  end_at := tokens.at(end.position) else return nil
   dots := end_at - 1
   return nil unless tokens.is_kind(dots, '..')
   changes := [
@@ -30,7 +30,7 @@ export counted_range := (tokens: Tokens, iterable: Expression) ->
 # The end `b + 1` at `end_at` written `b`, in the parentheses that it is written in if `b` is an
 # operation (see Ranges).
 counted_changes := (tokens: Tokens, sum: BinaryOperation, end_at: Int): Change[] ->
-  one := tokens.at(sum.right.position) ? return []
+  one := tokens.at(sum.right.position) else return []
   plus := one - 1
   return [] if not tokens.is_kind(plus, '+') or not tokens.is_kind(one, INTEGER)
   in_parentheses := tokens.is_kind(end_at, '(') and tokens.matching(end_at) == one + 1
@@ -45,7 +45,7 @@ counted_changes := (tokens: Tokens, sum: BinaryOperation, end_at: Int): Change[]
 # `a..(b + 1)`, without its start 0, and without its end where it is the length of what it indexes,
 # written alike and running no code, where it has a start; but `xs[0..]` keeps its start.
 export index_ranges := (tokens: Tokens, index: Index): Edit?[] ->
-  range := index.index as Range ? return []
+  range := index.index as Range else return []
 
   # An index takes no step, which is an error the rewrite must not hide.
   return [] if range.step or range.reversed
@@ -57,10 +57,10 @@ export index_ranges := (tokens: Tokens, index: Index): Edit?[] ->
   edits := [counted_range(tokens, range)]
   if ends_at_length
     end := range.end as Member!
-    first := tokens.at(end.position) ? return edits
+    first := tokens.at(end.position) else return edits
 
     # With the parentheses that it is written in.
-    name := tokens.at(end.name.position) ? return edits
+    name := tokens.at(end.name.position) else return edits
     closing :=
       if tokens.is_kind(first, '(')
         tokens.matching first
@@ -77,7 +77,7 @@ export index_ranges := (tokens: Tokens, index: Index): Edit?[] ->
       tokens.edit(RANGE_ENDS, [{ from: tokens.end(first - 1), to: tokens.end(last), text: '' }])
   else if start := range.start
     return edits if not is_zero(start) or range.end == nil
-    zero := tokens.at(start.position) ? return edits
+    zero := tokens.at(start.position) else return edits
     if tokens.is_kind(zero + 1, '..') or tokens.is_kind(zero + 1, '..=')
       edits.push
         tokens.edit(
@@ -89,14 +89,14 @@ export index_ranges := (tokens: Tokens, index: Index): Edit?[] ->
 # Whether the end of the range is `x.length` of the value indexed, written alike, which runs no
 # code: the tokens of x against those before the `[` that the range follows.
 is_length_of := (tokens: Tokens, range: Range, indexed: Expression) ->
-  length := range.end as Member ? return false
-  start := range.start ? return false
+  length := range.end as Member else return false
+  start := range.start else return false
   return false if length.name.name != 'length' or not runs_no_code(indexed)
-  end := tokens.at(length.position) ? return false
-  name := tokens.at(length.name.position) ? return false
-  first := tokens.at(start.position) ? return false
+  end := tokens.at(length.position) else return false
+  name := tokens.at(length.name.position) else return false
+  first := tokens.at(start.position) else return false
   open := first - 1
-  object := tokens.at(indexed.position) ? return false
+  object := tokens.at(indexed.position) else return false
   return false if not tokens.is_kind(open, '[') or not tokens.is_kind(name - 1, '.')
 
   # Without parentheses, which change nothing around a value that runs no code.

@@ -39,7 +39,7 @@ export nothing := -> return
 # Each initializer sees the constructor arguments and the fields initialized before it.
 export check_initializers := (body: Body, info: ObjectInfo, self: SelfContext) ->
   for field in info.fields
-    value := field.value ? continue
+    value := field.value else continue
     self.initializing = field
     if field_type := field.type
       expect_type body, value, field_type
@@ -70,7 +70,7 @@ export check_function_body := (
   body.names_literals_assign = names_literals_assign(statements)
   before_last := statements.all_but_last()
   finish := ->
-    last := statements.last() ? return
+    last := statements.last() else return
     if previous := before_last.last()
       warn_if_unreachable body, previous, last
     check_last_statement body, last
@@ -154,7 +154,7 @@ warn_if_unreachable := (body: Body, previous: Statement, statement: Statement) -
 
 # Whether the expression was typed `never`.
 export is_never_typed := (body: Body, expression: Expression) ->
-  type := body.facts.types[expression] ? return false
+  type := body.facts.types[expression] else return false
   is_kind(type, 'never')
 
 # A block is a scope; `define` declares the names that belong to it besides its statements, and
@@ -296,7 +296,7 @@ check_declaration := (body: Body, declaration: Declaration) ->
   reject_omitted_value body, declaration, annotated
   if annotated
     expect_type body, value, annotated
-  value_type := annotated ? type_of(body, value)
+  value_type := annotated else type_of(body, value)
   reject_if_not_storable body, value_type, value
 
   # An exported value is for other modules to use.
@@ -328,7 +328,7 @@ check_declaration := (body: Body, declaration: Declaration) ->
 # `var x: T` without a value: of a type other than an array, a map or a set, which start empty, it
 # is nil, which the type must fit.
 reject_omitted_value := (body: Body, declaration: Declaration, type: Type?) ->
-  written := type ? return
+  written := type else return
   is_nil := declaration.value is NilLiteral
   return if not declaration.omits_value or not is_nil or is_assignable(nil_type, written)
   needs := "a var of type #{format_type(written)} needs an initial value"
@@ -393,7 +393,7 @@ reject_unconsumed := (body: Body, value: Expression, type: Type): void ->
   if type is PromiseType
     fail body.program, at, "a Promise must be awaited#{awaiting_cause(body, value)}"
   return unless is_kind(type, 'void')
-  arms := arm_bodies(value) ? return
+  arms := arm_bodies(value) else return
   for arm in arms
     last := arm.last() as Expression?
     arm_type := last then body.facts.types[last]
@@ -403,10 +403,10 @@ reject_unconsumed := (body: Body, value: Expression, type: Type): void ->
 # Why a call gives a Promise, where it calls a function that awaits, which a change to its body may
 # have made one: where that function first awaits, unless std declares it, which is not to change.
 awaiting_cause := (body: Body, value: Expression) ->
-  call := value as Call ? return ''
-  callee := call.callee as Identifier ? return ''
-  (literal, shared) := named_function(body, callee) ? return ''
-  at := literal.await_at ? return ''
+  call := value as Call else return ''
+  callee := call.callee as Identifier else return ''
+  (literal, shared) := named_function(body, callee) else return ''
+  at := literal.await_at else return ''
   location := module_location(body.program.entry_path, shared.path)
   return '' if is_standard_name(location)
   ": '#{callee.name}' returns a Promise, as it awaits at #{location}:#{at.line}:#{at.column}"

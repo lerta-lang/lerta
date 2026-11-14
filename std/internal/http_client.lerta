@@ -101,7 +101,7 @@ export class Client
 
       # A body that ends with the connection leaves nothing to keep, and so does a request that has
       # not been sent whole.
-      keeps := left != nil and keeps_alive(head.version, head.headers) and sent?.whole ? true
+      keeps := left != nil and keeps_alive(head.version, head.headers) and sent?.whole else true
 
       # The connection is given back once the body has been read to its end, or closed.
       finish := ->
@@ -126,13 +126,13 @@ export class Client
     catch error
       sending?.cancel()
       socket.close()
-      throw sent?.failure ? error
+      throw sent?.failure else error
 
   # The latest connection kept for the host and port, after closing those kept too long, which the
   # server may be closing. A request on one the server has closed is sent again.
   private
     take_idle := (authority: String) ->
-      kept := @idle[authority] ? return nil
+      kept := @idle[authority] else return nil
       now := monotonic()
       fresh := [idle for idle in kept when now - idle.since < @idle_timeout]
       for idle in kept
@@ -141,7 +141,7 @@ export class Client
       fresh.is_empty() then nil else fresh.pop().socket
 
     give_back := (authority: String, socket: Socket) ->
-      kept := @idle[authority] ? []
+      kept := @idle[authority] else []
       if kept.length >= @max_idle
         socket.close()
         return
@@ -237,7 +237,7 @@ struct Target
 # that holds a user, which the client does not send.
 parse_url := (url: String) ->
   not_url := -> ValueError("not an http URL: #{url}")
-  (scheme, rest) := url.split_once('://') ? throw not_url()
+  (scheme, rest) := url.split_once('://') else throw not_url()
   lower_scheme := scheme.to_lower()
   throw IOError("https is not supported so far: #{url}") if lower_scheme == 'https'
   throw not_url() if lower_scheme != 'http'
@@ -245,7 +245,7 @@ parse_url := (url: String) ->
   authority := scanner.take_while((c) -> c not in '/?#')
   (path, _fragment) := split_or_whole(scanner.rest(), '#')
   throw not_url() if '@' in authority or not authority.all(is_host_char)
-  (host, port) := host_and_port(authority) ? throw not_url()
+  (host, port) := host_and_port(authority) else throw not_url()
   absolute := path.starts_with('/') then path else "/#{path}"
   Target(authority, host, port, path: percent_encoded(absolute))
 
@@ -257,7 +257,7 @@ is_host_char := (c: Char) -> c.to_int() > 0x20 and c.to_int() < 0x7F
 # as %XX of each byte of their UTF-8, as the WHATWG URL Standard does for http URLs. A `%` is kept,
 # as it may start an escape already written.
 percent_encoded := (target: String) ->
-  (path, query) := target.split_once('?') ? return encode_chars(target, PATH_ESCAPED)
+  (path, query) := target.split_once('?') else return encode_chars(target, PATH_ESCAPED)
   "#{encode_chars(path, PATH_ESCAPED)}?#{encode_chars(query, QUERY_ESCAPED)}"
 
 # Those of the WHATWG URL Standard but `#`, which starts the fragment that is left out, and the `?`
@@ -277,22 +277,22 @@ encode_chars := (text: String, escaped: String) ->
   encoded
 
 # The text before the first separator and the text after it, or the whole text and '' without one.
-split_or_whole := (text: String, separator: String) -> text.split_once(separator) ? (text, '')
+split_or_whole := (text: String, separator: String) -> text.split_once(separator) else (text, '')
 
 # The host, without the brackets of an IPv6 address, and the port, 80 if none is written.
 host_and_port := (authority: String) ->
-  (host, port_text) := split_authority(authority) ? return nil
+  (host, port_text) := split_authority(authority) else return nil
   return nil if host.is_empty()
   return (host, 80) if port_text.is_empty()
   return nil unless port_text.is_digits()
-  port := port_text.parse_int() ? return nil
+  port := port_text.parse_int() else return nil
   port <= 65535 then (host, port)
 
 split_authority := (authority: String) ->
-  inside := authority.without_prefix('[') ? return split_or_whole(authority, ':')
-  (address, after) := inside.split_once(']') ? return nil
+  inside := authority.without_prefix('[') else return split_or_whole(authority, ':')
+  (address, after) := inside.split_once(']') else return nil
   return (address, '') if after.is_empty()
-  port_text := after.without_prefix(':') ? return nil
+  port_text := after.without_prefix(':') else return nil
   (address, port_text)
 
 # The bytes of the request, but for a body that is a Reader, which follows them in chunks.
@@ -324,7 +324,7 @@ read_head := (socket: Socket, request: Outgoing, writes: Bool) ->
   while head.status < 200
     # What follows a 101 is another protocol, which the client does not speak.
     throw IOError('switching protocols not supported') if head.status == 101
-    head = await read_any_head(reader, await read_line(reader) ? throw ended_early('response'))
+    head = await read_any_head(reader, await read_line(reader) else throw ended_early('response'))
   head
 
 # The first line of the response to the request, which is written first if `writes`; a failure
@@ -337,10 +337,10 @@ first_line := (socket: Socket, request: Outgoing, writes: Bool) ->
     catch error: IOError
       throw NoAnswer(error.message)
   line := await well_formed(send(), 'response')
-  line ? throw NoAnswer('the connection closed before a response')
+  line else throw NoAnswer('the connection closed before a response')
 
 read_any_head := (reader: Reader, line: String) ->
-  (version, rest) := line.split_once(' ') ? throw malformed()
+  (version, rest) := line.split_once(' ') else throw malformed()
   throw malformed() unless version in ['HTTP/1.1', 'HTTP/1.0']
   (code, _reason) := split_or_whole(rest, ' ')
   throw malformed() if code.binary.length != 3 or not code.is_digits()
@@ -365,7 +365,7 @@ read_fields := (reader: Reader) ->
         folded headers.fields.pop(), line
       else
         line.split_once ':'
-    (name, value) := field ? throw malformed()
+    (name, value) := field else throw malformed()
 
     # A value joined of lines may be as long as a line, so that each join copies a bounded value.
     throw malformed() if value.binary.length > MAX_LINE
@@ -399,9 +399,9 @@ framing := (head: Head, method: String): Framing ->
   if coding := headers.get('transfer-encoding')
     throw IOError("a transfer coding not supported: #{coding}") if coding.to_lower() != 'chunked'
     return { left: 0, chunked: true }
-  text := headers.get('content-length') ? return { left: nil }
+  text := headers.get('content-length') else return { left: nil }
   throw malformed() unless text.is_digits()
-  { left: text.parse_int() ? throw malformed() }
+  { left: text.parse_int() else throw malformed() }
 
 # The chunks of a body as they come, after which the connection is finished with.
 class BodyChunks
@@ -439,7 +439,7 @@ class BodyChunks
 redirected := (request: Outgoing, response: Response): Outgoing? ->
   { status } := response
   return nil unless status in REDIRECTS
-  location := response.headers.get('location') ? return nil
+  location := response.headers.get('location') else return nil
   target :=
     try
       parse_url resolve(request.target, location)
@@ -465,7 +465,7 @@ redirected := (request: Outgoing, response: Response): Outgoing? ->
 # Whether a URL starts with its scheme, which is absolute then; a `:` after a `/`, a `?` or a `#`,
 # as of `/login?next=http://a/`, is in a relative one.
 has_scheme := (location: String) ->
-  (scheme, _rest) := location.split_once(':') ? return false
+  (scheme, _rest) := location.split_once(':') else return false
   not scheme.is_empty() and scheme.all(is_scheme_char)
 
 is_scheme_char := (c: Char) -> c.is_alphanumeric() or c in '+-.'

@@ -156,7 +156,7 @@ after_place := (line: String) ->
   nil
 
 is_diagnostic := (line: String) -> after_place(line) != nil
-is_warning := (line: String) -> after_place(line)?.starts_with('warning: ') ? false
+is_warning := (line: String) -> after_place(line)?.starts_with('warning: ') else false
 
 # Diagnostics are reported as the CLI prints them for a bare file name, so that the expected files
 # do not depend on where the test directory is.
@@ -188,7 +188,7 @@ path_delimiter := platform == 'windows' then ';' else ':'
 # which Wine adds WINEPATH (Z: is the root of the Unix file system).
 command_env := (prefix: String?) ->
   variables :=
-    'PATH': "#{work_dir}#{path_delimiter}#{env('PATH') ? ''}"
+    'PATH': "#{work_dir}#{path_delimiter}#{env('PATH') else ''}"
     'WINEPATH': "Z:#{work_dir}"
     'WINEDLLOVERRIDES': WINE_DLL_OVERRIDES
   variables['WINEPREFIX'] = prefix if prefix
@@ -317,9 +317,9 @@ run_test := (test: TestCase, optimize: Bool): Promise<String[]?> ->
       ["expected the run to #{expectation}, but #{ending(outcome.exit)}"]
   none := b''
   [
-    compare_output('stdout', expected['out'] ? none, outcome.stdout)...
-    compare_output('stderr', expected['err'] ? none, without_std_places(outcome.stderr))...
-    compare_text('warnings', expected['warn']?.text() ? '', outcome.warnings)...
+    compare_output('stdout', expected['out'] else none, outcome.stdout)...
+    compare_output('stderr', expected['err'] else none, without_std_places(outcome.stderr))...
+    compare_text('warnings', expected['warn']?.text() else '', outcome.warnings)...
     status_reasons...
   ]
 
@@ -333,7 +333,7 @@ ending := (exit: Exit?) ->
 # The output with the line and column of each place in a standard module that a trace goes
 # through written as XX (see std_frame).
 without_std_places := (output: Binary) ->
-  text := output.text() ? return output
+  text := output.text() else return output
   [std_frame(line) for line in text.split("\n")].join("\n").binary
 
 # A line of a trace, `  at Binary.text (std:builtins/text:201:5)`, with `XX` for the line and the
@@ -341,7 +341,7 @@ without_std_places := (output: Binary) ->
 # formed still differs; any other line as it is.
 std_frame := (line: String) ->
   return line if not line.starts_with('  at ') or not line.ends_with(')')
-  (head, place) := line.split_once(' (std:') ? return line
+  (head, place) := line.split_once(' (std:') else return line
   parts := place.without_suffix(')')!.split(':')
   return line if parts.length != 3 or not [parts[1], parts[2]].all(is_number)
   "#{head} (std:#{parts[0]}:XX)"
@@ -350,7 +350,7 @@ is_number := (part: String) -> part.is_digits()
 
 optimized_check := (test: TestCase) ->
   wait := ->
-    unoptimized := unoptimized_runs[test.label] ? return
+    unoptimized := unoptimized_runs[test.label] else return
     try
       _outcome := await unoptimized
     catch _
@@ -379,7 +379,7 @@ export suite := (given: Target) ->
     for test in await collect(group)
       all_checks.push { name: test.label, run: -> await run_test(test, false) }
       all_checks.push optimized_check(test)
-  checks := select(title, all_checks) ? return nil
+  checks := select(title, all_checks) else return nil
   print "not run for this target: #{dir}" for dir in skipped
   set_up := ->
     # Not in work_dir itself, which is on the PATH of the tested programs.

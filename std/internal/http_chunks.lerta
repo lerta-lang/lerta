@@ -12,9 +12,9 @@ export class SizedBody
     var left: Int?
 
   next := ->
-    left := @left ? return await @reader.read(CHUNK_SIZE)
+    left := @left else return await @reader.read(CHUNK_SIZE)
     return nil if left == 0
-    chunk := await @reader.read(min(left, CHUNK_SIZE)) ? throw ended_early(@name)
+    chunk := await @reader.read(min(left, CHUNK_SIZE)) else throw ended_early(@name)
     @left = left - chunk.length
     chunk
 
@@ -55,7 +55,7 @@ export class ChunkedBody
         await @skip_trailer()
         @ended = true
         return nil
-    chunk := await @reader.read(min(@left, CHUNK_SIZE)) ? throw ended_early(@name)
+    chunk := await @reader.read(min(@left, CHUNK_SIZE)) else throw ended_early(@name)
     @left -= chunk.length
     @ending_chunk = @left == 0
     @data_taken += chunk.length
@@ -64,13 +64,13 @@ export class ChunkedBody
 
   # The size of the next chunk, in hexadecimal before its extensions.
   size := ->
-    line := await @line() ? throw ended_early(@name)
+    line := await @line() else throw ended_early(@name)
     var size_text = line
     if (before, _extensions) := line.split_once(';')
       # Whitespace may go before the extensions, as RFC 9112 has it, and nowhere else.
       size_text = before
       while true
-        trimmed := size_text.without_suffix(' ') ? size_text.without_suffix("\t") ? break
+        trimmed := size_text.without_suffix(' ') else size_text.without_suffix("\t") else break
         size_text = trimmed
     hex := size_text.binary
     throw @malformed() if hex.is_empty()
@@ -82,12 +82,12 @@ export class ChunkedBody
 
     var size = 0
     for byte in hex
-      size = size * 16 + (byte.hex_value() ? throw @malformed())
+      size = size * 16 + (byte.hex_value() else throw @malformed())
     size
 
   private
     end_chunk := ->
-      line := await @line() ? throw ended_early(@name)
+      line := await @line() else throw ended_early(@name)
       throw @malformed() unless line.is_empty()
 
     skip_trailer := ->
@@ -97,7 +97,7 @@ export class ChunkedBody
 
     # A line, its line end counted as CR LF.
     line := ->
-      line := await well_formed(@reader.read_line(MAX_LINE), @name) ? return nil
+      line := await well_formed(@reader.read_line(MAX_LINE), @name) else return nil
       @lines_taken += line.binary.length + 2
 
       # Compared so, as `room` may be INT_MAX.
@@ -123,7 +123,7 @@ export class JoinedReads
 
   next := ->
     return nil if @ended
-    first := await @taken_waiting() ? return nil
+    first := await @taken_waiting() else return nil
     pieces := [first]
     var size = first.length
     while size < CHUNK_SIZE
@@ -146,12 +146,12 @@ export class JoinedReads
   # Cancels the read left for the next, of a body whose sending has stopped, and drops its result,
   # as an error that it has been rejected with would otherwise end the program.
   cancel := ->
-    waiting := @waiting ? return
+    waiting := @waiting else return
     waiting.cancel()
     spawn dropped(waiting)
 
   private taken_waiting := ->
-    read := @waiting ? @reader.read(CHUNK_SIZE)
+    read := @waiting else @reader.read(CHUNK_SIZE)
     @waiting = nil
     await read
 

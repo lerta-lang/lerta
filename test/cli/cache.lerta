@@ -24,7 +24,7 @@ is_hex_digit := (character: Char) -> character.is_digit() or character in 'A'..=
 
 runtime_name_reasons := (name: String, kind: String) ->
   prefix := "runtime-#{kind}-#{host_triple}-clang"
-  suffix := name.without_prefix(prefix) ? return [
+  suffix := name.without_prefix(prefix) else return [
     "the cached runtime #{name} does not start with #{prefix}"
   ]
   parts := suffix.split('-')
@@ -57,7 +57,7 @@ thinlto_entries := (cache: String): String[] ->
   for entry in list_dir(directory)
     continue if entry == 'llvmcache.timestamp'
     path := "#{directory}/#{entry}"
-    details := stat(path) ? throw ValueError("no ThinLTO cache entry: #{path}")
+    details := stat(path) else throw ValueError("no ThinLTO cache entry: #{path}")
     entries.push "#{entry} #{details.modified_time.to_fixed(9)}"
   entries.sorted()
 
@@ -152,7 +152,7 @@ cached_runtime_check := (flags: String[], kind: String, source: String) ->
     if (kind != 'debug') != (not optimized.is_empty())
       return ["#{flags.join(' ')} left the ThinLTO cache with: #{optimized}"]
     object := "#{cache}/#{name}/allocator.o"
-    written := stat(object) ? throw ValueError("no cached object: #{object}")
+    written := stat(object) else throw ValueError("no cached object: #{object}")
     modules := module_objects(cache, name)
     return ["the build kept no object of a standard module in #{name}"] if modules.is_empty()
     await build_and_run(cache, flags, source)
@@ -231,7 +231,7 @@ host_target_check := ->
     name := entries[0]
     reasons := runtime_name_reasons(name, 'debug') + await complete_runtime(cache, name)
     return reasons unless reasons.is_empty()
-    target := host_target_name ? return reasons
+    target := host_target_name else return reasons
     short_name := await build_in_cache(cache, ['--target', target])
     [
       expect_success("build --target #{target}", short_name.result)...
@@ -538,7 +538,7 @@ cflags_check := ->
     return ["expected one entry in the cache, found: #{entries}"] if entries.length != 1
     name := entries[0]
     include_dir := real_path(join(dir, 'cache', name))
-    hash := name.without_prefix('include-') ? ''
+    hash := name.without_prefix('include-') else ''
     header := await read_file("#{include_dir}/lerta.h")
     c_source := "#{root_dir}/tests/extern/lib/greeting.c"
     compiled := await run_command('clang', ['-fsyntax-only', "-I#{include_dir}", c_source], dir)

@@ -16,19 +16,20 @@ import Tokens from './tokens'
 export condition_edit := (
   tokens: Tokens, condition: Expression, negatable: Bool, claimed: Set<UnaryOperation>
 ) ->
-  start := tokens.at(condition.position) ? return nil
+  start := tokens.at(condition.position) else return nil
   word := start - 1
   return nil if word < 0 or tokens.code[word].kind not in ['if', 'unless', 'while', 'until']
   is_positive := tokens.code[word].kind in ['if', 'while']
   takes_negation := negatable and not tokens.is_kind(word - 1, 'else')
 
   # That of `unless` or `until` is `not` of what is written.
-  negation := condition as UnaryOperation ? return nil
+  negation := condition as UnaryOperation else return nil
   written := is_positive then condition else negation.operand
 
   if is_positive
-    not_at := not_of(tokens, negation) ? return nil
-    edit := positive_condition(tokens, word, negation, not_at, takes_negation, claimed) ? return nil
+    not_at := not_of(tokens, negation) else return nil
+    edit :=
+      positive_condition(tokens, word, negation, not_at, takes_negation, claimed) else return nil
     claimed.add negation
     return edit
   if is_junction(written)
@@ -36,10 +37,10 @@ export condition_edit := (
   is_unless := tokens.code[word].kind == 'unless'
   opposite := tokens.replaced(word, is_unless then 'if' else 'while')
   if inner := written as UnaryOperation?
-    not_at := not_of(tokens, inner) ? return nil
+    not_at := not_of(tokens, inner) else return nil
     claimed.add inner
     return tokens.edit(DOUBLE_NEGATIONS, [opposite, not_removed(tokens, not_at)])
-  inverse := inverse_equality(tokens, written) ? return nil
+  inverse := inverse_equality(tokens, written) else return nil
   tokens.edit(DOUBLE_NEGATIONS, [opposite, inverse])
 
 # `if x` for `if not not x`, `if a == b` for `if not (a != b)`, or `unless x` for `if not x`.
@@ -67,13 +68,13 @@ positive_condition := (
 
 # `a == b` for `a != b`, and `x != nil` for `x == nil`, as the opposite of a test.
 inverse_equality := (tokens: Tokens, test: Expression) ->
-  equality := test as BinaryOperation ? return nil
+  equality := test as BinaryOperation else return nil
   inverse :=
     case equality.operator
       when '!=' then '=='
       when '==' then is_nil_test(equality) then '!='
       else nil
-  right := tokens.at(equality.right.position) ? return nil
+  right := tokens.at(equality.right.position) else return nil
   operator := right - 1
   return nil if not inverse or tokens.spelling(operator) != equality.operator
   tokens.replaced(operator, inverse)
@@ -81,24 +82,24 @@ inverse_equality := (tokens: Tokens, test: Expression) ->
 # `x` for `not not x` in a value (see Negated conditions), and `x is T` for `not x is not T`; the
 # parentheses that held the inner negation are left to Parentheses.
 export double_negation := (tokens: Tokens, negation: UnaryOperation) ->
-  inner := negation.operand as UnaryOperation ? return nil
-  outer_not := not_of(tokens, negation) ? return nil
-  inner_not := not_of(tokens, inner) ? return nil
+  inner := negation.operand as UnaryOperation else return nil
+  outer_not := not_of(tokens, negation) else return nil
+  inner_not := not_of(tokens, inner) else return nil
   tokens.edit(VALUE_DOUBLE_NEGATIONS, [tokens.removed(outer_not), not_removed(tokens, inner_not)])
 
 # `x is not T` for `not (x is T)`, and `x not in xs` for `not (x in xs)`, without the parentheses
 # around the test.
 export negated_test := (tokens: Tokens, negation: UnaryOperation) ->
-  not_at := not_of(tokens, negation) ? return nil
+  not_at := not_of(tokens, negation) else return nil
   return nil if tokens.is_word(not_at - 1, 'is') or tokens.is_word(not_at + 1, 'in')
   { operand } := negation
-  word := test_word(tokens, operand) ? return nil
+  word := test_word(tokens, operand) else return nil
   is_test := operand is IsTest
   rule := is_test then NEGATED_IS_TESTS else NEGATED_IN_TESTS
   without_not := tokens.removed(not_at)
   written := tokens.replaced(word, is_test then 'is not' else 'not in')
   open := not_at + 1
-  close := closing_around(tokens, open, word) ? return tokens.edit(rule, [without_not, written])
+  close := closing_around(tokens, open, word) else return tokens.edit(rule, [without_not, written])
   return nil if tokens.code[open].line != tokens.code[close].line
 
   # `not (` goes as one, as the words around it are apart.
@@ -108,7 +109,7 @@ export negated_test := (tokens: Tokens, negation: UnaryOperation) ->
 # The `)` of parentheses at `open` around the token at `inside`.
 closing_around := (tokens: Tokens, open: Int, inside: Int) ->
   return nil unless tokens.is_kind(open, '(')
-  close := tokens.matching(open) ? return nil
+  close := tokens.matching(open) else return nil
   close > inside then close
 
 # The index of the `not` of the negation: that of `x is not T` or `x not in xs`, or the `not`
@@ -118,7 +119,7 @@ not_of := (tokens: Tokens, negation: UnaryOperation) ->
   if word := test_word(tokens, negation.operand)
     return word + 1 if tokens.is_word(word, 'is') and tokens.is_kind(word + 1, 'not')
     return word - 1 if tokens.is_word(word, 'in') and tokens.is_kind(word - 1, 'not')
-  var at = tokens.at(negation.position) ? return nil
+  var at = tokens.at(negation.position) else return nil
   at += 1 while tokens.is_kind(at, '(')
   if tokens.is_kind(at, 'not')
     at
@@ -129,14 +130,14 @@ not_of := (tokens: Tokens, negation: UnaryOperation) ->
 test_word := (tokens: Tokens, test: Expression) ->
   case test
     when IsTest
-      type := tokens.at(test.type.position) ? return nil
+      type := tokens.at(test.type.position) else return nil
       case
         when tokens.is_word(type - 1, 'is') then type - 1
         when tokens.is_word(type - 2, 'is') then type - 2
         else nil
     when BinaryOperation
       return nil if test.operator != 'in'
-      right := tokens.at(test.right.position) ? return nil
+      right := tokens.at(test.right.position) else return nil
       if tokens.is_word(right - 1, 'in')
         right - 1
       else

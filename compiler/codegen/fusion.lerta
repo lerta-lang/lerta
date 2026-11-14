@@ -47,12 +47,12 @@ MOST_COPIES := 8
 # yield_count), so that it holds no temporaries where it yields.
 export fused_call := (g: Generator, iterable: Expression): FusedCall? ->
   return nil if iterable is not Call or g.facts.instances[iterable] != nil
-  callee := iterable.callee as Identifier ? return nil
-  reference := g.facts.references[callee] as FunctionReference ? return nil
+  callee := iterable.callee as Identifier else return nil
+  reference := g.facts.references[callee] as FunctionReference else return nil
   return nil if reference.module_index != g.code.module.index
-  literal := top_level_function(g, reference.name) ? return nil
+  literal := top_level_function(g, reference.name) else return nil
   return nil if not literal.yields or not literal.type_params.is_empty()
-  yields := yield_count(literal.body) ? return nil
+  yields := yield_count(literal.body) else return nil
   return nil if literal in g.fusion.literals or g.fusion.copies * yields > MOST_COPIES
   args := arguments_of(g.facts, iterable)
   return nil if args.length != literal.params.length
@@ -137,7 +137,7 @@ export generate_fused_loop := (
 yield_count := (statements: Statement[]): Int? ->
   var count = 0
   for statement in statements
-    count += yields_of(statement) ? return nil
+    count += yields_of(statement) else return nil
   count
 
 yields_of := (statement: Statement): Int? ->
@@ -156,12 +156,12 @@ yields_of := (statement: Statement): Int? ->
       subject := statement.subject
       return nil if subject != nil and has_yield(subject)
       return nil if statement.arms.any((arm) -> arm.patterns.any(has_yield))
-      count_in([(arm.body for arm in statement.arms)..., statement.otherwise ? []])
+      count_in([(arm.body for arm in statement.arms)..., statement.otherwise else []])
     when Try
       bodies := [
         statement.body
         (clause.body for clause in statement.catches)...
-        statement.finally_body ? []
+        statement.finally_body else []
       ]
       count_in(bodies)
     when Declaration then not has_yield(statement.value) then 0
@@ -171,7 +171,7 @@ yields_of := (statement: Statement): Int? ->
       else
         nil
     else
-      expression := statement as Expression ? return 0
+      expression := statement as Expression else return 0
       not has_yield(expression) then 0
 
 count_in := (bodies: Statement[][]) ->
@@ -206,14 +206,14 @@ export struct LazySource
 # are written as such comprehensions, over a range, an array or an Iter; whose functions neither
 # yield nor await, and capture nothing weakly.
 export fused_comprehension := (g: Generator, iterable: Expression) ->
-  lazy := lazy_source(g, iterable) ? return nil
+  lazy := lazy_source(g, iterable) else return nil
   takes_in_place := (literal: FunctionLiteral?) ->
     return true if literal == nil
 
     # A literal that yields or awaits is a coroutine of its own, which the loop cannot run inline.
     return false if literal.yields or is_awaiting(g, literal)
 
-    captures := g.facts.captures[literal] ? []
+    captures := g.facts.captures[literal] else []
     not literal.weak and not captures.any(Capture.is_weak)
   if takes_in_place(lazy.guard) and takes_in_place(lazy.element)
     lazy
@@ -222,14 +222,14 @@ export fused_comprehension := (g: Generator, iterable: Expression) ->
 
 lazy_source := (g: Generator, iterable: Expression): LazySource? ->
   return nil unless iterable is Comprehension | Call
-  item := iterable_item(type_of(g, iterable)) ? return nil
+  item := iterable_item(type_of(g, iterable)) else return nil
   if iterable is Comprehension
     return nil if iterable.index != nil or not iterable.bindings.is_empty()
-    lazy := iterable.lazy ? return nil
+    lazy := iterable.lazy else return nil
     source := iterated(g, iterable.iterable)
     { position } := iterable
     return { source, item, position, guard: lazy.guard, element: lazy.element }
-  (name, receiver, literal) := std_iterable_call(g, iterable) ? return nil
+  (name, receiver, literal) := std_iterable_call(g, iterable) else return nil
   return nil if iterable_item(type_of(g, receiver)) == nil
   position := iterable.position
   case name
@@ -242,12 +242,12 @@ lazy_source := (g: Generator, iterable: Expression): LazySource? ->
 std_iterable_call := (g: Generator, expression: Expression) ->
   return nil if expression is not Call or not expression.named_args.is_empty()
   return nil if expression.args.length != 1
-  literal := replaced(g, expression.args[0]) as FunctionLiteral ? return nil
-  member := expression.callee as Member ? return nil
-  target := g.facts.members[member] as Method ? return nil
-  { method } := target.source as ExtensionSource ? return nil
+  literal := replaced(g, expression.args[0]) as FunctionLiteral else return nil
+  member := expression.callee as Member else return nil
+  target := g.facts.members[member] as Method else return nil
+  { method } := target.source as ExtensionSource else return nil
   return nil unless is_builtins(method.module_name)
-  extended := extended_type(method) as InterfaceType ? return nil
+  extended := extended_type(method) as InterfaceType else return nil
   if extended.name == 'Iterable'
     (member.name.name, deferred_value(g, member.object), literal)
   else
@@ -284,7 +284,7 @@ export generate_fused_comprehension := (
 element_local := (
   g: Generator, lazy: LazySource, item: String, position: Position?
 ): CodegenLocal ->
-  literal := lazy.element ? return ValueLocal(operand: item, type: lazy.item)
+  literal := lazy.element else return ValueLocal(operand: item, type: lazy.item)
   value := generate_in_place(g, literal, [item], unwind_from(g, position))
   store_in_slot(g, value, lazy.item)
 
@@ -319,7 +319,7 @@ export generate_in_place := (
   exit_label := ir.fresh_label('in_place.exit')
   inner.fused_exit = { unwind, label: exit_label }
   scope := inner.locals.push()
-  for capture in g.facts.captures[literal] ? []
+  for capture in g.facts.captures[literal] else []
     scope[capture.name] = borrowed_view(referred_local(g, capture.source, capture.name))
   for param at i in literal.params
     scope[param.name.name] = ValueLocal(operand: args[i], type: type.params[i])

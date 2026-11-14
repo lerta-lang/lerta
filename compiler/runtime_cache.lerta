@@ -33,7 +33,7 @@ export struct CachedRuntime
 # clang fails, after printing its messages. `temp_dir` is the build's own temporary directory.
 export cached_runtime := (kind: BuildKind, temp_dir: String) ->
   reject_path_target target if target := kind.target
-  clang_version := await clang_version_text() ? return nil
+  clang_version := await clang_version_text() else return nil
   build := platform_build(kind.target)
   cache := cache_dir()
   runtime_name := cached_runtime_name(kind, clang_version, build)
@@ -77,8 +77,8 @@ STAGING_INFIX := '.staging-'
 remove_abandoned_staging := (cache: String, name: String) ->
   prefix := "#{name}#{STAGING_INFIX}"
   for entry in list_dir(cache)
-    suffix := entry.without_prefix(prefix) ? continue
-    id := suffix.split('-')[0].parse_int() ? continue
+    suffix := entry.without_prefix(prefix) else continue
+    id := suffix.split('-')[0].parse_int() else continue
     continue if is_running(id)
     try
       await remove_tree(join(cache, entry))
@@ -134,14 +134,14 @@ clang_version_text := ->
   output := Buffer()
   ran := await run('clang', '--version', stdout: output)
   return nil if ran.code != 0
-  output.text() ? throw CompileError('clang --version is not valid UTF-8')
+  output.text() else throw CompileError('clang --version is not valid UTF-8')
 
 read_text_or_throw := (path: String) ->
-  await read_text(path) ? throw CompileError("#{path} is not valid UTF-8")
+  await read_text(path) else throw CompileError("#{path} is not valid UTF-8")
 
 # `$LERTA_CACHE_DIR`, or else the system's place for caches. An empty variable counts as unset, as
 # the XDG specification has it.
-cache_path := -> non_empty_env('LERTA_CACHE_DIR') ? default_cache_dir()
+cache_path := -> non_empty_env('LERTA_CACHE_DIR') else default_cache_dir()
 
 # The cache directory, made if missing.
 export cache_dir := ->
@@ -195,8 +195,8 @@ non_empty_env := (name: String) ->
 # reject_path_target).
 cached_runtime_name := (kind: BuildKind, clang_version: String, build: PlatformBuild) ->
   kind_name := runtime_kind_name(kind)
-  target_name := kind.target ? version_line_value(clang_version, 'Target: ') ? 'unknown'
-  clang_name := "clang#{major_version(clang_version) ? 'unknown'}"
+  target_name := kind.target else version_line_value(clang_version, 'Target: ') else 'unknown'
+  clang_name := "clang#{major_version(clang_version) else 'unknown'}"
   flags := build_flags(kind).join(' ')
   hash := runtime_hash([clang_version, flags, cached_file_names(build)...])
   "runtime-#{kind_name}-#{target_name}-#{clang_name}-#{hash}"
@@ -216,7 +216,7 @@ version_line_value := (clang_version: String, prefix: String) ->
 # The number before the first `.` of the word after `version`, as in `clang version 17.0.0`.
 major_version := (clang_version: String) ->
   words := clang_version.split("\n")[0].split(' ')
-  at := words.index_of('version') ? return nil
+  at := words.index_of('version') else return nil
   words.get(at + 1)?.split('.')[0]
 
 # FNV-1a of 64 bits, whose offset basis, 0xCBF29CE484222325, is written as the Int of its bits.
@@ -283,7 +283,7 @@ compile_runtime := (kind: BuildKind, build: PlatformBuild, staging_dir: String, 
     [libuv_job(path) for path in build.libuv_sources]...
   ]
   return false unless await run_clang_jobs(jobs)
-  ir := await clang_probe_ir(flags, temp_dir) ? return false
+  ir := await clang_probe_ir(flags, temp_dir) else return false
   await write_file(join(staging_dir, ATTRIBUTES_FILE), function_attributes(ir))
   await write_file(join(staging_dir, CORO_END_FILE), coro_end_type(ir))
   true
@@ -298,7 +298,7 @@ clang_probe_ir := (flags: String[], temp_dir: String) ->
   output := Buffer()
   ran := await run('clang', args..., stdout: output)
   return nil if ran.code != 0
-  output.text() ? throw CompileError('clang IR is not valid UTF-8')
+  output.text() else throw CompileError('clang IR is not valid UTF-8')
 
 # The attributes of the target that clang gives its function, as `"target-cpu"="x86-64"`.
 function_attributes := (ir: String) ->
@@ -311,9 +311,9 @@ function_attributes := (ir: String) ->
 attribute_group_of_function := (ir: String) ->
   lines := ir.split("\n")
   missing := CompileError('clang IR has no function attributes')
-  definition := lines.find((line) -> line.starts_with('define ')) ? throw missing
-  group := definition.split(' ').find((word) -> word.starts_with('#')) ? throw missing
-  lines.find((line) -> line.starts_with("attributes #{group} = { ")) ? throw missing
+  definition := lines.find((line) -> line.starts_with('define ')) else throw missing
+  group := definition.split(' ').find((word) -> word.starts_with('#')) else throw missing
+  lines.find((line) -> line.starts_with("attributes #{group} = { ")) else throw missing
 
 TARGET_ATTRIBUTES := ['target-cpu', 'target-features', 'tune-cpu']
 
@@ -322,7 +322,7 @@ TARGET_ATTRIBUTES := ['target-cpu', 'target-features', 'tune-cpu']
 coro_end_type := (ir: String) ->
   missing := CompileError('clang IR has no declaration of llvm.coro.end')
   is_declaration := (line: String) -> line.starts_with('declare ') and ' @llvm.coro.end(' in line
-  declaration := ir.lines().find(is_declaration) ? throw missing
+  declaration := ir.lines().find(is_declaration) else throw missing
   declaration.split(' ')[1]
 
 is_complete := (files: String[]) -> files.all(is_file)

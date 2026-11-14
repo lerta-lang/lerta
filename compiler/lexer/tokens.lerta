@@ -169,7 +169,7 @@ export lex := (source: String, path: String) ->
     var scanner = LineScanner(line, position: indent, depth: brackets)
     while true
       tokens.push token for token in scanner.run()
-      start := scanner.multiline_start ? break
+      start := scanner.multiline_start else break
       literal := scan_multiline(lines, scanner.line.number - 1, start)
       tokens.push multiline_token(scanner.line, start, literal)
       scanner = LineScanner(line: literal.line, position: literal.end, depth: scanner.depth)
@@ -192,7 +192,7 @@ source_lines := (source: String, path: String) ->
   lines
 
 # The line without a CR at its end, which it has where CRLF ends it.
-export without_carriage_return := (line: String) -> line.without_suffix("\r") ? line
+export without_carriage_return := (line: String) -> line.without_suffix("\r") else line
 
 # The tokens of an interpolated expression, placed where it is in the source line.
 export tokenize_fragment := (source: String, path: String, line: Int, column: Int) ->
@@ -336,7 +336,7 @@ class LineScanner
     scan_word := ->
       end := @line.scan_while(@position, is_identifier_part)
       word := @line.text(@position, end)
-      @add keyword_kind(word) ? IDENTIFIER, word, end, nil
+      @add keyword_kind(word) else IDENTIFIER, word, end, nil
 
     scan_raw_string := ->
       close := @raw_string_end(@position)
@@ -344,7 +344,7 @@ class LineScanner
 
     # The index of the `'` that closes the `'...'` literal whose opening quote is at `start`.
     raw_string_end := (start: Int) ->
-      @line.index_of(b"'", start + 1) ? @line.fail('unterminated string literal', start)
+      @line.index_of(b"'", start + 1) else @line.fail('unterminated string literal', start)
 
     read_double_quoted := ->
       { parts, end } := scan_double_quoted(@line, @position, false)
@@ -393,7 +393,7 @@ class LineScanner
       for length in [3, 2, 1]
         end := @position + length
         continue if end > @line.length
-        text := @line.bytes.text(@position, end) ? continue
+        text := @line.bytes.text(@position, end) else continue
         if kind := parse<TokenKind>(text)
           @add kind, text, end, nil
           return
@@ -418,7 +418,7 @@ multiline_token := (line: SourceLine, start: Int, literal: MultilineLiteral) ->
   Token(
     kind
     parts
-    text: plain ? ''
+    text: plain else ''
     spaced: start == 0 or line.bytes[start - 1] == b' '
     line: line.number
     column: line.column(start)
@@ -436,7 +436,7 @@ plain_text := (parts: TemplatePart[]) ->
 
 # The kind of a keyword; the named kinds are no keywords, so that a name such as EOF stays a name.
 keyword_kind := (word: String) ->
-  kind := parse<TokenKind>(word) ? return nil
+  kind := parse<TokenKind>(word) else return nil
   case kind
     when IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, BINARY, NEWLINE, INDENT, DEDENT, EOF
       nil
@@ -454,7 +454,7 @@ is_float_literal := (text: String) ->
   return false if not is_integer_literal(significand[0]) or significand[0].starts_with('0x')
   return false if significand.length == 2 and not is_digit_run(significand[1])
   return true if parts.length == 1
-  exponent := parts[1].without_prefix('-') ? parts[1].without_prefix('+') ? parts[1]
+  exponent := parts[1].without_prefix('-') else parts[1].without_prefix('+') else parts[1]
   is_digit_run(exponent)
 
 # Digits, with separators between them.

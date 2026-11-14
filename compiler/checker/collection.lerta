@@ -68,7 +68,7 @@ export type_of_array := (body: Body, array: ArrayLiteral, expected: Type?) ->
   empty := ->
     message := 'the type of an empty array must be written, as in `var xs: Int[] = []`'
     fail body.program, array.position, message
-  anchor := anchor_of(elements) ? empty()
+  anchor := anchor_of(elements) else empty()
   anchor_type := type_of(body, anchor)
   element_type := is_spread(anchor) then (anchor_type as ArrayType!).element else anchor_type
   element := check_value_type(body.program, element_type, anchor.position, 'an array')
@@ -131,11 +131,11 @@ export type_of_map := (body: Body, map: MapLiteral, expected: Type?) ->
   type
 
 expected_map := (expected: Type?) ->
-  map := inner_of_expected(expected) as MapType ? return nil
+  map := inner_of_expected(expected) as MapType else return nil
   not is_set(map) then map
 
 expected_set := (expected: Type?) ->
-  map := inner_of_expected(expected) as MapType ? return nil
+  map := inner_of_expected(expected) as MapType else return nil
   is_set(map) then map
 
 map_type_of_anchors := (body: Body, key: Expression, value: Expression) ->
@@ -174,7 +174,7 @@ export type_of_new_map := (body: Body, call: Call, expected: Type?) ->
   if call.args.is_empty()
     example := '`Map<String, Int>()`'
     message := "the type of an empty map must be written, as in #{example}"
-    return map ? fail(program, call.position, message)
+    return map else fail(program, call.position, message)
   entries := call.args[0]
   expected_entries :=
     if map
@@ -201,7 +201,7 @@ export type_of_new_set := (body: Body, call: Call, expected: Type?) ->
   if call.args.is_empty()
     example := '`Set<String>()`'
     message := "the type of an empty set must be written, as in #{example}"
-    return set ? fail(program, call.position, message)
+    return set else fail(program, call.position, message)
   items := call.args[0]
   item := type_of_iterated(body, items, "as Set()'s items", set then ArrayType(set.key))
   reject_other_items program, item, set?.key, items.position
@@ -292,7 +292,7 @@ export type_of_index := (body: Body, index: Index): Type ->
     expect_type body, index.index, object_type.key
     return optional_type(object_type.value) if default_value == nil
     unless index in body.written_defaults
-      read := 'write m[k] ? d to read it without adding k'
+      read := 'write m[k] else d to read it without adding k'
       message :=
         "a default adds its key, so it is only for a value written, as by += or push: #{read}"
       fail body.program, default_value.position, message

@@ -87,7 +87,7 @@ export format_parsed := (parsed: Parsed, path: String, typed: Typed?) ->
 
   # The types left out must keep the types of the program, or they all stay (see rewritten_text).
   with_types := await rewritten_text(parsed, laid, first, path, true)
-  text := with_types ? (await rewritten_text(parsed, laid, first, path, false))!
+  text := with_types else (await rewritten_text(parsed, laid, first, path, false))!
   kept_types := text.annotations_kept
 
   first_rewrites :=
@@ -116,7 +116,7 @@ long_lines := (source: String, formatted: String, left: Set<Int>) ->
   found: Finding[]
   for line at i in source.split("\n")
     continue if i + 1 in left
-    written := formatted_lines[line.trim()] ? continue
+    written := formatted_lines[line.trim()] else continue
     continue if written.count() <= WIDTH
 
     # The source column of the formatted line's first past WIDTH, as its indentation changes.
@@ -198,8 +198,8 @@ held_statements := (text: SourceTokens, laid: LaidOut, edits: Edit[]) ->
   for edit in edits
     # That of a `;` is the layout's (see rewritten_text).
     continue if edit.rule == SEMICOLONS
-    change := edit.change ? continue
-    continue if text.starts[edit.at] ? -1 in laid.skipped
+    change := edit.change else continue
+    continue if text.starts[edit.at] else -1 in laid.skipped
     var innermost: StatementShape?
     for statement in laid.statements
       continue unless spans(text, statement, change.from)
@@ -275,7 +275,7 @@ rewritten_text := (
       await rewrites(current, path)
   if left_out_types
     before := declared_types(parsed.statements, first.typed)
-    after := declared_types(current.statements, found.typed) ? return nil
+    after := declared_types(current.statements, found.typed) else return nil
     return nil if before != after
   annotations_kept := not types
   separators := applicable([edit for edit in found.edits when edit.rule == SEMICOLONS])
@@ -492,7 +492,7 @@ findings := (gaps: Gap[], decisions: Decision[]) ->
   reported: Set<String>
   for gap at index in gaps
     decision := decisions[index]
-    at := first_difference(gap, decision.text) ? continue
+    at := first_difference(gap, decision.text) else continue
     { rule } := decision
     key := "#{at.line} #{rule.label} #{rule.message}"
     continue if key in reported

@@ -27,7 +27,7 @@ struct MemberField
 export field_type := (body: Body, object_type: Type, member: Member) ->
   if object_type is RecordType
     return field_type_by_name(body, object_type, member.name)
-  field := field_of(body, object_type, member) ? return nil
+  field := field_of(body, object_type, member) else return nil
   field.type
 
 # The type of the field of the name, of a class, a struct or an anonymous struct, read from outside
@@ -43,13 +43,13 @@ export field_type_by_name := (body: Body, object_type: Type, name: Identifier) -
 export is_fixed_field := (body: Body, object_type: Type, name: String) ->
   return true if object_type is RecordType
   return false unless object_type is ObjectType
-  field := declared_field(body, object_type, name) ? return false
+  field := declared_field(body, object_type, name) else return false
   not field.mutable and not field.weak
 
 # The field of the name, with its type, if the object is a class or struct.
 field_by_name := (body: Body, object_type: Type, name: Identifier) ->
   return nil unless object_type is ObjectType
-  field := declared_field(body, object_type, name.name) ? return nil
+  field := declared_field(body, object_type, name.name) else return nil
   typed_field(body, object_type, field, name)
 
 declared_field := (body: Body, object_type: ObjectType, name: String) ->
@@ -162,7 +162,7 @@ export field_target := (body: Body, member: Member) ->
   if object_type is RecordType
     fail program, position, 'a field of an anonymous struct cannot be changed'
   no_field := -> fail(program, position, "type #{format_type(object_type)} has no field '#{name}'")
-  found := field ? no_field()
+  found := field else no_field()
   unless found.info.mutable
     is_struct := object_type is ObjectType and object_type.is_struct
     const_field := "'#{name}' is a const field"
@@ -183,7 +183,7 @@ field_key := (type: ObjectType, name: String) -> "#{type.symbol}.#{name}"
 # The field `member` names, with its type, if its object is a class or struct.
 field_of := (body: Body, object_type: Type, member: Member) ->
   return nil unless object_type is ObjectType
-  field := declared_field(body, object_type, member.name.name) ? return nil
+  field := declared_field(body, object_type, member.name.name) else return nil
   reject_private_member body.shared, object_type, member.name
 
   # Before the field is typed, which would infer the type of one not initialized yet.
@@ -197,8 +197,8 @@ field_of := (body: Body, object_type: Type, member: Member) ->
 # that may change after it, which leaves the computed one stale. A function literal in the
 # initializer, whose body has a function context, reads it when called.
 warn_if_stale := (body: Body, field: FieldInfo, member: Member) ->
-  self := body.self ? return
-  initializing := self.initializing ? return
+  self := body.self else return
+  initializing := self.initializing else return
   is_computed := not initializing.mutable and not initializing.has_default
   in_function_literal := body.context != nil
   return if not field.mutable or not is_computed or in_function_literal
@@ -209,7 +209,7 @@ warn_if_stale := (body: Body, field: FieldInfo, member: Member) ->
   warn body.shared, member.name.position, message
 
 reject_uninitialized := (body: Body, object_type: ObjectType, field: FieldInfo, member: Member) ->
-  initializing := body.self?.initializing ? return
+  initializing := body.self?.initializing else return
   return if field.value == nil
   fields := info_of(body.program, object_type).fields
   place := (each: FieldInfo) -> fields.index_of(each)!

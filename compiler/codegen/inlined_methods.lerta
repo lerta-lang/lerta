@@ -36,7 +36,7 @@ import ArrayType, is_float, is_kind, iterable_item, IterType, Type from '../type
 # method's arguments.
 export inlined_method := (g: Generator, call: Call, member: Member, source: MethodSource) ->
   return nil if source is not ExtensionSource or not is_builtins(source.method.module_name)
-  instance := g.facts.instances[call]?.instance ? return nil
+  instance := g.facts.instances[call]?.instance else return nil
   literal := instance.entry.literal
   return nil if literal.yields or literal.awaits or literal in g.fusion.literals
   return nil unless goes_through_this_once(literal.body)
@@ -61,14 +61,14 @@ export is_fused_source := (g: Generator, expression: Expression, reads_fields: B
   if expression is Range
     return stable(expression.start!) and stable(expression.end!)
   return fused.args.all(stable) if fused := fused_call(g, expression)
-  lazy := fused_comprehension(g, expression) ? return false
+  lazy := fused_comprehension(g, expression) else return false
   stable(lazy.source) or is_fused_source(g, lazy.source, reads_fields)
 
 # A plain value, or, if `reads_fields`, a field of a field, and so on, of one, or the Binary of a
 # String, which neither throw nor have effects either, as long as no argument assigns a field.
 is_stable := (g: Generator, expression: Expression, reads_fields: Bool): Bool ->
   return is_plain(g, expression) if expression is not Member or not reads_fields
-  property := g.facts.members[expression] as Property ? return false
+  property := g.facts.members[expression] as Property else return false
   return false unless property.kind in [FIELD, STRING_BINARY]
   return false unless is_unchanging_type(type_of(g, expression))
   is_stable(g, expression.object, reads_fields)
@@ -89,7 +89,7 @@ is_plain := (g: Generator, expression: Expression) ->
       case local
         when ValueLocal then true
         when SlotLocal
-          checked := local.top_level?.is_checked ? false
+          checked := local.top_level?.is_checked else false
           not local.is_var and not checked
     else false
 
@@ -123,16 +123,16 @@ reads_this := (statement: Statement): Bool ->
       return true if subject != nil and expression_reads_this(subject)
       return true if statement.arms.any((arm) -> arm.patterns.any(expression_reads_this))
       return true if statement.arms.any((arm) -> arm.body.any(reads_this))
-      (statement.otherwise ? []).any(reads_this)
+      (statement.otherwise else []).any(reads_this)
     when Try
       return true if statement.body.any(reads_this)
       return true if statement.catches.any((clause) -> clause.body.any(reads_this))
-      (statement.finally_body ? []).any(reads_this)
+      (statement.finally_body else []).any(reads_this)
     when Declaration then expression_reads_this(statement.value)
     when Assignment
       expression_reads_this(statement.value) or expression_reads_this(statement.target)
     else
-      expression := statement as Expression ? return false
+      expression := statement as Expression else return false
       expression_reads_this(expression)
 
 expression_reads_this := (expression: Expression): Bool ->
@@ -210,7 +210,7 @@ generate_argument := (g: Generator, arg: Expression, param: Parameter?, instance
 # is still made, unused, so that what it captures is checked where the literal is.
 is_taken_in_place := (g: Generator, arg: Expression, param: Parameter?, instance: Instance) ->
   return false if arg is not FunctionLiteral or param == nil or not is_only_called(param, instance)
-  captures := g.facts.captures[arg] ? []
+  captures := g.facts.captures[arg] else []
   return false if arg.weak or captures.any(Capture.is_weak)
   not arg.yields and not is_awaiting(g, arg)
 

@@ -30,8 +30,8 @@ export return_inferable := (
 
 export declared_inferable := (target: DeclaredType, facts: NodeFacts, program: ProgramWide) ->
   { name, value } := target
-  declared := facts.types[name] ? field_type(program, name) ? return false
-  type := facts.types[value] ? return false
+  declared := facts.types[name] else field_type(program, name) else return false
+  type := facts.types[value] else return false
 
   # A type that moves to the type arguments of a Map() or Set() is given there.
   is_given := target.moves_to_type_arguments or given_as_is(value, facts)
@@ -53,7 +53,7 @@ reaches := (
   calls: Map<FunctionLiteral, FunctionLiteral[]>, from: FunctionLiteral, target: FunctionLiteral,
   seen: Set<FunctionLiteral>
 ): Bool ->
-  for callee in calls[from] ? []
+  for callee in calls[from] else []
     return true if callee == target
     continue unless seen.add(callee)
     return true if reaches(calls, callee, target, seen)
@@ -64,16 +64,16 @@ reaches := (
 # with one of type void.
 gives_its_type := (function: FunctionLiteral, last: Expression?, facts: NodeFacts) ->
   return false if function.yields
-  declared := facts.types[function] as FunctionType ? return false
-  results := facts.results[function] ? return false
+  declared := facts.types[function] as FunctionType else return false
+  results := facts.results[function] else return false
   result := function.awaits then (declared.result as PromiseType?)?.value else declared.result
   return false if result == nil
   unless is_kind(result, 'void')
-    unified := unified_own_type(results, facts) ? return false
+    unified := unified_own_type(results, facts) else return false
     return unified == result
   return false unless results.is_empty()
-  value := last ? return true
-  type := facts.types[value] ? return false
+  value := last else return true
+  type := facts.types[value] else return false
   is_kind(type, 'void')
 
 # The type that values of their own types give together, as the branches of a conditional do; nil
@@ -84,7 +84,7 @@ gives_its_type := (function: FunctionLiteral, last: Expression?, facts: NodeFact
 unified_own_type := (values: Expression[], facts: NodeFacts) ->
   var unified: Type?
   for value in values
-    type := facts.types[value] ? return nil
+    type := facts.types[value] else return nil
     return nil unless has_own_type(value, facts)
     before := unified
     unified =
@@ -93,7 +93,7 @@ unified_own_type := (values: Expression[], facts: NodeFacts) ->
       else
         type
     return nil if unified == nil
-  whole := unified ? return nil
+  whole := unified else return nil
   is_converted := (value: Expression) ->
     type := facts.types[value]!
     facts.conversions[value] != nil or type == whole or is_kind(type, 'never')
@@ -132,18 +132,18 @@ has_own_type := (value: Expression, facts: NodeFacts): Bool ->
     when BinaryOperation then own(value.left) and own(value.right)
     when Conditional then unifies_to([value.then_value, value.else_value], type, facts)
     when Case, If, Try
-      values := branch_values(value) ? return false
+      values := branch_values(value) else return false
       unifies_to(values, type, facts)
     when ArrayLiteral
       element := (type as ArrayType?)?.element
       not value.elements.is_empty() and value.elements.all((part) -> own_as(part, element))
     when MapLiteral
-      map := type as MapType ? return false
+      map := type as MapType else return false
       own_entry := (entry: MapEntry) ->
         own_as(entry.key, map.key) and own_as(entry.value, map.value)
       not value.entries.is_empty() and value.entries.all(own_entry)
     when TupleLiteral
-      items := (type as TupleType?)?.items ? return false
+      items := (type as TupleType?)?.items else return false
       [own_as(part, items[i]) for part at i in value.items].all((same) -> same)
     else false
 
@@ -167,8 +167,8 @@ export branch_values := (value: Expression) ->
       else return nil
   values: Expression[]
   for body in bodies
-    last := body.last() ? return nil
-    last_value := last as Expression ? return nil
+    last := body.last() else return nil
+    last_value := last as Expression else return nil
     values.push last_value
   values
 
@@ -185,5 +185,5 @@ has_type_arguments := (type: Type?) ->
 # takes the name passes too: this only picks the annotations to check without, and that checking
 # keeps them (see removable_annotations).
 is_collection_call := (call: Call) ->
-  callee := call.callee as Identifier ? return false
+  callee := call.callee as Identifier else return false
   not call.type_args.is_empty() and callee.name in ['Map', 'Set']

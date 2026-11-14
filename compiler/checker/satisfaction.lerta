@@ -56,7 +56,7 @@ satisfying_member := (
       name.position
       "#{format_type(type)} does not satisfy #{bound_name}: its #{member.name} is private"
   found := find_member(body, type, name, call)
-  reason := unsatisfied_reason(body, type, member, name, found?.type) ? return found!
+  reason := unsatisfied_reason(body, type, member, name, found?.type) else return found!
   fail(
     body.program
     name.position
@@ -86,7 +86,7 @@ unsatisfied_reason := (
     when find_method(body.program, type, name.name, body.extensions)
       "its #{member.name} has type parameters of its own"
     when type is UnionType
-      union_method_problem(body, type, name) ? common_field_problem(body, type, name)!
+      union_method_problem(body, type, name) else common_field_problem(body, type, name)!
     when type is OptionalType and name.name == 'to_string' and holds_member(
       body, type, member, name
     )
@@ -110,7 +110,7 @@ export infer_through_members := (
   bindings[SELF] = type
   for member in interface_members(body.program, info)
     name := Identifier(position: at, name: member.name)
-    found := member_type_by_name(body, type, name) ? continue
+    found := member_type_by_name(body, type, name) else continue
     infer substitute(member.type, bindings), found, bind
 
 # `"#{x}"` calls `x.to_string()` (see Interpolation), which it records as typed here, so that x
@@ -133,7 +133,7 @@ export check_interpolated := (body: Body, part: Call, into_binary: Bool) ->
 # that the type satisfies; the methods of such extends do not count for satisfying one.
 export find_interface_extension := (body: Body, type: Type, name: Identifier) ->
   is_found := (method: ExtensionMethod) ->
-    bound := method.bound ? return false
+    bound := method.bound else return false
     method.name.name == name.name and satisfied_bindings(body, type, bound, name.position) != nil
   body.extensions.in_effect.find(is_found)
 
@@ -154,7 +154,7 @@ satisfied_bindings := (body: Body, type: Type, pattern: InterfaceType, at: Posit
 # The type of the items of a type that satisfies Iterable, which its iter gives.
 export iterable_item_of := (body: Body, type: Type, at: Position) ->
   iterable := std_interface(body.shared, 'Iterable', at)
-  bindings := satisfied_bindings(body, type, iterable.type, at) ? return nil
+  bindings := satisfied_bindings(body, type, iterable.type, at) else return nil
   bindings[iterable.type_params[0]]
 
 # Fails with the message, or, for a type that has a member `iter` of another type, with why it is

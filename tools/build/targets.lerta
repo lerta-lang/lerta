@@ -42,7 +42,7 @@ export test_targets := (named: String[]) ->
   ssh_hosts: Map<String, String[]>
   for (target, place) in targets
     if host := place.ssh
-      ssh_hosts[host] = [(ssh_hosts[host] ? [])..., target]
+      ssh_hosts[host] = [(ssh_hosts[host] else [])..., target]
     else if image := place.docker
       outcomes.push await run_in_docker(target, image)
     else
@@ -57,7 +57,8 @@ export test_targets := (named: String[]) ->
 read_settings := ->
   if stat(SETTINGS) == nil
     throw BuildError(message: SETTINGS_USAGE, code: 2)
-  text := await read_text(SETTINGS) ? throw BuildError(message: "#{SETTINGS} is not UTF-8", code: 2)
+  text :=
+    await read_text(SETTINGS) else throw BuildError(message: "#{SETTINGS} is not UTF-8", code: 2)
   settings := decode_settings(text)
   if settings.targets.is_empty()
     throw BuildError(message: SETTINGS_USAGE, code: 2)
@@ -183,7 +184,7 @@ run_over_ssh := (host: String, targets: String[]) ->
 
   # The last line, as a login's profile may print lines before it, which must be the absolute path
   # of the directory, as `rm -rf` takes it.
-  dir := (await remote_output(host, 'mktemp -d')).trim().lines().last() ? ''
+  dir := (await remote_output(host, 'mktemp -d')).trim().lines().last() else ''
   if not dir.starts_with('/') or ' ' in dir
     throw BuildError("#{host} made no temporary directory: '#{dir}'")
 

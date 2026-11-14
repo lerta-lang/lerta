@@ -159,7 +159,7 @@ export add_members := (shared: Shared) ->
 
 # The types written in a member: a field's, or a method's parameters' and result's.
 export written_types := (member: MemberDeclaration) ->
-  literal := method_literal(member) ? return [member.type]
+  literal := method_literal(member) else return [member.type]
   types: TypeName?[] = [param.type for param in literal.params]
   types.push literal.return_type
   types
@@ -314,7 +314,7 @@ reject_invalid_weak := (
 ) ->
   fail_weak := (message: String) -> fail(program, member.position, message)
   fail_weak 'a struct field cannot be weak' if is_struct
-  written := type ? fail_weak('the type of a weak field must be written')
+  written := type else fail_weak('the type of a weak field must be written')
   object := (written is OptionalType then inner_of(written) else written) as ObjectType?
   fail_weak 'a weak field holds an object of a class' if object?.is_struct != false
   if member.throws
@@ -330,8 +330,8 @@ reject_invalid_weak := (
 # The class or struct of the name, of the module or imported.
 export object_type := (shared: Shared, name: String) ->
   return info.type if info := shared.objects[name]
-  exported := imported_type(shared, name) ? builtin_type(shared, name) ? return nil
-  info := exported.info ? return nil
+  exported := imported_type(shared, name) else builtin_type(shared, name) else return nil
+  info := exported.info else return nil
   info.type
 
 # The class or struct of the type: an instance of a generic one for its type arguments, made on
@@ -350,7 +350,7 @@ export info_of := (program: ProgramWide, type: ObjectType) ->
     view := make_instance(declared, type, Map())
     declared.standing.push view
     return view
-  declared.instances.find(is_same) ? add_instance(declared, type)
+  declared.instances.find(is_same) else add_instance(declared, type)
 
 # The view of the generic class or struct with its type parameters standing for themselves, with
 # their bounds, where its initializers are checked at its definition.
@@ -418,7 +418,7 @@ export field_type := (
   if info.state == CHECKING
     fail program, at, "the type of '#{field.name.name}' is not known yet; write it"
   check_info program, info
-  field.type ? abort_part()
+  field.type else abort_part()
 
 # A generic class or struct is checked by its instances (see check_pending_objects). Whether a
 # type satisfies the interface it names is checked once all are, as its methods may need the
@@ -474,7 +474,7 @@ check_info := (program: ProgramWide, info: ObjectInfo): void ->
   checked := check_part(program, check)
   info.state = checked then CHECKED else FAILED
   return unless checked
-  generic := info.generic ? return
+  generic := info.generic else return
   at := info.declaration.name.position
   instance_of := (name: String) ->
     instantiate(program, generic.generics[name]!, info.type.args, [], at)
@@ -485,7 +485,7 @@ check_info := (program: ProgramWide, info: ObjectInfo): void ->
 # its type alone may not tell, is stopped at the depth or the number that ends a generic
 # function's.
 reject_endless_instance := (program: ProgramWide, info: ObjectInfo): void ->
-  generic := info.generic ? return
+  generic := info.generic else return
   too_deep := info.type.args.any((type) -> type_depth(type) > MAX_TYPE_DEPTH)
 
   # The instance is counted already, as a generic function's is not before it is added.
