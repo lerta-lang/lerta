@@ -78,10 +78,11 @@ export generate := (g: Generator, expression: Expression) ->
     return emit_box_value(g.ir, operand, source)
   if settles_into(source, target)
     closure := emit_settling_closure(g, operand, source, inner_of(target))
-    if target is OptionalType
-      return emit_wrap(g.ir, closure, inner_of(target))
-    else
-      return closure
+    return
+      if target is OptionalType
+        emit_wrap(g.ir, closure, inner_of(target))
+      else
+        closure
   unless itab
     return emit_wrap(g.ir, operand, type_of(g, expression))
   value := emit_interface_value(g, operand, itab)
@@ -203,16 +204,18 @@ emit_narrowed_cast := (g: Generator, cast: Cast, object: String) ->
 
   # A union's value, a pointer, is null for nil, so it needs no unwrapping or wrapping.
   if inner_of(member) is UnionType
-    if is_boxed(narrowed)
-      return emit_box_value(ir, object, value_type)
-    else
-      return object
+    return
+      if is_boxed(narrowed)
+        emit_box_value(ir, object, value_type)
+      else
+        object
 
   unless value_type is OptionalType
-    if cast.throws
-      return object
-    else
-      return emit_wrap(ir, object, member)
+    return
+      if cast.throws
+        object
+      else
+        emit_wrap(ir, object, member)
   if cast.throws
     emit_unwrap(ir, object, value_type)
   else
@@ -275,10 +278,11 @@ emit_member_test := (g: Generator, object: String, value: Expression, type_name:
 
   # An interface value holds a value of its interface, unless it is nil.
   if held is InterfaceType and type is InterfaceType
-    if value_type is OptionalType
-      return emit_is_present(g.ir, object, value_type)
-    else
-      return 'true'
+    return
+      if value_type is OptionalType
+        emit_is_present(g.ir, object, value_type)
+      else
+        'true'
 
   if held is InterfaceType
     test_object := (each: String) -> emit_type_test(g.ir, emit_interface_data(g.ir, each), type)
@@ -286,10 +290,11 @@ emit_member_test := (g: Generator, object: String, value: Expression, type_name:
     return emit_present_test(g.ir, object, value_type, test_object)
   unless held is UnionType
     return 'false' unless is_assignable(held, type)
-    if value_type is OptionalType
-      return emit_is_present(g.ir, object, value_type)
-    else
-      return 'true'
+    return
+      if value_type is OptionalType
+        emit_is_present(g.ir, object, value_type)
+      else
+        'true'
   test_of := (each: String) -> emit_type_test(g.ir, each, type)
   return test_of(object) unless value_type is OptionalType
   emit_present_test(g.ir, object, value_type, test_of)
@@ -541,10 +546,11 @@ export emit_narrowed := (ir: IrBuilder, value: String, declared: Type, type: Typ
     return emit_interface_data(ir, held)
   unless is_boxed_narrowing(declared, type)
     present := declared is OptionalType and type is not OptionalType
-    if present
-      return emit_unwrap(ir, value, declared)
-    else
-      return value
+    return
+      if present
+        emit_unwrap(ir, value, declared)
+      else
+        value
 
   # A union value is a pointer, null for nil, whether optional or not.
   unless type is OptionalType
