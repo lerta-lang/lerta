@@ -5,10 +5,11 @@
 import
   ArrayLiteral, Await, BinaryOperation, BooleanLiteral, Call, Case, Cast, Coalesce, Conditional,
   Expression, FloatLiteral, FunctionLiteral, Identifier, If, Index, IntegerLiteral, Interpolation,
-  IsTest, Jump, MapEntry, MapLiteral, Member, NilLiteral, Range, Return, Statement, StringLiteral,
-  This, Throw, Try, TupleItem, TupleLiteral, UnaryOperation, Unwrap
+  IsTest, Jump, MapEntry, MapLiteral, Member, NilLiteral, Range, Return, StringLiteral, This, Throw,
+  Try, TupleItem, TupleLiteral, UnaryOperation, Unwrap
 from '../ast'
 import enum_value_of, NodeFacts, ProgramWide from '../checker/shared'
+import arm_bodies from '../checker/statement'
 import
   ArrayType, FunctionType, is_kind, MapType, ObjectType, PromiseType, TupleType, Type, TypeKind,
   unify
@@ -159,16 +160,7 @@ unifies_to := (values: Expression[], type: Type?, facts: NodeFacts) ->
 # The values that the branches of a case, an if or a try give, their last statements; nil for
 # another value, or if a branch is empty or ends with a statement that is no expression.
 export branch_values := (value: Expression) ->
-  bodies: Statement[][] =
-    case value
-      when Case
-        arms := [arm.body for arm in value.arms]
-        otherwise := value.otherwise
-        rest: Statement[][] = otherwise then [otherwise] else []
-        arms + rest
-      when If then [value.then_body, value.else_body]
-      when Try then [value.body] + [clause.body for clause in value.catches]
-      else return nil
+  bodies := arm_bodies(value) else return nil
   [
     for body in bodies
       last := body.last() else return nil
