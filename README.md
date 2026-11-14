@@ -130,12 +130,13 @@ make check             # the code in the style (lerta fmt)
 
 - `test/main.lerta`, the driver, is built by minilerta into `bin/test`, as `tools/build.lerta` is. Why: a change to `compiler/` cannot break the harness that tests it.
 - `make test` builds and runs it. It runs all the suites, or those named, their checks as one list: as many at once as `-j` says, each result shown as it finishes, and each suite's summary at the end. The processes that the suites run to get ready, such as the builds of the runtimes, count toward `-j` too.
-- Its options are listed at the top of `test/main.lerta`: `-k <text>` (checks whose names hold the text), `--failed` (those that failed last time), `--target <target>` (the run tests built for another target), and more.
+- Its options are listed at the top of `test/main.lerta`: `-k <text>` (checks whose names hold the text; given more than once, one of the texts), `--failed` (those that failed last time), `--target <target>` (the run tests built for another target), and more.
 - A failed check runs once more, alone, after the others, and passes as flaky if it passes then. `--no-retry` turns that off.
 
 ```
 bin/test runtime            # the runtime checks alone
 bin/test -k tests/string    # the checks whose names hold tests/string
+bin/test -k tests/string -k tests/char  # those that hold either
 bin/test --failed           # the checks that failed when they last ran
 ```
 

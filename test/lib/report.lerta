@@ -26,12 +26,16 @@ export at_once := (reasons: String[]): Promise<String[]?> -> reasons
 export posix_check := (name: String, run: () -> Promise<String[]?>) ->
   Check(name, run: -> platform == 'windows' then nil else await run())
 
-# What the driver asks of the suites: the checks whose names hold `pattern`, and, unless `only` is
-# nil, are among those it names by their keys (see key); whether to list them rather than run them;
-# whether to print only the failures; how many checks run at once; and whether to run a
-# failed check once more.
+# Whether the name holds one of the patterns, as any name does where there are none.
+is_named := (name: String, patterns: String[]) ->
+  patterns.is_empty() or patterns.any((pattern) -> pattern in name)
+
+# What the driver asks of the suites: the checks whose names hold one of `patterns`, or all of them
+# where it has none, and, unless `only` is nil, are among those it names by their keys (see key);
+# whether to list them rather than run them; whether to print only the failures; how many checks
+# run at once; and whether to run a failed check once more.
 export struct Options
-  pattern: String
+  patterns: String[]
   only: Set<String>?
   listing: Bool
   quiet: Bool
@@ -100,7 +104,7 @@ export select := (title: String, checks: Check[]) ->
   selected := [
     check
     for check in checks
-    when check.name.contains(options().pattern) and
+    when is_named(check.name, options().patterns) and
       options().only?.contains(key(title, check.name)) ? true
   ]
   for check in selected
