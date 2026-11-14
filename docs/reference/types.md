@@ -70,7 +70,7 @@
 
 - No implicit conversions: `Byte` and `Int` cannot be mixed in one operation.
 - `b.to_int()` gives an `Int`.
-- `n.to_byte()` gives a `Byte?`, nil outside 0 to 255: `n.to_byte() ? 0`, or `n.to_byte()!` where it must fit (see [integer conversions](#integer-conversions)).
+- `n.to_byte()` gives a `Byte?`, nil outside 0 to 255: `n.to_byte() else 0`, or `n.to_byte()!` where it must fit (see [integer conversions](#integer-conversions)).
 
 ### Byte methods
 
@@ -346,7 +346,7 @@ These throw a `ValueError`:
 
 - `s.binary` gives the bytes of a `String`, its UTF-8, without copying them.
 - `b.text(start = 0, end = b.length)` gives those bytes as a `String` if they are valid UTF-8, or nil. It throws an `IndexError` if they are out of range. `b.text()` gives the whole `Binary` without copying it.
-  - `b.text()!` or `b.text() ? throw ...` takes a `String` where the bytes must be UTF-8.
+  - `b.text()!` or `b.text() else throw ...` takes a `String` where the bytes must be UTF-8.
 - `bytes.to_binary()` copies the items of a `Byte[]` into a new `Binary`.
 
 ### Indexing
@@ -393,7 +393,7 @@ The operators are the arithmetic and bitwise ones of integers, prefix `-` and `~
 
 ```lerta
 var name: String?
-print name ? 'nobody'
+print name else 'nobody'
 print n + 1 if n := '42'.parse_int()
 ```
 
@@ -408,7 +408,7 @@ print n + 1 if n := '42'.parse_int()
 |---|---|
 | `x!` | `x` without nil; throws `unwrapped nil` if `x` is nil. |
 | `x?.name` | Optional chaining (see [below](#optional-chaining)). |
-| `x ? fallback` | A fallback for nil (see [below](#fallback)). |
+| `x else fallback` | A fallback for nil (see [below](#fallback)). |
 | `x == nil`, `x != nil` | Test for nil. |
 
 #### Optional chaining
@@ -422,8 +422,10 @@ print n + 1 if n := '42'.parse_int()
 #### Fallback
 
 - `fallback` has the type of `x` without nil, and is evaluated only if `x` is nil.
-- `?` binds tighter than comparisons, so `ages[name] ? 0 > 18` compares the age, and weaker than ranges and arithmetic.
-- `a ? b ? c` is `a ? (b ? c)`.
+- `else` binds tighter than comparisons, so `ages[name] else 0 > 18` compares the age, and weaker than ranges and arithmetic.
+- `a else b else c` is `a else (b else c)`.
+- An `else` after the value of a `then` is that `then`'s instead (see [then and else](control-flow.md#then-and-else)).
+- `x ? fallback` is read as `x else fallback` too, until the code that writes it is rewritten.
 
 #### Comparison
 
@@ -517,7 +519,7 @@ print xs[0] + xs.length
 ages := { 'ann': 31, 'bob': 27 }
 squares: Map<Int, Int>
 squares[3] = 9
-print ages['ann'] ? 0
+print ages['ann'] else 0
 ```
 
 - `Map<K, V>` maps keys of type `K` to values of type `V`. Like arrays, maps are mutable and shared.
@@ -543,9 +545,9 @@ print ages['ann'] ? 0
 
 - `m[k, default: d]` is the value of `k`, of type `V`. Where `k` is missing, `d` is evaluated, then and only then, and the map holds it under `k` first.
   - `counts[word, default: 0] += 1` counts, and `groups[key, default: []].push(item)` groups, each array made for its own key.
-  - It is written only where the value is: as the target of `+=` and so on or of a field's assignment, or as the object of a method's call, as `push`, or what such a place is reached through, as `m[a, default: Map()][b, default: 0] += 1`. Elsewhere it is an error, which suggests `m[k] ? d`, as reading a map changes nothing.
+  - It is written only where the value is: as the target of `+=` and so on or of a field's assignment, or as the object of a method's call, as `push`, or what such a place is reached through, as `m[a, default: Map()][b, default: 0] += 1`. Elsewhere it is an error, which suggests `m[k] else d`, as reading a map changes nothing.
   - Why: a read that adds a key is a surprise, as `dict.get(k, d)` and `getOrDefault` change nothing. A method call counts as a write, as the method may change the value, which the compiler does not know.
-  - To read a value without changing the map, write `m[k] ? d`; to read it and add what is missing, as a cache does, `m.get_or_add(k, -> d)`.
+  - To read a value without changing the map, write `m[k] else d`; to read it and add what is missing, as a cache does, `m.get_or_add(k, -> d)`.
 - `+=` and so on read the value, or `d`, and add the key only once the result is written, so one that throws, as on overflow, leaves the map as it was.
 - `m[k, default: d] = v` is an error, as the default would go unused.
 
@@ -754,11 +756,11 @@ type Expr = Num | Add | Mul
 | `x is T` | Whether a union value holds a `T`; for an optional union value, whether it is not nil and holds a `T`. |
 | `x is not T` | `not (x is T)`. |
 | `x as T?` | The value as a `T` if it holds one, otherwise nil; nil for nil. |
-| `x as T ? y` | `(x as T?) ? y`, with a space before `?`: the value as a `T`, or `y`, evaluated only then. |
+| `x as T else y` | `(x as T?) else y`: the value as a `T`, or `y`, evaluated only then. |
 | `x as T!` | The value as a `T`; throws `failed cast` otherwise. |
 
 - `x as T` alone is an error, so that a cast shows where it is written whether it fails into nil, falls back or throws.
-- `x as T ? y` binds as the fallback of `?` does (see [optional values](#optional-values)), and `y` may be another such cast: `x as T ? y as T ? z` is `x as T ? (y as T ? z)`.
+- `x as T else y` binds as a [fallback](#fallback) does, and `y` may be another such cast: `x as T else y as T else z` is `x as T else (y as T else z)`.
 - `is` narrows as nil tests do: a `const`, a parameter, a loop variable or a path of fields from one, to `T` where it holds and to the other members where it does not (see [narrowing](control-flow.md#narrowing)). To take a narrowed value under another name, write `if c := x as Circle?`.
 - `is` and `as` are not [keywords](syntax.md#contextual-words), and do not chain with comparisons.
 - There is no unchecked cast.

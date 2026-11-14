@@ -39,6 +39,10 @@ export class TokenStream
   # Where the last `xs...` after a value is, which no array item may have taken (see at_spread).
   var spread: Position?
 
+  # Whether the value being parsed is that of a `then`, whose `else` ends it rather than giving a
+  # fallback, as it does elsewhere: `x else y`.
+  var in_then_value = false
+
   # The opening brackets that the expression being parsed is in, innermost last.
   private
     brackets: Token[] = []
@@ -224,7 +228,7 @@ export class TokenStream
             'write `not x` for `!x`'
           else
             nil
-        when '?' then previous == '?' then 'write `x ? default` for `x ?? default`'
+        when '?' then previous == '?' then 'write `x else default` for `x ?? default`'
         when ':' then @line_has_coalesce(index) then 'write `c then a else b` for `c ? a : b`'
         when '='
           is_let := @tokens[@line_start(index)].is_word('let')
@@ -259,9 +263,28 @@ export class TokenStream
   inside := <T>(parse: () -> T): T ->
     @brackets.push @tokens[@index - 1]
     @continue_line()
-    result := parse()
+    result := @outside_then_value(parse)
     @brackets.pop()
     result
+
+  # Runs `parse` on the value of a `then`, which an `else` ends (see in_then_value).
+  then_value := <T>(parse: () -> T): T -> @with_then_value(true, parse)
+
+  # Runs `parse` on a block, whose statements are no `then`'s value, as one in brackets is not.
+  outside_then_value := <T>(parse: () -> T): T -> @with_then_value(false, parse)
+
+  with_then_value := <T>(inside_then: Bool, parse: () -> T): T ->
+    outer := @in_then_value
+    @in_then_value = inside_then
+    result := parse()
+    @in_then_value = outer
+    result
+
+  # Whether the next token starts the fallback of a nil: `?`, which goes, or `else` but after the
+  # value of a `then`.
+  at_fallback := ->
+    next := @peek_continuation()
+    next == '?' or (next == 'else' and not @in_then_value)
 
   # The closing bracket `close`, which may start the line after the contents.
   expect_close := (close: TokenKind) ->

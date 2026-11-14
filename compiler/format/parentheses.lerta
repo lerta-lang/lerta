@@ -66,6 +66,10 @@ class ParenthesesWalk
     # The operands of the expressions visited, which are checked with them.
     operands := Map<Expression, Operand>()
 
+    # The fallbacks that the values of `then`s hold outside brackets, whose `else` would end the
+    # value without their parentheses (see TokenStream.in_then_value).
+    in_then_values := Set<Expression>()
+
     # The expression in its place, in the order of the source.
     visit := (value: Expression) ->
       return if value in @unwritten
@@ -74,6 +78,8 @@ class ParenthesesWalk
       @operands_checked own
 
     operands_checked := (own: Operand): void ->
+      if conditional := own.expression as Conditional?
+        @in_then_values.add each for each in bare_fallbacks(conditional.then_value)
       parts := operands_of(own)
       for part in parts
         @operands[part.expression] = part
@@ -85,7 +91,18 @@ class ParenthesesWalk
       for part in parts
         @operands_checked part if part.expression in unvisited
 
-    check := (operand: Operand) -> @found.push(edit) if edit := dropped(@tokens, operand)
+    check := (operand: Operand) ->
+      clarified := operand.clarified or operand.expression in @in_then_values
+      @found.push edit if edit := dropped(@tokens, { operand..., clarified })
+
+# The fallbacks of the expression outside brackets, through the operations that hold them.
+bare_fallbacks := (expression: Expression): Expression[] ->
+  case expression
+    when Coalesce then [expression]
+    when BinaryOperation
+      [bare_fallbacks(expression.left)..., bare_fallbacks(expression.right)...]
+    when UnaryOperation then bare_fallbacks(expression.operand)
+    else []
 
 # The parts of the expression that places_of does not visit as places (see Visit).
 export unvisited_parts := (expression: Expression): Expression[] ->

@@ -23,7 +23,7 @@ n :=
 
 - `throw value` throws an exception: a value of a type that satisfies `interface Error` of `std:builtins`, whose one member is `message: String`.
 - The value is converted to an `Error` as a value converts to an [interface type](objects.md#interfaces). It is a class or struct, which a program declares for its own errors, as `struct NotFound: Error`.
-- `throw` is an expression of type `never`, so it can stand wherever a value is expected: `case` arms, `x ? throw NotFound(message: 'missing')`. `never` does not count when the types of arms or returns are combined, and a function may end with it.
+- `throw` is an expression of type `never`, so it can stand wherever a value is expected: `case` arms, `x else throw NotFound(message: 'missing')`. `never` does not count when the types of arms or returns are combined, and a function may end with it.
 - A `String` cannot be thrown: `throw` takes an `Error`, so that a `catch` can tell errors apart by type.
 
 ### Runtime errors

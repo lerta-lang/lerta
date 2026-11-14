@@ -95,5 +95,5 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
   - Or the end signalled as an exception, as Python's `StopIteration`, which the check after each call that Lerta has anyway would carry.
 - A literal of an empty map, such as `{:}`, so that `to_literal` of one reads back: it gives `{}` now, an empty anonymous struct.
 - Whether a local declared with an array type alone, `names: String[]`, stays an empty array, while a field so declared is a required argument.
-- Which uses of the same tokens in different constructs could be removed, listed with the summary of the grammar ([follow-ups](README.md#follow-ups)). `?`, of `T?`, `x ? y`, `x?.y` and `as T ? y`, stays: each is about nil.
+- Which uses of the same tokens in different constructs could be removed, listed with the summary of the grammar ([follow-ups](README.md#follow-ups)). `?`, of `T?` and `x?.y`, stays: each is about nil.
 - Whether `as` also widens a value to a type it fits, as Swift's `nil as String?` or `x as Shape`, for a value in the middle of an expression. A `const` with a type annotation does it now. It would sit beside the casts that may fail, `as T?` and `as T!`, which `as T` alone is not allowed to be.

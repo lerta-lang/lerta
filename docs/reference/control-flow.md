@@ -67,13 +67,13 @@ until n >= 10
 ### break, continue and return
 
 - `break` leaves the innermost `while` or `for`, and `continue` goes on to its next round. Either is an error outside a loop.
-- `break`, `continue` and `return` are expressions of type `never`, like [`throw`](errors.md#exceptions): `age := ages[name] ? return -1`, `when 'stop' then break`.
+- `break`, `continue` and `return` are expressions of type `never`, like [`throw`](errors.md#exceptions): `age := ages[name] else return -1`, `when 'stop' then break`.
 - Unlike `throw`, they may only be written where nothing evaluated before them is still held:
   - as a statement;
   - as the value of a declaration or of an assignment to a variable;
-  - within those, as the fallback of `?`, a value of `then`/`else` or of a `case` arm.
-- Elsewhere, as in `f(x ? return 0)`, they are an error. So is a `return` inside an arm of a `case` that is itself such an operand, or a `break` or `continue` there that leaves a loop outside the arm.
-- As a statement, `x ? return` is a guard, whose value is not used.
+  - within those, as a [fallback](types.md#fallback), a value of `then`/`else` or of a `case` arm.
+- Elsewhere, as in `f(x else return 0)`, they are an error. So is a `return` inside an arm of a `case` that is itself such an operand, or a `break` or `continue` there that leaves a loop outside the arm.
+- As a statement, `x else return` is a guard, whose value is not used.
 - [`yield`](functions.md#functions-that-yield), which gives no value, may only be a statement where `return` may be.
 
 ### Postfix forms
@@ -150,11 +150,8 @@ greeting := name then "hello #{name}"
 - The condition and its [narrowing](#narrowing) are those of `if`: above, `name` is a `String` in the `then` value.
 - The values combine as the arms of a [`case`](#the-type-of-a-case) do.
 - Why `then` without `else` gives nil, while an `if` without one gives no value: `then` is always a value, while an `if` is a statement too. As the last statement of a block, an `if` without `else` giving nil would change what the block gives.
-- Why `?`, not `else` without `then` (`x else y`, mirroring `c then a`), gives the fallback of a nil:
-  - one `else` would take two precedences, the weakest for `then`/`else` and a tighter one for `x ? 0 > 18` and `n ? 0 + 1`;
-  - in `c then a else b else d`, the last `else` could continue the `then` or take the fallback, which differ where `c` holds and `a` is nil.
-
-  Only a guard, `ages[name] else return -1`, would read better.
+- An `else` after the value of a `then` is that `then`'s; elsewhere, an `else` gives the [fallback](types.md#fallback) of a nil, `x else d`. So the value of a `then` holds a fallback only in parentheses, `c then (x else d) else e`, and `c then a else b else d` is `c then a else (b else d)`.
+  - Why not two precedences for one `else`, the weakest for `then`/`else` and a tighter one for `x else 0 > 18`: where the `then` ends tells which `else` it takes, so the fallback keeps the precedence that it needs.
 - `if c then a else b` with no block below it is an error that says to leave out `if`, as are `unless`, `while` and `until` before such a value.
 - Why `c then a else b`, not `if c then a else b` on one line:
   - `if c then a` would have to give nil, while an `if` without `else` gives no value, or require `else` and lose `name then greet(name)`;

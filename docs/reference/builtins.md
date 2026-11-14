@@ -67,7 +67,7 @@ The least and the greatest [Int](types.md#int): `-9223372036854775808` and `9223
 - So does any type that declares `to_string`, as a method or a field that holds a function, or gets it from an extend in effect. A `to_string` with parameters or another result does not.
 - A `Bool` gives `true` or `false`, and a `Byte` a number.
 - An array, a map, a set, a tuple, an anonymous struct or a struct of [Literal](#literal) parts satisfies it too, giving its literal: `[1, 2]`, `{ 'a': Point(x: 1) }`.
-- An optional value does not, so that a `nil` never reaches a text unseen: `print x` and `"#{x}"` of an `Int?` are errors, which suggest `x ? default` or [`dbg(x)`](#dbg).
+- An optional value does not, so that a `nil` never reaches a text unseen: `print x` and `"#{x}"` of an `Int?` are errors, which suggest `x else default` or [`dbg(x)`](#dbg).
 - Nor does a class without a `to_string`: its objects are no values that a literal writes.
 
 ### Collections

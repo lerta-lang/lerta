@@ -149,7 +149,7 @@ parse_conditional := (tokens: TokenStream): Expression ->
   condition := parse_or(tokens)
   return condition if tokens.peek_continuation() != 'then'
   tokens.next()
-  then_value := parse_expression(tokens)
+  then_value := tokens.then_value(-> parse_expression(tokens))
   position := condition.position
   without_else := not tokens.accept('else')
   else_value: Expression = without_else then NilLiteral(position) else parse_expression(tokens)
@@ -228,16 +228,19 @@ parse_in := (tokens: TokenStream, item: Expression): Expression ->
     test
 
 # The `?` is read as the type's, which the checker takes as the form instead. `x as T ? y`, with a
-# space before `?`, is read as `(x as T?) ? y`.
+# space before `?`, is read as `(x as T?) ? y`, and so is `x as T else y`.
 parse_cast := (tokens: TokenStream, value: Expression): Expression ->
   as_token := tokens.next()
   type := parse_cast_type(tokens)
   next := tokens.peek()
   optional := next.kind == '?' and not next.spaced
   throws := next.kind == '!' and not next.spaced
-  falls_back := next.kind == '?' and next.spaced
+  falls_back := tokens.at_fallback() and (next.kind == 'else' or next.spaced)
+  if next.kind == 'else' and tokens.in_then_value
+    message := "write a cast's fallback in the value of a then in parentheses: '(x as T else y)'"
+    tokens.fail as_token.position(), message
   if not optional and not throws and not falls_back
-    forms := "'as T?' for nil where it is no T, 'as T ? y' for y, or 'as T!' to throw"
+    forms := "'as T?' for nil where it is no T, 'as T else y' for y, or 'as T!' to throw"
     tokens.fail as_token.position(), "write #{forms}"
   tokens.next()
   type.optional = not throws
@@ -260,7 +263,7 @@ parse_binary_comparison := (tokens: TokenStream, left: Expression): Expression -
 # `a ? b ? c` is `a ? (b ? c)`.
 parse_coalesce := (tokens: TokenStream): Expression ->
   value := parse_range(tokens)
-  return value if tokens.peek_continuation() != '?'
+  return value unless tokens.at_fallback()
   tokens.next()
   fallback := tokens.nested(-> parse_coalesce(tokens))
   Coalesce(value, fallback, position: value.position)
