@@ -5,17 +5,17 @@ import JsonError, JsonKeys from '../json'
 
 export class JsonWriter
   keys: JsonKeys
-  var written = ''
+  private var written = ''
   # Each array or object being written, the innermost last.
-  levels: Level[] = []
+  private levels: Level[] = []
   # Each object being written that may hold itself, by its address, the innermost last, and the
   # count of levels when it was entered: the steps of those levels give its path.
-  entered: Int[] = []
-  depths := Map<Int, Int>()
-  field_keys := FieldKeys(@keys)
+  private entered: Int[] = []
+  private depths := Map<Int, Int>()
+  private field_keys := FieldKeys(@keys)
   # The keys of each record being written in camel case, the innermost last: two fields that it
   # writes as one key, as `ab_c` and `abC`, would give the object two values of it.
-  record_keys: Set<String>[] = []
+  private record_keys: Set<String>[] = []
 
   write_nil := -> @written += 'null'
   write_bool := (value: Bool) -> @written += value.to_string()
@@ -81,15 +81,15 @@ export class JsonWriter
     @record_keys.pop() if @keys == CAMEL_CASE
     @end_object()
 
-  begin_object := -> @begin('{')
+  private begin_object := -> @begin('{')
 
   # Starts the value of the key in the innermost object.
-  next_key := (key: String) ->
+  private next_key := (key: String) ->
     @next ".#{key}"
     @written += quoted(key)
     @written += ':'
 
-  end_object := -> @end('}')
+  private end_object := -> @end('}')
 
   # Starts writing an object that may hold itself, by its address, which must not be written
   # already: JSON cannot hold a cycle.
@@ -100,7 +100,7 @@ export class JsonWriter
     @entered.push address
 
   # JSON holds no infinity.
-  check_finite := (value: Float): void ->
+  private check_finite := (value: Float): void ->
     return if is_finite(value)
     throw JsonError("#{@path_text()}: #{value}, which JSON cannot hold")
 
@@ -108,11 +108,11 @@ export class JsonWriter
 
   # The record has two fields of the key, an error of the record, which the levels around its own
   # give the path of, rather than of its last value.
-  fail_twice := (key: String) ->
+  private fail_twice := (key: String) ->
     record := path_of(@levels[..(@levels.length - 1)])
     throw JsonError("#{record}: two fields of the key #{quoted(key)}")
 
-  begin := (open: String) ->
+  private begin := (open: String) ->
     @written += open
     @levels.push Level()
 
@@ -126,6 +126,6 @@ export class JsonWriter
     @levels.pop()
     @written += close
 
-  path_text := -> path_of(@levels)
+  private path_text := -> path_of(@levels)
 
   text := -> @written

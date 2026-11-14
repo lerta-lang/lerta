@@ -37,7 +37,7 @@ export class Client
     finally
       body.close() if body is Reader
 
-  fetch_body := (url: String, options: FetchOptions, body: Binary | Reader) ->
+  private fetch_body := (url: String, options: FetchOptions, body: Binary | Reader) ->
     { method } := options
     throw ValueError("not a method: #{method}") unless is_token(method)
     check_field name, value for (name, value) in options.headers.fields
@@ -62,7 +62,7 @@ export class Client
   # by the server in the meantime, so a request that gets no answer on one is sent again on a new
   # one, when its method is one that may be sent twice. A body that is a Reader cannot be sent
   # twice, so it goes on a new connection, which the server has not had the time to close.
-  exchange := (request: Outgoing) ->
+  private exchange := (request: Outgoing) ->
     { target, body } := request
     if socket := body is Reader then nil else @take_idle(target.authority)
       try
@@ -114,7 +114,7 @@ export class Client
 
   # The latest connection kept for the host and port, after closing those kept too long, which the
   # server may be closing. A request on one the server has closed is sent again.
-  take_idle := (authority: String) ->
+  private take_idle := (authority: String) ->
     kept := @idle[authority] ? return nil
     now := monotonic()
     fresh := [idle for idle in kept when now - idle.since < @idle_timeout]
@@ -123,7 +123,7 @@ export class Client
     @idle[authority] = fresh
     fresh.is_empty() then nil else fresh.pop().socket
 
-  give_back := (authority: String, socket: Socket) ->
+  private give_back := (authority: String, socket: Socket) ->
     kept := @idle[authority] ? []
     if kept.length >= @max_idle
       socket.close()
@@ -177,8 +177,8 @@ class SentBody
   # The request's body, which is a Reader.
   body: Reader
   # Whether the last chunk has been written.
-  var whole = false
-  var failure: Error? = nil
+  private var whole = false
+  private var failure: Error? = nil
 
   send := ->
     reads := JoinedReads(@body)
@@ -195,7 +195,7 @@ class SentBody
     finally
       reads.cancel()
 
-  written := (bytes: Binary) ->
+  private written := (bytes: Binary) ->
     try
       await @socket.write(bytes)
       true
@@ -379,7 +379,7 @@ class BodyChunks
   socket: Socket
   finish: () -> void
   chunks: ChunkedBody | SizedBody
-  var ended = false
+  private var ended = false
 
   next := ->
     return nil if @ended
@@ -398,7 +398,7 @@ class BodyChunks
     @finish()
 
   # Closes the connection of a body left before its end, which cannot be kept with the rest unread.
-  abandon := ->
+  private abandon := ->
     return if @ended
     @ended = true
     @socket.close()

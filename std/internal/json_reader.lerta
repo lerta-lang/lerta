@@ -7,12 +7,12 @@ import JsonError, JsonKeys from '../json'
 export class JsonReader
   bytes: Binary
   keys: JsonKeys
-  var at = 0
+  private var at = 0
   # Each array or object being read, the innermost last.
-  levels: Level[] = []
+  private levels: Level[] = []
   # The keys that each object being read has given, the innermost last.
-  seen_keys: Set<String>[] = []
-  field_keys := FieldKeys(@keys)
+  private seen_keys: Set<String>[] = []
+  private field_keys := FieldKeys(@keys)
 
   read_bool := ->
     return true if @read_literal('true')
@@ -61,7 +61,7 @@ export class JsonReader
   fail_missing_field := (name: String) -> @fail("missing the key #{quoted(@field_keys.key(name))}")
 
   # A number that `parse` reads as what `expected` names, as `an Int8`, or gives nil for.
-  read_number := <T>(expected: String, parse: (String) -> T?): T ->
+  private read_number := <T>(expected: String, parse: (String) -> T?): T ->
     number := @number() ? @fail_expected(expected)
     value := parse(number) ? @fail("expected #{expected}, found #{number}")
     @at += number.binary.length
@@ -135,12 +135,12 @@ export class JsonReader
     true
 
   # Reads `{` of an object, whose keys next_key then gives.
-  begin_object := ->
+  private begin_object := ->
     @begin b'{', 'an object'
     @seen_keys.push Set<String>()
 
   # The next key of the innermost object, whose value it then starts reading, or nil at its end.
-  next_key := ->
+  private next_key := ->
     unless @has_next(b'}')
       @seen_keys.pop()
       return nil
@@ -197,7 +197,7 @@ export class JsonReader
   fail_member := (enum_name: String, text: String) ->
     @fail "expected a member of #{enum_name}, found #{quoted(text)}"
 
-  begin := (open: Byte, expected: String) ->
+  private begin := (open: Byte, expected: String) ->
     @skip_space()
     @fail_expected expected if @peek() != open
     @fail "nesting deeper than #{MAX_DEPTH}" if @levels.length == MAX_DEPTH
@@ -224,14 +224,14 @@ export class JsonReader
     @skip_space()
     @fail_expected 'the end of the text' if @at < @bytes.length
 
-  read_literal := (literal: String) ->
+  private read_literal := (literal: String) ->
     @skip_space()
     return false unless @bytes.occurs_at(@at, literal.binary)
     @at += literal.binary.length
     true
 
   # Reads the escape after a backslash in a string, as the Char it gives.
-  read_escape := ->
+  private read_escape := ->
     byte := @peek() ? @fail('a string that does not end')
     @at += 1
     return @read_escaped_char() if byte == b'u'
@@ -239,7 +239,7 @@ export class JsonReader
     escaped.to_char()
 
   # A surrogate pair is one Char, written as two escapes.
-  read_escaped_char := ->
+  private read_escaped_char := ->
     code := @read_hex_unit()
     return code.to_char()! unless code in 0xD800..=0xDFFF
     lone := -> @fail("a lone surrogate in a string, \\u#{code.to_hex(4)}")
@@ -249,7 +249,7 @@ export class JsonReader
     lone() unless low in 0xDC00..=0xDFFF
     (0x10000 + (code - 0xD800) << 10 + (low - 0xDC00)).to_char()!
 
-  read_hex_unit := ->
+  private read_hex_unit := ->
     var code = 0
     for _ in 0..4
       digit := (@peek() ? 0).hex_value() ? @fail('an escape \u without four hex digits')
@@ -258,7 +258,7 @@ export class JsonReader
     code
 
   # The number's text where the reader is, as JSON writes numbers, or nil if none is there.
-  number := ->
+  private number := ->
     @skip_space()
     bytes := @bytes
     var end = @at
@@ -280,16 +280,16 @@ export class JsonReader
       return nil unless digits()
     bytes.text(@at, end)!
 
-  skip_space := -> @at += 1 while @peek()?.is_space() == true
+  private skip_space := -> @at += 1 while @peek()?.is_space() == true
 
-  peek := -> @bytes.get(@at)
+  private peek := -> @bytes.get(@at)
 
   fail_expected := (expected: String) -> @fail("expected #{expected}, found #{@found()}")
 
   fail := (message: String) -> throw JsonError("#{path_of(@levels)}: #{message}")
 
   # What is where the reader is, as an error says it.
-  found := ->
+  private found := ->
     @skip_space()
     byte := @peek() ? return 'the end of the text'
     return number if number := @number()

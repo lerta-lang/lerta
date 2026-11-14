@@ -27,15 +27,15 @@ export class ChunkedBody
   reader: Reader
   name: String
   room: Int
-  var data_taken = 0
-  var lines_taken = 0
+  private var data_taken = 0
+  private var lines_taken = 0
   # The bytes left of the chunk being read.
-  var left = 0
+  private var left = 0
   # Where the body stands, kept before each read, so that a read that is cancelled leaves the next
   # to go on from there: after the data of a chunk, before its line end, and in the trailer.
-  var ending_chunk = false
-  var in_trailer = false
-  var ended = false
+  private var ending_chunk = false
+  private var in_trailer = false
+  private var ended = false
 
   next := ->
     return nil if @ended
@@ -77,26 +77,26 @@ export class ChunkedBody
     size = size * 16 + (byte.hex_value() ? throw @malformed()) for byte in hex
     size
 
-  end_chunk := ->
+  private end_chunk := ->
     line := await @line() ? throw ended_early(@name)
     throw @malformed() unless line.is_empty()
 
-  skip_trailer := ->
+  private skip_trailer := ->
     while line := await @line()
       return if line.is_empty()
     throw ended_early(@name)
 
   # A line, its line end counted as CR LF.
-  line := ->
+  private line := ->
     line := await well_formed(@reader.read_line(MAX_LINE), @name) ? return nil
     @lines_taken += line.binary.length + 2
     # Compared so, as `room` may be INT_MAX.
     throw @too_large() if @lines_taken - MAX_LINE > @room
     line
 
-  too_large := -> IOError("a #{@name} too large")
+  private too_large := -> IOError("a #{@name} too large")
 
-  malformed := -> IOError("a malformed #{@name}")
+  private malformed := -> IOError("a malformed #{@name}")
 
 export ended_early := (name: String) -> IOError("a #{name} ended early")
 
@@ -107,7 +107,7 @@ export ended_early := (name: String) -> IOError("a #{name} ended early")
 export class JoinedReads
   reader: Reader
   var ended = false
-  var waiting: Promise<Binary?>? = nil
+  private var waiting: Promise<Binary?>? = nil
 
   next := ->
     return nil if @ended
@@ -138,7 +138,7 @@ export class JoinedReads
     waiting.cancel()
     spawn dropped(waiting)
 
-  taken_waiting := ->
+  private taken_waiting := ->
     read := @waiting ? @reader.read(CHUNK_SIZE)
     @waiting = nil
     await read
