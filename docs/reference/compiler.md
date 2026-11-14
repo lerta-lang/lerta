@@ -524,7 +524,7 @@ A language server, of the [Language Server Protocol](https://microsoft.github.io
 
 #### Hover and definition
 
-- `textDocument/hover` gives the types of the name at the position, as `name: Type` in a block of Lerta, one line for each type it has in the instances of a generic function or class it is in.
+- `textDocument/hover` gives the types of the name at the position, as `name: Type` in a block of Lerta, one line for each type it has: in a generic function or class, the one at its definition, in which a type parameter stands for itself, then those in its instances.
 - `textDocument/definition` gives where it is declared:
   - a local, a parameter, a top-level value, a function, an import;
   - a class, struct or enum member, a field or a method, own or of an extend;

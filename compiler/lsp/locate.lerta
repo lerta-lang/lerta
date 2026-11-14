@@ -35,8 +35,8 @@ export module_at := (program: ProgramWide, location: String) ->
 export location_of := (program: ProgramWide, module_index: Int) ->
   module_location(program.entry_path, program.modules[module_index].display_path)
 
-# The types that the name at the position of the module's source has, one for each instance of a
-# generic body it is in, written as `name: Type`; none if no name is there.
+# The types that the name at the position of the module's source has, in a generic body one at its
+# definition and one for each instance, written as `name: Type`; none if no name is there.
 export hover_lines := (program: ProgramWide, module_index: Int, source: String, at: Position) ->
   lines: Set<String>
   for candidate in candidates_at(program, module_index, source, at)
@@ -49,8 +49,8 @@ export definition_of := (program: ProgramWide, module_index: Int, source: String
   candidates_at(program, module_index, source, at).find_map(Candidate.declaration)
 
 # The names at the position in the module's code: those whose types and references its own facts
-# and those of the instances of its generic functions and classes hold, the callees of generic
-# functions, and the names it imports.
+# and those of the definitions and instances of its generic functions and classes hold, the callees
+# of generic functions, and the names it imports.
 candidates_at := (program: ProgramWide, module_index: Int, source: String, at: Position) ->
   lines := source.split("\n")
   shared := program.shared[module_index]
@@ -264,11 +264,14 @@ spans := (name: Identifier, at: Position) ->
   length := name.name.count()
   start.line == at.line and at.column in start.column..=(start.column + length)
 
+# A generic body's are those of its definition, then those of its instances.
 all_facts := (shared: Shared) ->
   facts := [shared.facts]
   for generic in shared.generics
+    facts.push generic.definition.facts
     facts.push instance.facts for instance in generic.instances
   for info in shared.objects.values()
     facts.push info.facts
+    facts.push definition.facts if definition := info.standing.first()
     facts.push instance.facts for instance in info.instances
   facts

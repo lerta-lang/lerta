@@ -29,7 +29,7 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 
 ## Open questions
 
-- With generic bodies checked at definition (see [generic functions](../reference/functions.md#generic-functions)):
+- Of generic bodies, checked at definition (see [generic functions](../reference/functions.md#generic-functions)):
   - whether an optional type argument stays allowed, which a type that the body writes may not take, as a `Set<T>`'s key;
   - whether a `Numeric` bound, under which a number literal is a `T`, is worth a new implicit conversion. It would also settle `sum` of [Iterables](../reference/types.md#iter), whose default `zero` of `0` is an error for a `String[]` now: `sum()` fails to compile where `sum('')` is needed.
 - Whether an extend should be in effect beyond the modules that import its module directly.

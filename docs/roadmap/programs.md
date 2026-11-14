@@ -123,7 +123,6 @@ The rest of [`lerta lsp`](../reference/compiler.md#lsp):
 - In completion:
   - the methods of extends of interfaces (as `map` of `Iterable` for an array);
   - an enum's member written alone where the enum is expected;
-  - the body of a generic function that no call checks, which needs checking generic bodies at definition;
   - the code after an error in the same function's body.
 - Hover and going to a definition from a named argument's label.
 - A diagnostic's range over the whole token of its position, rather than the position alone.

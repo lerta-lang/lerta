@@ -449,10 +449,22 @@ hover_definition_check := ->
     ]
 
 generic_hover_check := ->
-  Check name: 'lerta lsp gives generic values the types of their instances', run: ->
+  Check name: 'lerta lsp gives generic values the types of their definitions and instances', run: ->
     dir := new_cli_dir('lsp-generic-hover')
     path := "#{dir}/a.lerta"
-    text := "id := <T>(v: T) -> v\nprint id(1)\nprint id('a')\n"
+    text :=
+      'id := <T>(v: T) -> v'
+      'print id(1)'
+      "print id('a')"
+      'unused := <T>(v: T) -> v'
+      'class Box<T>'
+      '  item: T'
+      '  get := -> @item'
+      'print Box(item: 1).get()'
+      'class Plain'
+      '  pick := <U>(u: U) -> u'
+      ''
+    .join("\n")
     await write_file(path, text)
     uri := uri_of(path)
     messages :=
@@ -460,6 +472,10 @@ generic_hover_check := ->
       hover_request(uri, 1, 6, 1)
       hover_request(uri, 2, 6, 2)
       hover_request(uri, 0, 24, 3)
+      hover_request(uri, 3, 23, 4)
+      definition_request(uri, 3, 23, 5)
+      hover_request(uri, 6, 13, 6)
+      hover_request(uri, 9, 23, 7)
     .join()
     ran := await session(dir, messages)
     [
@@ -469,7 +485,11 @@ generic_hover_check := ->
         [
           hover_fragment(1, 'id: (Int) -> Int')
           hover_fragment(2, 'id: (String) -> String')
-          hover_fragment(3, "v: Int\nv: String")
+          hover_fragment(3, "v: T\nv: Int\nv: String")
+          hover_fragment(4, 'v: T')
+          location_fragment(5, uri, 3, 14, 15)
+          hover_fragment(6, "item: T\nitem: Int")
+          hover_fragment(7, 'u: U')
         ]
       )...
     ]
@@ -1071,7 +1091,7 @@ imported_hover_definition_check := ->
             location_fragment(11, uri_of(lib), 3, 7, 11)
             hover_fragment(12, 'x: Int')
             location_fragment(13, uri_of(lib), 1, 2, 3)
-            hover_fragment(14, "v: Int\nv: String")
+            hover_fragment(14, "v: T\nv: Int\nv: String")
             location_fragment(15, uri, 3, 10, 11)
             hover_fragment(16, 'id: (Int) -> Int')
             location_fragment(17, uri, 3, 0, 2)
