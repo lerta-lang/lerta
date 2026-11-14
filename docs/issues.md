@@ -25,3 +25,7 @@ f := ((a, b): (Int, Int), y = a) -> y
 ```
 
 reports `the type of the parameter 'y' must be written`. The fix is to declare the names before the defaults (see parse_destructured_parameter and generate_default_entry), or to say that the name is not in scope there.
+
+## Hover gives nothing on a parameter at its declaration
+
+`lerta lsp` gives no type and no definition for a parameter's name where it is declared, as `f` in `map := (f: (Int) -> Int) -> f(@item)`, though it gives them for `f` in the body. The checker records no type for the declaring name, which candidates_at in compiler/lsp/locate.lerta finds through the facts' types alone. The fix is to record the parameters' names too, or to let the LSP find them through the function's type.
