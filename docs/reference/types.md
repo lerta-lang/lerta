@@ -10,6 +10,7 @@
 | In generic code | `Self` in an [interface](objects.md#interfaces) or an extend of one; the type parameters of a generic function, class, struct or extend, inside it |
 | Return types only | `void`, `never` |
 
+- `void` is not a type of values, to keep the rules few: generics cannot treat returning a value and returning nothing alike, and where both are needed, the standard library has a function of each kind, as a `for_each` would be beside `map`.
 - How types are written: [the syntax](syntax.md#types).
 - The methods of the builtin types: [builtins](builtins.md#methods-of-the-builtin-types). A method is called, or is a function value where a function type is expected (see [function values](functions.md#function-values)).
 

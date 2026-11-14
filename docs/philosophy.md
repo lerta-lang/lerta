@@ -1,73 +1,48 @@
 # Philosophy
 
-Lerta is a safe, single-threaded, event-driven language. It targets both native executables and [scripts](roadmap/programs.md#tools).
-
-Lerta's stance is that **cost is visible**: what a line does shows in it, beyond [reference counting](internals/memory.md) and [exception checks](internals/execution.md#exceptions).
+Lerta is a language for code you can see at a glance: indented like CoffeeScript, with types inferred as in TypeScript, and compiled to native code through LLVM. Programs are single-threaded and event-driven, with no undefined behavior in Lerta code and no tracing GC, and they run about as fast as Go.
 
 ## Design principles
 
 In priority order:
 
-1. **Write less, do more**
-   - Express the user's intent exactly, with minimal code.
-   - Do not sacrifice readability for brevity.
-   - For the user, whitespace and indentation are not tokens to "read" but visual information to "see". They show the structure at a glance and help reading.
+1. **Shape shows structure**
+   - Code is seen before it is read. Indentation shows a program's structure at a glance.
+   - Denser code is not always better code.
+   - The formatter lays out every program, so that all Lerta code looks alike.
 2. **Least surprise**
    - Intuitive to read and to write.
+   - Prefer what widely used languages already taught the reader.
 3. **Fewest rules**
-   - Keep the language specification and grammar rules to the necessary minimum.
-   - So `void` is not a type: generics cannot treat returning a value and returning nothing alike, and where both are needed, the standard library needs a function of each kind, as a `for_each` would be beside `map`.
-4. **Punctuation in moderation**
-   - Too much punctuation is noise and makes code hard to read.
-   - But well-placed punctuation reads better than none at all.
-   - Prefer punctuation in the meaning that widely used languages give it.
+   - Keep the language specification and grammar to the necessary minimum.
+   - One way to write each thing.
+4. **Cost is visible**
+   - What a line does shows in it. The only work it does unseen is [reference counting](internals/memory.md) and [exception checks](internals/execution.md#exceptions).
+5. **Punctuation in moderation**
+   - Too much punctuation is noise; well-placed punctuation reads better than none.
 
 ## Safety
 
 Safety means **zero undefined behavior** outside [C functions](reference/functions.md#c-functions), whose existence and types the compiler does not check: every operation returns a defined value or fails in a defined way.
 
 - **Nil safety** comes from [optional types](reference/types.md#optional-values).
-- **Weak safety** comes from [`weak` fields of type `T!`](reference/objects.md#weak-references), which throw once their object is gone.
+- **Weak safety** comes from [weak references](reference/objects.md#weak-references): once their object is gone, they give nil or throw, never a dangling pointer.
 - **No data races,** because programs are single-threaded.
 
 Planned rules are in [the roadmap](roadmap/runtime.md#safety).
 
+## Performance
+
+Lerta is mostly faster than Swift and Node.js, on par with Go, and close to C, without a tracing GC: memory is [reference counted](internals/memory.md), and generics are monomorphized. Reference cycles are not collected; weak references break them ([roadmap](roadmap/runtime.md#memory-management)). The results are in [bench/](../bench/README.md).
+
 ## Non-goals
 
-- Macros and compile-time evaluation **written by the user**
-  - The compiler does have built-in special cases: regular expression literals, and code generation for serialization (JSON and so on).
-- Runtime reflection (only type IDs and downcasts; JSON and similar formats use the code generation above)
-- ABI stability for dynamic libraries
-- A thread API
-- `any`, inheritance, delegation (automatic forwarding), getters, `import *`, `export default`, tab indentation
-- `undefined`, `null`
+- Macros and compile-time evaluation written by the user. The compiler has built-in special cases instead, such as code generation for serialization to JSON.
+- Runtime reflection, beyond type IDs and downcasts.
+- A thread API.
+- ABI stability for dynamic libraries.
+- `any`, inheritance, delegation (automatic forwarding), getters, `import *`, `export default`, `undefined`, `null`.
 
-## Prior art
+## Lineage
 
-| Area | Reference |
-|---|---|
-| Overall architecture | Crystal (Ruby syntax + inference + LLVM), Swift, Go |
-| Syntax | CoffeeScript (indentation, `->`, `@`), Nim (command syntax, without its nesting) |
-| RC + weak | Swift ARC, Rust `Rc`/`Weak` |
-| Single thread + async | Node.js / V8, libuv |
-| interface / itab | Go, Objective-C non-fragile ivars |
-| Strings | V8 (ConsString / SlicedString), Swift (small strings, `Substring`), PEP 393 |
-| Frame chain | Stackless Python, Scheme implementations, LLVM shadow stack, V8 contexts |
-| FFI | Zig `@cImport`, Swift clang importer, Nim c2nim |
-| Generics | Rust (monomorphization + `linkonce_odr`, trait bounds) |
-| Exceptions | Swift (error return values) |
-| Bootstrap | GCC `make bootstrap`, Rust, Crystal |
-
-## Why not Nim or Crystal
-
-Both are close, and much of Lerta is in them already. Lerta differs in what it leaves out.
-
-- **Nim** has the syntax and the memory management: its ARC is Lerta's reference counting. Lerta differs:
-  - Nim's default, ORC, also collects cycles, which Lerta does not ([roadmap](roadmap/runtime.md#memory-management)).
-  - Nim has several ways to write one thing: identifiers that differ only in `_` or in the case of letters after the first are one name; a call can be written `f(a, b)`, `a.f(b)` or `f a, b`; routines come in seven kinds; and templates and macros are central.
-  - Nil safety is a rule in Lerta; in Nim, `not nil` is experimental.
-  - Nim's syntax looks like Python's, but its conventions come from Pascal and its own: `$x` makes a string, `&` joins strings, and a routine returns the implicit `result`.
-- **Crystal** has the types: unions, `T?` as `T | Nil`, and narrowing. Lerta takes instead:
-  - explicit parameter types over Crystal's parameters typed by each call, so that modules can be compiled apart ([roadmap](roadmap/programs.md#open-questions));
-  - reference counting over a tracing GC;
-  - no macros, which Crystal's standard library is built on.
+Lerta takes its syntax from CoffeeScript (indentation, `->`, `@`); its type inference and narrowing from TypeScript; its optional types, memory model and exceptions from Swift (`T?`, reference counting with weak references, exceptions compiled to error return values); and its event loop from Node.js and libuv.

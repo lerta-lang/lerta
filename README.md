@@ -38,7 +38,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 
 | Document | Contents |
 |---|---|
-| [docs/philosophy.md](docs/philosophy.md) | Design principles and the reasons behind major decisions |
+| [docs/philosophy.md](docs/philosophy.md) | What Lerta stands for: its design principles, safety, performance and non-goals |
 | [docs/reference/](docs/reference/README.md) | The external specification as implemented: the language, the standard modules and the commands, as a program and its user observe them. It grows with the implementation |
 | [docs/internals/](docs/internals/README.md) | The internal specification as implemented: the architecture, the runtime rules and the bootstrap, the compiler, execution, memory, the representation of values, iteration and awaiting, input and output and the platforms |
 | [docs/roadmap/](docs/roadmap/README.md) | What is planned and not implemented yet, both external and internal, and open questions |
@@ -60,7 +60,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 | `test/` | The test driver and suites (see [Testing](#testing)) |
 | `tests/` | The run tests: Lerta sources and their expected output; also the CLI checks' files (`tests/cli/`) and the formatter cases (`tests/format/`) |
 | `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
-| `bench/` | Benchmarks (see [Benchmarks](#benchmarks)) |
+| `bench/` | Benchmarks, how to run them and their results (see [its README](bench/README.md)) |
 | `editors/` | Editor support for VS Code and Vim; each subdirectory's README says how to install it |
 | `site/` | The website, written from `docs/` (see [Website](#website)) |
 
@@ -163,20 +163,6 @@ bin/test --failed           # the checks that failed when they last ran
 | `wine` | Running Windows programs under Wine |
 | `cli` | Running the compiler in directories of its own |
 | `lsp` | Sessions with the language server |
-
-### Benchmarks
-
-```
-make bench             # the benchmarks' times
-make bench-http        # the HTTP server's requests per second
-```
-
-- Each benchmark in `bench/` is written in Lerta, Swift, Go, JavaScript and C; C is the reference, built with the system's own compiler: cc, or cl on Windows. Each prints its `main.out`.
-- On Windows, run `make bench` where `vcvars64.bat` has run, as in the x64 Native Tools Command Prompt, so that cl is on the PATH.
-- `bench/run.lerta` (`make bench`) builds them and prints each language's version, their times side by side and each language's geometric mean. Where stdout is colored, the fastest other than C is bold.
-- `bench/http/` holds an HTTP server in Lerta, Go and JavaScript. Its `run.lerta` (`make bench-http`) loads each with `load.lerta` and prints their requests per second.
-- `bench/shared.lerta` holds what both runners use.
-- The run tests build each Lerta source in `bench/`, and run each benchmark's `main.lerta`, whose stdout must be its `main.out`.
 
 ### Website
 
