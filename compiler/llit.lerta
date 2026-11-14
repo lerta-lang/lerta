@@ -58,22 +58,22 @@ class Level
   names: Identifier[] = default []
   keys: Expression[] = default []
   position: Position
-  var at = 0
+  private var at = 0
   # The names, or the keys of String, read so far, which none may repeat.
-  seen := Set<String>()
+  private seen := Set<String>()
 
-  is_done := -> @at == @values.length
+  private is_done := -> @at == @values.length
 
 # The Decoder of llit: `value` is the literal to read next, which each read takes.
 class LlitReader
   path: String
   var value: Expression?
   # Each array, set, tuple, record or map being read, the innermost last.
-  levels: Level[] = []
+  private levels: Level[] = []
   # Where the last literal read is, or the last level that ended, which a failure after it names.
-  var last: Position = { line: 1, column: 1 }
+  private var last: Position = { line: 1, column: 1 }
   # The name of the last field read, which a field that the type has not fails with.
-  var field = ''
+  private var field = ''
 
   read_nil := ->
     return false unless @value is NilLiteral
@@ -233,24 +233,24 @@ class LlitReader
     @fail_last "expected a member of #{enum_name}, found #{name}"
 
   # The literal to read, which it takes.
-  take := ->
+  private take := ->
     value := @value!
     @value = nil
     @last = value.position
     value
 
-  begin_items := (array: ArrayLiteral) ->
+  private begin_items := (array: ArrayLiteral) ->
     @take()
     @levels.push Level(values: array.elements, position: array.position)
 
   # Ends the innermost level, as reading it does when it has nothing more.
-  end_level := ->
+  private end_level := ->
     @last = @levels.pop().position
     false
 
   # Starts reading the value of the field or the key of the name, which the level must not have had
   # already.
-  next_named := (name: String, at: Position, what: String) ->
+  private next_named := (name: String, at: Position, what: String) ->
     level := @levels.last()!
     @fail_at at, "the #{what} #{name} twice" unless level.seen.add(name)
     @value = level.values[level.at]
@@ -258,22 +258,22 @@ class LlitReader
     name
 
   # The integer to read, which the parser gives with its minus, if it is one that an Int holds.
-  integer := (expected: String) ->
+  private integer := (expected: String) ->
     literal := @value as IntegerLiteral ? @fail_expected(expected)
     value := literal.value ? @fail_expected(expected)
     @take()
     value
 
   # The number to read, an integer or not, which the parser gives with its minus.
-  number := (expected: String) ->
+  private number := (expected: String) ->
     value := @value!
     number := number_of(value) ? @fail_expected(expected)
     @take()
     number
 
-  fail_last := (message: String) -> @fail_at(@last, message)
+  private fail_last := (message: String) -> @fail_at(@last, message)
 
-  fail_at := (at: Position, message: String) ->
+  private fail_at := (at: Position, message: String) ->
     throw LlitError("#{@path}:#{at.line}:#{at.column}: #{message}")
 
 # The text of a number literal, an integer or not, with its minus, if any.

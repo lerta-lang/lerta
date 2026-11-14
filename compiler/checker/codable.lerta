@@ -56,9 +56,9 @@ class PartFinder
   bounds: Map<String, InterfaceType>
   # The classes and structs whose parts are being looked through, which a part of them that is
   # of their own type does not look through again.
-  visited := Set<String>()
+  private visited := Set<String>()
 
-  uncodable_part := (type: Type, path: String): Part? ->
+  private uncodable_part := (type: Type, path: String): Part? ->
     case
       when is_one_of_kinds(type, SCALAR_KINDS) or type is EnumType then nil
       when type is OptionalType then @uncodable_part(type.inner, path)
@@ -77,17 +77,17 @@ class PartFinder
       when type is TypeParameterType and @is_codable_parameter(type) then nil
       else unconverted(path, "is of type #{format_type(type)}")
 
-  is_codable_parameter := (type: TypeParameterType) ->
+  private is_codable_parameter := (type: TypeParameterType) ->
     bound := @bounds[type.name]
     type.standing and bound != nil and is_codable_bound(@program, bound)
 
-  first_part := (parts: (Type, String)[]): Part? ->
+  private first_part := (parts: (Type, String)[]): Part? ->
     for (type, path) in parts
       return part if part := @uncodable_part(type, path)
     nil
 
   # The members, which decoding tells apart by their kinds.
-  union_part := (type: UnionType, path: String): Part? ->
+  private union_part := (type: UnionType, path: String): Part? ->
     members_by_kind: Map<Int, Type>
     for member in type.members
       return part if part := @uncodable_part(member, path)
@@ -100,7 +100,7 @@ class PartFinder
       members_by_kind[kind] = member
     nil
 
-  object_part := (type: ObjectType, path: String): Part? ->
+  private object_part := (type: ObjectType, path: String): Part? ->
     key := type_key(type)
     return nil unless @visited.add(key)
     info := info_of(@program, type)
