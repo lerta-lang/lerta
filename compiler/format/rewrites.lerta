@@ -2,10 +2,10 @@
 # source by the rule that asks for it (see docs/reference/style.md); those that need the types of
 # the checking, where the program checks, by typed.lerta.
 import
-  ArrayLiteral, ArrayTypeName, Assignment, BinaryOperation, Binding, Call, Coalesce, Comprehension,
-  Condition, Conditional, Declaration, Expression, For, FunctionLiteral, Identifier, If, Index,
-  Interpolation, Member, MemberDeclaration, NamedType, NilLiteral, Pass, RecordLiteral, Return,
-  Statement, StringLiteral, TypeDeclaration, UnaryOperation, UnionTypeName
+  ArrayLiteral, ArrayTypeName, Assignment, BinaryOperation, Binding, Call, Case, Coalesce,
+  Comprehension, Condition, Conditional, Declaration, Expression, For, FunctionLiteral, Identifier,
+  If, Index, Interpolation, Member, MemberDeclaration, NamedType, NilLiteral, Pass, RecordLiteral,
+  Return, Statement, StringLiteral, TypeDeclaration, UnaryOperation, UnionTypeName
 from '../ast'
 import TextPart from '../lexer/string_literal'
 import Lexed, Token, TokenKind from '../lexer/tokens'
@@ -33,6 +33,7 @@ import annotating_of, annotation_edits, annotation_statement_edits from './annot
 import typed_edits, typed_statement_edits, Typed from './typed'
 import union_test_edits from './union_tests'
 import long_two_way_edit, long_two_way_report, whole_value from './two_way'
+import returned_branches from './returned_branches'
 import leaves, Span, TWO_WAY_LEAVES from './leaves'
 import written_return, written_type_edits from './written_types'
 
@@ -56,9 +57,13 @@ export rewrites_of := (
   # The two-way values that the rewrite of a statement or of a chain around them takes (see
   # two_way.lerta).
   taken: Set<Expression>
+
+  # The last statements of functions, which give their results.
+  ends_functions: Set<Statement>
   places_of program, {
     before: (value, _) ->
       with_else.add value.condition if value is If and not value.else_body.is_empty()
+      add_ends ends_functions, value.body if value is FunctionLiteral
     condition: (condition, _) ->
       add condition_edit(tokens, condition, condition not in with_else, claimed)
     statement: (statement, _) ->
@@ -74,7 +79,7 @@ export rewrites_of := (
         if value is FunctionLiteral
           add written_return(tokens, value, annotating)
     statement: (statement, _) ->
-      add edit for edit in statement_edits(tokens, statement)
+      add edit for edit in statement_edits(tokens, statement, ends_functions)
       if known := typed
         add edit for edit in typed_statement_edits(tokens, statement, known)
       if annotating := annotated
@@ -89,6 +94,20 @@ export rewrites_of := (
   for index in 0..lexed.tokens.length
     add semicolon_edit(tokens, lexed, index)
   found
+
+# The last statement of the block, which gives its value, and those of the branches of an `if` or a
+# `case` that it is, which give that.
+add_ends := (ends: Set<Statement>, block: Statement[]): void ->
+  last := block.last() ? return
+  ends.add last
+  case last
+    when If
+      add_ends ends, last.then_body
+      add_ends ends, last.else_body
+    when Case
+      add_ends ends, arm.body for arm in last.arms
+      add_ends ends, otherwise if otherwise := last.otherwise
+    else pass
 
 # The lines of the statements on lines of their own that the comments mark to keep as they are
 # written, each asked about after those inside it (see KeptLines).
@@ -146,7 +165,9 @@ negation_edit := (
 
 # A field keeps its value (see Empty initial values), as a member of a class or a struct is no
 # Declaration.
-statement_edits := (tokens: Tokens, statement: Statement): Edit?[] ->
+statement_edits := (
+  tokens: Tokens, statement: Statement, ends_functions: Set<Statement>
+): Edit?[] ->
   long_value := long_two_way_edit(tokens, statement)
   case statement
     when Declaration
@@ -158,6 +179,7 @@ statement_edits := (tokens: Tokens, statement: Statement): Edit?[] ->
       ]
     when Assignment then [two_way_value(tokens, statement.value), long_value]
     when Return, Conditional then [long_value]
+    when If, Case then [returned_branches(tokens, statement, statement in ends_functions)]
     when TypeDeclaration
       [
         unneeded_pass(tokens, statement)

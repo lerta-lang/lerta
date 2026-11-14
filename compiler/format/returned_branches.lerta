@@ -1,0 +1,79 @@
+# An `if` or a `case` with `else` whose branches each return a value, written as the `return` of
+# its value (see Branches): `return`, with the `if` or the `case` on the lines below it, one level
+# deeper, and each branch its value alone; at the end of a function, its value alone.
+import Case, If, Position, Return, Statement from '../ast'
+import Change, Edit from './edits'
+import RETURNED_BRANCHES from './rules'
+import Tokens from './tokens'
+
+export returned_branches := (tokens: Tokens, statement: Statement, ends_function: Bool): Edit? ->
+  branches := branches_of(statement) ? return nil
+  returns: Return[]
+  for branch in branches
+    returned := branch as Return ? return nil
+    return nil if returned.value == nil
+    returns.push returned
+  start := tokens.text.statement_start(statement) ? return nil
+  last := statement_end(tokens, start, statement is If)
+
+  # Lines moved deeper would change the value of a `"""` or `'''` literal.
+  return nil if tokens.code[start..=last].any((token) -> token.end_line > token.line)
+  at := tokens.start(start)
+  changes: Change[]
+
+  # The value of a function, its last statement, is its result without `return` (see Implicit
+  # return); elsewhere `return` takes the `if` or the `case` on the lines below it, one level
+  # deeper.
+  unless ends_function
+    head_line := tokens.code[start].line
+    columns := tokens.line_indentation(head_line) ? 0
+    changes.push { from: at, to: at, text: "return\n#{' '.repeat(columns + 2)}" }
+    for line in (head_line + 1)..=block_end(tokens, tokens.code[last].end_line, columns)
+      continue unless tokens.line_indentation(line)
+      line_start := Position(line, column: 1)
+      changes.push { from: line_start, to: line_start, text: '  ' }
+  for returned in returns
+    keyword := tokens.at(returned.position) ? return nil
+    changes.push { from: tokens.start(keyword), to: tokens.start(keyword + 1), text: '' }
+  sorted := changes.sorted((a, b) -> a.from.compare(b.from))
+  tokens.edit_at(RETURNED_BRANCHES, at, sorted)
+
+# The last statements of the branches of an `if` with `else`, through its `else if`s, or of a
+# `case` with `else`, where each branch is one statement.
+branches_of := (statement: Statement): Statement[]? ->
+  case statement
+    when If
+      return nil if statement.nil_safe or statement.then_body.length != 1
+      return nil if statement.else_body.length != 1
+      otherwise := statement.else_body[0]
+      inner: Statement[]? = otherwise is If then branches_of(otherwise) else [otherwise]
+      rest := inner ? return nil
+      [statement.then_body[0], rest...]
+    when Case
+      otherwise := statement.otherwise ? return nil
+      bodies := [arm.body for arm in statement.arms] + [otherwise]
+      return nil if bodies.any((body) -> body.length != 1)
+      [body[0] for body in bodies]
+    else nil
+
+# The last code token of the statement that starts at `start`: before the next line no deeper than
+# it, but the `else` of an `if`, as deep as the `if`.
+statement_end := (tokens: Tokens, start: Int, continues_with_else: Bool) ->
+  { code } := tokens
+  column := code[start].column
+  var last = start
+  for at in (start + 1)..code.length
+    token := code[at]
+    starts_line := at in tokens.text.line_starts and token.column <= column
+    own_else := continues_with_else and token.kind == 'else' and token.column == column
+    break if starts_line and not own_else
+    last = at
+  last
+
+# The last line of the block that ends at `end_line`, through the lines of comments deeper than
+# `columns` after it, which end the block.
+block_end := (tokens: Tokens, end_line: Int, columns: Int) ->
+  comment_lines := Set([comment.line for comment in tokens.comments when comment.own_line])
+  var last = end_line
+  last += 1 while last + 1 in comment_lines and tokens.line_indentation(last + 1) ? 0 > columns
+  last

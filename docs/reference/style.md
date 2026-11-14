@@ -308,6 +308,7 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
   - Where no block can take the value, as in an argument, name it first, by hand: `lerta fmt` reports it.
 - An arm whose body is one statement that its line can hold (see [case without a subject](control-flow.md#case-without-a-subject)) and that fits on it, all of it, is written on it, `when 1 then 'one'` or `else pass`, and otherwise as a block, as is one of a `'''` literal.
 - An `else` whose body is one `if` is `else if`, unless a comment comes before the `if`.
+- An `if` or a `case` with `else` whose branches each return a value, through `else if`s, is the `return` of its value: `return`, then the `if` or the `case` on the lines below it, one level deeper, with the values alone in its branches. At the end of a function, the `if` or the `case` is its value, without `return` (see [Implicit return](#implicit-return)).
 - An `if`, a `case` or a `try` whose blocks are on the lines below starts a line of its own, one level deeper than the line that takes its value (`x :=`, then `case n` on the next line), where the grammar allows it (see [bracketless blocks](syntax.md#bracketless-blocks)).
 
 ### Shared arm bodies
