@@ -23,7 +23,7 @@ syn match lertaControl "\%(\<for\s\+\%(\h\w*\|([^)]*)\)\s\+\)\@<=at\>\ze\s\+\h\w
 " `private`, `weak` and `default` are not keywords either: `private` before a member, `weak`
 " before `var`, a field, a declaration or a function literal, and `default` before the operand of
 " a field, not before a binary operator, so that `default - 1` stays a subtraction.
-syn match lertaStorage "\%(^\s*\)\@<=private\ze\s\+\h"
+syn match lertaStorage "\%(^\s*\)\@<=private\ze\%(\s\+\h\|\s*$\)"
 " `args` alone on its line opens the block of a class's constructor arguments.
 syn match lertaStorage "^\s\+\zsargs\ze\s*$"
 syn match lertaStorage "[.@]\@<!\<weak\ze\s\+\%(var\>\|\h\w*\s*:\|(\|->\)"

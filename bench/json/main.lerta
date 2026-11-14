@@ -37,15 +37,15 @@ make_text := ->
 # Each part read skips the spaces after it, so that the next starts at its first byte.
 class Parser
   bytes: Binary
-  private var position = 0
+  private
+    var position = 0
 
-  private skip_spaces := ->
-    @position += 1 while @position < @bytes.length and @bytes[@position] == b' '
+    skip_spaces := -> @position += 1 while @position < @bytes.length and @bytes[@position] == b' '
 
-  # Skips a punctuation byte, as `[` or `,`, which the text has at the position.
-  private skip_byte := ->
-    @position += 1
-    @skip_spaces()
+    # Skips a punctuation byte, as `[` or `,`, which the text has at the position.
+    skip_byte := ->
+      @position += 1
+      @skip_spaces()
 
   parse_value := (): Json ->
     case @bytes[@position]
@@ -56,53 +56,54 @@ class Parser
       when b'f' then @parse_word(5, false)
       else @parse_int()
 
-  private parse_word := (length: Int, value: Bool) ->
-    @position += length
-    @skip_spaces()
-    value
+  private
+    parse_word := (length: Int, value: Bool) ->
+      @position += length
+      @skip_spaces()
+      value
 
-  private parse_array := ->
-    @skip_byte()
-    items: Json[]
-    if @bytes[@position] != b']'
-      items.push @parse_value()
-      while @bytes[@position] == b','
-        @skip_byte()
+    parse_array := ->
+      @skip_byte()
+      items: Json[]
+      if @bytes[@position] != b']'
         items.push @parse_value()
-    @skip_byte()
-    JsonArray(items)
+        while @bytes[@position] == b','
+          @skip_byte()
+          items.push @parse_value()
+      @skip_byte()
+      JsonArray(items)
 
-  private parse_object := ->
-    @skip_byte()
-    fields: Map<String, Json>
-    if @bytes[@position] != b'}'
-      @parse_field fields
-      while @bytes[@position] == b','
-        @skip_byte()
+    parse_object := ->
+      @skip_byte()
+      fields: Map<String, Json>
+      if @bytes[@position] != b'}'
         @parse_field fields
-    @skip_byte()
-    JsonObject(fields)
+        while @bytes[@position] == b','
+          @skip_byte()
+          @parse_field fields
+      @skip_byte()
+      JsonObject(fields)
 
-  private parse_field := (fields: Map<String, Json>) ->
-    key := @parse_string()
-    @skip_byte()
-    fields[key] = @parse_value()
+    parse_field := (fields: Map<String, Json>) ->
+      key := @parse_string()
+      @skip_byte()
+      fields[key] = @parse_value()
 
-  private parse_string := ->
-    start := @position + 1
-    @position = start
-    @position += 1 while @bytes[@position] != b'"'
-    text := @bytes.text(start, @position)!
-    @skip_byte()
-    text
+    parse_string := ->
+      start := @position + 1
+      @position = start
+      @position += 1 while @bytes[@position] != b'"'
+      text := @bytes.text(start, @position)!
+      @skip_byte()
+      text
 
-  private parse_int := ->
-    var value = 0
-    while @bytes[@position].is_digit()
-      value = value * 10 + (@bytes[@position] - b'0').to_int()
-      @position += 1
-    @skip_spaces()
-    value
+    parse_int := ->
+      var value = 0
+      while @bytes[@position].is_digit()
+        value = value * 10 + (@bytes[@position] - b'0').to_int()
+        @position += 1
+      @skip_spaces()
+      value
 
 # The integers, the lengths of the strings, the true booleans and the items and fields, added up.
 sum := (value: Json): Int ->

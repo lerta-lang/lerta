@@ -52,6 +52,9 @@ export struct Parsed
   lexed: Lexed
   statements: Statement[]
   text: SourceTokens
+  # The tree as parsed, which the formatter compares. It is dumped before the statements are
+  # checked, as the checker changes them: it gives an init the result void.
+  tree: String
 
 # The source laid out, what differs from it, but the stranded comments, the edits of the rewrites
 # that its lines ask for, and the statements walked.
@@ -128,7 +131,9 @@ distinct := (findings: Finding[]) ->
 
 export parsed_source := (source: String, path: String) ->
   lexed := lex(source, path)
-  Parsed(source, lexed, statements: parse(lexed.tokens, path), text: source_tokens(source, lexed))
+  statements := parse(lexed.tokens, path)
+  tree := dump_ast_without_positions(statements)
+  Parsed(source, lexed, statements, tree, text: source_tokens(source, lexed))
 
 # The edits of the rewrites of a tree, and its checked program, whose facts are found by its nodes:
 # each round parses anew.
@@ -282,9 +287,7 @@ written_program := (text: String, path: String, what: String) ->
     throw changed(path, "#{what} would not parse: #{error.message}")
 
 check_same := (written: Parsed, expected: Parsed, path: String, what: String) ->
-  same := dump_ast_without_positions(written.statements) ==
-    dump_ast_without_positions(expected.statements)
-  throw changed(path, "#{what} would change the program") unless same
+  throw changed(path, "#{what} would change the program") unless written.tree == expected.tree
 
 changed := (path: String, message: String) ->
   ChangedProgram("#{path}: #{message}, which is a fault of the formatter")

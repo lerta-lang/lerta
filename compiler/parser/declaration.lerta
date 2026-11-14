@@ -164,7 +164,7 @@ parse_type_body := (tokens: TokenStream) ->
   while tokens.peek().kind != DEDENT
     if at_args_block(tokens)
       tokens.fail tokens.peek().position(), "'args' must be the first line of the type's body"
-    members.push parse_member(tokens)
+    read_member_line tokens, members
     tokens.expect_line_end()
   tokens.next()
   TypeBody(members, args_position)
@@ -217,7 +217,30 @@ export parse_extend := (tokens: TokenStream) ->
   Extend(type_params, type, position, members: parse_members(tokens))
 
 parse_members := (tokens: TokenStream) ->
-  tokens.parse_lines('indented members', -> parse_member(tokens))
+  members: MemberDeclaration[]
+  tokens.expect NEWLINE, 'end of line'
+  tokens.expect INDENT, 'indented members'
+  while tokens.peek().kind != DEDENT
+    read_member_line tokens, members
+    tokens.expect_line_end()
+  tokens.next()
+  members
+
+# A member, or `private` and an indented block of members, each private.
+read_member_line := (tokens: TokenStream, members: MemberDeclaration[]) ->
+  unless at_private_block(tokens)
+    members.push parse_member(tokens)
+    return
+  block := tokens.next().position()
+  for member in tokens.parse_lines('indented members', -> parse_member(tokens))
+    if member.private
+      tokens.fail member.position, "a member in a 'private' block is private already"
+    members.push { member..., private: true, private_block: block }
+
+# `private` alone on its line, before an indented block: a field may be named `private` too.
+at_private_block := (tokens: TokenStream) ->
+  is_alone := tokens.peek_at(1).kind == NEWLINE and tokens.peek_at(2).kind == INDENT
+  tokens.at_word('private') and is_alone
 
 parse_member_modifier := (tokens: TokenStream) ->
   token := tokens.peek()

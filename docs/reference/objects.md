@@ -60,6 +60,7 @@ export class Counter
   step := -> @count += 1
 ```
 
+- `private` alone on a line, before an indented block of members, makes each of them private, as `private` before each would (see [private blocks](style.md#private-blocks)). A member in the block is not marked `private` again.
 - A private member is reached only by the code of the module that declares its type: there, by any code, as a module function or another type's method; elsewhere, not at all, neither read, assigned, called nor taken as a value: `'count' is private to the module of Counter`. A module keeps its members as it keeps the names it does not export.
   - Why the module, not the type: a module's functions and helper types work with its types' state, as a constructing function or a type's `equals` with another object's.
 - A private field is computed at construction, unless it is in `args`: it is no constructor argument, and takes no `default`. A spread copy computes it again. A struct's is computed too.

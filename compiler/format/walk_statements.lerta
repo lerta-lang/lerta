@@ -309,10 +309,10 @@ extend Walker
     { members } := node
     args_at := node.args_position ? return @members(members, head)
     args := [member for member in members when member.in_args]
-    others := [member for member in members when not member.in_args]
-    position := (i: Int) -> i == 0 then args_at else others[i - 1].position
+    others := groups_of([member for member in members when not member.in_args])
+    position := (i: Int) -> i == 0 then args_at else others[i - 1].position()
     @in_block head, others.length + 1, position, (i, gap) ->
-      return @member_declaration(others[i - 1], gap) if i > 0
+      return @member_group(others[i - 1], gap) if i > 0
       @members args, @take_spelled('args', gap)
 
   interface_declaration := (node: InterfaceDeclaration, before: CodeGap) ->
@@ -428,6 +428,15 @@ extend Walker
       at := @code[@at].position()
       @in_block head, 1, (_) -> at, (_, gap) -> @take_spelled('pass', gap)
       return
+    groups := groups_of(members)
+    @in_block head, groups.length, (i) -> groups[i].position(), (i, gap) ->
+      @member_group groups[i], gap
+
+  # A member on its line, or `private` and the members of its block below it.
+  member_group := (group: MemberGroup, before: CodeGap) ->
+    { members } := group
+    return @member_declaration(members[0], before) if group.private_block == nil
+    head := @take_spelled('private', before)
     @in_block head, members.length, (i) -> members[i].position, (i, gap) ->
       @member_declaration members[i], gap
 
@@ -446,7 +455,7 @@ extend Walker
   # `[private] name := [default] value`.
   member_declaration := (member: MemberDeclaration, before: CodeGap) ->
     var gap = before
-    if member.private
+    if member.private and member.private_block == nil
       @take_spelled 'private', gap
       gap = ONE
     if member.is_weak()
@@ -626,3 +635,22 @@ written_statements := (statements: Statement[]) ->
   [statement for statement in statements when not is_taken_apart(statement)]
 
 is_kept_chain := (shape: Shape) -> shape is ChainShape and shape.kept
+
+# A member alone, or the members of a `private` block.
+struct MemberGroup
+  members: MemberDeclaration[]
+  private_block: Position?
+
+  position := -> @private_block ? @members[0].position
+
+# The members in their order, those of a `private` block together.
+groups_of := (members: MemberDeclaration[]) ->
+  groups: MemberGroup[]
+  for member in members
+    block := member.private_block
+    last := groups.last()
+    if block and last and last.private_block == block
+      last.members.push member
+    else
+      groups.push { members: [member], private_block: block }
+  groups

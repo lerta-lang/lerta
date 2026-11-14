@@ -330,6 +330,21 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 - Write type-only fields (constructor arguments) first, then those with a `default`.
 - Declare a class's field `var` only if it is assigned.
 
+### Private blocks
+
+- Put two or more private members in a row in one `private` block, comments and blank lines between them or not; mark one alone `private` on its line.
+
+```lerta
+class Counter
+  args
+    label: String
+  private
+    var count = 0
+    step := -> @count += 1
+  show := -> print "#{@label}: #{@count}"
+  private reset := -> @count = 0
+```
+
 ### Integer types
 
 - Quantities (counters, sizes, indexes, `length`) are `Int`, which every API takes.

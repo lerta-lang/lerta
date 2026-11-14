@@ -1,0 +1,88 @@
+# The rewrites of private members (see Private blocks in docs/reference/style.md): two or more in a
+# row go in one `private` block, and one alone is marked `private` on its line.
+import MemberDeclaration, Position, TypeDeclaration from '../ast'
+import PRIVATE_BLOCKS from './rules'
+import Change, Edit from './edits'
+import CLOSING_BRACKETS, OPENING_BRACKETS from '../lexer/tokens'
+import Tokens from './tokens'
+
+export private_block_edits := (tokens: Tokens, node: TypeDeclaration): Edit?[] ->
+  [edit_of(tokens, run) for run in private_runs(node.members)]
+
+# The private members that follow one another in a block of the type, its body or `args`, comments
+# and blank lines between them or not.
+private_runs := (members: MemberDeclaration[]) ->
+  runs: MemberDeclaration[][]
+  var run: MemberDeclaration[]
+  for member at i in members
+    joins := member.private and i > 0 and members[i - 1].in_args == member.in_args
+    unless joins
+      runs.push run unless run.is_empty()
+      run = []
+    run.push member if member.private
+  runs.push run unless run.is_empty()
+  runs
+
+edit_of := (tokens: Tokens, run: MemberDeclaration[]) ->
+  first := run[0]
+  block := first.private_block
+  is_one_block := block != nil and run.all((member) -> member.private_block == block)
+  return is_one_block then unwrapped(tokens, first) if run.length == 1
+  return nil if is_one_block
+  changes: Change[]
+  changes.push header(tokens, first) if first.private_block == nil
+  for member at i in run
+    if block := member.private_block
+      changes.push line_removed(block.line) if i > 0 and block != run[i - 1].private_block
+    else
+      changes.push change for change in indented(tokens, member)
+  tokens.edit_at(PRIVATE_BLOCKS, first.position, changes)
+
+# `private` on a line of its own above the member, at its indentation.
+header := (tokens: Tokens, member: MemberDeclaration) ->
+  { line } := member.position
+  at := Position(line, column: 1)
+  Change(from: at, to: at, text: "#{' '.repeat(indentation(tokens, line))}private\n")
+
+# The member's lines moved into the block: indented, and its `private` left out.
+indented := (tokens: Tokens, member: MemberDeclaration) ->
+  changes: Change[]
+  for line in member.position.line..=last_line(tokens, member)
+    continue if tokens.line_indentation(line) == nil
+    at := Position(line, column: 1)
+    changes.push { from: at, to: at, text: '  ' }
+    changes.push tokens.removed(tokens.at(member.position)!) if line == member.position.line
+  changes
+
+# The member of a block of its own moved out of it: the block's line left out, its lines indented
+# less, and `private` written before it.
+unwrapped := (tokens: Tokens, member: MemberDeclaration) ->
+  block := member.private_block!
+  changes := [line_removed(block.line)]
+  start := member.position
+  for line in start.line..=last_line(tokens, member)
+    continue if tokens.line_indentation(line) == nil
+    changes.push { from: { line, column: 1 }, to: { line, column: 3 }, text: '' }
+    changes.push { from: start, to: start, text: 'private ' } if line == start.line
+  tokens.edit_at(PRIVATE_BLOCKS, block, changes)
+
+line_removed := (line: Int) ->
+  Change(from: { line, column: 1 }, to: { line: line + 1, column: 1 }, text: '')
+
+# The last line of the member: of its last token, before the first that starts a line at its column
+# or left of it outside brackets.
+last_line := (tokens: Tokens, member: MemberDeclaration) ->
+  { code } := tokens
+  start := tokens.at(member.position)!
+  var depth = 0
+  var last = start
+  for index in start + 1..code.length
+    token := code[index]
+    starts_line := code[index - 1].end_line < token.line
+    break if depth == 0 and starts_line and token.column <= member.position.column
+    depth += 1 if token.kind in OPENING_BRACKETS
+    depth -= 1 if token.kind in CLOSING_BRACKETS
+    last = index
+  code[last].end_line
+
+indentation := (tokens: Tokens, line: Int) -> tokens.line_indentation(line) ? 0
