@@ -38,7 +38,8 @@ from '../types'
 # An array's `pop` takes out an item (see are_items_taken).
 record_pop := (body: Body, receiver: Type, source: MethodSource?) ->
   is_pop := source is BuiltinMethod and source.member == ARRAY_POP
-  record_taken_items body.program, receiver as ArrayType! if is_pop
+  if is_pop
+    record_taken_items body.program, receiver as ArrayType!
 
 # The result of a call of the method that `member` names: a method of the object's type (see
 # find_method), or a field that holds a function.
@@ -77,7 +78,11 @@ export generic_method := (source: MethodSource?) ->
 type_of_method := (body: Body, member: Member, receiver: Type, source: MethodSource?) ->
   { name, position } := member.name
   reject_deinit body, receiver, member
-  from_source := source then method_type(body, receiver, source, member.name, nil)
+  from_source :=
+    if source
+      method_type body, receiver, source, member.name, nil
+    else
+      nil
   no_method := ->
     missing := "type #{format_type(receiver)} has no method '#{name}'#{member_hint(receiver, name)}"
     fail_missing body, member, receiver, missing
@@ -97,10 +102,12 @@ find := (body: Body, receiver: Type, name: Identifier): MethodSource? ->
   if receiver is UnionType
     return found if found := union_method(body, receiver, name)
     return builtin_method(body.program, receiver, name.name)
-  return bound_method(body, receiver, name.name) if receiver is TypeParameterType
+  if receiver is TypeParameterType
+    return bound_method(body, receiver, name.name)
   return nil if name.name == 'equals' and not compares_by_bounds(body, receiver, name.position)
   found := find_method(body.program, receiver, name.name, body.extensions)
-  reject_private_member body.shared, found.receiver, name if found is OwnMethod
+  if found is OwnMethod
+    reject_private_member body.shared, found.receiver, name
   return found if found
   parts_method(body, receiver, name.name, name.position)
 
@@ -118,7 +125,10 @@ export compares_by_bounds := (body: Body, type: Type, at: Position) ->
 bound_method := (body: Body, type: TypeParameterType, name: String): MethodSource? ->
   if found := bound_member(body, type, name)
     member_type := found.member.type
-    return member_type is FunctionType then InterfaceMethod(type: member_type, index: found.index)
+    if member_type is FunctionType
+      return InterfaceMethod(type: member_type, index: found.index)
+    else
+      return nil
   return nil if name != 'equals' or not bound_member(body, type, 'compare')
   BuiltinMethod(member: EQUALS, type: FunctionType(params: [type], result: bool_type))
 
@@ -129,7 +139,10 @@ bound_member := (body: Body, type: TypeParameterType, name: String) ->
 # The method of the name that every member of the union has, of one type, or nil.
 union_method := (body: Body, union: UnionType, name: Identifier): UnionMethod? ->
   found := find_union_method(body, union, name)
-  found.problem == nil then { type: found.type!, members: found.members }
+  if found.problem == nil
+    { type: found.type!, members: found.members }
+  else
+    nil
 
 # Why no method of the name can be called on the union, or nil if one can or no member has one.
 export union_method_problem := (body: Body, union: UnionType, name: Identifier) ->
@@ -154,7 +167,8 @@ find_union_method := (body: Body, union: UnionType, name: Identifier): UnionMeth
     failed := (problem: String) -> UnionMethods(members, problem, type: nil)
     missing := "'#{name.name}' is no method #{of_member}"
     source := find_callable(body, member, name) ? return failed(missing)
-    return failed(generic_problem(source, name.name, of_member)) if generic_method(source) != nil
+    if generic_method(source) != nil
+      return failed(generic_problem(source, name.name, of_member))
     type := method_type(body, member, source, name, nil)!
     if first and first != type
       first_typed := { member: members[0].member, type: first }
@@ -224,7 +238,8 @@ export find_member := (body: Body, type: Type, name: Identifier, call: Call? = n
   if type is UnionType
     common := common_field_type_by_name(body, type, name) ? return nil
     return { target: Property(FIELD), type: common }
-  return { target: Property(FIELD), type: field } if field := field_type_by_name(body, type, name)
+  if field := field_type_by_name(body, type, name)
+    return { target: Property(FIELD), type: field }
   property_of(body, type, name.name)
 
 # Whether the member names a method of its object, rather than a field or a property.
@@ -338,5 +353,6 @@ has_unless_nil := (body: Body, type: Type, name: Identifier) ->
 type_of_object := (body: Body, member: Member) ->
   object := member.object
   if object is This
-    return set_type(body, object, self.type) if self := body.self
+    if self := body.self
+      return set_type(body, object, self.type)
   type_of(body, object)

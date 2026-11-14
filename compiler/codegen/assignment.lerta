@@ -102,18 +102,24 @@ export field_pointer := (g: Generator, object: String, type: Type, name: String)
 # is read after the value is evaluated, as a name's is (see assign_through).
 generate_index_assignment := (g: Generator, assignment: Assignment, target: Index) ->
   object_type := type_of(g, target.object)
-  return generate_map_assignment(g, assignment, target, object_type) if object_type is MapType
+  if object_type is MapType
+    return generate_map_assignment(g, assignment, target, object_type)
   ir := g.ir
   element := type_of(g, target)
   (array, is_owned) := generate_borrowed(g, target.object, [target.index, assignment.value])
   depth := g.temporaries.length
-  push_temporary g, array, object_type if is_owned
+  if is_owned
+    push_temporary g, array, object_type
   index := generate(g, target.index)
   operand := assignment.value
   value := generate(g, operand)
   array_depth := g.temporaries.length
   push_temporary g, value, type_at_use(g, operand)
-  old := assignment.operator == '=' then '' else emit_get(ir, array, index, element)
+  old :=
+    if assignment.operator == '='
+      ''
+    else
+      emit_get ir, array, index, element
 
   # An index out of range throws.
   emit_exception_check g unless old.is_empty()
@@ -142,7 +148,8 @@ generate_map_assignment := (g: Generator, assignment: Assignment, target: Index,
   later.push default_value if default_value := target.default_value
   (map, is_owned) := generate_borrowed(g, target.object, later)
   depth := g.temporaries.length
-  push_temporary g, map, type if is_owned
+  if is_owned
+    push_temporary g, map, type
   key := generate(g, target.index)
   push_temporary g, key, type_at_use(g, target.index)
   if assignment.operator == '='
@@ -183,7 +190,11 @@ update_with_default := (
 
   # A method, unlike an operator, may change the map, as the default may.
   place_anew := -> emit_place(ir, map, key, type)
-  written := by_method then place_anew() else emit_branch(ir, 'ptr', missing, place_anew, place)
+  written :=
+    if by_method
+      place_anew()
+    else
+      emit_branch ir, 'ptr', missing, place_anew, place
 
   emit_set_at ir, written, result, type
   emit_release_value ir, result, type.value
@@ -226,9 +237,14 @@ assign_through := (
 
   old := is_plain then '' else load()
   result := combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
-  replaced := is_plain and ownership(type) != NONE then load() else ''
+  replaced :=
+    if is_plain and ownership(type) != NONE
+      load()
+    else
+      ''
   ir.store ir_type(type), result, pointer, tag
-  emit_release_value ir, replaced, type unless replaced.is_empty()
+  unless replaced.is_empty()
+    emit_release_value ir, replaced, type
 
 # The value to store: the new one for `=`, or the old one combined with it for `+=` and so on.
 # Both are owned.

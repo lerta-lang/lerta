@@ -32,15 +32,21 @@ export warn_if_kept := (
 ) ->
   args := arguments_of(body.facts, call)
   if source is BuiltinMethod
-    warn_if_cycle body, member.object, args[0] if keeps_argument(source.member)
+    if keeps_argument(source.member)
+      warn_if_cycle body, member.object, args[0]
     return
   return unless source is OwnMethod
   callee := method ? return
   holder := holder_of(body, member.object) ? return
   kept := body.program.kept_arguments
   for arg at place in args
-    param := holder == THIS then parameter_place(body, arg)
-    kept.passed.push { from: body.context!.literal, param, to: callee, place } if param
+    param :=
+      if holder == THIS
+        parameter_place body, arg
+      else
+        nil
+    if param
+      kept.passed.push { from: body.context!.literal, param, to: callee, place }
     if literal := capturing_literal(body, arg, holder)
       message := cycle_message(body, holder)
       kept.calls.push { literal, message, method: callee, place, module_index: body.shared.index }
@@ -102,7 +108,11 @@ holder_of := (body: Body, target: Expression): String? ->
       local := find_local(body, target.name) ? return nil
       return THIS if local.is_this
       not local.mutable and not local.weak then target.name
-    when Member then not is_weak_field(body, target) then holder_of(body, target.object)
+    when Member
+      if not is_weak_field(body, target)
+        holder_of(body, target.object)
+      else
+        nil
     when Index then holder_of(body, target.object)
     when Unwrap then holder_of(body, target.operand)
     else nil
@@ -114,17 +124,25 @@ is_weak_field := (body: Body, member: Member) ->
 captures_holder := (body: Body, literal: FunctionLiteral, holder: String) ->
   captures := body.facts.captures[literal] ? []
   is_holder := (capture: Capture) ->
-    holder == THIS then capture.is_this else capture.name == holder and not capture.is_weak
+    if holder == THIS
+      capture.is_this
+    else
+      capture.name == holder and not capture.is_weak
   captures.any(is_holder)
 
 capturing_literal := (body: Body, value: Expression, holder: String): FunctionLiteral? ->
   first := (parts: Expression[]) -> parts.find_map((part) -> capturing_literal(body, part, holder))
 
   # A method of `@` used as a value is the literal that calls it (see function_references).
-  return capturing_literal(body, replaced, holder) if replaced := body.facts.replacements[value]
+  if replaced := body.facts.replacements[value]
+    return capturing_literal(body, replaced, holder)
 
   case value
-    when FunctionLiteral then captures_holder(body, value, holder) then value
+    when FunctionLiteral
+      if captures_holder(body, value, holder)
+        value
+      else
+        nil
     when ArrayLiteral then first(value.elements)
     when TupleLiteral then first(value.items)
     when MapLiteral then first([entry.value for entry in value.entries])

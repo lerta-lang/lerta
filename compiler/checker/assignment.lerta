@@ -30,7 +30,10 @@ export check_assignment := (body: Body, assignment: Assignment) ->
       when Member
         # An export of a module imported as a name is no var, as an imported name is not.
         qualified := qualified_name(body, target)
-        qualified then check_variable_target(body, qualified) else field_target(body, target)
+        if qualified
+          check_variable_target body, qualified
+        else
+          field_target body, target
       when Identifier then check_variable_target(body, target)
   if operator != '='
     kinds := operand_kinds(combining_operator(operator))
@@ -43,7 +46,8 @@ export check_assignment := (body: Body, assignment: Assignment) ->
   value_type := type_of(body, assignment.value, target_type)
   is_unit := operator == '+=' and appends_unit(target_type, value_type)
   unless is_unit
-    reject_text_and_bytes body, assignment.value, target_type, value_type if operator == '+='
+    if operator == '+='
+      reject_text_and_bytes body, assignment.value, target_type, value_type
     require_type body, assignment.value, value_type, target_type
 
   # The value is read where the variable is still narrowed, as it is evaluated first.
@@ -104,7 +108,8 @@ check_item_target := (body: Body, target: Index, operator: String) ->
       message := "a map value cannot be updated with '#{operator}' without a default; #{advice}"
       fail body.program, target.position, message
     return object_type.value
-  fail body.program, target.position, 'a Binary cannot be changed' if is_kind(object_type, 'Binary')
+  if is_kind(object_type, 'Binary')
+    fail body.program, target.position, 'a Binary cannot be changed'
   if target.index is Range
     fail body.program, target.position, 'an index by a range gives a copy, which cannot be assigned'
   record_taken_items body.program, object_type if object_type is ArrayType
@@ -127,7 +132,8 @@ check_variable_target := (body: Body, target: Identifier) ->
   reject := (reason: String) -> fail(body.program, target.position, "'#{target.name}' #{reason}")
   not_a_variable := ->
     abort_if_failed body.shared.top_level, target.name
-    reject_pending body.program, body.shared.top_level, target if body.sees_top_level
+    if body.sees_top_level
+      reject_pending body.program, body.shared.top_level, target
     reject "is not a variable#{declaration_hint(body, target.name)}"
   variable := lookup(body, target.name) ? not_a_variable()
   reject 'is not a var' unless variable.mutable

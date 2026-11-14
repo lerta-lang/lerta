@@ -196,8 +196,14 @@ export integer_range := (type: Type) ->
   bits := integer_bits(type)
   signed_least := INT_MIN >> (64 - bits)
   signed_most := -(signed_least + 1)
-  return { least: signed_least, most: signed_most } if is_signed(type)
-  { least: 0, most: bits == 64 then signed_most else signed_most * 2 + 1 }
+  if is_signed(type)
+    return { least: signed_least, most: signed_most }
+  most :=
+    if bits == 64
+      signed_most
+    else
+      signed_most * 2 + 1
+  { least: 0, most }
 
 export is_one_of_kinds := (type: Type, kinds: TypeKind[]) -> kind_of(type) in kinds
 
@@ -287,7 +293,10 @@ map_text := (type: MapType, format: (Type) -> String) ->
 
 # A Promise of no value is written without a type argument.
 promise_text := (type: PromiseType, write: (Type) -> String) ->
-  is_kind(type.value, 'void') then 'Promise' else "Promise<#{write(type.value)}>"
+  if is_kind(type.value, 'void')
+    'Promise'
+  else
+    "Promise<#{write(type.value)}>"
 
 # A class, struct or interface, with its type arguments, and its module where `qualified` says so.
 format_named := (
@@ -354,7 +363,11 @@ export iterable_item := (type: Type): Type? ->
   case type
     when ArrayType then type.element
     when IterType then type.item
-    else is_kind(type, 'Binary') then byte_type
+    else
+      if is_kind(type, 'Binary')
+        byte_type
+      else
+        nil
 
 # The members of a union, or the type alone.
 export members_of := (type: Type): Type[] -> type is UnionType then type.members else [type]

@@ -95,14 +95,23 @@ emit_write_map := (ir: IrBuilder, writer: Coder, map: String, type: MapType): vo
   more := -> call_runtime(ir, 'i1 @lerta_map_cursor_has_next(ptr)', "ptr #{cursor}")
   write_entry := ->
     key_slot := ir.alloca('i64')
-    value_slot := shape == SET then 'null' else emit_item_slot(ir, type.value)
+    value_slot :=
+      if shape == SET
+        'null'
+      else
+        emit_item_slot ir, type.value
     args := "ptr #{cursor}, ptr #{key_slot}, ptr #{value_slot}"
     call_void_runtime ir, 'void @lerta_map_cursor_next(ptr, ptr, ptr)', args
     key := from_item(ir, ir.load('i64', key_slot), type.key)
-    value := shape == SET then '' else emit_load_item(ir, value_slot, type.value)
+    value :=
+      if shape == SET
+        ''
+      else
+        emit_load_item ir, value_slot, type.value
     release_entry := ->
       emit_release_value ir, key, type.key
-      emit_release_value ir, value, type.value unless shape == SET
+      unless shape == SET
+        emit_release_value ir, value, type.value
     unwind := ->
       release_entry()
       release_cursor()
@@ -162,7 +171,8 @@ emit_write_object := (
     emit_write_field ir, writer, name, unwind
     emit_write ir, writer, ir.load(ir_type(field_type), pointer), field_type, unwind
   call_void_method ir, writer, 'end_record', [], unwind
-  call_void_method ir, writer, 'leave', [], unwind if may_cycle
+  if may_cycle
+    call_void_method ir, writer, 'leave', [], unwind
 
 # The member that the value is, as it is written alone.
 emit_write_union := (

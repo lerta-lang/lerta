@@ -103,7 +103,8 @@ export emit_load_item := (ir: IrBuilder, pointer: String, type: Type) ->
 # null; LLVM is told so, so that a retain or release of it inlined checks none.
 load_indexed_item := (ir: IrBuilder, address: String, type: Type) ->
   item := emit_load_item(ir, address, type)
-  emit_assume ir, ir.is_not_null(item) if is_reference_type(type) and type is not OptionalType
+  if is_reference_type(type) and type is not OptionalType
+    emit_assume ir, ir.is_not_null(item)
   item
 
 export emit_array_new := (ir: IrBuilder, element: Type) ->
@@ -149,7 +150,8 @@ export emit_get_from := (
 ) ->
   read := ->
     item := load_indexed_item(ir, emit_item_address(ir, items, index, element), element)
-    emit_retain_value ir, item, element if owned
+    if owned
+      emit_retain_value ir, item, element
     item
   emit_branch(ir, ir_type(element), emit_is_in_range(ir, items), read, 'poison')
 

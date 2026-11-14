@@ -71,7 +71,8 @@ export check_function_body := (
   before_last := statements.all_but_last()
   finish := ->
     last := statements.last() ? return
-    warn_if_unreachable body, previous, last if previous := before_last.last()
+    if previous := before_last.last()
+      warn_if_unreachable body, previous, last
     check_last_statement body, last
 
   # A function literal's own name, outside its parameters and locals, which may hide it.
@@ -93,7 +94,8 @@ export define_parameters := (
   for declared at i in literal.params
     identifier := declared.name
     if default := declared.default
-      expect_type body, default, params[i] if checks_defaults
+      if checks_defaults
+        expect_type body, default, params[i]
     else if i > required
       described := described_parameter(identifier)
 
@@ -114,7 +116,8 @@ export check_top_level_code := (body: Body, statements: Statement[]) ->
   body.names_literals_assign = names_literals_assign(statements)
   body.scopes.push()
   for statement at i in statements
-    warn_if_unreachable body, statements[i - 1], statement if i > 0
+    if i > 0
+      warn_if_unreachable body, statements[i - 1], statement
     continue if check_part(body.program, -> check_statement(body, statement))
     body.scopes.pop() while body.scopes.depth() > 1
     body.loop_depth = 0
@@ -133,7 +136,8 @@ export type_of_block := (
   before_last := statements.all_but_last()
   var type: Type = void_type
   finish := ->
-    warn_if_unreachable body, previous, last if previous := before_last.last()
+    if previous := before_last.last()
+      warn_if_unreachable body, previous, last
     if value := last as Expression?
       type = type_of_last(value)
       return
@@ -145,7 +149,8 @@ export type_of_block := (
 # Warns at a statement after one that never ends, as `return` or a call of `exit` does.
 warn_if_unreachable := (body: Body, previous: Statement, statement: Statement) ->
   is_never := (expression: Expression) -> is_never_typed(body, expression)
-  warn body.shared, statement.position, 'unreachable code' if ends_with_jump([previous], is_never)
+  if ends_with_jump([previous], is_never)
+    warn body.shared, statement.position, 'unreachable code'
 
 # Whether the expression was typed `never`.
 export is_never_typed := (body: Body, expression: Expression) ->
@@ -164,7 +169,8 @@ export check_block := (
   predeclare_local_functions body, statements
   try
     for statement at i in statements
-      warn_if_unreachable body, statements[i - 1], statement if i > 0
+      if i > 0
+        warn_if_unreachable body, statements[i - 1], statement
       check_statement body, statement
     finish()
     finish_local_functions body
@@ -216,7 +222,8 @@ export check_statement := (body: Body, statement: Statement): void ->
   if is_exported(statement) and not is_top_level
     fail body.program, statement.position, 'export can only be at the top level'
   require_top_level := (message: String) ->
-    fail body.program, statement.position, message unless is_top_level
+    unless is_top_level
+      fail body.program, statement.position, message
   case statement
     when For then check_for(body, statement)
     when While then check_while(body, statement)
@@ -281,21 +288,34 @@ check_declaration := (body: Body, declaration: Declaration) ->
     return if body.is_top_level()
     body.facts.local_function_names[value] = declaration.name unless declaration.mutable
   type_name := declaration.type
-  annotated := type_name then resolve(body.program, body.resolver, type_name)
+  annotated :=
+    if type_name
+      resolve body.program, body.resolver, type_name
+    else
+      nil
   reject_omitted_value body, declaration, annotated
-  expect_type body, value, annotated if annotated
+  if annotated
+    expect_type body, value, annotated
   value_type := annotated ? type_of(body, value)
   reject_if_not_storable body, value_type, value
 
   # An exported value is for other modules to use.
   { name, mutable, exported, weak } := declaration
 
-  type := weak then weak_local_type(body, declaration, value_type) else value_type
+  type :=
+    if weak
+      weak_local_type body, declaration, value_type
+    else
+      value_type
   declared := not declaration.of_loop
   is_this := value is This and not mutable and not weak
   assigned_by_literal := mutable and name.name in body.names_literals_assign
   scope_depth := body.scopes.depth()
-  constant := body.is_top_level() and not mutable then declared_constant(body, value, type)
+  constant :=
+    if body.is_top_level() and not mutable
+      declared_constant body, value, type
+    else
+      nil
   if predeclared := predeclared_function(body, value)
     predeclared.pending = false
     body.facts.types[name] = type
@@ -320,13 +340,15 @@ reject_omitted_value := (body: Body, declaration: Declaration, type: Type?) ->
 weak_local_type := (body: Body, declaration: Declaration, value_type: Type) ->
   program := body.program
   at := declaration.position
-  fail program, at, 'a weak const or var can only be a local' if body.is_top_level()
+  if body.is_top_level()
+    fail program, at, 'a weak const or var can only be a local'
   if declaration.type != nil and value_type is not OptionalType
     written := "#{format_type(value_type)}?"
     fail program, at, "a weak const or var may hold nil: write its type as #{written}"
   object := inner_of(value_type) as ObjectType?
   holds_class := object?.is_struct == false
-  fail program, at, 'a weak const or var holds an object of a class' unless holds_class
+  unless holds_class
+    fail program, at, 'a weak const or var holds an object of a class'
   optional_type(value_type)
 
 reject_if_not_storable := (body: Body, type: Type, value: Expression) ->
@@ -366,7 +388,8 @@ export check_discarded := (body: Body, statement: Expression, type: Type) ->
 # values with no type in common, as a Promise and void, which gives void.
 reject_unconsumed := (body: Body, value: Expression, type: Type): void ->
   at := value.position
-  fail body.program, at, 'an Iter does nothing until it is consumed' if type is IterType
+  if type is IterType
+    fail body.program, at, 'an Iter does nothing until it is consumed'
   if type is PromiseType
     fail body.program, at, "a Promise must be awaited#{awaiting_cause(body, value)}"
   return unless is_kind(type, 'void')
@@ -374,7 +397,8 @@ reject_unconsumed := (body: Body, value: Expression, type: Type): void ->
   for arm in arms
     last := arm.last() as Expression?
     arm_type := last then body.facts.types[last]
-    reject_unconsumed body, last!, arm_type if arm_type
+    if arm_type
+      reject_unconsumed body, last!, arm_type
 
 # Why a call gives a Promise, where it calls a function that awaits, which a change to its body may
 # have made one: where that function first awaits, unless std declares it, which is not to change.

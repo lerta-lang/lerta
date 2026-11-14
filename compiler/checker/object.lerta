@@ -49,7 +49,10 @@ export struct_construction := (
 # The struct that the expected type is, or makes optional.
 export expected_struct := (expected: Type?) ->
   type := inner_of_expected(expected) ? return nil
-  type is ObjectType and type.is_struct then type
+  if type is ObjectType and type.is_struct
+    type
+  else
+    nil
 
 # A construction of the struct that is expected (see struct_construction), whose type arguments are
 # inferred from the expected type's.
@@ -80,7 +83,8 @@ export type_of_construction := (
   given: Set<String>
   for arg in named_args
     { name, position } := arg.name
-    fail program, position, "the argument '#{name}' is given twice" unless given.add(name)
+    unless given.add(name)
+      fail program, position, "the argument '#{name}' is given twice"
     field_type := argument_type(body, info, arg)
     value := arg.value
     if value_type := typed[value]
@@ -90,7 +94,8 @@ export type_of_construction := (
   required := required_fields(info)
   for field in required
     name := field.name.name
-    fail program, call.position, "missing argument '#{name}'" unless name in given
+    unless name in given
+      fail program, call.position, "missing argument '#{name}'"
   is_given := (field: FieldInfo) -> not is_argument(field) or field.name.name in given
   body.facts.full_constructions.add call if info.fields.all(is_given)
   body.facts.alone_constructions.add call if may_give_alone(call, info, required)
@@ -177,7 +182,8 @@ constructed_instance := (
   bind := (name: String, type: Type) ->
     return if is_one_of_kinds(type, ['nil', 'never'])
     type_bindings[name] = type unless name in type_bindings
-  infer declared, inner_of(expected), bind if expected
+  if expected
+    infer declared, inner_of(expected), bind
   infer_from := (arg: NamedValue, expected_type: Type?) ->
     type := type_of(body, arg.value, expected_type)
     typed[arg.value] = type
@@ -191,7 +197,8 @@ constructed_instance := (
   for arg in float_first(literals, NamedValue.value)
     pattern := substitute(argument_type(body, info, arg), type_bindings)
     continue unless is_pattern(pattern)
-    infer_from arg, takes_function_type(body, arg.value) then pattern
+    takes_function := takes_function_type(body, arg.value)
+    infer_from arg, takes_function then pattern
 
   args: Type[]
   type_name := declared.name
@@ -206,7 +213,10 @@ constructed_instance := (
 # The class or struct of the type, if it has a method of the name.
 export method_owner := (body: Body, object_type: Type, name: String) ->
   return nil unless object_type is ObjectType
-  info_of(body.program, object_type).methods.contains(name) then object_type
+  if info_of(body.program, object_type).methods.contains(name)
+    object_type
+  else
+    nil
 
 # The type of the method `name` of an object, or nil if the type is no class or struct with that
 # method.
@@ -270,7 +280,10 @@ spread_argument := (body: Body, items: Expression[], holder: String) ->
   first
 
 is_path := (value: Expression): Bool ->
-  value is Member then is_path(value.object) else value is Identifier | This
+  if value is Member
+    is_path(value.object)
+  else
+    value is Identifier | This
 
 # A record where a struct is expected constructs it (see NodeFacts.replacements).
 export type_of_record := (body: Body, record: RecordLiteral, expected: Type?): Type ->
@@ -288,7 +301,8 @@ export type_of_record := (body: Body, record: RecordLiteral, expected: Type?): T
   names: Set<String>
   for field in record.fields
     { name, position } := field.name
-    fail program, position, "'#{name}' is already a field" unless names.add(name)
+    unless names.add(name)
+      fail program, position, "'#{name}' is already a field"
   expected_fields := expected_record_fields(expected)
   type_of_field := (field: NamedValue): RecordField ->
     name := field.name.name

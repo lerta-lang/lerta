@@ -63,8 +63,10 @@ export check_case_statement := (body: Body, case_expression: Case) ->
 export check_try_statement := (body: Body, try_expression: Try) ->
   { catches, finally_body } := try_expression
   check_block body, try_expression.body, nothing, nothing
-  check_block body, clause.body, catch_entry(body, clause), nothing for clause in catches
-  check_block body, finally_body, nothing, nothing if finally_body
+  for clause in catches
+    check_block body, clause.body, catch_entry(body, clause), nothing
+  if finally_body
+    check_block body, finally_body, nothing, nothing
   body.facts.types[try_expression] = void_type
 
 export type_of_try := (body: Body, try_expression: Try, expected: Type?) ->
@@ -73,7 +75,8 @@ export type_of_try := (body: Body, try_expression: Try, expected: Type?) ->
     branches.push { statements: clause.body, enter: catch_entry(body, clause) }
   unify := unify_unless_void(body, try_expression, 'the values of try and catch')
   type := type_of_branches(body, branches, expected, unify)
-  check_block body, finally_body, nothing, nothing if finally_body := try_expression.finally_body
+  if finally_body := try_expression.finally_body
+    check_block body, finally_body, nothing, nothing
   type
 
 # What entering a catch does: it defines the name of the exception it takes.

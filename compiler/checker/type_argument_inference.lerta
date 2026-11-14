@@ -46,7 +46,8 @@ export receiver_type_arguments := (
   infer pattern, receiver, bind
 
   # The receiver of an extend of an interface is Self, the first type parameter.
-  infer_through_members body, generic.bounds[0]!, receiver, at, bind if pattern is TypeParameterType
+  if pattern is TypeParameterType
+    infer_through_members body, generic.bounds[0]!, receiver, at, bind
 
   return nil if generic.type_params.any((param) -> param.name.name not in bindings)
   [bindings[param.name.name]! for param in generic.type_params]
@@ -69,7 +70,8 @@ export infer_type_arguments := (
   for arg at i in args
     inferrer.check_argument i unless needs_context(body, arg)
   if result := generic.result
-    inferrer.bind_from result, expected, call.position if expected
+    if expected
+      inferrer.bind_from result, expected, call.position
   literals := [i for i in 0..args.length when is_literal(i)]
   inferrer.check_argument i for i in float_first(literals, (i) -> args[i])
   inferrer.bind_from_bounds()
@@ -124,9 +126,15 @@ class Inferrer
         return
 
       # A function literal's parameters may take the types that are known already.
-      type := type_of(body, arg, takes_function_type(body, arg) then param)
+      expected :=
+        if takes_function_type(body, arg)
+          param
+        else
+          nil
+      type := type_of(body, arg, expected)
 
-      fail body.program, arg.position, 'expected a value, got void' if is_kind(type, 'void')
+      if is_kind(type, 'void')
+        fail body.program, arg.position, 'expected a value, got void'
       @bind_from declared, type, arg.position
       @inferred.push { arg, type, index }
 

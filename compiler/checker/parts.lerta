@@ -43,7 +43,8 @@ export struct PartCall
 # disagree; neither where it has a field of the name, which a call reads, or gets the method from
 # an extend of an interface it satisfies.
 export parts_method := (body: Body, type: Type, name: String, at: Position): BuiltinMethod? ->
-  return compare_method(body, type, at) if name == 'compare'
+  if name == 'compare'
+    return compare_method(body, type, at)
   return nil unless gets_by_parts(body, type, name, at)
   plan := planned(body, type, 'to_literal', at, is_literal_part) ? return nil
   to_string := FunctionType(params: [], result: string_type)
@@ -114,7 +115,11 @@ part_call := (body: Body, part: Type, method: String, at: Position) ->
   target := find_member(body, part, name)!.target
 
   generic := target is Method then generic_method(target.source)
-  instance := generic then receiver_instance(body, generic, part, at, nil)
+  instance :=
+    if generic
+      receiver_instance body, generic, part, at, nil
+    else
+      nil
   PartCall(target, instance: instance then InstanceLink(instance))
 
 # Whether the type satisfies Literal, as `<T: Literal>` asks: an array, a map or a set by its
@@ -142,7 +147,8 @@ is_literal_part := (body: Body, type: Type, at: Position, visiting: Set<String>)
 
 # Whether the type satisfies Comparable, a tuple by its items, which cannot hold the tuple again.
 is_ordered_part := (body: Body, type: Type, at: Position, visiting: Set<String>): Bool ->
-  return type.items.all((item) -> is_ordered_part(body, item, at, visiting)) if type is TupleType
+  if type is TupleType
+    return type.items.all((item) -> is_ordered_part(body, item, at, visiting))
   satisfies(body, type, std_interface(body.shared, 'Comparable', at).type, at)
 
 # The methods of extends that the plan calls, through its parts' plans too, which an instance of a

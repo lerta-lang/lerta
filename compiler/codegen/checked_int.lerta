@@ -13,9 +13,12 @@ from '../types'
 export apply_integer_operator := (
   g: Generator, operator: String, left: String, right: String, type: Type
 ) ->
-  return bitwise(g, operator, left, right, type) if operator in BITWISE_INSTRUCTIONS
-  return shift(g, operator, left, right, type) if operator in ['<<', '>>']
-  return division(g, operator, left, right, type) if operator in ['/', '%']
+  if operator in BITWISE_INSTRUCTIONS
+    return bitwise(g, operator, left, right, type)
+  if operator in ['<<', '>>']
+    return shift(g, operator, left, right, type)
+  if operator in ['/', '%']
+    return division(g, operator, left, right, type)
   checked(g, operator, left, right, type)
 
 ARITHMETIC_INSTRUCTIONS := { '+': 'add', '-': 'sub', '*': 'mul' }
@@ -107,10 +110,17 @@ integer_conversion := (ir: IrBuilder, value: String, from: Type, to: Type) ->
   same := ir.assign("icmp eq #{ir_type(from)} #{back}, #{value}")
   is_negative := (operand: String, type: Type) ->
     is_signed(type) then ir.assign("icmp slt #{ir_type(type)} #{operand}, 0") else 'false'
-  negative := is_signed(from) then is_negative(value, from) else is_negative(converted, to)
+  negative :=
+    if is_signed(from)
+      is_negative value, from
+    else
+      is_negative converted, to
   signs_agree := ir.negate(negative)
   fits :=
-    is_signed(from) == is_signed(to) then same else ir.assign("and i1 #{same}, #{signs_agree}")
+    if is_signed(from) == is_signed(to)
+      same
+    else
+      ir.assign "and i1 #{same}, #{signs_agree}"
   Conversion(fits, value: converted)
 
 # A number fits in a Char where it is a Unicode scalar value: from 0 to 0x10FFFF, but for the
@@ -133,5 +143,9 @@ resized := (ir: IrBuilder, value: String, from: Type, to: Type, signed: Bool) ->
   from_bits := integer_bits(from)
   to_bits := integer_bits(to)
   return value if from_bits == to_bits
-  instruction := to_bits < from_bits then 'trunc' else signed then 'sext' else 'zext'
+  instruction :=
+    case
+      when to_bits < from_bits then 'trunc'
+      when signed then 'sext'
+      else 'zext'
   ir.assign("#{instruction} #{ir_type(from)} #{value} to #{ir_type(to)}")

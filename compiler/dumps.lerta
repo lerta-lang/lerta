@@ -79,7 +79,8 @@ struct Writer
   positions: Bool
 
 write_items := (writer: Writer, items: Item[], indent: String) ->
-  write_item writer, item, indent for item in items
+  for item in items
+    write_item writer, item, indent
 
 write_item := (writer: Writer, item: Item, indent: String) ->
   case item
@@ -98,7 +99,8 @@ write_group := (writer: Writer, group: Group, indent: String) ->
     else
       indent
   for field in group.fields
-    write_field writer, field, field_indent if writer.positions or not field.is_position
+    if writer.positions or not field.is_position
+      write_field writer, field, field_indent
 
 write_field := (writer: Writer, field: Field, indent: String): void ->
   value := field.value
@@ -143,7 +145,10 @@ flag := (value: Bool) -> Scalar(value.to_string())
 optional_node := (value: Node?): Value -> value then dump_node(value) else NONE
 
 optional_position := (position: Position?) ->
-  position then group(position_fields(position)) else NONE
+  if position
+    group(position_fields(position))
+  else
+    NONE
 
 optional_text := (value: String?) -> value then text(value) else NONE
 
@@ -247,7 +252,11 @@ name_text := (identifier: Identifier) ->
   { name, position } := identifier
   { line, column } := position
   made := ["#{line}.#{column}", "#{line}:#{column}"].find(name.ends_with)
-  positionless := made then quote(name.without_suffix(made)!)
+  positionless :=
+    if made
+      quote name.without_suffix(made)!
+    else
+      nil
   Scalar(positionless, text: quote(name))
 
 dump_array := (array: ArrayLiteral): Group ->

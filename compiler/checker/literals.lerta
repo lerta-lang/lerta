@@ -45,7 +45,10 @@ export holds_float_literal := (expression: Expression): Bool ->
 # The array literal that a spread goes through, as `[1, 2]` of `[1, 2]...`; nil for any other
 # expression.
 spread_literal := (expression: Expression) ->
-  is_spread(expression) then (expression as Comprehension!).iterable as ArrayLiteral?
+  if is_spread(expression)
+    (expression as Comprehension!).iterable as ArrayLiteral?
+  else
+    nil
 
 # The items, those of contextual expressions that hold a float literal first (see
 # holds_float_literal), each in its order.
@@ -66,16 +69,19 @@ export integer_literal := (
       { least, most } := integer_range(type)
       value := literal.value
       fits := value != nil and value in least..=most
-      fail program, at, "integer literal does not fit in #{format_type(type)}" unless fits
+      unless fits
+        fail program, at, "integer literal does not fit in #{format_type(type)}"
     when StringLiteral
       if is_kind(type, 'Char')
         one := literal.value.count() == 1
-        fail program, at, 'a string literal used as a Char must be one code point' unless one
+        unless one
+          fail program, at, 'a string literal used as a Char must be one code point'
       else
         fail program, at, "a string literal is no Byte; write a Binary literal, as b'a'"
     when Interpolation
       fits := binary_literal_bytes(literal)!.length == 1
-      fail program, at, 'a Binary literal used as a Byte must be one byte long' unless fits
+      unless fits
+        fail program, at, 'a Binary literal used as a Byte must be one byte long'
   type
 
 # A float literal, or an integer one where a Float or a Float32 is expected, must be finite as one,
@@ -97,7 +103,8 @@ export float_literal := (program: ProgramWide, literal: Expression, type: Type) 
   type
 
 export int_literal := (program: ProgramWide, literal: IntegerLiteral) ->
-  fail program, literal.position, 'integer literal does not fit in Int' if literal.value == nil
+  if literal.value == nil
+    fail program, literal.position, 'integer literal does not fit in Int'
   int_type
 
 is_hexadecimal := (literal: IntegerLiteral) ->

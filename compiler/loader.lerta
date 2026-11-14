@@ -107,7 +107,11 @@ load_all := (loader: Loader) ->
 
   # A key resolves the path, which a missing file does not: one that is not given is read first,
   # which reports it as missing.
-  entry := given.is_empty() then nil else given[module_key(entry_path)]
+  entry :=
+    if given.is_empty()
+      nil
+    else
+      given[module_key(entry_path)]
   source := entry?.source ? await read_entry_source(entry_path)
   await load(loader, module_key(entry_path), source, nil, entry?.program)
 
@@ -157,7 +161,8 @@ visit := (loader: Loader, statement: Import, from: String, location: String): Pr
   if is_standard_name(module)
     source := imported_standard_source(statement, location)
     return loaded(loader, module) ? await load_standard(loader, module, source)
-  return await visit_standard_file(loader, statement, from, location) if is_standard_name(from)
+  if is_standard_name(from)
+    return await visit_standard_file(loader, statement, from, location)
   path := imported_file(statement, dir_name(from), location)
   real := real_path(path)
   display_path := relative(dir_name(loader.entry_path), path, loader.cwd)
@@ -213,7 +218,8 @@ imported_file := (statement: Import, from: String, location: String) ->
     rule := 'a file is imported by a path that starts with ./ or ../'
     import_error statement, location, "unknown module '#{module}'; #{rule}"
   path := join(from, "#{module}.lerta")
-  import_error statement, location, "cannot find module '#{module}'" unless is_file(path)
+  unless is_file(path)
+    import_error statement, location, "cannot find module '#{module}'"
   path
 
 import_error := (statement: Import, location: String, message: String) ->
@@ -224,7 +230,8 @@ finished_module := (loader: Loader, id: Int) ->
   loading := loader.loaded[id]
   index_of := (place: Int) -> loader.loaded[place].index
   imported: Map<Import, Int>
-  imported[statement] = index_of(place) for (statement, place) in loading.imported
+  for (statement, place) in loading.imported
+    imported[statement] = index_of(place)
   { index, key, display_path, source, program } := loading
   symbol_name := display_path ? "./#{base_name(loader.entry_path)}"
   cycle := [index_of(place) for place in loading.cycle]
@@ -236,7 +243,10 @@ export is_standard_module := (module: Module) ->
 
 # The key of the module at the path (see load).
 export module_key := (path: String) ->
-  is_standard_name(path) or path in given_sources then path else real_path(path)
+  if is_standard_name(path) or path in given_sources
+    path
+  else
+    real_path(path)
 
 # The keys of the files that the file at the path imports, read without loading them.
 export imported_files := (path: String) ->

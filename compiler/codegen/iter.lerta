@@ -19,7 +19,10 @@ from '../types'
 
 # The length and the items of an array or a Binary, which for loops and their Iters read by index.
 export emit_sequence_length := (ir: IrBuilder, sequence: String, type: Type) ->
-  is_kind(type, 'Binary') then emit_binary_length(ir, sequence) else emit_length(ir, sequence)
+  if is_kind(type, 'Binary')
+    emit_binary_length(ir, sequence)
+  else
+    emit_length(ir, sequence)
 
 # The item is owned when it is a reference.
 export emit_sequence_get := (ir: IrBuilder, sequence: String, index: String, type: Type) ->
@@ -64,7 +67,8 @@ export emit_adapter_iter := (ir: IrBuilder, source: String, source_type: Type, i
 
 # The Ints from start up to, but not including, end.
 export emit_range_iter := (ir: IrBuilder, start: String, end: String, inclusive: Bool) ->
-  return emit_inclusive_range_iter(ir, start, end) if inclusive
+  if inclusive
+    return emit_inclusive_range_iter(ir, start, end)
   has_next := (body: IrBuilder, kind: IterKind) ->
     current := load_state(body, kind, 0)
     last := load_state(body, kind, 1)
@@ -164,7 +168,8 @@ emit_filter_iter := (ir: IrBuilder, source: String, test: String, item: Type) ->
   next := (body: IrBuilder, kind: IterKind) ->
     store_state body, kind, 2, 'false'
     value := load_state(body, kind, 3)
-    store_state body, kind, 3, 'zeroinitializer' if ownership(item) != NONE
+    if ownership(item) != NONE
+      store_state body, kind, 3, 'zeroinitializer'
     body.emit "ret #{ir_type(item)} #{value}"
 
   state :=
@@ -178,7 +183,10 @@ emit_filter_iter := (ir: IrBuilder, source: String, test: String, item: Type) ->
 # An owned array, Binary or Iter as an Iter to read from: an Iter of the array's or the Binary's
 # items, or the Iter itself, whose traversal is not started yet: see emit_source_start.
 export emit_reading_iter := (ir: IrBuilder, value: String, type: Type) ->
-  is_sequence(type) then emit_sequence_iter(ir, value, type) else value
+  if is_sequence(type)
+    emit_sequence_iter(ir, value, type)
+  else
+    value
 
 # Starts the traversal of an Iter that emit_reading_iter reads from, which throws if one has.
 export emit_source_start := (ir: IrBuilder, value: String, type: Type) ->
@@ -204,5 +212,9 @@ consume := (ir: IrBuilder, object: String, result: String) ->
 export emit_comprehension_iter := (
   ir: IrBuilder, source: String, item: Type, guard: String?, element: String, element_type: Type
 ) ->
-  kept := guard then emit_filter_iter(ir, source, guard, item) else source
+  kept :=
+    if guard
+      emit_filter_iter ir, source, guard, item
+    else
+      source
   emit_map_iter(ir, kept, element, element_type)

@@ -71,8 +71,10 @@ method := (member: BuiltinMember, params: Type[], result: Type) ->
 # The method of a generic builtin type, an enum or an integer type by the name, if it has one: an
 # enum's to_string gives the member's text, and its to_literal the member as declared.
 export builtin_method := (program: ProgramWide, receiver: Type, name: String) ->
-  return equality_method(program, receiver, name) if name in ['equals', 'hash']
-  return value_method(program, receiver, name) if is_value_type(receiver)
+  if name in ['equals', 'hash']
+    return equality_method(program, receiver, name)
+  if is_value_type(receiver)
+    return value_method(program, receiver, name)
   case receiver
     when ArrayType then array_method(receiver.element, name)
     when MapType then map_method(receiver, name)
@@ -97,9 +99,15 @@ is_value_type := (type: Type) ->
 equality_method := (program: ProgramWide, receiver: Type, name: String): BuiltinMethod? ->
   return nil if receiver is ObjectType and info_of(program, receiver).methods.contains(name)
   if name == 'equals'
-    return is_equatable(program, receiver, nil) then method(EQUALS, [receiver], bool_type)
+    if is_equatable(program, receiver, nil)
+      return method(EQUALS, [receiver], bool_type)
+    else
+      return nil
   is_key := receiver is not OptionalType and is_hashable(program, receiver, nil)
-  is_key then method(HASH, [], int_type)
+  if is_key
+    method(HASH, [], int_type)
+  else
+    nil
 
 value_method := (program: ProgramWide, receiver: Type, name: String) ->
   case name
@@ -113,16 +121,25 @@ value_method := (program: ProgramWide, receiver: Type, name: String) ->
       return operator if operator := operator_method(receiver, name)
       return char_method(name) if is_kind(receiver, 'Char')
       return conversion if conversion := float_conversion(receiver, name)
-      is_integer(receiver) then integer_method(receiver, name)
+      if is_integer(receiver)
+        integer_method(receiver, name)
+      else
+        nil
 
 # The method that an operator calls, `add` for `+` and so on, of a type that the operator applies
 # to, which applies it: the numbers', and String's and Binary's add.
 operator_method := (receiver: Type, name: String) ->
   for (prefix, unary) in UNARY_METHODS
     if name == unary
-      return is_one_of_kinds(receiver, unary_kinds(prefix)) then method(OPERATOR, [], receiver)
+      if is_one_of_kinds(receiver, unary_kinds(prefix))
+        return method(OPERATOR, [], receiver)
+      else
+        return nil
   operator := operator_of_method(name) ? return nil
-  is_one_of_kinds(receiver, operand_kinds(operator)) then method(OPERATOR, [receiver], receiver)
+  if is_one_of_kinds(receiver, operand_kinds(operator))
+    method(OPERATOR, [receiver], receiver)
+  else
+    nil
 
 # The enum that compare gives, of std:builtins.
 export ordering_type := (program: ProgramWide) ->
@@ -137,11 +154,13 @@ integer_method := (receiver: Type, name: String) ->
       when 'wrapping_sub' then WRAPPING_SUB
       when 'wrapping_mul' then WRAPPING_MUL
       else nil
-  return method(wrapping, [receiver], receiver) if wrapping
+  if wrapping
+    return method(wrapping, [receiver], receiver)
   return method(INTEGER_TO_FLOAT, [], float_type) if name == 'to_float'
   kind := CONVERSIONS[name] ? return nil
   target := SimpleType(kind)
-  method(INTEGER_CONVERSION, [], holds_all(target, receiver) then target else optional_type(target))
+  holds := holds_all(target, receiver)
+  method(INTEGER_CONVERSION, [], holds then target else optional_type(target))
 
 # A Float's `to_float32`, the nearest Float32, an infinity beyond the largest, and a Float32's
 # `to_float`, the same value.
@@ -161,7 +180,10 @@ holds_all := (to: Type, from: Type) ->
   return is_kind(from, 'Byte') if is_kind(to, 'Char')
   wider := integer_bits(to) > integer_bits(from)
   as_wide := integer_bits(to) >= integer_bits(from)
-  is_signed(from) == is_signed(to) then as_wide else not is_signed(from) and wider
+  if is_signed(from) == is_signed(to)
+    as_wide
+  else
+    not is_signed(from) and wider
 
 # The types that `to_int`, `to_byte`, `to_int8` and so on convert to: the integer types, and Char.
 CONVERSIONS: Map<String, TypeKind> =
@@ -169,7 +191,11 @@ CONVERSIONS: Map<String, TypeKind> =
   'to_uint16': 'UInt16', 'to_uint32': 'UInt32', 'to_uint64': 'UInt64', 'to_char': 'Char'
 
 # A Char's number, which every Char has, as an Int.
-char_method := (name: String) -> name == 'to_int' then method(INTEGER_CONVERSION, [], int_type)
+char_method := (name: String) ->
+  if name == 'to_int'
+    method(INTEGER_CONVERSION, [], int_type)
+  else
+    nil
 
 # Whether the builtin method keeps its argument, as an array's `push` does, which a cycle can go
 # through (see cycles).

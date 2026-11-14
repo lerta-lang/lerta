@@ -82,12 +82,14 @@ analyze_statement := (analysis: Analysis, statement: Statement): void ->
       analysis.declared_depths[statement.name] = analysis.loop_depth
       forget_assigned analysis, [statement.value]
       found := found_of(analysis, statement.value)
-      follow analysis, statement.name, found.range if is_float_node(analysis, statement.value)
+      if is_float_node(analysis, statement.value)
+        follow analysis, statement.name, found.range
     when Assignment
       forget_assigned analysis, [statement.value]
       found := found_of(analysis, statement.value)
       local := followed_local(analysis, statement.target)
-      analysis.ranges[local] = statement.operator == '=' then found.range else UNKNOWN if local
+      if local
+        analysis.ranges[local] = statement.operator == '=' then found.range else UNKNOWN
     when While then analyze_while(analysis, statement)
     when For then analyze_for(analysis, statement)
     # Declarations of types and imports hold no Float of the body.
@@ -290,7 +292,8 @@ binary_found := (analysis: Analysis, binary: BinaryOperation): Found ->
   left := found_of(analysis, binary.left)
   right := found_of(analysis, binary.right)
   is_float := is_float_node(analysis, binary) and binary not in analysis.facts.operator_calls
-  return { range: UNKNOWN, nan_free: true } unless is_float
+  unless is_float
+    return { range: UNKNOWN, nan_free: true }
 
   # An operation whose range is not followed may give a NaN.
   square := is_square(analysis, binary)
@@ -330,7 +333,11 @@ negation := (range: FloatRange) ->
   FloatRange(range..., nonnegative: range.nonpositive, nonpositive: range.nonnegative)
 
 sum := (left: FloatRange, right: FloatRange) ->
-  bound := finite(left) and finite(right) then left.bound + right.bound else INFINITY
+  bound :=
+    if finite(left) and finite(right)
+      left.bound + right.bound
+    else
+      INFINITY
   FloatRange(
     bound
     nonnegative: left.nonnegative and right.nonnegative
@@ -345,14 +352,21 @@ product := (left: FloatRange, right: FloatRange) ->
 
 # The bounds multiplied, where both are finite, as an infinity times 0 has no bound.
 product_bound := (left: FloatRange, right: FloatRange) ->
-  finite(left) and finite(right) then left.bound * right.bound else INFINITY
+  if finite(left) and finite(right)
+    left.bound * right.bound
+  else
+    INFINITY
 
 # Only a division by a constant other than 0 is followed, which gives no NaN: a range tells no
 # least magnitude, so that a divisor of any other range may be 0.
 quotient := (left: FloatRange, divisor: Float?): (FloatRange, Bool)? ->
   constant := divisor ? return nil
   return nil if constant == 0.0
-  bound := finite(left) then left.bound / abs(constant) else INFINITY
+  bound :=
+    if finite(left)
+      left.bound / abs(constant)
+    else
+      INFINITY
   range := product(left, constant_range(constant))
   ({ range..., bound }, true)
 
@@ -373,7 +387,8 @@ narrow := (analysis: Analysis, condition: Condition): void ->
     narrow analysis, condition.right
     return
   range := condition.right
-  return narrow_by_range(analysis, condition.left, range) if range is Range
+  if range is Range
+    return narrow_by_range(analysis, condition.left, range)
   { operator, left, right } := condition
   if constant := constant_of(right)
     narrow_comparison analysis, operator, left, constant
@@ -381,7 +396,8 @@ narrow := (analysis: Analysis, condition: Condition): void ->
     narrow_comparison analysis, MIRRORED[operator] ? '', right, constant
 
 narrow_by_range := (analysis: Analysis, expression: Expression, range: Range) ->
-  narrow_comparison analysis, '>=', expression, constant if constant := constant_of(range.start!)
+  if constant := constant_of(range.start!)
+    narrow_comparison analysis, '>=', expression, constant
   if constant := constant_of(range.end!)
     narrow_comparison analysis, range.inclusive then '<=' else '<', expression, constant
 
@@ -443,7 +459,8 @@ is_nonnegative := (analysis: Analysis, expression: Expression) ->
 assigned_in_blocks := (analysis: Analysis, blocks: Statement[][]) ->
   assigned: Set<Identifier>
   for block in blocks
-    add_assigned analysis, node, assigned for node in block
+    for node in block
+      add_assigned analysis, node, assigned
   assigned
 
 add_assigned := (analysis: Analysis, node: Statement, assigned: Set<Identifier>): void ->

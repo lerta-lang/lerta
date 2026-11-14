@@ -95,14 +95,16 @@ export key := (title: String, name: String) -> "#{title}\t#{name}"
 # The checks to run of a suite, or nil if there are none, which is also the case when they are only
 # listed, so that the suite skips what it would do before it runs them.
 export select := (title: String, checks: Check[]) ->
-  known_keys.add key(title, check.name) for check in checks
+  for check in checks
+    known_keys.add key(title, check.name)
   selected := [
     check
     for check in checks
     when check.name.contains(options().pattern) and
       options().only?.contains(key(title, check.name)) ? true
   ]
-  selected_keys.push key(title, check.name) for check in selected
+  for check in selected
+    selected_keys.push key(title, check.name)
   if options().listing
     print "#{title}:" unless selected.is_empty()
     print "  #{check.name}" for check in selected
@@ -216,7 +218,8 @@ class ChecksRun
       reasons := result.reasons ? return
       tally.run_count += 1
       if reasons.is_empty()
-        @show 'ok', entry.check, result, reasons unless options().quiet
+        unless options().quiet
+          @show 'ok', entry.check, result, reasons
       else if options().retry
         @retried.push entry
         @show 'FAIL?', entry.check, result, reasons
@@ -231,7 +234,8 @@ class ChecksRun
         await ready if ready := @suites[entry.suite].ready
       catch error
         tally.setup_error = tally.setup_error ? error.message
-      return Result(reasons: nil, duration: 0.0) if tally.setup_error
+      if tally.setup_error
+        return Result(reasons: nil, duration: 0.0)
       tally.started = tally.started ? milliseconds()
       result := await run_in_slot(entry.check)
       tally.finished = max(tally.finished, milliseconds())

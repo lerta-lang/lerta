@@ -26,14 +26,17 @@ export check_arguments := (
   packed := packed_arguments(body, call, declaration)
   args := packed ? call.args
   if gathers_per_instance(call, args, params)
-    expect_type body, arg, params[i] for arg at i in args
+    for arg at i in args
+      expect_type body, arg, params[i]
     type_of body, arg.value for arg in call.named_args
     return callee_type.result
   gathered := gathered_of(body, call, args, params)
   passed := gathered then [args..., gathered] else args
   check_argument_count body, call, declaration, given: passed.length, params: params.length
-  expect_type body, arg, params[i] for arg at i in args
-  check_gathered body, gathered, params.last()! if gathered
+  for arg at i in args
+    expect_type body, arg, params[i]
+  if gathered
+    check_gathered body, gathered, params.last()!
   body.facts.arguments[call] = passed if packed or gathered
   callee_type.result
 
@@ -48,7 +51,8 @@ export check_argument_count := (
   var split = given
   split += comparisons_more(arg) for arg in call.args
   hint := '; `a<b, c>(d)` is a call with type arguments: write spaces around `<` and `>` to compare'
-  fail body.program, call.position, split in required..=params then message + hint else message
+  compares := split in required..=params
+  fail body.program, call.position, compares then message + hint else message
 
 # How many arguments more the argument would be as the comparisons that it may have been meant
 # for: `a<b, c>(d)`, without spaces, is one call with type arguments, while `a < b, c > d` is two
@@ -67,7 +71,11 @@ export packed_arguments := (body: Body, call: Call, declaration: FunctionLiteral
   program := body.program
   params := declaration?.params ? []
   place := params.find_index(Parameter.variadic)
-  packed := place != nil then pack_from(body, call, params, place)
+  packed :=
+    if place != nil
+      pack_from body, call, params, place
+    else
+      nil
   if spread := (packed ? call.args).find(is_spread)
     fail
       program
@@ -121,5 +129,6 @@ gathered_argument := (body: Body, call: Call, last_param: Type?): Expression ->
 
 # The gathered argument must fit the last parameter.
 export check_gathered := (body: Body, gathered: Expression, param: Type) ->
-  return expect_type(body, gathered, param) unless gathered is Call
+  unless gathered is Call
+    return expect_type(body, gathered, param)
   require_type body, gathered, type_of_expected_construction(body, gathered, param), param

@@ -108,10 +108,12 @@ reject_invalid_members := (shared: Shared, declaration: InterfaceDeclaration) ->
   seen: Set<String>
   for member in declaration.members
     { name, position } := member.name
-    fail_already_member program, position, name, declaration.name.name unless seen.add(name)
+    unless seen.add(name)
+      fail_already_member program, position, name, declaration.name.name
     if modifier := member.modifier
       fail program, member.position, "an interface member cannot be #{modifier}"
-    fail program, member.position, 'an interface member cannot be private' if member.private
+    if member.private
+      fail program, member.position, 'an interface member cannot be private'
     if member.value != nil
       fail program, member.position, 'an interface member has a type and no value'
 
@@ -170,7 +172,8 @@ export bound_interface := (program: ProgramWide, resolver: Resolver, bound: Name
   shared := resolver_shared(program, resolver)
   import_qualified_type shared, bound
   if info := named_interface(program, resolver, name)
-    fail program, position, 'a bound cannot be optional' if bound.optional
+    if bound.optional
+      fail program, position, 'a bound cannot be optional'
     type := instantiate(program, resolver, info, bound)
     record_type_name shared, bound, type
     return type

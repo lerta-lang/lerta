@@ -37,7 +37,8 @@ export reject_misplaced_jumps := (program: ProgramWide, statements: Statement[])
   visit_statements program, statements, all_jumps
 
 visit_statements := (program: ProgramWide, statements: Statement[], jumps: Jumps) ->
-  visit_statement program, statement, jumps for statement in statements
+  for statement in statements
+    visit_statement program, statement, jumps
 
 visit_statement := (program: ProgramWide, statement: Statement, jumps: Jumps): void ->
   in_loop := Jumps(jumps..., may_leave_loop: true)
@@ -57,7 +58,8 @@ visit_statement := (program: ProgramWide, statement: Statement, jumps: Jumps): v
       own_reason := jumps.yield_reason
       held := 'cannot be here: only where nothing evaluated before it is still held'
       message := "'yield' #{own_reason ? jumps.reason ? held}"
-      fail program, statement.position, message if own_reason or not jumps.may_return
+      if own_reason or not jumps.may_return
+        fail program, statement.position, message
       visit program, statement.value, no_jumps
     when TypeDeclaration, Extend then visit_members(program, statement.members)
     when Import, Pass, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern, Intrinsic then pass
@@ -65,7 +67,8 @@ visit_statement := (program: ProgramWide, statement: Statement, jumps: Jumps): v
 
 visit_members := (program: ProgramWide, members: MemberDeclaration[]) ->
   for member in members
-    visit program, value, all_jumps if value := member.value
+    if value := member.value
+      visit program, value, all_jumps
 
 visit_condition := (program: ProgramWide, condition: Condition) ->
   if condition is Binding
@@ -101,18 +104,21 @@ visit := (program: ProgramWide, expression: Expression, jumps: Jumps): void ->
       for arm in expression.arms
         operand pattern for pattern in arm.patterns
         visit_statements program, arm.body, jumps
-      visit_statements program, otherwise, jumps if otherwise := expression.otherwise
+      if otherwise := expression.otherwise
+        visit_statements program, otherwise, jumps
     when Try
       finally_inside := Jumps(jumps..., yield_reason: FINALLY_YIELD_REASON)
       inside := expression.finally_body then finally_inside else jumps
       visit_statements program, expression.body, inside
-      visit_statements program, clause.body, inside for clause in expression.catches
+      for clause in expression.catches
+        visit_statements program, clause.body, inside
       if finally_body := expression.finally_body
         visit_statements program, finally_body, within_finally
     # No loop is outside a function; a jump out of none is an error of its own.
     when FunctionLiteral
       for param in expression.params
-        visit program, default, in_default if default := param.default
+        if default := param.default
+          visit program, default, in_default
       visit_statements program, expression.body, all_jumps
     else operand(each) for each in operands_of(expression)
 
@@ -120,7 +126,8 @@ check_jump := (
   program: ProgramWide, keyword: String, allowed: Bool, reason: String?, at: Position
 ) ->
   return if allowed
-  fail program, at, "'#{keyword}' #{reason}" if reason
+  if reason
+    fail program, at, "'#{keyword}' #{reason}"
   statement := 'a statement or as the value of a declaration or of an assignment to a variable'
   through := "directly or through '?', then/else or case arms"
   fail program, at, "'#{keyword}' cannot be used here: only as #{statement}, #{through}"

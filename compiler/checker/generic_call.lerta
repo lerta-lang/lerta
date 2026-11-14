@@ -42,7 +42,8 @@ export receiver_instance := (
   return nil if type_arguments == nil
   reject_unsatisfied_bounds body, generic_function, type_arguments, [at for _ in type_arguments]
   instance := instantiate_here(body, generic, type_arguments, at)
-  body.facts.instances[call] = InstanceLink(instance) if call
+  if call
+    body.facts.instances[call] = InstanceLink(instance)
   instance
 
 # Each argument typed alone must fit its parameter once the type arguments are known.
@@ -61,18 +62,21 @@ instance_of_call := (
     generic.literal
     given: passed.length
     params: generic.params.length
-  check_gathered body, gathered, generic.params.last()! if gathered
+  if gathered
+    check_gathered body, gathered, generic.params.last()!
   body.facts.arguments[call] = passed if packed or gathered
   inference := infer_type_arguments(body, call, args, generic, expected, receiver)
   type_arguments := type_arguments_of(body, call, generic, inference.bindings)
   reject_invalid_signature body, generic, type_arguments, call.position
   instance := instantiate_here(body, ref, type_arguments, call.position)
   type := function_type(instance)
-  require_type body, each.arg, each.type, type.params[each.index] for each in inference.inferred
+  for each in inference.inferred
+    require_type body, each.arg, each.type, type.params[each.index]
   body.facts.instances[call] = InstanceLink(instance)
 
   # Leaving arguments out uses defaults, which are checked for the instance then.
-  check_defaults program, generic, instance, call.position if passed.length < generic.params.length
+  if passed.length < generic.params.length
+    check_defaults program, generic, instance, call.position
 
   instance
 

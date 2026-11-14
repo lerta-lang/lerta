@@ -61,7 +61,8 @@ export check_map_value := (program: ProgramWide, value: Type, at: Position) ->
 export type_of_array := (body: Body, array: ArrayLiteral, expected: Type?) ->
   array_type := inner_of_expected(expected)
   if array_type is ArrayType
-    expect_element body, item, array_type.element for item in array.elements
+    for item in array.elements
+      expect_element body, item, array_type.element
     return array_type
   elements := array.elements
   empty := ->
@@ -72,7 +73,8 @@ export type_of_array := (body: Body, array: ArrayLiteral, expected: Type?) ->
   element_type := is_spread(anchor) then (anchor_type as ArrayType!).element else anchor_type
   element := check_value_type(body.program, element_type, anchor.position, 'an array')
   for item in elements
-    expect_element body, item, element if item != anchor
+    if item != anchor
+      expect_element body, item, element
   keep_constructions body, elements
   ArrayType(element)
 
@@ -120,8 +122,10 @@ export type_of_map := (body: Body, map: MapLiteral, expected: Type?) ->
   value := anchor_of(values)!
   type := map_type_of_anchors(body, key, value)
   for entry in map.entries
-    expect_type body, entry.key, type.key if entry.key != key
-    expect_type body, entry.value, type.value if entry.value != value
+    if entry.key != key
+      expect_type body, entry.key, type.key
+    if entry.value != value
+      expect_type body, entry.value, type.value
   keep_constructions body, keys
   keep_constructions body, values
   type
@@ -172,7 +176,11 @@ export type_of_new_map := (body: Body, call: Call, expected: Type?) ->
     message := "the type of an empty map must be written, as in #{example}"
     return map ? fail(program, call.position, message)
   entries := call.args[0]
-  expected_entries := map then ArrayType(TupleType([map.key, map.value]))
+  expected_entries :=
+    if map
+      ArrayType TupleType([map.key, map.value])
+    else
+      nil
   entry := type_of_iterated(body, entries, "as Map()'s entries", expected_entries)
   at := entries.position
   reject_other_items program, entry, expected_entries?.element, at
@@ -219,8 +227,13 @@ export type_of_filled_array := (body: Body, call: Call, expected: Type?) ->
   expect_type body, call.args[0], int_type
   value := call.args[1]
   expected_array := inner_of_expected(expected) as ArrayType?
-  element := expected_array then expected_array.element else type_of(body, value)
-  expect_type body, value, element if expected_array
+  element :=
+    if expected_array
+      expected_array.element
+    else
+      type_of body, value
+  if expected_array
+    expect_type body, value, element
   check_value_type program, element, value.position, 'an array'
   if value is not NilLiteral and holds_changing(program, element, value.position, Set())
     shared := "Array() would make every item share one #{format_type(element)}"
@@ -272,7 +285,8 @@ export type_of_index := (body: Body, index: Index): Type ->
     message := "only a map's index takes a default, not that of #{format_type(object_type)}"
     fail body.program, default_value.position, message
   range := index.index as Range?
-  return type_of_slice(body, range, object_type) if range
+  if range
+    return type_of_slice(body, range, object_type)
   if object_type is MapType
     reject_set_index body, index, object_type
     expect_type body, index.index, object_type.key
@@ -298,8 +312,10 @@ type_of_slice := (body: Body, range: Range, object_type: Type) ->
     message :=
       "only an array or a Binary takes a range as its index, not #{format_type(object_type)}"
     fail body.program, range.position, message
-  expect_type body, start, int_type if start := range.start
-  expect_type body, end, int_type if end := range.end
+  if start := range.start
+    expect_type body, start, int_type
+  if end := range.end
+    expect_type body, end, int_type
   object_type
 
 reject_set_index := (body: Body, index: Index, type: MapType) ->

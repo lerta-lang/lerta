@@ -8,7 +8,13 @@ export base64 := (bytes: Binary) ->
   for i in 0..bytes.length by 3
     count := min(3, bytes.length - i)
     var group = 0
-    group = group << 8 | (k < count then bytes[i + k].to_int() else 0) for k in 0..3
+    for k in 0..3
+      byte :=
+        if k < count
+          bytes[i + k].to_int()
+        else
+          0
+      group = group << 8 | byte
     for k in 0..4
       letter := BASE64_LETTERS[group >> (18 - 6 * k) & 0x3F].to_char()
       letters += k <= count then letter.to_string() else '='
@@ -19,7 +25,11 @@ export from_base64 := (text: Binary) ->
   return nil if text.length % 4 != 0
   bytes: Byte[]
   for i in 0..text.length by 4
-    padding := text[i + 3] != b'=' then 0 else text[i + 2] != b'=' then 1 else 2
+    padding :=
+      case
+        when text[i + 3] != b'=' then 0
+        when text[i + 2] != b'=' then 1
+        else 2
     return nil if padding > 0 and i + 4 < text.length
     var group = 0
     for k in 0..(4 - padding)
@@ -30,7 +40,8 @@ export from_base64 := (text: Binary) ->
     return nil if group & (1 << (2 * padding) - 1) != 0
     group = group << (6 * padding)
 
-    bytes.push (group >> (16 - 8 * k) & 0xFF).to_byte()! for k in 0..(3 - padding)
+    for k in 0..(3 - padding)
+      bytes.push (group >> (16 - 8 * k) & 0xFF).to_byte()!
   bytes.to_binary()
 
 base64_value := (letter: Byte) ->

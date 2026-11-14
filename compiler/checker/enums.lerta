@@ -71,8 +71,10 @@ export type_of_enum_query := (body: Body, call: Call, kind: EnumQueryKind) ->
   reject_non_enum body, type, written.position
   arguments := kind == PARSE then 'one argument, the text' else 'no arguments'
   arity := kind == PARSE then 1 else 0
-  fail program, call.position, "#{callee.name} takes #{arguments}" if call.args.length != arity
-  expect_type body, arg, string_type for arg in call.args
+  if call.args.length != arity
+    fail program, call.position, "#{callee.name} takes #{arguments}"
+  for arg in call.args
+    expect_type body, arg, string_type
   record_reference body, callee, EnumQuery(kind, type)
   case kind
     when PARSE then optional_type(type)
@@ -126,7 +128,11 @@ export type_of_literal_member := (body: Body, literal: StringLiteral, expected: 
   type := expected_literal_enum(expected) ? return nil
   text := literal.value
   no_member := ->
-    hint := name_index(type, text) != nil then "; write #{text}" else ''
+    hint :=
+      if name_index(type, text) != nil
+        "; write #{text}"
+      else
+        ''
     fail body.program, literal.position, "'#{text}' is not a member of #{type.name}#{hint}"
   is_literal_of_text := (member: EnumMember) -> not member.is_name and member.text == text
   index := type.members.find_index(is_literal_of_text) ? no_member()

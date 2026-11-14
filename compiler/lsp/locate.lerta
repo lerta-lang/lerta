@@ -94,7 +94,8 @@ add_type_names := (add: AddCandidate, program: ProgramWide, module_index: Int) -
     alias := shared.alias_names[type_name]
     for type in types
       declaration := ->
-        return Declared(module_index, name: alias) if alias
+        if alias
+          return Declared(module_index, name: alias)
         type_declaration(program, type)
       add { type, name: written_name(type_name), declaration }
 
@@ -173,7 +174,11 @@ member_declaration := (program: ProgramWide, facts: NodeFacts, member: Member) -
         when ExtensionSource
           Declared(module_index: source.method.module_index, name: source.method.name)
         else nil
-    when Property then target.kind == FIELD then member_of_type(program, object_type, name)
+    when Property
+      if target.kind == FIELD
+        member_of_type(program, object_type, name)
+      else
+        nil
     when EnumValue then enum_member_declaration(program, facts.types[member]!, name)
     else nil
 
@@ -182,7 +187,8 @@ enum_member_declaration := (program: ProgramWide, type: Type, name: String) ->
   enum_type := type as EnumType ? return nil
   (module_index, declaration) := enum_statement(program, enum_type) ? return nil
   for each in declaration.members
-    return Declared(module_index, name: each) if each is Identifier and each.name == name
+    if each is Identifier and each.name == name
+      return Declared(module_index, name: each)
   nil
 
 # The name of the enum of an enum's member written with it, as `Color` of `Color.RED` or of

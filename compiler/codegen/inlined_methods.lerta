@@ -50,12 +50,16 @@ export inlined_method := (g: Generator, call: Call, member: Member, source: Meth
 
   type := type_of(g, receiver)
   is_sequence := type is ArrayType or is_kind(type, 'Binary')
-  is_sequence and is_stable(g, receiver, reads_fields) then instance
+  if is_sequence and is_stable(g, receiver, reads_fields)
+    instance
+  else
+    nil
 
 # A range is one only as a comprehension's source, as no method is called on one.
 export is_fused_source := (g: Generator, expression: Expression, reads_fields: Bool): Bool ->
   stable := (part: Expression) -> is_stable(g, part, reads_fields)
-  return stable(expression.start!) and stable(expression.end!) if expression is Range
+  if expression is Range
+    return stable(expression.start!) and stable(expression.end!)
   return fused.args.all(stable) if fused := fused_call(g, expression)
   lazy := fused_comprehension(g, expression) ? return false
   stable(lazy.source) or is_fused_source(g, lazy.source, reads_fields)

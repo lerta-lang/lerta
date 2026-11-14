@@ -32,7 +32,8 @@ export borrowing_all := (g: Generator, expressions: Expression[], use: (String[]
     operands.push operand
   result := use(operands)
   pop_temporaries g, depth
-  release_if_reference g, expression, operand for (expression, operand) in owned
+  for (expression, operand) in owned
+    release_if_reference g, expression, operand
   result
 
 # The value of the expression and whether it is owned: borrowed when it is a local whose scope
@@ -48,7 +49,8 @@ export generate_borrowed := (
   later: Expression[]
   in_place = false
 ) ->
-  return (generate(g, expression), true) unless is_borrowable(g, expression, later, in_place)
+  unless is_borrowable(g, expression, later, in_place)
+    return (generate(g, expression), true)
   (generate_borrowed_value(g, expression), false)
 
 # Whether the value can be borrowed for the whole scope of a const that it initializes: as
@@ -117,7 +119,8 @@ export plain_field_of := (g: Generator, member: Member) ->
 
 # The value of an expression that is_borrowable, borrowed.
 export generate_borrowed_value := (g: Generator, expression: Expression): String ->
-  return read_borrowed(g, local, type_of(g, expression)) if local := named_local(g, expression)
+  if local := named_local(g, expression)
+    return read_borrowed(g, local, type_of(g, expression))
   return generate_borrowed_item(g, expression) if expression is Index
   assert expression is Member
   object := generate_borrowed_value(g, expression.object)

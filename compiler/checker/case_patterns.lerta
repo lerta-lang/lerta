@@ -49,14 +49,19 @@ export check_patterns := (body: Body, case_expression: Case): CaseNarrowings ->
     fail body.program, subject.position, message
   for patterns in (arm.patterns for arm in arms when not is_nil_arm(arm))
     for pattern in patterns
-      fail_narrowed_type_pattern body, pattern, type if declared is UnionType
+      if declared is UnionType
+        fail_narrowed_type_pattern body, pattern, type
       expect_type body, pattern, type
   if type is EnumType
     check_member_patterns body, case_expression, type, missing
   else if case_expression.otherwise == nil
     fail body.program, case_expression.position, 'a case on values needs an else arm'
   no_narrowings: Narrowing[]
-  narrowed := is_optional then subject_narrowings(body, subject, type) else no_narrowings
+  narrowed :=
+    if is_optional
+      subject_narrowings body, subject, type
+    else
+      no_narrowings
   arm_narrowings := [is_nil_arm(arm) then no_narrowings else narrowed for arm in arms]
   { arms: arm_narrowings, otherwise: unhandled_nil then no_narrowings else narrowed }
 
@@ -69,7 +74,8 @@ check_nil_arms := (body: Body, arms: CaseArm[]) ->
       continue unless is_nil_pattern(pattern)
       if arm.patterns.length > 1
         fail body.program, pattern.position, 'nil must be the only pattern of its arm'
-      fail_handled_twice body, pattern, 'nil' if handled
+      if handled
+        fail_handled_twice body, pattern, 'nil'
       type_of body, pattern
       handled = true
   handled
@@ -87,7 +93,8 @@ check_type_patterns := (
     types := [type_pattern(body, pattern, union) for pattern in arm.patterns]
     for (pattern_type, pattern) in types.zip(arm.patterns)
       for member in members_of(pattern_type)
-        fail_handled_twice body, pattern, format_member(member, union) unless handled.add(member)
+        unless handled.add(member)
+          fail_handled_twice body, pattern, format_member(member, union)
     arm_narrowings.push subject_narrowings(body, subject, union_of(types)!)
   is_unhandled := (member: Type) -> member not in handled
   unhandled_members := members_of(narrowed).filter(is_unhandled)
@@ -98,7 +105,11 @@ check_type_patterns := (
   unhandled := not missing_nil.is_empty() then optional_type(narrowed) else narrowed
   handled_members := [member for member in union.members when member in handled]
   others := other_members(unhandled, union_type(handled_members))
-  otherwise: Narrowing[] = others then subject_narrowings(body, subject, others) else []
+  otherwise: Narrowing[] =
+    if others
+      subject_narrowings body, subject, others
+    else
+      []
 
   CaseNarrowings(otherwise, arms: arm_narrowings)
 
@@ -109,7 +120,8 @@ check_member_patterns := (
   for arm in case_expression.arms
     for pattern in arm.patterns
       index := enum_value_of(body.facts, pattern) ? continue
-      fail_handled_twice body, pattern, format_enum_member(type.members[index]) if index in handled
+      if index in handled
+        fail_handled_twice body, pattern, format_enum_member(type.members[index])
       handled.add index
   members := type.members
   missing := [format_enum_member(member) for member at i in members when i not in handled]

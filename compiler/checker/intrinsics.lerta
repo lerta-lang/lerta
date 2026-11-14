@@ -56,7 +56,8 @@ export declare_intrinsics := (shared: Shared, statements: Statement[]) ->
       fail program, statement.position, 'only a standard module can declare an intrinsic'
     type := declared_type(shared, statement)
     known := type then name.name in VALUE_INTRINSICS else name.name in INTRINSICS
-    fail program, name.position, "no intrinsic '#{name.name}'" unless known
+    unless known
+      fail program, name.position, "no intrinsic '#{name.name}'"
     add_intrinsic shared, name, type
 
 # The type of an intrinsic value, which must be the one that the compiler gives it; nil for a
@@ -81,10 +82,14 @@ export struct IntrinsicCode
 # `members` of std:enums, are calls of the code that codegen makes for each type (see
 # type_of_codable_call and type_of_enum_query); the others give code of their own.
 export type_of_intrinsic_call := (body: Body, call: Call, name: String, expected: Type?) ->
-  return type_of_codable_call(body, call, ENCODE) if name == 'encode_value'
-  return type_of_codable_call(body, call, DECODE) if name == 'decode_value'
-  return type_of_enum_query(body, call, PARSE) if name == 'parse'
-  return type_of_enum_query(body, call, MEMBERS) if name == 'members'
+  if name == 'encode_value'
+    return type_of_codable_call(body, call, ENCODE)
+  if name == 'decode_value'
+    return type_of_codable_call(body, call, DECODE)
+  if name == 'parse'
+    return type_of_enum_query(body, call, PARSE)
+  if name == 'members'
+    return type_of_enum_query(body, call, MEMBERS)
   reject_named_arguments body, call, name
   code: IntrinsicCode =
     case name
@@ -103,7 +108,8 @@ reject_named_arguments := (body: Body, call: Call, name: String) ->
 # follows where it does, as a guard. The message tells where, quotes the call, and gives the values
 # of the operands of a comparison or of `is` that the source does not write as literals.
 assertion := (body: Body, call: Call) ->
-  fail body.program, call.position, 'assert takes one condition' if call.args.length != 1
+  if call.args.length != 1
+    fail body.program, call.position, 'assert takes one condition'
   held := Held(body, prefix: local_prefix('assert', call.position))
   test := held_test(held, call.args[0])
   shown := -> [operand_text(body, each) for each in held.shown]
@@ -149,7 +155,11 @@ is_test := (expression: Expression) ->
 # The test with each operand, and each part of a range after `in`, which is no value, given by
 # `operand`, in the order that they are evaluated, with a label for the message.
 with_operands := (test: Expression, operand: (Expression, String) -> Expression): Expression ->
-  part := (value: Expression?, label: String) -> value then operand(value, label)
+  part := (value: Expression?, label: String) ->
+    if value
+      operand(value, label)
+    else
+      nil
   case test
     when BinaryOperation
       { right } := test
@@ -217,7 +227,8 @@ copied_path := (path: Expression): Expression ->
 # `dbg(value)`: writes where the call is, its code and the literal of the value to stderr, and
 # gives the value, which it evaluates once, typed where it is expected.
 debugged := (body: Body, call: Call, expected: Type?) ->
-  fail body.program, call.position, 'dbg takes one value' if call.args.length != 1
+  if call.args.length != 1
+    fail body.program, call.position, 'dbg takes one value'
   at := call.position
   name := "#{local_prefix('dbg', at)}.value"
   value := call.args[0]
@@ -241,7 +252,8 @@ debugged := (body: Body, call: Call, expected: Type?) ->
 # (see lerta_print_trace in runtime/lerta.c). The C function takes the interface value, which no
 # extern can, to tell whether the trace it keeps is the error's.
 traced := (body: Body, call: Call) ->
-  fail body.program, call.position, 'print_trace takes one error' if call.args.length != 1
+  if call.args.length != 1
+    fail body.program, call.position, 'print_trace takes one error'
   error := std_interface(body.shared, 'Error', call.position).type
   runtime_call(body, 'lerta_print_trace', call.args[0], { params: [error], result: void_type })
 
@@ -338,9 +350,11 @@ code_at := (source: String, tokens: Token[], at: Position) ->
   start := tokens.find_index(starts_there) ? return ''
   last := tokens[last_of_code(tokens, start)]
   lines := source.lines()
-  return columns(lines[at.line - 1], at.column, last.end_column) if last.end_line == at.line
+  if last.end_line == at.line
+    return columns(lines[at.line - 1], at.column, last.end_column)
   parts := [columns(lines[at.line - 1], at.column, INT_MAX)]
-  parts.push lines[line - 1] for line in (at.line + 1)..last.end_line
+  for line in (at.line + 1)..last.end_line
+    parts.push lines[line - 1]
   parts.push columns(lines[last.end_line - 1], 1, last.end_column)
   parts.join("\n")
 

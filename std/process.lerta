@@ -74,7 +74,11 @@ export run := (command: String, args: String..., options: RunOptions) ->
   throw IOError("cannot run: #{command}") if texts.any(holds_nul)
 
   changes_env := not env.is_empty() or not unset_env.is_empty()
-  program_env := changes_env then env_with(env, unset_env)
+  program_env :=
+    if changes_env
+      env_with env, unset_env
+    else
+      nil
   input := input_of(options.stdin, command)
   output := output_of(options.stdout, 'standard output', command)
   errors := output_of(options.stderr, 'standard error', command)
@@ -93,9 +97,21 @@ export run := (command: String, args: String..., options: RunOptions) ->
   give options.stdout, false
   give options.stderr, false
   copies := Copies(command)
-  feeding := input.pipe then feed(input.pipe, input.source!, program, copies)
-  outputting := output.pipe then copy_output(output.pipe, output.sink!, program, copies)
-  erroring := errors.pipe then copy_output(errors.pipe, errors.sink!, program, copies)
+  feeding :=
+    if input.pipe
+      feed input.pipe, input.source!, program, copies
+    else
+      nil
+  outputting :=
+    if output.pipe
+      copy_output output.pipe, output.sink!, program, copies
+    else
+      nil
+  erroring :=
+    if errors.pipe
+      copy_output errors.pipe, errors.sink!, program, copies
+    else
+      nil
   status :=
     try
       await lerta_program_wait(program.pointer)
@@ -110,10 +126,12 @@ export run := (command: String, args: String..., options: RunOptions) ->
   # A stopped program's output is not wanted, and a program that it started may hold its pipes
   # open, so it is not waited for; an output read once the program has ended may still fail, and
   # stop it, which gives up the other output then, settled or not.
-  await give_up(copies, nil, outputting, erroring) if copies.stopped
+  if copies.stopped
+    await give_up(copies, nil, outputting, erroring)
   await outputting if outputting and not copies.stopped
   await erroring if erroring and not copies.stopped
-  await give_up(copies, nil, outputting, erroring) if copies.stopped
+  if copies.stopped
+    await give_up(copies, nil, outputting, erroring)
 
   await end_writers(output.sink, errors.sink, copies)
   throw error if error := copies.error
@@ -162,8 +180,17 @@ give := (stream: Binary | Reader | Output | Writer | Pipe?, reading: Bool) ->
 # program writes its `source` to, or neither, for this program's own input, which it shares.
 input_of := (stdin: Binary | Reader | Pipe?, command: String) ->
   file := file_of(stdin, true)
-  source := not file then (stdin is Pipe then stdin.reader else stdin)
-  { file, source, pipe: source != nil then pipe_of('standard input', command) }
+  source :=
+    if not file
+      stdin is Pipe then stdin.reader else stdin
+    else
+      nil
+  pipe :=
+    if source != nil
+      pipe_of 'standard input', command
+    else
+      nil
+  { file, source, pipe }
 
 # As input_of, for an output: the `file` of a system pipe's end, or else a `pipe` that this program
 # reads into its `sink`, or neither, for this program's own output, which it shares.
@@ -176,7 +203,12 @@ output_of := (output: Output | Writer | Pipe?, stream: String, command: String) 
       when Pipe then not file then output.writer
       when Output then nil
       else output
-  { file, sink, pipe: sink != nil then pipe_of(stream, command) }
+  pipe :=
+    if sink != nil
+      pipe_of stream, command
+    else
+      nil
+  { file, sink, pipe }
 
 # As lerta_program_run takes them: a file as -1 minus it, a pipe by its handle, DISCARDED or
 # AS_STDOUT for those Outputs, the values of DISCARDED_STREAM and AS_STDOUT_STREAM in

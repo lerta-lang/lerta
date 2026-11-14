@@ -76,7 +76,8 @@ export parse_continued_value := (tokens: TokenStream) ->
 export continue_with_members := (tokens: TokenStream, value: Expression) ->
   nesting := tokens.nesting
   var continued = value
-  continued = parse_member_block(tokens, continued) if at_member_block(tokens)
+  if at_member_block(tokens)
+    continued = parse_member_block(tokens, continued)
   while at_member_line(tokens)
     tokens.deepen()
     tokens.accept NEWLINE
@@ -121,7 +122,11 @@ parse_member_line := (tokens: TokenStream, object: Expression): Expression ->
 # `f`, `f x` or `f(x)`, followed by an indented block of the arguments after those on the line.
 export parse_block_arguments := (tokens: TokenStream, callee: Expression) ->
   no_arguments := Arguments(args: [], named_args: [])
-  call := callee is Call then callee else call_of(callee, no_arguments, [])
+  call :=
+    if callee is Call
+      callee
+    else
+      call_of callee, no_arguments, []
   items: Argument[]
   tokens.read_block_items -> items.push(parse_block_argument(tokens))
   { args, named_args } := to_arguments(tokens, items)
@@ -218,7 +223,10 @@ parse_is := (tokens: TokenStream, value: Expression): Expression ->
   negated := tokens.peek().kind == 'not'
   tokens.next() if negated
   test := IsTest(value, type: parse_tested_type(tokens), position: value.position)
-  negated then UnaryOperation(operator: 'not', operand: test, position: value.position) else test
+  if negated
+    UnaryOperation(operator: 'not', operand: test, position: value.position)
+  else
+    test
 
 # `x not in xs` is read as `not (x in xs)`.
 parse_in := (tokens: TokenStream, item: Expression): Expression ->
@@ -226,7 +234,10 @@ parse_in := (tokens: TokenStream, item: Expression): Expression ->
   tokens.next()
   container := parse_coalesce(tokens)
   test := BinaryOperation(operator: 'in', left: item, right: container, position: item.position)
-  negated then UnaryOperation(operator: 'not', operand: test, position: item.position) else test
+  if negated
+    UnaryOperation(operator: 'not', operand: test, position: item.position)
+  else
+    test
 
 # The `?` is read as the type's, which the checker takes as the form instead. `x as T ? y`, with a
 # space before `?`, is read as `(x as T?) ? y`.
@@ -249,7 +260,10 @@ parse_cast := (tokens: TokenStream, value: Expression): Expression ->
 # The fallback of `x as T ? y`, which may itself be one, as `a ? b ? c` is `a ? (b ? c)`.
 parse_cast_fallback := (tokens: TokenStream) ->
   fallback := tokens.nested(-> parse_coalesce(tokens))
-  tokens.continues_with_word('as') then parse_cast(tokens, fallback) else fallback
+  if tokens.continues_with_word('as')
+    parse_cast(tokens, fallback)
+  else
+    fallback
 
 parse_binary_comparison := (tokens: TokenStream, left: Expression): Expression ->
   operator := tokens.next().kind.to_string()
@@ -281,7 +295,11 @@ parse_range := (tokens: TokenStream): Expression ->
   inclusive := operator == '..='
   end := parse_arithmetic(tokens, 0)
   reject_chained_range tokens
-  step := tokens.accept_word('by') then parse_arithmetic(tokens, 0)
+  step :=
+    if tokens.accept_word('by')
+      parse_arithmetic tokens, 0
+    else
+      nil
   reversed := tokens.accept_word('reversed')
   Range(start, end, inclusive, step, reversed, position: start.position)
 
@@ -389,7 +407,8 @@ parse_unary := (tokens: TokenStream): Expression ->
   if token.kind == '~'
     tokens.next()
     return UnaryOperation(position, operator: '~', operand: tokens.nested(-> parse_unary(tokens)))
-  return parse_postfix(tokens, parse_primary(tokens)) if token.kind != '-'
+  if token.kind != '-'
+    return parse_postfix(tokens, parse_primary(tokens))
   tokens.next()
 
   # `-1` with no space is a negative literal, so that the minimum Int can be written; `-1.5` is one
@@ -417,7 +436,10 @@ parse_postfix := (tokens: TokenStream, primary: Expression): Expression ->
     tokens.deepen()
     expression = extended
   tokens.nesting = nesting
-  at_nil_safe(tokens) then tokens.nested(-> parse_nil_safe(tokens, expression)) else expression
+  if at_nil_safe(tokens)
+    tokens.nested(-> parse_nil_safe(tokens, expression))
+  else
+    expression
 
 at_nil_safe := (tokens: TokenStream) ->
   question := tokens.peek()
@@ -525,7 +547,8 @@ export struct Destructuring
 export at_destructuring_names := (tokens: TokenStream) -> tokens.peek().kind in ['{', '(']
 
 export parse_destructuring_names := (tokens: TokenStream): Destructuring ->
-  return { names: parse_tuple_names(tokens), of_tuple: true } if tokens.peek().kind == '('
+  if tokens.peek().kind == '('
+    return { names: parse_tuple_names(tokens), of_tuple: true }
   tokens.expect '{'
   names := tokens.parse_list('}', -> parse_identifier(tokens))
   tokens.fail_expecting tokens.peek(), 'a name' if names.is_empty()
@@ -541,7 +564,8 @@ export destructured_holder := (destructuring: Destructuring, at: Position) ->
 # what `holder` holds.
 export take_apart_held := (destructuring: Destructuring, holder: Identifier, mutable: Bool) ->
   { names } := destructuring
-  return take_apart(holder, names, mutable, false) if destructuring.of_tuple
+  if destructuring.of_tuple
+    return take_apart(holder, names, mutable, false)
   field_of := (name: Identifier) ->
     Member(object: copy_identifier(holder), name: copy_identifier(name), position: name.position)
   declare := (name: Identifier): Statement ->

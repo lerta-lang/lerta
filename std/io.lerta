@@ -453,7 +453,11 @@ class SystemPipe
       free_pipe handle if handle > 0
 
   private
-    file_for := (side: Int) -> @files[side] >= 0 then @files[side]
+    file_for := (side: Int) ->
+      if @files[side] >= 0
+        @files[side]
+      else
+        nil
 
     holds := (side: Int) -> @files[side] >= 0 or @handles[side] > 0
 
@@ -504,7 +508,10 @@ class SystemPipe
     if @handles[side] == 0 and @files[side] >= 0
       @handles[side] = lerta_pipe_of_file('a pipe', @files[side])
       @files[side] = -1
-    @handles[side] > 0 then @handles[side]
+    if @handles[side] > 0
+      @handles[side]
+    else
+      nil
 
 system_pipe_files := ->
   files: Int[]
@@ -656,7 +663,8 @@ export class Reader
     part := (count: Int) ->
       return nil unless await @has_bytes()
       @taken += @take(count)
-      @taken += @take(count - @taken.length) while @taken.length < count and await @fill()
+      while @taken.length < count and await @fill()
+        @taken += @take(count - @taken.length)
       @taken_out()
 
     # Up to `count` bytes of the chunk, from where it is read.
@@ -672,7 +680,12 @@ export class Reader
 # A line that ended with "\n", without a "\r" before it.
 ended_line_text := (bytes: Binary) ->
   ends_with_return := bytes.last() == b"\r"
-  utf8_line(ends_with_return then bytes[..(bytes.length - 1)] else bytes)
+  line :=
+    if ends_with_return
+      bytes[..(bytes.length - 1)]
+    else
+      bytes
+  utf8_line(line)
 
 utf8_line := (bytes: Binary) -> bytes.text() ? throw ValueError('a line is not valid UTF-8')
 

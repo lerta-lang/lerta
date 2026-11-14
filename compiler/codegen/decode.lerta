@@ -189,7 +189,8 @@ emit_read_tuple := (ir: IrBuilder, reader: Coder, type: TupleType) ->
   count := "i64 #{type.items.length}"
   items: String[]
   unwind := ->
-    emit_release_value ir, item, type.items[i] for item at i in items
+    for item at i in items
+      emit_release_value ir, item, type.items[i]
     emit_return_thrown ir, type
   call_void_method ir, reader, 'begin_tuple', [count], unwind
   for item_type in type.items
@@ -250,7 +251,8 @@ class FieldValues
     given := (i: Int) -> @ir.load('i1', @slots[i].given)
 
     unwind := ->
-      emit_release_value @ir, @value(i), field.type for field at i in @fields
+      for field at i in @fields
+        emit_release_value @ir, @value(i), field.type
       emit_return_thrown @ir, @type
 
 # The slots of a field: of its value, and of whether its key was given.
@@ -317,7 +319,11 @@ emit_read_union := (ir: IrBuilder, reader: Coder, type: UnionType) ->
   for member at i in type.members
     ir.start_block labels[i]
     value := emit_read(ir, reader, member, unwind)
-    boxed := is_boxed(member) then emit_box(ir, value, member) else value
+    boxed :=
+      if is_boxed(member)
+        emit_box ir, value, member
+      else
+        value
     incoming.push phi_incoming(boxed, ir.current_block)
     ir.branch done
   ir.start_block other

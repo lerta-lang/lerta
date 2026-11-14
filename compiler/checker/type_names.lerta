@@ -150,7 +150,8 @@ export resolve_result := (program: ProgramWide, resolver: Resolver, type_name: T
   resolve_type(program, resolver, type_name, true)
 
 resolve_type := (program: ProgramWide, resolver: Resolver, type_name: TypeName, is_result: Bool) ->
-  return resolve_union(program, resolver, type_name) if type_name is UnionTypeName
+  if type_name is UnionTypeName
+    return resolve_union(program, resolver, type_name)
   type: Type =
     case type_name
       when RecordTypeName then resolve_record(program, resolver, type_name)
@@ -172,7 +173,8 @@ resolve_record := (program: ProgramWide, resolver: Resolver, type_name: RecordTy
   names: Set<String>
   for field in type_name.fields
     { name, position } := field.name
-    fail program, position, "'#{name}' is already a field" unless names.add(name)
+    unless names.add(name)
+      fail program, position, "'#{name}' is already a field"
   resolve_field := (field: RecordTypeField) ->
     RecordField(name: field.name.name, type: resolve(program, resolver, field.type))
   record_type([resolve_field(field) for field in type_name.fields])
@@ -211,7 +213,8 @@ resolve_alias := (program: ProgramWide, resolver: Resolver, name: String, at: Po
   shared := resolver_shared(program, resolver)
   entry := shared.aliases[name] ? return nil
   return type if type := entry.type
-  fail program, at, "the type '#{name}' refers to itself" unless shared.resolving.add(name)
+  unless shared.resolving.add(name)
+    fail program, at, "the type '#{name}' refers to itself"
   type := resolve(program, resolver, entry.alias.type)
   entry.type = type
   shared.resolving.remove name
@@ -297,7 +300,8 @@ resolve_key := (
   role = 'a map key'
 ) ->
   type := resolve(program, resolver, type_name)
-  reject_map_key program, type, type_name.position, role unless is_kind(type, TYPE_PARAMETER)
+  unless is_kind(type, TYPE_PARAMETER)
+    reject_map_key program, type, type_name.position, role
   type
 
 resolve_map_value := (program: ProgramWide, resolver: Resolver, type_name: TypeName) ->

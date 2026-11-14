@@ -37,12 +37,19 @@ key_kind := (program: ProgramWide, key: Type) ->
 export are_keys_plain := (program: ProgramWide, key: Type) -> key_kind(program, key) != VALUE_KEYS
 
 key_word := (ir: IrBuilder, key: String, type: Type) ->
-  is_float(type) then emit_float_word(ir, key, type) else to_item(ir, key, type)
+  if is_float(type)
+    emit_float_word(ir, key, type)
+  else
+    to_item(ir, key, type)
 
 # Keys that compare by their contents come with the functions that hash and compare them.
 export emit_map_new := (ir: IrBuilder, program: ProgramWide, type: MapType) ->
   kind := key_kind(program, type.key)
-  functions := kind == VALUE_KEYS then item_functions(ir.module, program, type.key)
+  functions :=
+    if kind == VALUE_KEYS
+      item_functions ir.module, program, type.key
+    else
+      nil
   hash := functions?.hash ? 'null'
   equals := functions?.equals ? 'null'
   args := "i32 #{kind}, i32 #{item_kind(type.value)}, ptr #{hash}, ptr #{equals}"
@@ -125,7 +132,11 @@ export emit_set_iter := (ir: IrBuilder, set: String, type: MapType) ->
 # The entries of a borrowed map, which the Iter traverses by a cursor (LertaMapCursor in
 # runtime/lerta.h): the keys alone, as a set gives its items, or as tuples of a key and a value.
 emit_cursor_iter := (ir: IrBuilder, map: String, type: MapType, keys_only: Bool) ->
-  item := keys_only then type.key else TupleType([type.key, type.value])
+  item :=
+    if keys_only
+      type.key
+    else
+      TupleType [type.key, type.value]
   has_next := (body: IrBuilder, kind: IterKind) ->
     cursor := load_state(body, kind, 0)
     more := call_runtime(body, 'i1 @lerta_map_cursor_has_next(ptr)', "ptr #{cursor}")
@@ -134,7 +145,11 @@ emit_cursor_iter := (ir: IrBuilder, map: String, type: MapType, keys_only: Bool)
     key_slot := body.alloca('i64')
 
     # The keys alone take no value from the cursor.
-    value_slot := keys_only then 'null' else emit_item_slot(body, type.value)
+    value_slot :=
+      if keys_only
+        'null'
+      else
+        emit_item_slot body, type.value
 
     args := "ptr #{load_state(body, kind, 0)}, ptr #{key_slot}, ptr #{value_slot}"
     call_void_runtime body, 'void @lerta_map_cursor_next(ptr, ptr, ptr)', args

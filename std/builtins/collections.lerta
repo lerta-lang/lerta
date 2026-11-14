@@ -24,7 +24,11 @@ extend<T> T[]
   is_empty := -> @length == 0
   first := (): T? -> @get(0)
   last := (): T? -> @get(@length - 1)
-  get := (index: Int): T? -> index in 0..@length then @[index]
+  get := (index: Int): T? ->
+    if index in 0..@length
+      @[index]
+    else
+      nil
 
   # The items in the order that `compare` gives (LESS when its first argument goes first), equal
   # items keeping their order.
@@ -63,7 +67,8 @@ extend<T> T[]
         width *= 2
     finally
       if in_copy
-        @[i] = runs[i] for i in 0..count
+        for i in 0..count
+          @[i] = runs[i]
 
   # Pushes the items of another array, one by one; those of the array itself, if it is that, once.
   append := (items: T[]) ->
@@ -84,14 +89,16 @@ extend<T> T[]
   insert := (at: Int, item: T) ->
     throw IndexError(message: "insert at #{at}, of #{@length} items") unless at in 0..=@length
     @push item
-    @[i] = @[i - 1] for i in (at + 1)..@length reversed
+    for i in (at + 1)..@length reversed
+      @[i] = @[i - 1]
     @[at] = item
 
   # Removes the item at `at` and gives it, moving the items after it one place earlier.
   remove_at := (at: Int): T ->
     throw IndexError(message: "remove_at #{at}, of #{@length} items") unless at in 0..@length
     removed := @[at]
-    @[i] = @[i + 1] for i in at..(@length - 1)
+    for i in at..(@length - 1)
+      @[i] = @[i + 1]
     @pop()
     removed
 
@@ -111,7 +118,11 @@ extend<T> T[]
     taken
 
   # The items but the last; none for an empty array, for which a slice to one before the end throws.
-  all_but_last := (): T[] -> @is_empty() then [] else @[..(@length - 1)]
+  all_but_last := (): T[] ->
+    if @is_empty()
+      []
+    else
+      @[..(@length - 1)]
 
   # The items in the order of their keys, as `sorted` orders them.
   sorted_by := <K: Comparable>(key: (T) -> K): T[] -> @sorted((a, b) -> key(a).compare(key(b)))
@@ -137,7 +148,8 @@ extend<T: Equatable> T[]
   # whether it did.
   remove := (item: T): Bool ->
     index := @index_of(item) ? return false
-    @[i] = @[i + 1] for i in index..(@length - 1)
+    for i in index..(@length - 1)
+      @[i] = @[i + 1]
     @pop()
     true
 
@@ -203,7 +215,8 @@ extend<T> Iterable<T>
   # `combine` applied to `initial` and the first item, then to that and the next, and so on.
   fold := <A>(initial: A, combine: (A, T) -> A): A ->
     var result = initial
-    result = combine(result, x) for x in @
+    for x in @
+      result = combine(result, x)
     result
 
   # The item whose key is the least, the first of those with equal keys, or nil if there is none.

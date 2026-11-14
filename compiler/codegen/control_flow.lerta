@@ -69,7 +69,8 @@ export generate_for := (g: Generator, for_statement: For) ->
   { variable, index } := for_statement
   body := statements_code(g, for_statement.body)
   if go_through := g.iterates_this
-    return go_through(g, variable, body) if for_statement.iterable is This and index == nil
+    if for_statement.iterable is This and index == nil
+      return go_through(g, variable, body)
   iterable := iterated(g, for_statement.iterable)
   generate_iteration g, iterable, variable, index, body
 
@@ -77,7 +78,8 @@ export generate_for := (g: Generator, for_statement: For) ->
 # of no `break` or `continue`, which its element and guard cannot hold (see jump_positions).
 export generate_comprehension := (g: Generator, comprehension: Comprehension) ->
   iterable := iterated(g, comprehension.iterable)
-  return generate_iter_comprehension(g, iterable, lazy) if lazy := comprehension.lazy
+  if lazy := comprehension.lazy
+    return generate_iter_comprehension(g, iterable, lazy)
   array_type := type_of(g, comprehension) as ArrayType!
   result := emit_array_new(g.ir, array_type.element)
   push := -> push_comprehension(g, comprehension, result)
@@ -93,9 +95,14 @@ export push_comprehension := (g: Generator, comprehension: Comprehension, result
   ir := g.ir
   body := ->
     generate_statements g, bindings
-    test := guard then generate_condition(g, guard) else 'true'
+    test :=
+      if guard
+        generate_condition g, guard
+      else
+        'true'
     emit_when ir, test, ->
-      return push_comprehension(g, element as Comprehension!, result) if is_nested(element)
+      if is_nested(element)
+        return push_comprehension(g, element as Comprehension!, result)
       value := generate(g, element)
       emit_push ir, result, value, element_type
       release_if_reference g, element, value
@@ -132,9 +139,16 @@ generate_lazy_iter := (g: Generator, source: String, item: Type, lazy: LazyFunct
   make_element := -> generate_closure(g, lazy.element)
   make_closures := ->
     lazy_guard := lazy.guard
-    guard := lazy_guard then generate_closure(g, lazy_guard)
+    guard :=
+      if lazy_guard
+        generate_closure g, lazy_guard
+      else
+        nil
     element :=
-      guard then holding(g, guard, type_of(g, lazy_guard!), make_element) else make_element()
+      if guard
+        holding g, guard, type_of(g, lazy_guard!), make_element
+      else
+        make_element()
     emit_comprehension_iter(g.ir, source, item, guard, element, type_of(g, lazy.element))
   holding(g, source, IterType(item), make_closures)
 
@@ -144,7 +158,8 @@ export generate_iteration := (
   g: Generator, iterable: Expression, variable: Identifier, index: Identifier?, body: () -> void
 ): void ->
   define_index := (scope: Map<String, CodegenLocal>, place: String) ->
-    scope[index.name] = ValueLocal(operand: place, type: int_type) if index
+    if index
+      scope[index.name] = ValueLocal(operand: place, type: int_type)
   if iterable is Range
     start := generate(g, iterable.start!)
     end := generate(g, iterable.end!)
@@ -152,7 +167,8 @@ export generate_iteration := (
       return generate_stride_loop(g, iterable, start, end, variable, define_index, body)
     define := (scope: Map<String, CodegenLocal>, current: String) ->
       scope[variable.name] = ValueLocal(operand: current, type: int_type)
-      define_index scope, g.ir.assign("sub i64 #{current}, #{start}") if index
+      if index
+        define_index scope, g.ir.assign("sub i64 #{current}, #{start}")
     generate_counting_loop g, start, -> end, body, define, iterable.inclusive
     return
   type := type_of(g, iterable)
@@ -167,7 +183,8 @@ export generate_iteration := (
       return
   if text := iterated_string(g, iterable)
     return generate_string_loop(g, text, variable, define_index, body)
-  return generate_iter_loop(g, iterable, type, variable, define_index, body) if type is IterType
+  if type is IterType
+    return generate_iter_loop(g, iterable, type, variable, define_index, body)
   item_type := iterable_item(type)!
   sequence := generate(g, iterable)
   release := hold(g, sequence, type)
@@ -230,11 +247,17 @@ generate_stride_loop := (
   define_index: (Map<String, CodegenLocal>, String) -> void, body: () -> void
 ) ->
   ir := g.ir
-  step := range.step then generate(g, range.step!) else '1'
-  throw_if g, ir.assign("icmp slt i64 #{step}, 1"), NONPOSITIVE_STEP if range.step
+  step :=
+    if range.step
+      generate g, range.step!
+    else
+      '1'
+  if range.step
+    throw_if g, ir.assign("icmp slt i64 #{step}, 1"), NONPOSITIVE_STEP
   test := range.inclusive then 'sle' else 'slt'
   stepping := StrideStepping(step, test, first: start, bound: end, advance: 'add')
-  return generate_stepping_loop(g, stepping, variable, define_index, body) unless range.reversed
+  unless range.reversed
+    return generate_stepping_loop(g, stepping, variable, define_index, body)
   holds_one := ir.assign("icmp #{range.inclusive then 'sge' else 'sgt'} i64 #{end}, #{start}")
   emit_when ir, holds_one, ->
     span := ir.assign("sub i64 #{end}, #{start}")

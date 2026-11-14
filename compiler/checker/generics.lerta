@@ -105,7 +105,11 @@ export make_generic_function := (
   bounds := bounds_of(program, generic_resolver, type_params)
   params := parameter_types(program, generic_resolver, literal)
   return_type := literal.return_type
-  result := return_type then resolve_result(program, generic_resolver, return_type)
+  result :=
+    if return_type
+      resolve_result program, generic_resolver, return_type
+    else
+      nil
   GenericFunction(
     name
     literal
@@ -128,7 +132,11 @@ make_definition := (
   bounds: Map<String, InterfaceType>
   for (param, bound) in type_params.zip(bounds_of(program, standing_resolver, type_params))
     bounds[param.name.name] = bound if bound
-  this_type := receiver then substitute(receiver.type, standing)
+  this_type :=
+    if receiver
+      substitute receiver.type, standing
+    else
+      nil
   Definition(
     entry: FunctionEntry(name, literal, this_type)
     resolver: { standing_resolver..., bounds }
@@ -160,7 +168,8 @@ export instantiate := (
   at: Position
 ) ->
   generic := generic_of(program, ref)
-  return signature(program, ref, type_arguments, methods, at) if type_arguments.any(has_standing)
+  if type_arguments.any(has_standing)
+    return signature(program, ref, type_arguments, methods, at)
   key := arguments_key(type_arguments)
   same_arguments :=
     [instance for instance in generic.instances when arguments_key(instance.type_arguments) == key]
@@ -172,7 +181,8 @@ export instantiate := (
       fail_in_context program, at, message, "from #{describe(generic, generic.instances[0])}"
   variant := same_arguments.length
   instance := found ? add_instance(program, ref, type_arguments, methods, variant, at)
-  check program, generic, instance if found == nil and instance.entry.type == nil
+  if found == nil and instance.entry.type == nil
+    check program, generic, instance
   abort_part() if instance.entry.state == FAILED
   if instance.entry.type == nil
     fail program, at, "'#{generic.name.name}' is recursive, so its return type must be written"
@@ -223,7 +233,11 @@ new_instance := (
   type_bindings := bindings(generic, type_arguments)
   resolver := with_type_parameters(module_resolver(generic.module_index), type_bindings)
   receiver := generic.receiver
-  this_type := receiver then substitute(receiver.type, type_bindings)
+  this_type :=
+    if receiver
+      substitute receiver.type, type_bindings
+    else
+      nil
   entry := FunctionEntry(this_type, literal: generic.literal, name: generic.name)
   extensions := with_methods(program.shared[generic.module_index].extensions, methods)
   instance := Instance(entry, type_arguments, methods, extensions, resolver, variant, generic: ref)
@@ -234,7 +248,8 @@ new_instance := (
 export check_pending := (program: ProgramWide, generic: GenericFunction) ->
   is_pending := (instance: Instance) -> instance.entry.state == UNCHECKED
   pending := [instance for instance in generic.instances when is_pending(instance)]
-  check program, generic, instance for instance in pending
+  for instance in pending
+    check program, generic, instance
   not pending.is_empty()
 
 # Checks the body at its definition, once; an error there is the body's own, of no instance.
@@ -245,7 +260,11 @@ export check_definition := (program: ProgramWide, generic: GenericFunction) ->
   check_body := ->
     entry.type = annotated_type(program, resolver, entry.literal)
     check_definition_body program, generic.module_index, generic.definition
-  entry.state = check_part(program, check_body) then CHECKED else FAILED
+  entry.state =
+    if check_part(program, check_body)
+      CHECKED
+    else
+      FAILED
 
 # An error in the body says which instance it was found in.
 check := (program: ProgramWide, generic: GenericFunction, instance: Instance) ->
@@ -258,7 +277,11 @@ check := (program: ProgramWide, generic: GenericFunction, instance: Instance) ->
     program.contexts.push "in #{describe(generic, instance)}"
     check_instance program, generic.module_index, instance
     program.contexts.pop()
-  instance.entry.state = check_part(program, check_body) then CHECKED else FAILED
+  instance.entry.state =
+    if check_part(program, check_body)
+      CHECKED
+    else
+      FAILED
 
 # The defaults of the instance, for the call at `at` that leaves arguments out; an error in one is
 # the call's, which says which instance's defaults it was found in. Inside the check of a call
@@ -285,7 +308,8 @@ resolve_annotation := (
 # outer call is annotated already, whose annotation is kept.
 annotating := (program: ProgramWide, at: Position, context: String, check: () -> void) ->
   outer := program.annotated_call
-  program.annotated_call = { at, context, path: error_module_path(program) } if outer == nil
+  if outer == nil
+    program.annotated_call = { at, context, path: error_module_path(program) }
   check()
   program.annotated_call = outer
 

@@ -153,7 +153,8 @@ export parse_parenthesized := (tokens: TokenStream, position: Position) ->
   parse_contents := ->
     first := parse_expression(tokens)
     tokens.continue_line_before 'for'
-    return parse_comprehension(tokens, first, position, ')') if tokens.peek().kind == 'for'
+    if tokens.peek().kind == 'for'
+      return parse_comprehension(tokens, first, position, ')')
     if tokens.peek().kind == ','
       items := tokens.parse_list_rest(')', -> parse_expression(tokens), [first])
       return TupleLiteral(items, position)
@@ -195,7 +196,11 @@ comprehension_of := (
 
   # Each place that reads the parts declares them anew, as each is its own function or scope.
   bindings := -> take_apart_item(header)
-  lazy := is_lazy then lazy_functions(element, variable, guard, bindings)
+  lazy :=
+    if is_lazy
+      lazy_functions element, variable, guard, bindings
+    else
+      nil
 
   Comprehension(
     element
@@ -290,10 +295,15 @@ export parse_case := (tokens: TokenStream, position: Position) ->
   tokens.expect INDENT, "indented 'when' arms"
   has_subject := subject != nil
   arms := [parse_case_arm(tokens, has_subject)]
-  arms.push parse_case_arm(tokens, has_subject) while tokens.at_word('when')
+  while tokens.at_word('when')
+    arms.push parse_case_arm(tokens, has_subject)
   has_else := not has_subject or tokens.peek().kind == 'else'
   tokens.expect 'else', "'when' or 'else'" if has_else
-  otherwise := has_else then parse_arm_body(tokens, 'else')
+  otherwise :=
+    if has_else
+      parse_arm_body tokens, 'else'
+    else
+      nil
   tokens.expect DEDENT, 'end of block'
   Case(subject, arms, otherwise, position)
 
@@ -323,7 +333,11 @@ parse_case_arm := (tokens: TokenStream, has_subject: Bool): CaseArm ->
   if has_subject and at_block(tokens)
     patterns := parse_pattern_block(tokens, parse_pattern)
     return { patterns, body: parse_arm_body(tokens, 'else') }
-  patterns := has_subject then tokens.parse_separated(',', parse_pattern) else [parse_pattern()]
+  patterns :=
+    if has_subject
+      tokens.parse_separated ',', parse_pattern
+    else
+      [parse_pattern()]
   { patterns, body: parse_arm_body(tokens, 'then') }
 
 # Patterns in an indented block, as the items of a literal are, and `then` at the indentation of
@@ -397,7 +411,11 @@ lazy_functions := (
       await_at: nil
       weak: false
     )
-  guard_function := guard then function_of(as_test(guard))
+  guard_function :=
+    if guard
+      function_of as_test(guard)
+    else
+      nil
   LazyFunctions(guard: guard_function, element: function_of(element))
 
 as_test := (guard: Expression) ->

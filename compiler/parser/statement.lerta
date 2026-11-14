@@ -50,7 +50,8 @@ parse_program := (tokens: Token[], path: String, in_blocks: Bool) ->
   statements: Statement[]
   errors: Located[]
   stream.block_errors = errors if in_blocks
-  parse_line_or_skip stream, statements, errors while stream.peek().kind != EOF
+  while stream.peek().kind != EOF
+    parse_line_or_skip stream, statements, errors
   Parsed(statements, errors)
 
 # Statements, one per line, up to the token that ends the block.
@@ -284,7 +285,8 @@ parse_declaration := (tokens: TokenStream) ->
 # value.
 empty_value := (type: TypeName): Expression? ->
   at := type.position
-  return ArrayLiteral(position: at, elements: []) if type is ArrayTypeName and not type.optional
+  if type is ArrayTypeName and not type.optional
+    return ArrayLiteral(position: at, elements: [])
   named := type as NamedType ? return nil
   return nil if named.optional or named.name not in ['Map', 'Set']
   callee := Identifier(position: at, name: named.name)
@@ -462,7 +464,8 @@ export parse_if := (tokens: TokenStream): If ->
   keyword := tokens.next()
   position := keyword.position()
   (condition, then_body) := parse_head_and_block(tokens, keyword)
-  return If(condition, then_body, position, else_body: []) if tokens.peek().kind != 'else'
+  if tokens.peek().kind != 'else'
+    return If(condition, then_body, position, else_body: [])
   tokens.next()
   tokens.fail_here "an 'unless' cannot follow 'else'" if tokens.peek().kind == 'unless'
   else_body: Statement[] =

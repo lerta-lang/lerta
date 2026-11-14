@@ -31,7 +31,8 @@ define_loop_variable := (body: Body, variable: Identifier, type: Type) ->
 # The item, and its place, an Int, if the loop names it.
 define_loop_variables := (body: Body, variable: Identifier, index: Identifier?, type: Type) ->
   define_loop_variable body, variable, type
-  define_loop_variable body, index, int_type if index
+  if index
+    define_loop_variable body, index, int_type
 
 export check_for := (body: Body, for_statement: For) ->
   { iterable, variable, index } := for_statement
@@ -86,7 +87,8 @@ type_of_iter_comprehension := (
   body: Body, comprehension: Comprehension, item_type: Type, expected: Type?
 ) ->
   { guard, element } := comprehension.lazy!
-  type_of_item_function body, guard, item_type, bool_type, nil if guard
+  if guard
+    type_of_item_function body, guard, item_type, bool_type, nil
   expected_item := expected_iter_item(expected)
   holds := comprehension.guard
   element_type := type_of_item_function(body, element, item_type, expected_item, holds)
@@ -110,7 +112,8 @@ export range_part := (body: Body, range: Range, part: Expression?) ->
 
 # A step, or the other order, is only for going through the range: not for a test or an index.
 export reject_steps := (body: Body, range: Range, message: String) ->
-  fail body.program, range.position, message if range.step or range.reversed
+  if range.step or range.reversed
+    fail body.program, range.position, message
 
 # The type of the items that a loop, a comprehension, `Set()` or `Map()` goes through. A value of a
 # type that satisfies Iterable is gone through by the Iter of its `iter()`, a call recorded in the
@@ -126,7 +129,8 @@ export type_of_iterated := (
   if iterable is Range
     expect_type body, range_part(body, iterable, iterable.start), int_type
     expect_type body, range_part(body, iterable, iterable.end), int_type
-    expect_type body, step, int_type if step := iterable.step
+    if step := iterable.step
+      expect_type body, step, int_type
     return int_type
   type := type_of(body, iterable, expected)
   return item if item := iterable_item(type)

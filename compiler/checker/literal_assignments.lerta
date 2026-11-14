@@ -20,13 +20,15 @@ export names_literals_assign := (statements: Statement[]) ->
 # one of them is not borrowed while they are evaluated (see is_var_kept).
 export names_assigned := (expressions: Expression[]) ->
   names: Set<String>
-  visit names, expression, true for expression in expressions
+  for expression in expressions
+    visit names, expression, true
   names
 
 # `collects`: whether the assignments of the statements are collected: those in a function literal
 # of the body, or every one (see names_assigned).
 visit_statements := (names: Set<String>, statements: Statement[], collects: Bool): void ->
-  visit_statement names, statement, collects for statement in statements
+  for statement in statements
+    visit_statement names, statement, collects
 
 visit_statement := (names: Set<String>, statement: Statement, collects: Bool) ->
   case statement
@@ -46,7 +48,8 @@ visit_statement := (names: Set<String>, statement: Statement, collects: Bool) ->
     # The methods of a class, a struct or an extend may assign a top-level `var`.
     when TypeDeclaration, Extend
       for member in statement.members
-        visit names, value, collects if value := member.value
+        if value := member.value
+          visit names, value, collects
     else pass
 
 visit_condition := (names: Set<String>, condition: Condition, collects: Bool) ->
@@ -62,13 +65,20 @@ visit := (names: Set<String>, expression: Expression, collects: Bool): void ->
       visit_statements names, expression.then_body, collects
       visit_statements names, expression.else_body, collects
     when Case
-      visit names, subject, collects if subject := expression.subject
+      if subject := expression.subject
+        visit names, subject, collects
       for arm in expression.arms
-        visit names, pattern, collects for pattern in arm.patterns
+        for pattern in arm.patterns
+          visit names, pattern, collects
         visit_statements names, arm.body, collects
-      visit_statements names, otherwise, collects if otherwise := expression.otherwise
+      if otherwise := expression.otherwise
+        visit_statements names, otherwise, collects
     when Try
       visit_statements names, expression.body, collects
-      visit_statements names, clause.body, collects for clause in expression.catches
-      visit_statements names, finally_body, collects if finally_body := expression.finally_body
-    else visit(names, operand, collects) for operand in operands_of(expression)
+      for clause in expression.catches
+        visit_statements names, clause.body, collects
+      if finally_body := expression.finally_body
+        visit_statements names, finally_body, collects
+    else
+      for operand in operands_of(expression)
+        visit names, operand, collects

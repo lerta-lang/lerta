@@ -39,8 +39,13 @@ export scan_multiline := (lines: SourceLine[], first: Int, start: Int) ->
   var close: Int?
   while close == nil
     last += 1
-    lines[first].fail('unterminated string literal', start) if last == lines.length
-    close = is_raw then closing_raw_quotes(lines[last]) else closing_quotes(lines[last])
+    if last == lines.length
+      lines[first].fail('unterminated string literal', start)
+    close =
+      if is_raw
+        closing_raw_quotes lines[last]
+      else
+        closing_quotes lines[last]
   assert close
   ends := [i == last then close else lines[i].length for i in (first + 1)..=last]
   texts := [lines[first + 1 + i].text(0, end) for end at i in ends]
@@ -83,7 +88,11 @@ closing_quotes := (line: SourceLine) ->
       brace := find_interpolation_end(line, i + 2)
       i = (brace ? line.fail('unterminated interpolation', i)) + 1
     else
-      i += line.bytes[i] == b'\' then 2 else 1
+      i +=
+        if line.bytes[i] == b'\'
+          2
+        else
+          1
   nil
 
 # The parts of a literal as they are read.
@@ -137,8 +146,10 @@ read_template := (
 read_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
   kind := line.bytes.get(start + 1) ? 0
   simple := simple_escape(kind)
-  return { value: simple.binary, end: start + 2 } if simple
-  return read_byte_escape(line, start, is_binary) if kind == b'x'
+  if simple
+    return { value: simple.binary, end: start + 2 }
+  if kind == b'x'
+    return read_byte_escape(line, start, is_binary)
   line.fail 'invalid escape sequence', start unless line.bytes.occurs_at(start + 1, b'u{')
   close := line.index_of(b'}', start + 3) ? line.fail('invalid unicode escape', start)
   digits := line.bytes[(start + 3)..close]
@@ -147,7 +158,11 @@ read_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
 
 read_byte_escape := (line: SourceLine, start: Int, is_binary: Bool) ->
   end := start + 4
-  digits := end <= line.length then line.bytes[(start + 2)..end] else b''
+  digits :=
+    if end <= line.length
+      line.bytes[(start + 2)..end]
+    else
+      b''
   value := parse_byte(digits) ? line.fail('invalid byte escape', start)
   if not is_binary and not value <= 0x7F
     line.fail 'a String takes \x00 to \x7F, and other characters as \u{...}', start

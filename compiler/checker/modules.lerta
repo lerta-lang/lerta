@@ -49,7 +49,8 @@ export check_program := (program: ProgramWide) ->
 
 check_steps := (program: ProgramWide) ->
   { modules } := program
-  program.shared.push create_shared(program, module) for module in modules
+  for module in modules
+    program.shared.push create_shared(program, module)
   for_each_module program, (shared) ->
     reject_misplaced_jumps program, modules[shared.index].program
     declare_names shared
@@ -65,19 +66,22 @@ check_steps := (program: ProgramWide) ->
   check_early_bounds program
   for_each_module program, check_top_level
   for_each_module program, check_bodies
-  plan_runtime_errors builtins_declarer(program, 'Error') if program.builtins != nil
+  if program.builtins != nil
+    plan_runtime_errors builtins_declarer(program, 'Error')
 
   # Instances of generic functions and of generic classes and structs may make others.
   # Checks the module's instances left unchecked, and tells whether there were any. Each round
   # goes through every module, until none has any left.
   check_round := (shared: Shared) ->
     var checked = false
-    checked = check_pending(program, generic) or checked for generic in shared.generics
+    for generic in shared.generics
+      checked = check_pending(program, generic) or checked
     check_pending_objects(shared) or checked
   var pending = true
   while pending
     pending = false
-    pending = check_round(shared) or pending for shared in program.shared
+    for shared in program.shared
+      pending = check_round(shared) or pending
 
   # The generic bodies that no call made an instance of.
   for_each_module program, (shared) ->
@@ -142,5 +146,7 @@ reject_deinit_results := (shared: Shared) ->
     type := function_type_of(program, shared.index, key, literal.position)
     result := (type as FunctionType?)?.result
     if result
-      fail program, literal.position, 'deinit cannot throw' if is_kind(result, 'never')
-      fail program, literal.position, 'deinit gives no value' unless is_kind(result, 'void')
+      if is_kind(result, 'never')
+        fail program, literal.position, 'deinit cannot throw'
+      unless is_kind(result, 'void')
+        fail program, literal.position, 'deinit gives no value'

@@ -80,8 +80,10 @@ export completion_items := (
   found := probe ? return []
 
   # A member, of an object, a module or an enum, as the checker found it, or else a name.
-  return member_items(program, shared, found, object) if object := found.object
-  return exported_items(program, program.shared[index]) if index := found.module_index
+  if object := found.object
+    return member_items(program, shared, found, object)
+  if index := found.module_index
+    return exported_items(program, program.shared[index])
   return enum_items(type) if type := found.enum_type
 
   locals := local_items(found.locals)
@@ -112,13 +114,17 @@ member_items := (program: ProgramWide, shared: Shared, probe: CompletionProbe, r
     is_inside := shared.index == info.module_index
     reaches := (name: String) -> is_inside or name not in info.private_names
     for field in info.fields
-      add field.name.name, FIELD, formatted(field.type) if reaches(field.name.name)
+      if reaches(field.name.name)
+        add field.name.name, FIELD, formatted(field.type)
     for name in info.methods.keys()
-      add name, METHOD, nil if reaches(name)
+      if reaches(name)
+        add name, METHOD, nil
     for name in info.generics.keys()
-      add name, METHOD, nil if reaches(name)
+      if reaches(name)
+        add name, METHOD, nil
   else if type is RecordType
-    add field.name, FIELD, format_type(field.type) for field in type.fields
+    for field in type.fields
+      add field.name, FIELD, format_type(field.type)
   else if type is InterfaceType
     for member in members_for(program, type, type)
       kind := member.type is FunctionType then METHOD else PROPERTY
@@ -131,7 +137,8 @@ member_items := (program: ProgramWide, shared: Shared, probe: CompletionProbe, r
   extensions := probe.extensions
   for method in extensions.in_effect
     name := method.name.name
-    add name, METHOD, nil if method.bound == nil and find_extension(extensions, type, name) != nil
+    if method.bound == nil and find_extension(extensions, type, name) != nil
+      add name, METHOD, nil
   items.values().to_array()
 
 # The names of the builtin members of the builtin types, whose methods and properties
@@ -155,7 +162,8 @@ module_items := (program: ProgramWide, shared: Shared, in_top_level: Bool) ->
   own := names_of(program, shared)
   declared_later := (item: CompletionItem) -> in_top_level and item.label in shared.top_level.locals
   items := [item for item in own when not declared_later(item)]
-  items.push { label: name, kind: MODULE, detail: nil } for name in shared.imports.modules.keys()
+  for name in shared.imports.modules.keys()
+    items.push { label: name, kind: MODULE, detail: nil }
 
   # An imported name is as its module declares it, under the name it is imported by; a name of a
   # module imported as a name, `m.x`, is no name of its own.
@@ -182,7 +190,8 @@ exported_items := (program: ProgramWide, shared: Shared): CompletionItem[] ->
   for name in shared.exported.keys()
     continue if has_label(items, name)
     exported := export_of(program, shared.index, name)
-    items.push extern_item(name, exported.type) if exported is ExternExport
+    if exported is ExternExport
+      items.push extern_item(name, exported.type)
     items.push intrinsic_item(name) if exported is IntrinsicExport
   for name in shared.reexported.keys()
     ref := export_ref(program, shared.index, name) ? continue
@@ -214,10 +223,12 @@ names_of := (program: ProgramWide, shared: Shared) ->
     items.push { label: name, kind: FUNCTION, detail: formatted(entry.type) }
 
   for generic in shared.generics
-    items.push { label: generic.name.name, kind: FUNCTION, detail: nil } if generic.receiver == nil
+    if generic.receiver == nil
+      items.push { label: generic.name.name, kind: FUNCTION, detail: nil }
   for (name, info) in shared.objects
     items.push { label: name, kind: info.type.is_struct then STRUCT else CLASS, detail: nil }
-  items.push { label: name, kind: ENUM, detail: nil } for name in shared.enums.keys()
+  for name in shared.enums.keys()
+    items.push { label: name, kind: ENUM, detail: nil }
   items
 
 # The keywords, those of TokenKind in compiler/lexer/tokens.lerta, wherever a name is written: the

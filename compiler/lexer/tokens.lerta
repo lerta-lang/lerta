@@ -235,7 +235,8 @@ class Layout
       @tokens.push layout_token(NEWLINE, line.number, line.column(line.length))
 
     finish := (eof_line: Int) ->
-      @tokens.push layout_token(DEDENT, eof_line, 1) for _ in 1..@indents.length
+      for _ in 1..@indents.length
+        @tokens.push layout_token(DEDENT, eof_line, 1)
       @tokens.push layout_token(EOF, eof_line, 1)
 
 # The tokens of one line, from `position`.
@@ -361,20 +362,28 @@ class LineScanner
 
       # What looks like a fraction is taken whole (see Float literals in docs/reference/syntax.md).
       at_dot := end + 1 < @line.length and bytes[end] == b'.'
-      after_dot: Byte = at_dot then bytes[end + 1] else b' '
+      after_dot: Byte =
+        if at_dot
+          bytes[end + 1]
+        else
+          b' '
       has_fraction := after_dot.is_digit() or after_dot == b'_'
-      end = after_digits(end + 1) if has_fraction
+      if has_fraction
+        end = after_digits(end + 1)
 
       ends_with_exponent := bytes[end - 1] == b'e' or bytes[end - 1] == b'E'
 
       # The sign is taken even with no digit after it, so that a diagnostic shows it.
       sign_follows := end < @line.length and (bytes[end] == b'+' or bytes[end] == b'-')
-      end = after_digits(end + 1) if is_decimal and ends_with_exponent and sign_follows
+      if is_decimal and ends_with_exponent and sign_follows
+        end = after_digits(end + 1)
 
       text := @line.text(@position, end)
       digits := text.replace('_', '')
-      return @add(INTEGER, digits, end, nil) if is_integer_literal(text)
-      return @add(FLOAT, digits, end, nil) if is_float_literal(text)
+      if is_integer_literal(text)
+        return @add(INTEGER, digits, end, nil)
+      if is_float_literal(text)
+        return @add(FLOAT, digits, end, nil)
       @line.fail "invalid number literal '#{text}'", @position
 
     # The longest punctuation that starts here; `...` and `..=` are the longest of all. What follows

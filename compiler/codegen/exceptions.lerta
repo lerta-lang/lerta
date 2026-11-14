@@ -181,7 +181,8 @@ export generate_try := (g: Generator, try_expression: Try) ->
 
   # A catch's own exception goes through the finally block, if there is one.
   catch_handler := finally_body then rethrow_label
-  generate_catch g, clause, catch_handler, generate_value for clause in try_expression.catches
+  for clause in try_expression.catches
+    generate_catch g, clause, catch_handler, generate_value
 
   # No catch takes the exception.
   ir.branch rethrow_label
@@ -209,7 +210,11 @@ generate_catch := (
   caught_type := type_of(g, clause.name)
   data := emit_interface_data(ir, exception)
   takes_any := is_kind(caught_type, INTERFACE)
-  matched := takes_any then 'true' else emit_type_test(ir, data, caught_type)
+  matched :=
+    if takes_any
+      'true'
+    else
+      emit_type_test ir, data, caught_type
   clause_label := ir.fresh_label('catch')
   next_label := ir.fresh_label('catch.next')
   ir.branch_if matched, clause_label, next_label

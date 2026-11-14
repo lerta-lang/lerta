@@ -16,16 +16,23 @@ from '../types'
 
 # Fails at `at`, where the type is given, if a part of it is invalid.
 export reject_invalid_type := (program: ProgramWide, type: Type, at: Position): void ->
-  check_value_type program, type.element, at, 'an array' if type is ArrayType
-  check_value_type program, type.item, at, 'an Iter' if type is IterType
-  reject_invalid_map program, type, at if type is MapType
-  reject_invalid_instance_types program, type, at if type is ObjectType
-  reject_invalid_instance_types program, type, at if type is InterfaceType
-  reject_invalid_type program, part, at for part in parts_of(type)
+  if type is ArrayType
+    check_value_type program, type.element, at, 'an array'
+  if type is IterType
+    check_value_type program, type.item, at, 'an Iter'
+  if type is MapType
+    reject_invalid_map program, type, at
+  if type is ObjectType
+    reject_invalid_instance_types program, type, at
+  if type is InterfaceType
+    reject_invalid_instance_types program, type, at
+  for part in parts_of(type)
+    reject_invalid_type program, part, at
 
 # A set's value type, void, is no map value.
 reject_invalid_map := (program: ProgramWide, type: MapType, at: Position) ->
-  return reject_map_key(program, type.key, at, 'a set item') if is_set(type)
+  if is_set(type)
+    return reject_map_key(program, type.key, at, 'a set item')
   check_map_types program, type.key, type.value, at, at
 
 # Checks the field types of an instance of a generic class or struct, or the member types of one of
@@ -39,7 +46,8 @@ export reject_invalid_instance := (
   else
     { module_index, bounds } := resolver
     program.early_instances.push { type, at, module_index, bounds }
-  reject_unsatisfied_object_bounds program, resolver, type, at if type is ObjectType
+  if type is ObjectType
+    reject_unsatisfied_object_bounds program, resolver, type, at
 
 # Checks the instances given before the fields and members were known, each as a part of the
 # program.
@@ -62,9 +70,11 @@ reject_invalid_instance_types := (
       return if info.fields_checked
       info.fields_checked = true
       for field in info.fields
-        reject_invalid_type program, field_type, at if field_type := field.type
+        if field_type := field.type
+          reject_invalid_type program, field_type, at
     when InterfaceType
       key := type_key(type)
       return if key in program.checked_interfaces
       program.checked_interfaces[key] = true
-      reject_invalid_type program, member.type, at for member in members_for(program, type, type)
+      for member in members_for(program, type, type)
+        reject_invalid_type program, member.type, at

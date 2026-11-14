@@ -107,9 +107,11 @@ value_of := (statement: Statement) ->
 # Values are converted to the return type when the function is done.
 record_result := (body: Body, type: Type, at: Expression) ->
   context := body.context!
-  context.results.push { type, value: at } unless at is Return
+  unless at is Return
+    context.results.push { type, value: at }
   if promise := undecided_promise(context)
-    decide_settling context, type is not PromiseType, promise unless is_kind(type, 'never')
+    unless is_kind(type, 'never')
+      decide_settling context, type is not PromiseType, promise
   if annotated := context.annotated
     return if is_assignable(type, annotated) or settles_into(type, annotated)
     return if converts_through_itab(body, at, type, annotated)
@@ -133,7 +135,11 @@ export check_return := (body: Body, return_expression: Return) ->
   if context.yields
     return if value == nil
     fail body.program, value.position, 'a function that yields returns no value'
-  type: Type = value then type_of_result(body, value) else void_type
+  type: Type =
+    if value
+      type_of_result body, value
+    else
+      void_type
   record_result body, type, value ? return_expression
 
 # A promise's value, once it is settled. What waits for it is the top-level code, which the module
@@ -143,10 +149,12 @@ export type_of_await := (body: Body, await_expression: Await) ->
   program := body.program
   at := await_expression.position
   if context := body.context
-    fail program, at, "'await' cannot be in a lazy comprehension" unless context.awaits
+    unless context.awaits
+      fail program, at, "'await' cannot be in a lazy comprehension"
   else
     # A field's value is computed by the constructor, which does not wait.
-    fail program, at, "'await' cannot be in a field's value" if body.self
+    if body.self
+      fail program, at, "'await' cannot be in a field's value"
     body.shared.top_level_awaits = true
   operand := await_expression.operand
   type := type_of(body, operand)
@@ -158,10 +166,12 @@ export type_of_await := (body: Body, await_expression: Await) ->
 
 # A yielded value must fit the item type, as a return value fits the return type.
 export check_yield := (body: Body, yield_expression: Yield) ->
-  fail body.program, yield_expression.position, "'yield' outside a function" if body.context == nil
+  if body.context == nil
+    fail body.program, yield_expression.position, "'yield' outside a function"
   value := yield_expression.value
   type := type_of_result(body, value)
-  fail body.program, value.position, 'cannot yield a value of type void' if is_kind(type, 'void')
+  if is_kind(type, 'void')
+    fail body.program, value.position, 'cannot yield a value of type void'
   record_result body, type, value
 
 # A written return type is a hint for the value's type, which can type `[]` and literals; the
@@ -173,7 +183,14 @@ type_of_result := (body: Body, value: Expression) ->
   context := body.context!
   promise := undecided_promise(context)
   annotated := promise then promise.value else context.annotated
-  hint := annotated then (not is_kind(annotated, 'void') then annotated)
+  hint :=
+    if annotated
+      if not is_kind(annotated, 'void')
+        annotated
+      else
+        nil
+    else
+      nil
   type_of(body, value, hint)
 
 # The type of a function once its body is checked: its return type is the written one, or the one
@@ -183,7 +200,8 @@ type_of_result := (body: Body, value: Expression) ->
 # alone, which gives no type, as may its items, if it yields nothing else: see reject_nil_result.
 export finish_function_type := (context: FunctionContext, params: Type[], facts: NodeFacts) ->
   # No result told, as none ends without a throw: a throw then rejects the Promise.
-  decide_settling context, true, promise if promise := undecided_promise(context)
+  if promise := undecided_promise(context)
+    decide_settling context, true, promise
   unknown := context.yields then nil_type else void_type
   result := context.annotated ? context.inferred ? unknown
   for each in context.results

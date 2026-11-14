@@ -91,13 +91,16 @@ compute_type := (body: Body, expression: Expression, expected: Type?): Type ->
   program := body.program
   case expression
     when StringLiteral
-      return integer_literal(program, expression, literal_kind!) if wants_character
+      if wants_character
+        return integer_literal(program, expression, literal_kind!)
       type_of_literal_member(body, expression, expected) ? string_type
     when Interpolation
       byte_literal := wants_byte and binary_literal_bytes(expression) != nil
-      return integer_literal(program, expression, literal_kind!) if byte_literal
+      if byte_literal
+        return integer_literal(program, expression, literal_kind!)
       for part in expression.parts
-        check_interpolated body, part, expression.binary if part is Call
+        if part is Call
+          check_interpolated body, part, expression.binary
       expression.binary then binary_type else string_type
     when IntegerLiteral
       case
@@ -138,7 +141,8 @@ compute_type := (body: Body, expression: Expression, expected: Type?): Type ->
     when If then type_of_if(body, expression, expected)
     when Conditional then type_of_conditional(body, expression, expected)
     when Member
-      return type_of(body, name, expected) if name := qualified_name(body, expression)
+      if name := qualified_name(body, expression)
+        return type_of(body, name, expected)
       return member if member := type_of_qualified_member(body, expression, expected)
       return reference if reference := type_of_function_reference(body, expression, expected)
       type_of_property(body, expression, expected)
@@ -179,7 +183,8 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
     return made_collection(body, call, type_of_new_set(body, call, expected))
   if makes_builtin(body, call, 'Array')
     return made_collection(body, call, type_of_filled_array(body, call, expected))
-  return type_of_intrinsic_call(body, call, name, expected) if name := intrinsic_named(body, callee)
+  if name := intrinsic_named(body, callee)
+    return type_of_intrinsic_call(body, call, name, expected)
   if generic := generic_callee(body, callee)
     return type_of_generic_call(body, call, generic, expected)
   if object_type := constructed_type(body, callee)
@@ -239,7 +244,8 @@ check_member_type := (body: Body, value: Expression, type_name: TypeName, type: 
   program := body.program
   value_type := unnarrowed_type(body, value, type_of(body, value))
   union := inner_of(value_type)
-  return check_interface_member(body, union, type_name, type) if union is InterfaceType
+  if union is InterfaceType
+    return check_interface_member(body, union, type_name, type)
   unless union is UnionType
     message := "expected a value of a union type, got #{format_type(value_type)}"
     fail program, value.position, message

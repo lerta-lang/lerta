@@ -77,7 +77,8 @@ class Renderer
     fail line, 'unexpected indentation' if text.starts_with(' ')
     fail line, unsupported if unsupported := unsupported_block(text)
     return @fence(lines, at) if text.starts_with('```')
-    return (@heading(line), at + 1) if text.starts_with('#')
+    if text.starts_with('#')
+      return (@heading(line), at + 1)
     return @table(lines, at) if text.starts_with('|')
     return @list(lines, at) if list_marker(text)
     @paragraph(lines, at, tight)
@@ -166,11 +167,19 @@ class Renderer
       item_lines.push (item, marker.width)
       next = end
       next += 1 while next < lines.length and is_blank(lines[next].text)
-      following := next < lines.length then list_marker(lines[next].text)
+      following :=
+        if next < lines.length
+          list_marker lines[next].text
+        else
+          nil
       loose = true if next > end and following?.ordered == first.ordered
 
     items := [@item(item, width, not loose) for (item, width) in item_lines].join('')
-    start_attribute := first.ordered and first.number != 1 then " start=\"#{first.number}\"" else ''
+    start_attribute :=
+      if first.ordered and first.number != 1
+        " start=\"#{first.number}\""
+      else
+        ''
     html :=
       first.ordered then "<ol#{start_attribute}>\n#{items}</ol>\n" else "<ul>\n#{items}</ul>\n"
     (html, next)
@@ -188,7 +197,8 @@ class Renderer
     var end = at + 1
     end += 1 while end < lines.length and continues_paragraph(lines[end].text)
     for index in at..(end - 1)
-      fail lines[index], 'a hard line break' if lines[index].text.ends_with('  ')
+      if lines[index].text.ends_with('  ')
+        fail lines[index], 'a hard line break'
     html := @inline([lines[index].text.trim() for index in at..end].join("\n"))
     (tight then "#{html}\n" else "<p>#{html}</p>\n", end)
 
@@ -235,7 +245,11 @@ class Renderer
         throw InlineError(unsupported)
 
   emphasis := (bytes: Binary, at: Int): (String, Int)? ->
-    delimiter := bytes.occurs_at(at, b'**') then b'**' else b'*'
+    delimiter :=
+      if bytes.occurs_at(at, b'**')
+        b'**'
+      else
+        b'*'
     tag := delimiter.length == 2 then 'strong' else 'em'
     start := at + delimiter.length
     return nil if start >= bytes.length or bytes[start] == b' '
@@ -267,10 +281,14 @@ is_blank := (text: String) -> text.trim().is_empty()
 indentation := (text: String) -> text.binary.iter().take_while((byte) -> byte == b' ').count()
 
 dedent := (text: String, width: Int) ->
-  is_blank(text) then '' else text.binary.text(min(width, indentation(text)))!
+  if is_blank(text)
+    ''
+  else
+    text.binary.text(min(width, indentation(text)))!
 
 list_marker := (text: String): Marker? ->
-  return { ordered: false, number: 0, width: 2 } if text.starts_with('- ')
+  if text.starts_with('- ')
+    return { ordered: false, number: 0, width: 2 }
   bytes := text.binary
   digits := bytes.iter().take_while((byte) -> byte.is_digit()).count()
   return nil if digits == 0 or not bytes.occurs_at(digits, b'. ')
@@ -330,11 +348,22 @@ unsupported_inline := (bytes: Binary, at: Int) ->
   next := bytes.get(at + 1) ? return nil
   case bytes[at]
     when b'!' then next == b'[' then 'an image'
-    when b'<' then is_tag(bytes, at + 1) then 'HTML'
-    when b'&' then is_entity(bytes, at + 1) then 'an HTML entity'
+    when b'<'
+      if is_tag(bytes, at + 1)
+        'HTML'
+      else
+        nil
+    when b'&'
+      if is_entity(bytes, at + 1)
+        'an HTML entity'
+      else
+        nil
     when b'_'
       starts_word := at == 0 or not is_word_byte(bytes[at - 1])
-      starts_word and is_word_byte(next) then 'emphasis by _'
+      if starts_word and is_word_byte(next)
+        'emphasis by _'
+      else
+        nil
     else nil
 
 # Whether an `&` before `start` starts an entity, as `&copy;` or `&#169;`, which GitHub shows as
@@ -347,7 +376,11 @@ is_entity := (bytes: Binary, start: Int) ->
 # Whether a `<` before `start` opens an HTML tag, as GitHub reads one: an optional `/`, a name,
 # then a space, `>` or `/`. So `Iter<T>` outside code is text, and `<name>` is a tag.
 is_tag := (bytes: Binary, start: Int) ->
-  name_start := bytes.get(start) == b'/' then start + 1 else start
+  name_start :=
+    if bytes.get(start) == b'/'
+      start + 1
+    else
+      start
   return false unless bytes.get(name_start)?.is_letter() == true
   var end = name_start
   end += 1 while end < bytes.length and (is_word_byte(bytes[end]) or bytes[end] == b'-')
@@ -402,7 +435,12 @@ code_span := (bytes: Binary, at: Int) ->
     if run == width
       code := bytes.text(at + width, next)!.replace("\n", ' ')
       padded := code.starts_with(' ') and code.ends_with(' ') and not is_blank(code)
-      return (padded then code.binary.text(1, code.binary.length - 1)! else code, next + run)
+      text :=
+        if padded
+          code.binary.text(1, code.binary.length - 1)!
+        else
+          code
+      return (text, next + run)
     next += run
   nil
 

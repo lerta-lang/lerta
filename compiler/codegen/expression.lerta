@@ -74,11 +74,16 @@ export generate := (g: Generator, expression: Expression) ->
   if inner_of(target) is UnionType and itab != nil
     return emit_box_value(g.ir, emit_interface_value(g, operand, itab), itab.target)
 
-  return emit_box_value(g.ir, operand, source) if boxes_into(source, target)
+  if boxes_into(source, target)
+    return emit_box_value(g.ir, operand, source)
   if settles_into(source, target)
     closure := emit_settling_closure(g, operand, source, inner_of(target))
-    return target is OptionalType then emit_wrap(g.ir, closure, inner_of(target)) else closure
-  return emit_wrap(g.ir, operand, type_of(g, expression)) unless itab
+    if target is OptionalType
+      return emit_wrap(g.ir, closure, inner_of(target))
+    else
+      return closure
+  unless itab
+    return emit_wrap(g.ir, operand, type_of(g, expression))
   value := emit_interface_value(g, operand, itab)
   converted := inner_of(target)
   return value unless converted is IterType
@@ -198,11 +203,20 @@ emit_narrowed_cast := (g: Generator, cast: Cast, object: String) ->
 
   # A union's value, a pointer, is null for nil, so it needs no unwrapping or wrapping.
   if inner_of(member) is UnionType
-    return is_boxed(narrowed) then emit_box_value(ir, object, value_type) else object
+    if is_boxed(narrowed)
+      return emit_box_value(ir, object, value_type)
+    else
+      return object
 
   unless value_type is OptionalType
-    return cast.throws then object else emit_wrap(ir, object, member)
-  cast.throws then emit_unwrap(ir, object, value_type) else object
+    if cast.throws
+      return object
+    else
+      return emit_wrap(ir, object, member)
+  if cast.throws
+    emit_unwrap(ir, object, value_type)
+  else
+    object
 
 # The object if it holds the type, and otherwise nil, or a throw.
 generate_cast := (g: Generator, cast: Cast) ->
@@ -211,8 +225,10 @@ generate_cast := (g: Generator, cast: Cast) ->
   member := type_of(g, cast.type)
   value_type := type_of(g, cast.value)
   is_object_cast := inner_of(value_type) is InterfaceType and member is not InterfaceType
-  return emit_interface_cast(g, cast, object) if is_object_cast
-  return emit_narrowed_cast(g, cast, object) unless inner_of(value_type) is UnionType
+  if is_object_cast
+    return emit_interface_cast(g, cast, object)
+  unless inner_of(value_type) is UnionType
+    return emit_narrowed_cast(g, cast, object)
   holds := emit_member_test(g, object, cast.value, cast.type)
   if cast.throws
     fails := ir.negate(holds)
@@ -259,7 +275,10 @@ emit_member_test := (g: Generator, object: String, value: Expression, type_name:
 
   # An interface value holds a value of its interface, unless it is nil.
   if held is InterfaceType and type is InterfaceType
-    return value_type is OptionalType then emit_is_present(g.ir, object, value_type) else 'true'
+    if value_type is OptionalType
+      return emit_is_present(g.ir, object, value_type)
+    else
+      return 'true'
 
   if held is InterfaceType
     test_object := (each: String) -> emit_type_test(g.ir, emit_interface_data(g.ir, each), type)
@@ -267,7 +286,10 @@ emit_member_test := (g: Generator, object: String, value: Expression, type_name:
     return emit_present_test(g.ir, object, value_type, test_object)
   unless held is UnionType
     return 'false' unless is_assignable(held, type)
-    return value_type is OptionalType then emit_is_present(g.ir, object, value_type) else 'true'
+    if value_type is OptionalType
+      return emit_is_present(g.ir, object, value_type)
+    else
+      return 'true'
   test_of := (each: String) -> emit_type_test(g.ir, each, type)
   return test_of(object) unless value_type is OptionalType
   emit_present_test(g.ir, object, value_type, test_of)
@@ -315,7 +337,8 @@ export read_any_field := (
   field_type: Type
   is_owned = true
 ) ->
-  return read_field(g, object, object_type, name, is_owned) unless object_type is UnionType
+  unless object_type is UnionType
+    return read_field(g, object, object_type, name, is_owned)
   of_member := (type: Type) -> read_field(g, object, type, name, is_owned)
   emit_member_dispatch(g.ir, object, object_type.members, ir_type(field_type), of_member)
 
@@ -420,7 +443,8 @@ export release_if_reference := (g: Generator, expression: Expression, operand: S
 # A local's value, a member of an enum, or a top-level function's closure (see
 # emit_function_closure).
 generate_identifier := (g: Generator, identifier: Identifier) ->
-  return intrinsic_value(g, identifier, name) if name := g.facts.intrinsic_values[identifier]
+  if name := g.facts.intrinsic_values[identifier]
+    return intrinsic_value(g, identifier, name)
   reference := g.facts.references[identifier]!
   type := type_of(g, identifier)
   case reference
@@ -468,7 +492,11 @@ export read_borrowed := (g: Generator, local: CodegenLocal, type: Type) ->
   held := held_value(g, local)
 
   # A weak local's object, which may be gone, is never narrowed.
-  value := local.weak then emit_weak_object(ir, held) else held
+  value :=
+    if local.weak
+      emit_weak_object ir, held
+    else
+      held
 
   check_where_read g, local, value
   emit_narrowed(ir, value, local.type, type)
@@ -505,20 +533,29 @@ export held_value := (g: Generator, local: CodegenLocal) ->
 export emit_narrowed := (ir: IrBuilder, value: String, declared: Type, type: Type) ->
   # An interface value narrowed to a class or struct is the object it holds.
   if inner_of(declared) is InterfaceType and inner_of(type) is not InterfaceType
-    held := declared is OptionalType then emit_unwrap(ir, value, declared) else value
+    held :=
+      if declared is OptionalType
+        emit_unwrap ir, value, declared
+      else
+        value
     return emit_interface_data(ir, held)
   unless is_boxed_narrowing(declared, type)
     present := declared is OptionalType and type is not OptionalType
-    return present then emit_unwrap(ir, value, declared) else value
+    if present
+      return emit_unwrap(ir, value, declared)
+    else
+      return value
 
   # A union value is a pointer, null for nil, whether optional or not.
-  return emit_unbox(ir, value, type) unless type is OptionalType
+  unless type is OptionalType
+    return emit_unbox(ir, value, type)
   member := -> emit_wrap(ir, emit_unbox(ir, value, type.inner), type.inner)
   emit_branch(ir, ir_type(type), ir.is_not_null(value), member, nil_constant(type))
 
 # As emit_narrowed, of a value that is owned and given over.
 emit_narrowed_owned := (ir: IrBuilder, value: String, declared: Type, type: Type) ->
-  return emit_narrowed(ir, value, declared, type) unless is_boxed_narrowing(declared, type)
+  unless is_boxed_narrowing(declared, type)
+    return emit_narrowed(ir, value, declared, type)
   narrowed := emit_narrowed(ir, value, declared, type)
   emit_retain_value ir, narrowed, type
   emit_release ir, value
@@ -530,7 +567,8 @@ export is_boxed_narrowing := (declared: Type, type: Type) ->
 
 # A box of the value, owned, for a union, and of a T? a box or null.
 emit_box_value := (ir: IrBuilder, value: String, type: Type) ->
-  return emit_box(ir, value, type) unless type is OptionalType
+  unless type is OptionalType
+    return emit_box(ir, value, type)
   box := -> emit_box(ir, emit_unwrap(ir, value, type), type.inner)
   emit_branch(ir, 'ptr', emit_is_present(ir, value, type), box, 'null')
 
@@ -547,6 +585,10 @@ generate_assertion_throw := (g: Generator, message: Expression) ->
 generate_throw := (g: Generator, throw_expression: Throw) ->
   message := throw_expression.message
   return generate_assertion_throw(g, message) if throw_expression.assertion
-  local := message is Identifier then local_of(g, message)
+  local :=
+    if message is Identifier
+      local_of g, message
+    else
+      nil
   rethrows := local is SlotLocal and local.caught
   emit_throw_error(g, generate(g, message), rethrows)

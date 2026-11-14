@@ -19,7 +19,8 @@ export parse_type_name := (tokens: TokenStream, is_result = false): TypeName ->
   tokens.nested(-> parse_any_type(tokens, is_result))
 
 parse_any_type := (tokens: TokenStream, is_result: Bool) ->
-  return union_of(parse_union_members(tokens, is_result)) if tokens.peek().kind != '('
+  if tokens.peek().kind != '('
+    return union_of(parse_union_members(tokens, is_result))
   position := tokens.peek().position()
   first := parse_parenthesized_type(tokens, is_result)
   return first if tokens.peek().kind != '|'
@@ -66,7 +67,8 @@ parse_parenthesized_type := (tokens: TokenStream, is_result: Bool): TypeName ->
     result := parse_type_name(tokens)
     return FunctionTypeName(result, position, params: types)
   is_array := types.length == 1 and tokens.peek().kind == '['
-  return parse_array_type(tokens, types[0], position) if is_array
+  if is_array
+    return parse_array_type(tokens, types[0], position)
   inner := types.length == 1 then types[0]
   if inner is UnionTypeName and tokens.accept('?')
     union := UnionTypeName(inner..., position, optional: true)
@@ -95,7 +97,10 @@ parse_parenthesized_member := (tokens: TokenStream, is_result: Bool): UnionMembe
 
 # The type, made the items of an array if `[]` follows.
 parse_array_suffix := (tokens: TokenStream, type: TypeName, position: Position): TypeName ->
-  tokens.peek().kind == '[' then parse_array_type(tokens, type, position) else type
+  if tokens.peek().kind == '['
+    parse_array_type(tokens, type, position)
+  else
+    type
 
 # `T[]`, any number of times, each with `?` after it if the array may be nil: `Int[]?` is an
 # optional array, and `Int[]?[]` an array of them.
@@ -177,7 +182,10 @@ export parse_type_annotation := (tokens: TokenStream) ->
 
 # `: Type` as a function literal's return type (see parse_parenthesized_type), if it follows.
 export parse_result_annotation := (tokens: TokenStream) ->
-  tokens.accept(':') then parse_type_name(tokens, true)
+  if tokens.accept(':')
+    parse_type_name(tokens, true)
+  else
+    nil
 
 # `<T, U: Stringable, X: Iterable<T>>`, if it follows.
 export parse_type_parameters := (tokens: TokenStream): TypeParameter[] ->

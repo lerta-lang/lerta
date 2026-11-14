@@ -83,7 +83,8 @@ export generate_main := (
     emit_return g, '', void_type
   body := is_program then '@lerta.top_level' else code.symbol
   generate_awaiting_function g, '', body, [], void_type, run_and_return
-  generate_program_main g.ir.module, body, releases if is_program
+  if is_program
+    generate_program_main g.ir.module, body, releases
 
 # Runs the program's top-level code, a coroutine, and the event loop, which must settle it; its
 # exception is the program's, which ends it as soon as it is thrown.
@@ -121,7 +122,8 @@ export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = f
 
   # A float that holds a NaN throws before any capture is retained, so that none is left held.
   for capture in captures
-    emit_deferred_check g, local_of(capture) unless capture.is_var
+    unless capture.is_var
+      emit_deferred_check g, local_of(capture)
 
   slots: HeapField[]
   operands: String[]
@@ -130,13 +132,19 @@ export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = f
     slots.push capture_slot(capture)
     unless capture.is_var
       borrowed := -> read_borrowed(g, local, capture.type)
-      operands.push on_stack then borrowed() else captured_value(g, local, capture)
+      operand :=
+        if on_stack
+          borrowed()
+        else
+          captured_value g, local, capture
+      operands.push operand
       continue
     cell := local is SlotLocal then local.cell
     owned := cell ? panic("the captured var '#{capture.name}' has no cell")
     emit_retain g.ir, owned.cell unless on_stack
     operands.push owned.cell
-  return emit_local_closure(g.ir, symbol, slots, operands) if on_stack
+  if on_stack
+    return emit_local_closure(g.ir, symbol, slots, operands)
   emit_closure(g.ir, symbol, name, slots, operands)
 
 # The code of the literal, generated once outside the loops that take functions in place; within
@@ -270,7 +278,8 @@ generate_function_body := (
   # A local function that sees itself is its own closure, outside its parameters and locals, which
   # may hide it; the closure outlives the call, held as `(closure)` by a coroutine.
   itself := literal in g.facts.sees_itself then g.facts.local_function_names[literal]
-  g.locals.push()[itself.name] = ValueLocal(type, operand: '%closure') if itself
+  if itself
+    g.locals.push()[itself.name] = ValueLocal(type, operand: '%closure')
 
   scope := g.locals.push()
   bind := (name: String, operand: String, local_type: Type) ->
@@ -279,11 +288,14 @@ generate_function_body := (
       return
     emit_retain_value ir, operand, local_type
     scope[name] = store_in_slot(g, operand, local_type)
-  bind '@', '%this', this_type if this_type
-  bind param.name.name, "%p#{i}", type.params[i] for param at i in literal.params
+  if this_type
+    bind '@', '%this', this_type
+  for param at i in literal.params
+    bind param.name.name, "%p#{i}", type.params[i]
 
   # The name cannot be written in the source, so no code can read it.
-  bind '(closure)', '%closure', type if holds and captures != nil
+  if holds and captures != nil
+    bind '(closure)', '%closure', type
 
   # A captured var is its cell, which the closure holds; the literal reads and writes through it.
   captured := captures ? []
@@ -316,7 +328,8 @@ generate_default_entry := (
   type := function_type_of(type_of(g, literal))
   g.result_type = type.result
   scope := g.locals.push()
-  scope['@'] = ValueLocal(operand: '%this', type: this_type) if this_type
+  if this_type
+    scope['@'] = ValueLocal(operand: '%this', type: this_type)
   operands: String[]
   for param at i in literal.params
     param_type := type.params[i]
@@ -347,7 +360,8 @@ export generate_body_returning_last := (g: Generator, body: Statement[], result:
   has_result := not is_kind(result, 'void')
   last := body.last()
   value := last as Expression?
-  return emit_return(g, generate(g, value), type_at_use(g, value)) if value and has_result
+  if value and has_result
+    return emit_return(g, generate(g, value), type_at_use(g, value))
   generate_statement g, last if last
   if has_result
     g.ir.emit 'unreachable'
@@ -366,7 +380,8 @@ export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo)
   g.result_type = info.type
   object := emit_allocate(ir, info)
   field_pointer := (field: FieldInfo) -> emit_field_pointer(ir, object, info, field.name.name)
-  ir.store ir_type(field.type!), 'zeroinitializer', field_pointer(field) for field in info.fields
+  for field in info.fields
+    ir.store ir_type(field.type!), 'zeroinitializer', field_pointer(field)
   g.unwind_cleanup = ->
     mark := call_runtime(ir, 'i64 @lerta_drop_mark()', '')
     for field in info.fields
@@ -409,7 +424,11 @@ argument_index := (arguments: FieldInfo[], field: FieldInfo) -> arguments.index_
 # The field takes over the value, owned; a weak field takes its box instead.
 store_field := (g: Generator, object: String, info: ObjectInfo, field: FieldInfo, value: String) ->
   pointer := emit_field_pointer(g.ir, object, info, field.name.name)
-  stored := field.weak then weak_box_of(g, value, field.type!) else value
+  stored :=
+    if field.weak
+      weak_box_of g, value, field.type!
+    else
+      value
   emit_release g.ir, value if field.weak
   g.ir.store ir_type(field.type!), stored, pointer
 
@@ -445,7 +464,10 @@ defers_to_read := (g: Generator, declaration: Declaration) ->
   # A top-level value is read by functions too, which the checker counts no reads of.
   return nil if g.top_level_code and g.locals.depth() == 1
 
-  is_fused_source(g, declaration.value, false) then read
+  if is_fused_source(g, declaration.value, false)
+    read
+  else
+    nil
 
 # Holds an owned reference in a scope of its own, which a jump out of it releases; the returned
 # function releases it where the code goes on.
@@ -503,7 +525,11 @@ export generate_block_value := (
 
   # nil that ends a branch of an if or a try that gives no value has no type to be converted to.
   is_discarded_nil := expression is NilLiteral and g.facts.conversions[expression] == nil
-  value := expression and not is_discarded_nil then generate(g, expression) else ''
+  value :=
+    if expression and not is_discarded_nil
+      generate g, expression
+    else
+      ''
 
   generate_statement g, last if expression == nil
   release_scope g, scope
@@ -577,7 +603,8 @@ generate_declaration := (g: Generator, declaration: Declaration) ->
     return
   code := g.code
   is_top_level := g.top_level_code and g.locals.depth() == 1
-  if global := is_top_level then code.globals[code.module.index][declaration.name.name]
+  globals := code.globals[code.module.index]
+  if global := is_top_level then globals[declaration.name.name]
     generate_top_level_declaration g, declaration, global
   else
     generate_local_declaration g, declaration

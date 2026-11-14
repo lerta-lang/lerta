@@ -55,10 +55,12 @@ export test_targets := (named: String[]) ->
   outcomes.all(Outcome.passed) then 0 else 1
 
 read_settings := ->
-  throw BuildError(message: SETTINGS_USAGE, code: 2) if stat(SETTINGS) == nil
+  if stat(SETTINGS) == nil
+    throw BuildError(message: SETTINGS_USAGE, code: 2)
   text := await read_text(SETTINGS) ? throw BuildError(message: "#{SETTINGS} is not UTF-8", code: 2)
   settings := decode_settings(text)
-  throw BuildError(message: SETTINGS_USAGE, code: 2) if settings.targets.is_empty()
+  if settings.targets.is_empty()
+    throw BuildError(message: SETTINGS_USAGE, code: 2)
   for (target, place) in settings.targets
     places := [given for given in [place.local, place.docker != nil, place.ssh != nil] when given]
     if places.length != 1
@@ -82,7 +84,8 @@ decode_settings := (text: String) ->
 selected := (targets: Map<String, Place>, named: String[]) ->
   return targets if named.is_empty()
   for target in named
-    throw BuildError(message: "#{SETTINGS} has no #{target}", code: 2) unless target in targets
+    unless target in targets
+      throw BuildError(message: "#{SETTINGS} has no #{target}", code: 2)
   chosen: Map<String, Place>
   for (target, place) in targets
     chosen[target] = place if target in named
@@ -92,11 +95,13 @@ selected := (targets: Map<String, Place>, named: String[]) ->
 # bootstrap built for it. A Windows target on another system runs under Wine, whose bootstrap
 # needs a clang for Windows on Wine's PATH, without which it fails.
 export test_target := (target: String) ->
-  throw BuildError(message: "no target #{target}", code: 2) unless is_target_name(target)
+  unless is_target_name(target)
+    throw BuildError(message: "no target #{target}", code: 2)
   print "started: #{target}"
   host :=
     target_name_of_host((await captured('clang', ['-print-target-triple'], b'')).text()!.trim())
-  return await call('nice', BUILD_TOOL, 'test') if target == host
+  if target == host
+    return await call('nice', BUILD_TOOL, 'test')
   return 1 if await call(BUILD_TOOL, 'bin/lerta') != 0 or await call(BUILD_TOOL, 'bin/test') != 0
   under_wine := is_mingw(target_triple(target)) and platform != 'windows'
 
@@ -110,7 +115,10 @@ export test_target := (target: String) ->
 
   code := (await run('nice', HARNESS_PROGRAM, '--target', target, env: env)).code
   bootstrap := (await run('nice', BUILD_TOOL, 'test-bootstrap', '--target', target, env: env)).code
-  code == 0 and bootstrap == 0 then 0 else 1
+  if code == 0 and bootstrap == 0
+    0
+  else
+    1
 
 # Wine itself missing is none either.
 has_wine_clang := (env: Map<String, String>) ->

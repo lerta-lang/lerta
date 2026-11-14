@@ -77,9 +77,12 @@ export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Boo
   fail_only_called body, identifier if generic_function(shared, name) != nil
   if object_type(shared, name) != nil
     fail program, position, "'#{name}' is a type; construct it as #{name}(...)"
-  fail program, position, "'#{name}' is a type" if name in shared.enums
-  fail program, position, "'#{name}' is an interface" if name in shared.interfaces
-  fail program, position, "'#{name}' is a type" if has_alias(shared, name)
+  if name in shared.enums
+    fail program, position, "'#{name}' is a type"
+  if name in shared.interfaces
+    fail program, position, "'#{name}' is an interface"
+  if has_alias(shared, name)
+    fail program, position, "'#{name}' is a type"
   if imported := use_import(shared, name)
     exported := imported_export(program, imported)
     if exported is ValueExport and exported.type == nil
@@ -87,7 +90,8 @@ export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Boo
       fail_runs_later program, identifier, "'#{imported.module}'", body.sees_top_level
     return type_of_export(body, exported, identifier, is_callee)
   abort_if_failed shared.top_level, name
-  reject_pending program, shared.top_level, identifier if body.sees_top_level
+  if body.sees_top_level
+    reject_pending program, shared.top_level, identifier
   if name in shared.imports.modules
     fail program, position, "'#{name}' is a module, which is no value: write #{name}.<export>"
   probe_locals body if name == COMPLETION_NAME

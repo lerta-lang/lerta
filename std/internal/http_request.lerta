@@ -43,7 +43,8 @@ export read_rest_of_request := (
   (method, target, version) := (parts[0], parts[1], parts[2])
   throw bad_request() unless is_token(method)
   throw bad_request() unless is_visible(target)
-  throw RequestError(status: 505, message: 'http version not supported') unless version in VERSIONS
+  unless version in VERSIONS
+    throw RequestError(status: 505, message: 'http version not supported')
   headers :=
     try
       await deadline.within(read_headers(reader, options), options.head_timeout)
@@ -58,7 +59,8 @@ export read_rest_of_request := (
   throw bad_request() unless is_host(host)
 
   length := content_length(headers)
-  throw RequestError(status: 413, message: 'content too large') if length > options.max_body
+  if length > options.max_body
+    throw RequestError(status: 413, message: 'content too large')
   { max_body, body_timeout } := options
   chunks: ChunkedBody | SizedBody =
     if chunked
@@ -91,7 +93,10 @@ bad_request := -> RequestError(status: 400, message: 'bad request')
 export read_request_line := (reader: Reader, options: ServerOptions, deadline: Deadline) ->
   read := ->
     line := await read_limited_line(reader, options.max_line, 414) ? return nil
-    line.is_empty() then await read_limited_line(reader, options.max_line, 414) else line
+    if line.is_empty()
+      await read_limited_line(reader, options.max_line, 414)
+    else
+      line
   try
     await deadline.within(read(), options.idle_timeout)
   catch _: TimeoutError

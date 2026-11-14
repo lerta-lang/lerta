@@ -129,11 +129,13 @@ class Server
       try
         await @dispatch(header.method ? '', header.id, body)
       catch error: JsonError
-        await respond_error(id, INVALID_PARAMS, error.message) if id := header.id
+        if id := header.id
+          await respond_error(id, INVALID_PARAMS, error.message)
       catch error
         # A bug of the server ends the message alone, as one message should not end the session.
         print_error error.message
-        await respond_error(id, INTERNAL_ERROR, error.message) if id := header.id
+        if id := header.id
+          await respond_error(id, INTERNAL_ERROR, error.message)
 
     dispatch := (method: String, id: Int | String?, body: String) ->
       case method
@@ -164,9 +166,12 @@ class Server
           await respond(request.id, await @completion(request.params))
         when 'shutdown'
           @shut_down = true
-          await respond<Bool?>(given, nil) if given := id
+          if given := id
+            await respond<Bool?>(given, nil)
         when 'exit' then exit(@shut_down then 0 else 1)
-        else await respond_error(given, METHOD_NOT_FOUND, "no method #{method}") if given := id
+        else
+          if given := id
+            await respond_error(given, METHOD_NOT_FOUND, "no method #{method}")
 
     initialize := (request: Request<InitializeParams>) ->
       encodings := request.params.capabilities.general?.position_encodings ? []

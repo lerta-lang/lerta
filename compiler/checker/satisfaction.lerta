@@ -26,8 +26,10 @@ from '../types'
 
 # Rejects a type that does not satisfy the interface type.
 export reject_unsatisfied := (body: Body, type: Type, bound: InterfaceType, at: Position) ->
-  return reject_uncodable(body, type, at) if is_codable_bound(body.program, bound)
-  return reject_non_enum(body, type, at) if is_enum_bound(body.program, bound)
+  if is_codable_bound(body.program, bound)
+    return reject_uncodable(body, type, at)
+  if is_enum_bound(body.program, bound)
+    return reject_non_enum(body, type, at)
   for member in members_for(body.program, bound, type)
     satisfying_member body, type, bound, member, Identifier(position: at, name: member.name), nil
 
@@ -117,7 +119,8 @@ export check_interpolated := (body: Body, part: Call, into_binary: Bool) ->
   member := part.callee
   panic 'an interpolated value is read by a call of its to_string()' unless member is Member
   type := type_of(body, member.object)
-  return set_type(body, part, binary_type) if into_binary and is_kind(type, 'Binary')
+  if into_binary and is_kind(type, 'Binary')
+    return set_type(body, part, binary_type)
   bound := std_interface(body.shared, 'Stringable', member.object.position).type
   to_string := members_for(body.program, bound, type)[0]
   name := Identifier(position: member.object.position, name: member.name.name)
@@ -159,7 +162,8 @@ export iterable_item_of := (body: Body, type: Type, at: Position) ->
 export reject_not_iterable := (body: Body, type: Type, at: Position, message: String) ->
   name := Identifier(position: at, name: 'iter')
   found := member_type_by_name(body, type, name)
-  fail body.program, at, message if found == nil
+  if found == nil
+    fail body.program, at, message
   iterable := std_interface(body.shared, 'Iterable', at)
   member := interface_members(body.program, iterable)[0]
   reason := unsatisfied_reason(body, type, member, name, found)!

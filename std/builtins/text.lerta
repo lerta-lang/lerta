@@ -33,8 +33,16 @@ print_stderr_line := (text: String) -> lerta_print_stderr(text + "\n")
 # The String of the Char, made anew.
 text_of := (c: Char) -> '' + c
 
-upper_of := (b: Byte) -> b in b'a'..=b'z' then b - b'a' + b'A' else b
-lower_of := (b: Byte) -> b in b'A'..=b'Z' then b - b'A' + b'a' else b
+upper_of := (b: Byte) ->
+  if b in b'a'..=b'z'
+    b - b'a' + b'A'
+  else
+    b
+lower_of := (b: Byte) ->
+  if b in b'A'..=b'Z'
+    b - b'A' + b'a'
+  else
+    b
 
 # The Char mapped by `map` if it is ASCII, or else the Char itself.
 mapped_ascii_char := (c: Char, map: (Byte) -> Byte) ->
@@ -189,13 +197,17 @@ extend String
   without_prefix := (prefix: String) ->
     @starts_with(prefix) then @binary.text(prefix.binary.length)!
   without_suffix := (suffix: String) ->
-    @ends_with(suffix) then @binary.text(0, @binary.length - suffix.binary.length)!
+    if @ends_with(suffix)
+      @binary.text(0, @binary.length - suffix.binary.length)!
+    else
+      nil
 
   # By the first byte that differs, or else by length, so that a prefix goes first.
   compare := (other: String) ->
     (bytes, other_bytes) := (@binary, other.binary)
     for i in 0..min(bytes.length, other_bytes.length)
-      return bytes[i].compare(other_bytes[i]) if bytes[i] != other_bytes[i]
+      if bytes[i] != other_bytes[i]
+        return bytes[i].compare(other_bytes[i])
     bytes.length.compare(other_bytes.length)
 
   # The empty String occurs in every one, as index_of finds an empty part.
@@ -261,7 +273,8 @@ extend String
   skip_while := (skipped: (Char) -> Bool) ->
     bytes := @binary
     var at = 0
-    at += sequence_length(bytes[at]) while at < bytes.length and skipped(char_at(bytes, at))
+    while at < bytes.length and skipped(char_at(bytes, at))
+      at += sequence_length(bytes[at])
     lerta_string_slice(@, at, bytes.length)
 
   # The number of its bytes, its UTF-8's, rather than of its code points, which `count()` gives.
@@ -279,7 +292,11 @@ extend String
 
 extend Binary
   is_empty := -> @length == 0
-  get := (index: Int) -> index in 0..@length then @[index]
+  get := (index: Int) ->
+    if index in 0..@length
+      @[index]
+    else
+      nil
   first := -> @get(0)
   last := -> @get(@length - 1)
   starts_with := (prefix: Binary) -> @occurs_at(0, prefix)
@@ -289,11 +306,13 @@ extend Binary
   # always so past the end; an empty part occurs at `from` if it is at most the length.
   index_of := (part: Binary | Byte, from = 0) ->
     throw IndexError('index_of from a negative place') if from < 0
-    return byte_index(@, part, from) if part is Byte
+    if part is Byte
+      return byte_index(@, part, from)
 
     # A part of one byte is found as the byte, one comparison at each place. The search is a
     # function of its own rather than a call of index_of, which LLVM would not inline.
-    return byte_index(@, part[0], from) if part.length == 1
+    if part.length == 1
+      return byte_index(@, part[0], from)
     for i in from..max(from, @length - part.length + 1)
       return i if @occurs_at(i, part)
     nil
@@ -307,7 +326,11 @@ extend Binary
       return false if @[index + k] != byte
     true
   text := (start = 0, end: Int = @length) ->
-    bytes := start == 0 and end == @length then @ else @[start..end]
+    bytes :=
+      if start == 0 and end == @length
+        @
+      else
+        @[start..end]
     lerta_binary_text(bytes)
 
 # The Chars of a String's bytes, for its iter: one object, where `has_next` and `next` as closures
@@ -399,7 +422,11 @@ extend Byte[]
 
 # Digits, an optional fraction and an optional exponent, after an optional `-` (see parse_float).
 is_decimal_number := (bytes: Binary) ->
-  var i = bytes.get(0) == b'-' then 1 else 0
+  var i =
+    if bytes.get(0) == b'-'
+      1
+    else
+      0
   digits_from := (start: Int) ->
     var end = start
     end += 1 while bytes.get(end)?.is_digit() == true

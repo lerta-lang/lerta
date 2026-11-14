@@ -145,7 +145,8 @@ export add_members := (shared: Shared) ->
     seen: Set<String>
     for member in info.declaration.members
       { name, position } := member.name
-      fail_already_member program, position, name, info.declaration.name.name unless seen.add(name)
+      unless seen.add(name)
+        fail_already_member program, position, name, info.declaration.name.name
       if member.private and info.declaration.is_struct
         fail program, member.position, "a struct's members are public: they cannot be private"
       info.private_names.add name if member.private
@@ -153,7 +154,8 @@ export add_members := (shared: Shared) ->
         add_method shared, info, member, literal
       else
         info.fields.push field_of_member(shared, info, member)
-    add_interface_fields shared, info, seen if info.declaration.satisfies != nil
+    if info.declaration.satisfies != nil
+      add_interface_fields shared, info, seen
 
 # The types written in a member: a field's, or a method's parameters' and result's.
 export written_types := (member: MemberDeclaration) ->
@@ -177,7 +179,8 @@ add_interface_fields := (shared: Shared, info: ObjectInfo, declared: Set<String>
   missing := [member for member in members when member.name not in declared]
   methods := method_names(program, interface_type)
   is_method := (member: InterfaceMember) -> member.name in methods
-  reject_missing_method program, info, interface_type, method if method := missing.find(is_method)
+  if method := missing.find(is_method)
+    reject_missing_method program, info, interface_type, method
   reject_unset_interface_field program, info, interface_type, missing
   info.fields = [field_of(member) for member in missing] + info.fields
 
@@ -224,15 +227,18 @@ add_method := (
     fail program, literal.position, "#{name} takes no parameters"
   if runs_alone and not literal.type_params.is_empty()
     fail program, literal.position, "#{name} takes no type parameters"
-  fail program, literal.position, "#{name} cannot yield" if runs_alone and literal.yields
-  fail program, literal.position, "#{name} cannot await" if runs_alone and literal.awaits
+  if runs_alone and literal.yields
+    fail program, literal.position, "#{name} cannot yield"
+  if runs_alone and literal.awaits
+    fail program, literal.position, "#{name} cannot await"
   if name == 'init'
     info.has_init = true
 
     # Construction takes no value from it: that of its last expression is released as a
     # statement's is.
     written := literal.return_type
-    fail program, literal.position, 'init gives no value' if written != nil and not is_void(written)
+    if written != nil and not is_void(written)
+      fail program, literal.position, 'init gives no value'
     literal.return_type = NamedType(name: 'void', args: [], position: literal.position)
   if name == 'deinit' and info.declaration.is_struct
     fail program, member.position, 'a struct has no deinit'
@@ -260,13 +266,19 @@ field_of_member := (shared: Shared, info: ObjectInfo, member: MemberDeclaration)
   if is_struct and member.modifier == 'var'
     fail program, member.position, 'a struct field cannot be var'
   type_name := member.type
-  type := type_name then resolve(program, info.resolver, type_name)
+  type :=
+    if type_name
+      resolve program, info.resolver, type_name
+    else
+      nil
   weak := member.is_weak()
   if member.throws and not weak
     fail program, member.position, "only a weak field's type is written with '!'"
-  reject_invalid_weak program, member, is_struct, type if weak
+  if weak
+    reject_invalid_weak program, member, is_struct, type
   is_argument := is_struct or member.in_args
-  reject_unset_field program, member, type unless is_argument
+  unless is_argument
+    reject_unset_field program, member, type
 
   # A `var` of an optional type starts nil, as a local does.
   var value = member.value
@@ -348,7 +360,8 @@ definition_of := (generic: ObjectInfo) ->
   standing := placeholders(type_params, true)
   bounds: Map<String, InterfaceType>
   for (param, bound) in type_params.zip(generic.bounds)
-    bounds[param.name.name] = substitute(bound, standing) as InterfaceType! if bound
+    if bound
+      bounds[param.name.name] = substitute(bound, standing) as InterfaceType!
   args := [standing[param.name.name]! for param in type_params]
   view := make_instance(generic, { generic.type..., args }, bounds)
   generic.standing.push view
@@ -367,7 +380,12 @@ make_instance := (generic: ObjectInfo, type: ObjectType, bounds: Map<String, Int
   info := ObjectInfo(declaration, type, module_index, resolver, generic, facts: NodeFacts())
   instance_field := (field: FieldInfo) ->
     field_type := field.type
-    FieldInfo(field..., type: field_type then substitute(field_type, type_bindings))
+    type :=
+      if field_type
+        substitute field_type, type_bindings
+      else
+        nil
+    FieldInfo(field..., type)
   info.fields = [instance_field(field) for field in generic.fields]
   if satisfies := generic.satisfies
     info.satisfies = substitute(satisfies, type_bindings) as InterfaceType!

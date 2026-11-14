@@ -28,12 +28,14 @@ from '../types'
 export emit_equals_by_contents := (
   ir: IrBuilder, program: ProgramWide, left: String, right: String, type: Type
 ) ->
-  return emit_equals(ir, program, left, right, type) if is_whole(program, type)
+  if is_whole(program, type)
+    return emit_equals(ir, program, left, right, type)
   symbol := equals_function(ir.module, program, type)
   ir.assign("call i1 #{symbol}(#{ir_type(type)} #{left}, #{ir_type(type)} #{right})")
 
 export emit_hash_by_contents := (ir: IrBuilder, program: ProgramWide, value: String, type: Type) ->
-  return emit_hash(ir, program, value, type) if is_whole(program, type)
+  if is_whole(program, type)
+    return emit_hash(ir, program, value, type)
   ir.assign("call i64 #{hash_function(ir.module, program, type)}(#{ir_type(type)} #{value})")
 
 # A type whose values have no parts that compare on their own: a value, an object that compares as
@@ -116,7 +118,11 @@ emit_equals := (
       args := "ptr #{left}, ptr #{right}, ptr #{items}"
       call_runtime(ir, 'zeroext i1 @lerta_array_equals(ptr, ptr, ptr)', args)
     when type is MapType
-      values := is_set(type) then 'null' else item_equals_function(ir.module, program, type.value)
+      values :=
+        if is_set(type)
+          'null'
+        else
+          item_equals_function ir.module, program, type.value
       args := "ptr #{left}, ptr #{right}, ptr #{values}"
       call_runtime(ir, 'zeroext i1 @lerta_map_equals(ptr, ptr, ptr)', args)
     when type is UnionType then emit_union_equals(ir, program, left, right, type)
@@ -202,7 +208,8 @@ emit_value_hash := (ir: IrBuilder, value: String, type: Type) ->
     return call_runtime(ir, 'i64 @lerta_string_hash(ptr)', "ptr #{value}")
 
   # Equal floats, as 0.0 and -0.0, hash alike.
-  return emit_float_word(ir, value, type) if is_float(type)
+  if is_float(type)
+    return emit_float_word(ir, value, type)
 
   widened_to_word(ir, value, scalar_of(type)!)
 

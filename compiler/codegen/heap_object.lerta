@@ -117,7 +117,8 @@ define_drop := (
   if weak_slot
     slot := emit_heap_field_pointer(ir, layout, '%object', weak_slot)
     call_void_runtime ir, 'void @lerta_weak_detach(ptr)', "ptr #{slot}"
-  call_void_runtime ir, 'void @lerta_run_deinit(ptr, ptr)', "ptr %object, ptr #{deinit}" if deinit
+  if deinit
+    call_void_runtime ir, 'void @lerta_run_deinit(ptr, ptr)', "ptr %object, ptr #{deinit}"
   for field at i in fields
     continue if field.owned == NONE or is_counted(field.owned)
     pointer := emit_heap_field_pointer(ir, layout, '%object', i)
@@ -160,7 +161,8 @@ export record_field_index := (type: RecordType, name: String) ->
 # A class's object starts without a weak box.
 export emit_allocate := (ir: IrBuilder, info: ObjectInfo) ->
   object := emit_heap_allocate(ir, object_ir_type(info.type), type_symbol(info.type))
-  ir.store 'ptr', 'null', emit_weak_slot_pointer(ir, object, info) if is_class(info)
+  if is_class(info)
+    ir.store 'ptr', 'null', emit_weak_slot_pointer(ir, object, info)
   object
 
 # Its type has the linkage.
@@ -170,7 +172,11 @@ export define_object := (
   fields := [value_field(field.type!) for field in info.fields]
   weak_slot := is_class(info) then fields.length
   fields.push plain_field('ptr') if is_class(info)
-  deinit := info.has_deinit then special_method_symbol(program, info, 'deinit')
+  deinit :=
+    if info.has_deinit
+      special_method_symbol program, info, 'deinit'
+    else
+      nil
   layout := object_ir_type(info.type)
   type := type_symbol(info.type)
   name := format_type(info.type)
@@ -183,7 +189,10 @@ emit_weak_slot_pointer := (ir: IrBuilder, object: String, info: ObjectInfo) ->
 
 # The slot of the weak box of a class's object, or null for a struct's, which has none.
 export emit_weak_slot_or_null := (ir: IrBuilder, object: String, info: ObjectInfo) ->
-  is_class(info) then emit_weak_slot_pointer(ir, object, info) else 'null'
+  if is_class(info)
+    emit_weak_slot_pointer(ir, object, info)
+  else
+    'null'
 
 # The weak box of a class's object, which a weak field holds instead of the object, owned; the
 # object is borrowed.
@@ -195,7 +204,8 @@ emit_weak_box := (ir: IrBuilder, object: String, info: ObjectInfo) ->
 # owned, or null for nil; the object is borrowed.
 export emit_weak_box_of := (ir: IrBuilder, program: ProgramWide, object: String, type: Type) ->
   info := info_of(program, inner_of(type) as ObjectType!)
-  return emit_weak_box(ir, object, info) unless type is OptionalType
+  unless type is OptionalType
+    return emit_weak_box(ir, object, info)
   is_present := ir.is_not_null(object)
   emit_branch(ir, 'ptr', is_present, -> emit_weak_box(ir, object, info), 'null')
 
@@ -209,7 +219,8 @@ export emit_type_test := (ir: IrBuilder, object: String, type: Type) ->
 
 emit_object_test := (ir: IrBuilder, object: String, type: Type) ->
   object_type := emit_object_type(ir, object)
-  return emit_box_test(ir, object_type, type) if is_boxed(type)
+  if is_boxed(type)
+    return emit_box_test(ir, object_type, type)
   ir.assign("icmp eq ptr #{object_type}, #{object_type_symbol(ir, type)}")
 
 # The type in the header of the objects of a member of a union that is no box: an array's or a

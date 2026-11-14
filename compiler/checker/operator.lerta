@@ -83,7 +83,10 @@ export describe_kinds := (kinds: TypeKind[]) ->
 # hint for the operands: `1 + 2` is a Float where a `Float?` is expected.
 hint_of := (expected: Type?, kinds: TypeKind[]) ->
   type := inner_of_expected(expected) ? return nil
-  is_one_of_kinds(type, kinds) then type
+  if is_one_of_kinds(type, kinds)
+    type
+  else
+    nil
 
 export type_of_unary := (body: Body, unary: UnaryOperation, expected: Type?): Type ->
   if unary.operator == 'not'
@@ -121,7 +124,8 @@ export type_of_coalesce := (body: Body, coalesce: Coalesce) ->
 
 export operand_kinds := (operator: String): TypeKind[] ->
   # Strings order by their compare, Chars by their numbers, and enum members as declared.
-  return [NUMBER_KINDS..., 'Char', 'String', ENUM] if is_order_operator(operator)
+  if is_order_operator(operator)
+    return [NUMBER_KINDS..., 'Char', 'String', ENUM]
   case operator
     when '+' then [NUMBER_KINDS..., 'String', 'Binary']
     when '%', '&', '|', '^', '<<', '>>' then INTEGER_KINDS
@@ -138,13 +142,15 @@ export type_of_binary := (body: Body, binary: BinaryOperation, expected: Type?):
     return bool_type
   return type_of_nil_test(body, binary) if is_nil_test(binary)
   range := binary.right
-  return type_of_range_test(body, binary, range) if operator == 'in' and range is Range
+  if operator == 'in' and range is Range
+    return type_of_range_test(body, binary, range)
   return type_of_in_test(body, binary) if operator == 'in'
   if is_equality_operator(operator)
     reject := (type: Type) -> "cannot compare values of type #{format_type(type)}"
     type_of_operands body, binary, nil, EQUALITY_KINDS, reject
     return bool_type
-  return type_of_power(body, binary, expected) if operator == '**'
+  if operator == '**'
+    return type_of_power(body, binary, expected)
   allowed := operand_kinds(operator)
   reject := (type: Type) -> "expected #{describe_kinds(allowed)}, got #{format_type(type)}"
   if is_order_operator(operator)
@@ -160,7 +166,11 @@ type_of_power := (body: Body, binary: BinaryOperation, expected: Type?) ->
   { left, right } := binary
   expected_hint := hint_of(expected, POWER_KINDS)
   is_float_power := is_contextual(left) and is_float_exponent(body, right)
-  hint := expected_hint then expected_hint else is_float_power then float_type
+  hint :=
+    case
+      when expected_hint then expected_hint
+      when is_float_power then float_type
+      else nil
   body.retyped_hints[left] = hint if hint and is_contextual(left)
   type := type_of(body, left, hint)
   type_of_operator_call(body, binary, '**', left, type, 'pow', [right])!
@@ -186,7 +196,8 @@ type_of_range_test := (body: Body, binary: BinaryOperation, range: Range) ->
     message := "a range after `in` takes #{describe_kinds(allowed)}, got #{format_type(type)}"
     fail body.program, deciding.position, message
   for part in parts
-    expect_type body, part, type if part != deciding
+    if part != deciding
+      expect_type body, part, type
   bool_type
 
 # `x in xs` tests the call of `xs.contains(x)`, of the Contains interface, the facts record for
@@ -208,7 +219,11 @@ type_of_in_test := (body: Body, binary: BinaryOperation) ->
 
   # The item is typed by the call, as the parameter's type may decide it, as of `[]`, but for the
   # Char that a String takes.
-  text := is_kind(container, 'String') then char_as_text(container, type_of(body, left), left)
+  text :=
+    if is_kind(container, 'String')
+      char_as_text container, type_of(body, left), left
+    else
+      nil
   call := method_call(right, 'contains', [text then text else left], position)
 
   body.facts.in_tests[binary] = call
@@ -249,7 +264,10 @@ expected_container := (body: Body, binary: BinaryOperation) ->
 # any other part.
 export char_as_text := (container: Type, part: Type, value: Expression) ->
   takes_char := is_kind(container, 'String') and is_kind(part, 'Char')
-  takes_char then method_call(value, 'to_string', [], value.position)
+  if takes_char
+    method_call(value, 'to_string', [], value.position)
+  else
+    nil
 
 # Whether the operand takes its type from the context: a literal, or a name that may stand for a
 # member of an enum.
@@ -279,7 +297,8 @@ type_of_operands := (
   inner := is_equality then inner_of(type) else type
   by_contents := is_equality and compares_by_contents(program, inner)
   is_identity := is_equality and is_identity_type(inner) and not by_contents
-  return type_of_identity_operand(body, second, type) if is_identity
+  if is_identity
+    return type_of_identity_operand(body, second, type)
   is_order := is_order_operator(operator)
   is_allowed :=
     case
@@ -294,9 +313,11 @@ type_of_operands := (
   unless is_allowed
     if first == left
       right_type := alone_type(body, right)
-      reject_char_literal_arithmetic body, binary, right_type if right_type
+      if right_type
+        reject_char_literal_arithmetic body, binary, right_type
     reject_operand body, operator, first, type, reject
-  return type_of_equality_operand(body, first, second, type) if is_equality
+  if is_equality
+    return type_of_equality_operand(body, first, second, type)
   second_type := type_of(body, second, hint(second, type))
   is_unit := not right_first and operator == '+' and appends_unit(type, second_type)
   return type if is_unit
@@ -309,7 +330,10 @@ type_of_operands := (
 # depend on what is expected, which typing it alone would get wrong.
 alone_type := (body: Body, operand: Expression): Type? ->
   return int_type if operand is IntegerLiteral
-  takes_context(body, operand) then nil else type_of(body, operand)
+  if takes_context(body, operand)
+    nil
+  else
+    type_of(body, operand)
 
 # `'a' + 1` or `'a' - 1`: a string literal on the left of an operator is a String, as nothing
 # expects a Char there, so a Char moved by an integer is written with a Char.
@@ -341,7 +365,8 @@ type_of_operation_call := (
 
   # The method is that of the left operand.
   name := OPERATOR_METHODS[operator]!
-  return type_of_operator_call(body, binary, operator, left, type, name, [right]) unless right_first
+  unless right_first
+    return type_of_operator_call(body, binary, operator, left, type, name, [right])
 
   has_method := member_type_by_name(body, type, Identifier(name, position: first.position)) != nil
   if has_method or type is ObjectType

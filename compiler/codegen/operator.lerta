@@ -33,13 +33,18 @@ UNSIGNED_PREDICATES := { '==': 'eq', '!=': 'ne', '<': 'ult', '<=': 'ule', '>': '
 
 export generate_unary := (g: Generator, unary: UnaryOperation) ->
   return generate(g, call) if call := g.facts.operator_calls[unary]
-  return g.ir.negate(generate_condition(g, unary.operand)) if unary.operator == 'not'
+  if unary.operator == 'not'
+    return g.ir.negate(generate_condition(g, unary.operand))
   operand := generate(g, unary.operand)
   type := type_of(g, unary)
-  unary.operator == '~' then invert(g, operand, type) else negate(g, operand, type)
+  if unary.operator == '~'
+    invert(g, operand, type)
+  else
+    negate(g, operand, type)
 
 negate := (g: Generator, operand: String, type: Type) ->
-  return emit_float_negation(g.ir, operand, type) if is_float(type)
+  if is_float(type)
+    return emit_float_negation(g.ir, operand, type)
   apply_integer_operator(g, '-', '0', operand, type)
 
 # `~x`, the bits of an integer inverted, as `x ^ -1` gives them.
@@ -51,8 +56,10 @@ invert := (g: Generator, operand: String, type: Type) ->
 export apply_operator_method := (
   g: Generator, name: String, object: String, args: String[], type: Type
 ) ->
-  return negate(g, object, type) if name == 'neg'
-  return invert(g, object, type) if name == 'bit_not'
+  if name == 'neg'
+    return negate(g, object, type)
+  if name == 'bit_not'
+    return invert(g, object, type)
   if is_bytes(type)
     emit_retain g.ir, part for part in [object, args[0]]
     return emit_concat(g.ir, [object, args[0]])
@@ -62,10 +69,12 @@ export apply_operator_method := (
 # type_of_operator_call).
 export generate_binary := (g: Generator, binary: BinaryOperation) ->
   return generate(g, call) if call := g.facts.operator_calls[binary]
-  return generate_in_items(g, binary, items) if items := compared_items(g.facts, binary)
+  if items := compared_items(g.facts, binary)
+    return generate_in_items(g, binary, items)
   return generate_in_test(g, call) if call := g.facts.in_tests[binary]
   range := binary.right
-  return generate_range_test(g, binary, range) if range is Range
+  if range is Range
+    return generate_range_test(g, binary, range)
   if call := g.facts.order_calls[binary]
     return emit_order_test(g.ir, binary.operator, generate(g, call))
   operator := binary.operator
@@ -187,16 +196,20 @@ apply_binary := (g: Generator, operator: String, left: String, right: String, op
     return negate_if_unequal(g, operator, released(equal))
   if operand_type is OptionalType
     return negate_if_unequal(g, operator, generate_optional_equals(g, left, right, operand_type))
-  return negate_if_unequal(g, operator, emit_equals(g.ir, left, right)) if is_bytes(operand_type)
-  return apply_numeric(g, operator, left, right, operand_type) if is_numeric_operator(operator)
-  return emit_float_comparison(g.ir, operator, left, right, operand_type) if is_float(operand_type)
+  if is_bytes(operand_type)
+    return negate_if_unequal(g, operator, emit_equals(g.ir, left, right))
+  if is_numeric_operator(operator)
+    return apply_numeric(g, operator, left, right, operand_type)
+  if is_float(operand_type)
+    return emit_float_comparison(g.ir, operator, left, right, operand_type)
   is_unsigned := is_integer(operand_type) and not is_signed(operand_type)
   predicate := (is_unsigned then UNSIGNED_PREDICATES else SIGNED_PREDICATES)[operator]!
   g.ir.assign("icmp #{predicate} #{ir_type(operand_type)} #{left}, #{right}")
 
 # An arithmetic operator applied to two numbers of the type: floats, or integers.
 export apply_numeric := (g: Generator, operator: String, left: String, right: String, type: Type) ->
-  return apply_float_arithmetic(g, operator, left, right, type) if is_float(type)
+  if is_float(type)
+    return apply_float_arithmetic(g, operator, left, right, type)
   apply_integer_operator(g, operator, left, right, type)
 
 # Whether the Ordering, an i64, is one that the operator, `<` or the like, holds for.
@@ -248,7 +261,8 @@ generate_nil_test := (g: Generator, binary: BinaryOperation) ->
   value := binary.left is NilLiteral then binary.right else binary.left
   (operand, is_owned) := generate_borrowed(g, value, [], true)
   present := emit_is_present(g.ir, operand, type_of(g, value))
-  release_if_reference g, value, operand if is_owned
+  if is_owned
+    release_if_reference g, value, operand
   binary.operator == '!=' then present else g.ir.negate(present)
 
 # Short-circuit: the right operand is evaluated only when the left one does not decide.

@@ -64,7 +64,8 @@ build_then := (request: BuildRequest, run_args: String[]?) ->
 
   # A Windows program that crashes exits with an NTSTATUS, such as 0xC0000005, which exit does not
   # take.
-  exit code in 0..=255 then code else 255
+  in_range := code in 0..=255
+  exit in_range then code else 255
 
 # The output would replace a file that the build reads, which another path may name: a module,
 # whose key is its real path, or a linked file.
@@ -119,7 +120,8 @@ build_universal := (request: BuildRequest, program: ProgramWide, dir: String) ->
 # std:process's `program` gives the name to the program, in a directory of `dir` of its own, apart
 # from the files of the build.
 executable_path := (request: BuildRequest, dir: String) ->
-  return link_path(real_path('.'), output) if output := request.output
+  if output := request.output
+    return link_path(real_path('.'), output)
   executable_dir := join(real_path(dir), 'executable')
   make_dir executable_dir
   join(executable_dir, "#{program_name(request.source)}#{executable_suffix(request.kind.target)}")
@@ -170,7 +172,11 @@ link_executable := (request: BuildRequest, program: ProgramWide, dir: String, pr
 
   lto_cache := join(real_path(cache_dir()), LTO_CACHE)
   system := target_system(kind.target)
-  lto_flags := kind.optimize then lto_link_flags(system, lto_cache)
+  lto_flags :=
+    if kind.optimize
+      lto_link_flags system, lto_cache
+    else
+      nil
 
   # dsymutil (below) reads the debug information from the objects, which the link-time optimizer
   # makes in a directory that it removes unless told one.
@@ -216,10 +222,12 @@ link_path := (cwd: String, path: String) -> is_absolute(path) then path else "#{
 compile_modules := (request: ModulesRequest, dir: String, prefix: String) ->
   { program, modules, runtime } := request
   names := ["#{prefix}module#{i}" for _ at i in modules]
-  cached := [
-    is_standard_name(module.key) then cached_module_object(runtime, ir)
-    for (module, ir) in program.modules.zip(modules)
-  ]
+  cached_of := (key: String, ir: String[]) ->
+    if is_standard_name(key)
+      cached_module_object(runtime, ir)
+    else
+      nil
+  cached := [cached_of(module.key, ir) for (module, ir) in program.modules.zip(modules)]
   reused := [path and is_file(path) for path in cached]
   compiled := [i for is_reused at i in reused when not is_reused]
   for i in compiled
@@ -234,16 +242,19 @@ compile_modules := (request: ModulesRequest, dir: String, prefix: String) ->
 
   return nil unless await run_clang_jobs([job(i) for i in compiled])
   for i in compiled
-    await keep_module_object(join(dir, "#{names[i]}.o"), path, dir) if path := cached[i]
+    if path := cached[i]
+      await keep_module_object(join(dir, "#{names[i]}.o"), path, dir)
 
   # A kept object is linked from the cache even by the build that compiled it, as the key of an
   # entry of the linker's ThinLTO cache on Linux holds the paths of the objects, which the next
   # build would not find otherwise. The link runs in `dir`, and the cache may be named relative to
   # where the compiler runs.
-  [
-    path and is_file(path) then real_path(path) else "#{name}.o"
-    for (name, path) in names.zip(cached)
-  ]
+  object_of := (name: String, path: String?) ->
+    if path and is_file(path)
+      real_path(path)
+    else
+      "#{name}.o"
+  [object_of(name, path) for (name, path) in names.zip(cached)]
 
 # The modules that compile_modules compiles: the IR of each of the program's modules, and the
 # runtime for the build's kind, with the flags of that kind.
