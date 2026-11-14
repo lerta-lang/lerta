@@ -48,7 +48,10 @@ extend Walker
       when If then node.nil_safe then OTHER else BRANCH
       when ArrayLiteral, RecordLiteral, MapLiteral
         # One written in a block is one, as a spread may start a record there.
-        is_block_literal(node) or is_written_in_block(node) then LITERAL_BLOCK
+        if is_block_literal(node) or is_written_in_block(node)
+          LITERAL_BLOCK
+        else
+          nil
       when FunctionLiteral then nil
       when BinaryOperation then OPERATION
       when Conditional then TWO_WAY
@@ -56,7 +59,10 @@ extend Walker
         if literal := literal_under_members(node)
           return LITERAL_BLOCK if is_block_literal(literal)
         return BLOCK_CALL if is_block_call(node) and @on_own_line
-        node is Member | Call | Index then CHAIN else OTHER
+        if node is Member | Call | Index
+          CHAIN
+        else
+          OTHER
 
   # A type, on one line, in the parentheses that group it: those that the tree does not keep, as
   # around a union or a function type that `?` or `[]` follows. One whose items line ends separate,
@@ -218,7 +224,8 @@ extend Walker
         @chain node.condition, before
         @breaks_operations = breaks
         @value @take('then', ONE), node.then_value, false, false
-        @value @take('else', ONE), node.else_value, false, false unless node.without_else
+        unless node.without_else
+          @value @take('else', ONE), node.else_value, false, false
       when ArrayLiteral then @literal(node, '[', before, ']', NONE, @element_items(node.elements))
       when MapLiteral then @map(node, before)
       when RecordLiteral then @record(node, before)
@@ -234,7 +241,8 @@ extend Walker
       when Try then @try_value(node, before)
       when Return
         return_at := @take('return', before)
-        @value return_at, value, true if value := node.value
+        if value := node.value
+          @value return_at, value, true
       when Throw
         @take 'throw', before
         @expression node.message, ONE
@@ -280,7 +288,8 @@ extend Walker
       literal_under_members(node) == nil
 
     # The shapes inside follow it: a call's arguments stay the last shapes of its statement.
-    @shapes.push ChainShape(first, dots, last: @at - 1) if is_chain
+    if is_chain
+      @shapes.push ChainShape(first, dots, last: @at - 1)
     kept := [dot for dot in dots when dot in @line_starts]
     if takes_unbracketed and not kept.is_empty() and literal_under_members(node) == nil
       @shapes.push ChainShape(first, last: @at - 1, dots: kept, kept: true)
@@ -594,7 +603,8 @@ extend Walker
       else
         field := fields[i - spread_count]
         @take IDENTIFIER, gap
-        @value @take(':', NONE), field.value, in_block if @at_kind(':')
+        if @at_kind(':')
+          @value @take(':', NONE), field.value, in_block
     items := ListItems
       walk
       count: spread_count + fields.length

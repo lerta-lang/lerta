@@ -31,8 +31,10 @@ export condition_edit := (
     edit := positive_condition(tokens, word, negation, not_at, takes_negation, claimed) ? return nil
     claimed.add negation
     return edit
-  return tokens.report(NEGATED_JUNCTIONS, tokens.start(word)) if is_junction(written)
-  opposite := tokens.replaced(word, tokens.code[word].kind == 'unless' then 'if' else 'while')
+  if is_junction(written)
+    return tokens.report(NEGATED_JUNCTIONS, tokens.start(word))
+  is_unless := tokens.code[word].kind == 'unless'
+  opposite := tokens.replaced(word, is_unless then 'if' else 'while')
   if inner := written as UnaryOperation?
     not_at := not_of(tokens, inner) ? return nil
     claimed.add inner
@@ -46,7 +48,8 @@ positive_condition := (
   claimed: Set<UnaryOperation>
 ) ->
   { operand } := negation
-  return tokens.report(NEGATED_JUNCTIONS, tokens.start(word)) if is_junction(operand)
+  if is_junction(operand)
+    return tokens.report(NEGATED_JUNCTIONS, tokens.start(word))
   without_not := not_removed(tokens, not_at)
   if inner := operand as UnaryOperation?
     if inner_not := not_of(tokens, inner)
@@ -55,7 +58,11 @@ positive_condition := (
   if inverse := inverse_equality(tokens, operand)
     return tokens.edit(DOUBLE_NEGATIONS, [without_not, inverse])
   return nil unless takes_negation
-  opposite := tokens.code[word].kind == 'if' then 'unless' else 'until'
+  opposite :=
+    if tokens.code[word].kind == 'if'
+      'unless'
+    else
+      'until'
   tokens.edit(NEGATED_CONDITIONS, [tokens.replaced(word, opposite), without_not])
 
 # `a == b` for `a != b`, and `x != nil` for `x == nil`, as the opposite of a test.
@@ -113,24 +120,36 @@ not_of := (tokens: Tokens, negation: UnaryOperation) ->
     return word - 1 if tokens.is_word(word, 'in') and tokens.is_kind(word - 1, 'not')
   var at = tokens.at(negation.position) ? return nil
   at += 1 while tokens.is_kind(at, '(')
-  tokens.is_kind(at, 'not') then at
+  if tokens.is_kind(at, 'not')
+    at
+  else
+    nil
 
 # The `is` of `x is T` or `x is not T`, or the `in` of `x in xs`.
 test_word := (tokens: Tokens, test: Expression) ->
   case test
     when IsTest
       type := tokens.at(test.type.position) ? return nil
-      tokens.is_word(type - 1, 'is') then type - 1 else tokens.is_word(type - 2, 'is') then type - 2
+      case
+        when tokens.is_word(type - 1, 'is') then type - 1
+        when tokens.is_word(type - 2, 'is') then type - 2
+        else nil
     when BinaryOperation
       return nil if test.operator != 'in'
       right := tokens.at(test.right.position) ? return nil
-      tokens.is_word(right - 1, 'in') then right - 1
+      if tokens.is_word(right - 1, 'in')
+        right - 1
+      else
+        nil
     else nil
 
 # The `not` at the index left out, with the space before it after `is`, and with that after it
 # otherwise.
 not_removed := (tokens: Tokens, at: Int) ->
-  tokens.is_word(at - 1, 'is') then tokens.removed_with_spaces_before(at) else tokens.removed(at)
+  if tokens.is_word(at - 1, 'is')
+    tokens.removed_with_spaces_before(at)
+  else
+    tokens.removed(at)
 
 # An `and` or an `or`.
 is_junction := (expression: Expression) ->

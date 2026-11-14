@@ -26,7 +26,10 @@ export annotating_of := (program: Statement[], typed: Typed?): Annotating? ->
 
 export annotation_edits := (tokens: Tokens, value: Expression, annotating: Annotating): Edit?[] ->
   { typed, functions } := annotating
-  value is FunctionLiteral then function_types(tokens, value, typed, functions) else []
+  if value is FunctionLiteral
+    function_types(tokens, value, typed, functions)
+  else
+    []
 
 export annotation_statement_edits := (
   tokens: Tokens, statement: Statement, annotating: Annotating
@@ -182,7 +185,11 @@ left_out_parameter := (
   name_at := tokens.at(name.position) ? return nil
   return nil unless tokens.is_kind(name_at + 1, ':')
   bound := parameter_bound(tokens, function.params, i, close) ? return nil
-  last := tokens.is_kind(bound - 1, ',') then bound - 2 else bound - 1
+  last :=
+    if tokens.is_kind(bound - 1, ',')
+      bound - 2
+    else
+      bound - 1
   return nil if names_import(tokens, name_at + 2, last + 1, typed)
   change := Change(from: tokens.end(name_at), to: tokens.end(last), text: '')
   tokens.edit_at(TYPE_ANNOTATIONS, tokens.start(name_at + 1), [change])
@@ -192,8 +199,14 @@ left_out_parameter := (
 parameter_bound := (tokens: Tokens, params: Parameter[], i: Int, close: Int) ->
   if value := params[i].default
     value_at := tokens.at(value.position) ? return nil
-    return tokens.is_kind(value_at - 1, '=') then value_at - 1
-  i + 1 < params.length then tokens.at(params[i + 1].name.position) else close
+    if tokens.is_kind(value_at - 1, '=')
+      return value_at - 1
+    else
+      return nil
+  if i + 1 < params.length
+    tokens.at(params[i + 1].name.position)
+  else
+    close
 
 left_out_return := (
   tokens: Tokens, function: FunctionLiteral, open: Int, close: Int, typed: Typed
@@ -220,7 +233,11 @@ arrow_after := (tokens: Tokens, from: Int) ->
   var i = from
   while i < tokens.code.length
     return i if tokens.is_kind(i, '->')
-    closing := tokens.code[i].kind in OPENING_BRACKETS then (tokens.matching(i) ? return nil) else i
+    closing :=
+      if tokens.code[i].kind in OPENING_BRACKETS
+        tokens.matching(i) ? return nil
+      else
+        i
     i = closing + 1
   nil
 

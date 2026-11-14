@@ -162,7 +162,10 @@ operands_of := (operand: Operand): Operand[] ->
     when Index then [part(expression.object, POSTFIX, last: false)]
     when Unwrap then [part(expression.operand, POSTFIX, last: false)]
     when Member
-      expression.object is This then [] else [part(expression.object, POSTFIX, last: false)]
+      if expression.object is This
+        []
+      else
+        [part(expression.object, POSTFIX, last: false)]
     when Call then [part(expression.callee, POSTFIX, last: false)]
     when UnaryOperation then [unary_operand(expression)]
     when BinaryOperation then binary_operands(expression, last)
@@ -176,7 +179,10 @@ operands_of := (operand: Operand): Operand[] ->
     when Comprehension then comprehension_operands(expression)
     when If
       binding := expression.condition as Binding ? return []
-      expression.nil_safe then [part(binding.value, POSTFIX, last: false)] else []
+      if expression.nil_safe
+        [part(binding.value, POSTFIX, last: false)]
+      else
+        []
     else []
 
 # The iterable of a spread, `xs...`, and the element and the guard of a comprehension, which are no
@@ -258,16 +264,23 @@ range_ends := (range: Range, last: Bool) ->
     is_operation := value is BinaryOperation | UnaryOperation
     Operand(expression: value, level: ADDITIVE, last: flags.last, clarified: is_operation)
   ends: Operand[]
-  ends.push end_of(start, last: false) if start := range.start
-  ends.push end_of(end, last: last and range.step == nil) if end := range.end
-  ends.push end_of(step, last: last) if step := range.step
+  if start := range.start
+    ends.push end_of(start, last: false)
+  if end := range.end
+    ends.push end_of(end, last: last and range.step == nil)
+  if step := range.step
+    ends.push end_of(step, last: last)
   ends
 
 # The parentheses of `(x as T?) ? y` are those of Cast fallbacks, which leaves them out.
 coalesce_operands := (coalesce: Coalesce, last: Bool) ->
   cast := cast_of(coalesce)
   value := Operand(expression: coalesce.value, level: RANGE, last: false, clarified: cast != nil)
-  fallback_level := cast != nil and is_cast(coalesce.fallback) then COMPARISON else COALESCE
+  fallback_level :=
+    if cast != nil and is_cast(coalesce.fallback)
+      COMPARISON
+    else
+      COALESCE
   [value, Operand(last, expression: coalesce.fallback, level: fallback_level)]
 
 # A `then`/`else` inside the `then` value of another is clarified.

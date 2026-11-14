@@ -259,7 +259,11 @@ extend Walker
         @take ':=', ONE
         @operand condition.value, ONE
       when UnaryOperation
-        written := keyword in ['unless', 'until'] then condition.operand else condition
+        written :=
+          if keyword in ['unless', 'until']
+            condition.operand
+          else
+            condition
         @operand written, ONE
       else @operand(condition, ONE)
 
@@ -317,9 +321,14 @@ extend Walker
     args_at := node.args_position ? return @members(members, head)
     args := [member for member in members when member.in_args]
     others := groups_of([member for member in members when not member.in_args])
-    position := (i: Int) -> i == 0 then args_at else others[i - 1].position()
+    position := (i: Int) ->
+      if i == 0
+        args_at
+      else
+        others[i - 1].position()
     @in_block head, others.length + 1, position, (i, gap) ->
-      return @member_group(others[i - 1], gap) if i > 0
+      if i > 0
+        return @member_group(others[i - 1], gap)
       @members args, @take_spelled('args', gap)
 
   interface_declaration := (node: InterfaceDeclaration, before: CodeGap) ->
@@ -334,7 +343,12 @@ extend Walker
     @take IDENTIFIER, ONE
     { members } := node
     @in_block head, members.length, (i) -> members[i].position, (i, gap) ->
-      @take members[i] is StringLiteral then STRING else IDENTIFIER, gap
+      kind: TokenKind =
+        if members[i] is StringLiteral
+          STRING
+        else
+          IDENTIFIER
+      @take kind, gap
 
   extend_declaration := (node: Extend, before: CodeGap) ->
     head := @take('extend', before)
@@ -380,7 +394,12 @@ extend Walker
       starts := @at in @line_starts
       @take '|', ONE if i > 0 and not starts
       members.push @at
-      @type member, starts then LineStart(@depth + 1) else ONE
+      gap: CodeGap =
+        if starts
+          LineStart @depth + 1
+        else
+          ONE
+      @type member, gap
     @shapes.push UnionShape(members, last: @at - 1)
 
   # The members of a union on the line of `=`, with `|` between them.
@@ -445,7 +464,8 @@ extend Walker
   # A member on its line, or `private` and the members of its block below it.
   member_group := (group: MemberGroup, before: CodeGap) ->
     { members } := group
-    return @member_declaration(members[0], before) if group.private_block == nil
+    if group.private_block == nil
+      return @member_declaration(members[0], before)
     head := @take_spelled('private', before)
     @in_block head, members.length, (i) -> members[i].position, (i, gap) ->
       @member_declaration members[i], gap
@@ -455,8 +475,16 @@ extend Walker
   in_block := (head: Int, count: Int, position: (Int) -> Position, walk: (Int, CodeGap) -> void) ->
     line := (i: Int) ->
       start := @starts[position(i)]
-      first := start != nil and start in @line_starts then start
-      next := i + 1 < count then position(i + 1)
+      first :=
+        if start != nil and start in @line_starts
+          start
+        else
+          nil
+      next :=
+        if i + 1 < count
+          position i + 1
+        else
+          nil
       @on_line first, next, -> walk(i, LineStart(@depth))
     @shapes.push @lines_block(@depth + 1, head, count, line)
     @close head, true
@@ -479,7 +507,8 @@ extend Walker
       @type type, ONE
       @take '!', NONE if member.throws
     value := member.value ? return
-    assign := @take(member.modifier == nil and member.type == nil then ':=' else '=', ONE)
+    is_const := member.modifier == nil and member.type == nil
+    assign := @take(is_const then ':=' else '=', ONE)
     @value assign, value, true
 
   # `import 'module'`, with `as` and a name or not, or `import` or `export` and names, on its line
@@ -627,7 +656,11 @@ extend Walker
     @breaks_operations = breaks
     shapes := @shapes
     @shapes = outer
-    then_at := @at_kind('then') then @take('then', ONE)
+    then_at :=
+      if @at_kind('then')
+        @take 'then', ONE
+      else
+        nil
     body := @body(then_at ? start, arm.body, BRANCHES)
     ArmShape(
       start

@@ -27,10 +27,15 @@ edit_of := (tokens: Tokens, run: MemberDeclaration[]) ->
   first := run[0]
   block := first.private_block
   is_one_block := block != nil and run.all((member) -> member.private_block == block)
-  return is_one_block then unwrapped(tokens, first) if run.length == 1
+  if run.length == 1
+    if is_one_block
+      return unwrapped(tokens, first)
+    else
+      return nil
   return nil if is_one_block
   changes: Change[]
-  changes.push header(tokens, first) if first.private_block == nil
+  if first.private_block == nil
+    changes.push header(tokens, first)
   for member at i in run
     if block := member.private_block
       changes.push line_removed(block.line) if i > 0 and block != run[i - 1].private_block
@@ -51,7 +56,8 @@ indented := (tokens: Tokens, member: MemberDeclaration) ->
     continue if tokens.line_indentation(line) == nil
     at := Position(line, column: 1)
     changes.push { from: at, to: at, text: '  ' }
-    changes.push tokens.removed(tokens.at(member.position)!) if line == member.position.line
+    if line == member.position.line
+      changes.push tokens.removed(tokens.at(member.position)!)
   changes
 
 # The member of a block of its own moved out of it: the block's line left out, its lines indented
@@ -63,7 +69,8 @@ unwrapped := (tokens: Tokens, member: MemberDeclaration) ->
   for line in start.line..=last_line(tokens, member)
     continue if tokens.line_indentation(line) == nil
     changes.push { from: { line, column: 1 }, to: { line, column: 3 }, text: '' }
-    changes.push { from: start, to: start, text: 'private ' } if line == start.line
+    if line == start.line
+      changes.push { from: start, to: start, text: 'private ' }
   tokens.edit_at(PRIVATE_BLOCKS, block, changes)
 
 line_removed := (line: Int) ->

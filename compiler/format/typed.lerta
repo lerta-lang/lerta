@@ -63,7 +63,8 @@ export typed_programs := (paths: String[], given: Map<String, EntryModule>) ->
   # module: it is loaded by its name, and what is found is kept by its file's key.
   standard: Map<String, String>
   for path in paths
-    standard[module_key(path)] = name if name := standard_module_of(path)
+    if name := standard_module_of(path)
+      standard[module_key(path)] = name
   file_keys := Map([(name, key) for (key, name) in standard])
   modules_given := Map([(standard[key] ? key, entry) for (key, entry) in given])
   found: Map<String, Typed>
@@ -128,11 +129,16 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
     when Member then [unqualified(tokens, value, typed.facts)]
     when BinaryOperation
       { facts } := typed
+      concatenation :=
+        if value.operator == '+'
+          char_concatenation tokens, value.left, value.right, facts
+        else
+          nil
       [
         emptiness_test(tokens, value, facts)
         tested_range(tokens, value, facts)
         range_test(tokens, value, facts)
-        value.operator == '+' then char_concatenation(tokens, value.left, value.right, facts)
+        concatenation
         found_test(tokens, value, facts)
         membership_lists(tokens, value, typed)...
       ]
@@ -155,7 +161,12 @@ export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Ty
     when Import then [unused_imports(tokens, statement, typed.unused_imports)]
     when Assignment
       { operator, target, value } := statement
-      [operator == '+=' then char_concatenation(tokens, target, value, typed.facts)]
+      concatenation :=
+        if operator == '+='
+          char_concatenation tokens, target, value, typed.facts
+        else
+          nil
+      [concatenation]
     else []
 
 # The import without the names that are never used (see Unused names); only reported where it gives
@@ -164,7 +175,10 @@ export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Ty
 unused_imports := (tokens: Tokens, statement: Import, unused: Set<Identifier>) ->
   return nil if statement.exported
   if alias := statement.alias
-    return alias in unused then tokens.report(UNUSED_IMPORTS, statement.position)
+    if alias in unused
+      return tokens.report(UNUSED_IMPORTS, statement.position)
+    else
+      return nil
   { names } := statement
   is_unused := (name: ImportName) -> name.alias ? name.name in unused
   return nil unless names.any(is_unused)
@@ -199,7 +213,8 @@ left_out_names := (tokens: Tokens, spans: Span[]) ->
   changes: Change[]
   for span at index in spans[..kept_last]
     next := spans[index + 1].first
-    changes.push { from: tokens.start(span.first), to: tokens.start(next), text: '' } if span.unused
+    if span.unused
+      changes.push { from: tokens.start(span.first), to: tokens.start(next), text: '' }
   if kept_last < spans.length - 1
     changes.push {
       from: tokens.end(spans[kept_last].last)
@@ -230,12 +245,21 @@ export record_changes := (tokens: Tokens, call: Call) ->
   callee := tokens.at(call.callee.position) ? return nil
   open := after_callee(tokens, call) ? return nil
   return nil if tokens.is_kind(open, '<')
-  return unparenthesized_record(tokens, callee, open) unless tokens.is_kind(open, '(')
+  unless tokens.is_kind(open, '(')
+    return unparenthesized_record(tokens, callee, open)
   close := tokens.matching(open) ? return nil
 
   # A space inside each brace that has the arguments on its line.
-  opening := tokens.code[open + 1].line == tokens.code[open].line then '{ ' else '{'
-  closing := tokens.code[close - 1].end_line == tokens.code[close].line then ' }' else '}'
+  opening :=
+    if tokens.code[open + 1].line == tokens.code[open].line
+      '{ '
+    else
+      '{'
+  closing :=
+    if tokens.code[close - 1].end_line == tokens.code[close].line
+      ' }'
+    else
+      '}'
   [
     Change(from: tokens.start(callee), to: tokens.end(open), text: opening)
     tokens.replaced(close, closing)
@@ -291,7 +315,11 @@ shorthand_arguments := (tokens: Tokens, call: Call, facts: NodeFacts): Edit?[] -
   var stays = true
   for named in call.named_args
     shorthand := is_shorthand(named)
-    change := shorthand and stays then alone(tokens, named)
+    change :=
+      if shorthand and stays
+        alone tokens, named
+      else
+        nil
     stays = change != nil
     if change
       changes.push change
@@ -332,7 +360,10 @@ default_comparison := (tokens: Tokens, call: Call, facts: NodeFacts) ->
   comparison := tokens.at(call.args[0].position) ? return nil
   without_parentheses := comparison == name + 1
   within :=
-    without_parentheses then arguments_after(tokens, name) else arguments_within(tokens, name + 1)
+    if without_parentheses
+      arguments_after tokens, name
+    else
+      arguments_within tokens, name + 1
   change := within ? return nil
   tokens.edit_at(DEFAULT_COMPARISONS, call.args[0].position, [change])
 
@@ -481,7 +512,11 @@ membership_test := (tokens: Tokens, call: Call, facts: NodeFacts) ->
   name := tokens.at(member.name.position) ? return nil
 
   # `@contains(x)` has no `.`.
-  last := tokens.is_kind(name - 1, '.') then name - 2 else name - 1
+  last :=
+    if tokens.is_kind(name - 1, '.')
+      name - 2
+    else
+      name - 1
 
   open := name + 1
   return nil if not tokens.is_kind(open, '(') or not is_balanced(tokens, first, last)
@@ -500,7 +535,10 @@ tested_range := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
   range := test.right as Range ? return nil
   counted := counted_end(range.end) ? return nil
   type := facts.types[counted] ? return nil
-  is_one_of_kinds(type, INTEGER_KINDS) then counted_range(tokens, range)
+  if is_one_of_kinds(type, INTEGER_KINDS)
+    counted_range(tokens, range)
+  else
+    nil
 
 # `s + c` for `s + c.to_string()` of a String `s` and a Char `c`, and so for `+=` (see Char
 # concatenations): `+` of a String appends a Char.
@@ -561,7 +599,8 @@ membership_lists := (tokens: Tokens, test: BinaryOperation, typed: Typed): Edit?
     if tested := tested_word(terms[start], comparison, typed.facts)
       while end + 1 < terms.length and tests_same(terms[end + 1], tested, comparison, typed.facts)
         end += 1
-    edits.push membership_list(tokens, terms[start..=end], junction) if end > start
+    if end > start
+      edits.push membership_list(tokens, terms[start..=end], junction)
     start = end + 1
   edits
 
@@ -571,7 +610,10 @@ tested_word := (term: Expression, comparison: String, facts: NodeFacts) ->
   test := term as BinaryOperation ? return nil
   return nil if test.operator != comparison or not runs_no_code(test.left)
   type := facts.types[test.left] ? return nil
-  is_plainly_compared(type) and is_fixed(facts, test.right) then test.left
+  if is_plainly_compared(type) and is_fixed(facts, test.right)
+    test.left
+  else
+    nil
 
 tests_same := (term: Expression, tested: Expression, comparison: String, facts: NodeFacts) ->
   other := tested_word(term, comparison, facts) ? return false
@@ -597,13 +639,19 @@ membership_list := (tokens: Tokens, terms: Expression[], junction: String) ->
 text_of := (tokens: Tokens, value: Expression) ->
   first := tokens.at(first_position(value)) ? return nil
   last := last_token(tokens, value) ? return nil
-  is_balanced(tokens, first, last) then tokens.slice(tokens.start(first), tokens.end(last))
+  if is_balanced(tokens, first, last)
+    tokens.slice(tokens.start(first), tokens.end(last))
+  else
+    nil
 
 last_token := (tokens: Tokens, value: Expression) ->
   at := tokens.at(last_position(value)) ? return nil
 
   # `-1` is one literal of two tokens, found by the first.
-  tokens.is_kind(at, '-') then at + 1 else at
+  if tokens.is_kind(at, '-')
+    at + 1
+  else
+    at
 
 first_position := (value: Expression): Position ->
   case value
@@ -664,13 +712,19 @@ holds_comment := (tokens: Tokens, run: CaseArm[]) ->
       (tokens.code[at].line == tokens.code[at - 1].line or tokens.code[at].column > column)
   next += 1 while continues(next)
   last :=
-    next < tokens.code.length then tokens.code[next].line - 1 else tokens.code.last()!.end_line
+    if next < tokens.code.length
+      tokens.code[next].line - 1
+    else
+      tokens.code.last()!.end_line
   tokens.comments.any((comment) -> comment.line in line..=last)
 
 # A spread of the value whose fields a construction copies, where it gives every argument, of the
 # type constructed (see Spreads), only reported.
 spread := (tokens: Tokens, call: Call, facts: NodeFacts) ->
-  is_copy(call, facts) then tokens.report(SPREADS, call.position)
+  if is_copy(call, facts)
+    tokens.report(SPREADS, call.position)
+  else
+    nil
 
 # Whether the construction gives every argument from the fields of a value of its type.
 is_copy := (call: Call, facts: NodeFacts) ->

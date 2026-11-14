@@ -9,12 +9,12 @@ import CompileError from '../errors'
 import lex, Lexed from '../lexer/tokens'
 import parse from '../parser/statement'
 import
-  BINARY_LITERALS, BLANK_LINES, CHAR_CONCATENATIONS, COMMENT_BLANK_LINES, EMPTINESS_TESTS,
-  MEMBERSHIP_TESTS, COMMENTS, DEFAULT_COMPARISONS, DESTRUCTURED_VALUES, DOUBLE_NEGATIONS, ELSE_NIL,
-  EMPTY_INITIAL_VALUES, EXPECTED_TYPES, FOUND_TESTS, ITERABLE_ARGUMENTS, LAYOUT, MEMBERSHIP_LISTS,
-  NIL_FIELDS, RANGE_ENDS, REDUNDANT_CASTS, SEMICOLONS, SHORTHAND_ARGUMENTS, STRANDED_COMMENTS,
-  StyleRule, TYPE_ANNOTATIONS, UNBREAKABLE_LINES, UNION_IS_TESTS, UNUSED_IMPORTS,
-  VALUE_DOUBLE_NEGATIONS, VALUES_ALONE
+  BINARY_LITERALS, BLANK_LINES, CHAINED_VALUES, CHAR_CONCATENATIONS, COMMENT_BLANK_LINES,
+  EMPTINESS_TESTS, MEMBERSHIP_TESTS, COMMENTS, DEFAULT_COMPARISONS, DESTRUCTURED_VALUES,
+  DOUBLE_NEGATIONS, ELSE_NIL, EMPTY_INITIAL_VALUES, EXPECTED_TYPES, FOUND_TESTS, ITERABLE_ARGUMENTS,
+  LAYOUT, LONG_TWO_WAY_VALUES, MEMBERSHIP_LISTS, NIL_FIELDS, RANGE_ENDS, REDUNDANT_CASTS,
+  SEMICOLONS, SHORTHAND_ARGUMENTS, STRANDED_COMMENTS, StyleRule, TYPE_ANNOTATIONS,
+  UNBREAKABLE_LINES, UNION_IS_TESTS, UNUSED_IMPORTS, VALUE_DOUBLE_NEGATIONS, VALUES_ALONE
 from './rules'
 import common_indentation, is_blank from '../lexer/string_literal'
 import applicable, applied, Edit from './edits'
@@ -73,7 +73,8 @@ struct LaidOut
 # Throws a CompileError if the source does not parse. The layout of a statement that holds a
 # rewrite is reported once the rewrite is applied, as the rewrite may change it.
 export format_source := (source: String, path: String) ->
-  return Formatted(text: source, findings: []) if is_off_throughout(source)
+  if is_off_throughout(source)
+    return Formatted(text: source, findings: [])
   parsed := parsed_source(source, path)
   await format_parsed(parsed, path, await typed_program(path, source, parsed.statements))
 
@@ -202,7 +203,8 @@ held_statements := (text: SourceTokens, laid: LaidOut, edits: Edit[]) ->
     for statement in laid.statements
       continue unless spans(text, statement, change.from)
       innermost = statement if innermost == nil or statement.start > innermost.start
-    held.push { from: text.code[innermost.start].position(), last: change.to.line } if innermost
+    if innermost
+      held.push { from: text.code[innermost.start].position(), last: change.to.line }
   held
 
 spans := (text: SourceTokens, statement: StatementShape, at: Position) ->
@@ -215,10 +217,11 @@ spans := (text: SourceTokens, statement: StatementShape, at: Position) ->
 # formatter checks. A comparison of trees cannot check these, which change it by design;
 # tests/format/rewritten_forms.lerta checks that each form means what its rewrite does.
 TREE_CHANGES :=
-  BINARY_LITERALS, CHAR_CONCATENATIONS, DEFAULT_COMPARISONS, DESTRUCTURED_VALUES, DOUBLE_NEGATIONS,
-  ELSE_NIL, EMPTINESS_TESTS, EMPTY_INITIAL_VALUES, EXPECTED_TYPES, FOUND_TESTS, ITERABLE_ARGUMENTS,
-  MEMBERSHIP_LISTS, MEMBERSHIP_TESTS, NIL_FIELDS, RANGE_ENDS, REDUNDANT_CASTS, SHORTHAND_ARGUMENTS,
-  TYPE_ANNOTATIONS, UNION_IS_TESTS, UNUSED_IMPORTS, VALUE_DOUBLE_NEGATIONS, VALUES_ALONE
+  BINARY_LITERALS, CHAINED_VALUES, CHAR_CONCATENATIONS, DEFAULT_COMPARISONS, DESTRUCTURED_VALUES,
+  DOUBLE_NEGATIONS, ELSE_NIL, EMPTINESS_TESTS, EMPTY_INITIAL_VALUES, EXPECTED_TYPES, FOUND_TESTS,
+  ITERABLE_ARGUMENTS, LONG_TWO_WAY_VALUES, MEMBERSHIP_LISTS, MEMBERSHIP_TESTS, NIL_FIELDS,
+  RANGE_ENDS, REDUNDANT_CASTS, SHORTHAND_ARGUMENTS, TYPE_ANNOTATIONS, UNION_IS_TESTS,
+  UNUSED_IMPORTS, VALUE_DOUBLE_NEGATIONS, VALUES_ALONE
 
 # Only the rewrites of the source itself are reported: one that a round enables, as `b'...'` for the
 # `b"..."` that `"...".binary` is written as, shows once the text written is formatted again.
@@ -242,8 +245,13 @@ rewritten_text := (
   var settled = false
 
   for round in 0..MAX_ROUNDS
-    last_rewrites = await rewrites(current, path) if round > 0
-    laid := round == 0 then first_laid else laid_out(current, last_rewrites.typed)
+    if round > 0
+      last_rewrites = await rewrites(current, path)
+    laid :=
+      if round == 0
+        first_laid
+      else
+        laid_out current, last_rewrites.typed
     edits := last_rewrites.edits + laid.edits
     is_chosen := (edit: Edit) ->
       edit.rule != SEMICOLONS and (types or edit.rule != TYPE_ANNOTATIONS)
@@ -259,7 +267,11 @@ rewritten_text := (
     else
       settled = true
       break
-  found := settled then last_rewrites else await rewrites(current, path)
+  found :=
+    if settled
+      last_rewrites
+    else
+      await rewrites(current, path)
   if left_out_types
     before := declared_types(parsed.statements, first.typed)
     after := declared_types(current.statements, found.typed) ? return nil
@@ -378,7 +390,10 @@ class Layout
           decision := line_feed(gap, 2 * @depth, code_gap.rule)
           return decision if not comment or opens_block
           ends_block := @depth > code_gap.depth
-          @starts_paragraph(token, index, ends_block) then blank_before(decision) else decision
+          if @starts_paragraph(token, index, ends_block)
+            blank_before(decision)
+          else
+            decision
 
     # Whether the own-line comment at `index` starts a paragraph (see Blank lines): not after
     # another, which it continues, but at the end of its block or of the source, or before a
@@ -416,7 +431,11 @@ blank_before := (decision: Decision): Decision ->
   return decision if decision.text.starts_with("\n\n")
   { text: "\n" + decision.text, rule: COMMENT_BLANK_LINES }
 
-ending_rule := (gap: Gap) -> line_feeds(gap.text) > 1 then BLANK_LINES else LAYOUT
+ending_rule := (gap: Gap) ->
+  if line_feeds(gap.text) > 1
+    BLANK_LINES
+  else
+    LAYOUT
 
 # A line feed, after a blank line where the source has one, and an indentation of `columns`; `rule`
 # decides it where the source has none.
@@ -461,7 +480,8 @@ shifted := (line: String, shift: Int) ->
 
 render := (texts: String[], decisions: Decision[]) ->
   var text = decisions[0].text
-  text += token_text + decisions[index + 1].text for token_text at index in texts
+  for token_text at index in texts
+    text += token_text + decisions[index + 1].text
   text
 
 # A finding for each gap whose decision differs from the source, at the first character that
@@ -484,7 +504,8 @@ token_findings := (tokens: TextToken[], texts: String[]) ->
   found: Finding[]
   for token at index in tokens
     source := Gap(text: token.text, start: token.start)
-    found.push { at, rule: LAYOUT } if at := first_difference(source, texts[index])
+    if at := first_difference(source, texts[index])
+      found.push { at, rule: LAYOUT }
   found
 
 first_difference := (gap: Gap, decided: String) ->

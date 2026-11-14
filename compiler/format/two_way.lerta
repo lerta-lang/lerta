@@ -1,0 +1,202 @@
+# Two-way values too long for one line by their leaves (see Branches): `c then a else b` whose
+# condition or a value has more leaves than TWO_WAY_LEAVES is written as an `if`, and a chain of
+# them, `a then x else b then y else z`, as a `case`. Where the value is the whole value of a
+# statement on one line, which a block can hold, the formatter writes it so; elsewhere it reports
+# it.
+import Assignment, Conditional, Declaration, Expression, Return, Statement from '../ast'
+import Token, TokenKind from '../lexer/tokens'
+import Change, Edit from './edits'
+import leaves, Span, TWO_WAY_LEAVES from './leaves'
+import CHAINED_VALUES, LONG_TWO_WAY_VALUES, StyleRule from './rules'
+import Tokens from './tokens'
+
+# The conditionals of a chain, the first and those of the `else`s after it.
+chain_of := (conditional: Conditional) ->
+  links := [conditional]
+  links.push links.last()!.else_value as Conditional! while is_chained(links.last()!)
+  links
+
+is_chained := (conditional: Conditional) ->
+  not conditional.without_else and conditional.else_value is Conditional
+
+# A chain, or a value with a part of more leaves than TWO_WAY_LEAVES, reported at its start, unless
+# a statement's rewrite or the chain around it takes it, which `taken` holds; it takes the
+# conditionals of the chain after it.
+export long_two_way_report := (tokens: Tokens, conditional: Conditional, taken: Set<Expression>) ->
+  taken.add link for link in chain_of(conditional)[1..]
+  return nil if conditional in taken
+  parts := parts_of(tokens, conditional) ? return nil
+  rule := rule_of(tokens, parts) ? return nil
+  tokens.report(rule, tokens.start(parts.first))
+
+# The rule that the value breaks, if it breaks one.
+rule_of := (tokens: Tokens, parts: Parts): StyleRule? ->
+  return CHAINED_VALUES if parts.conditions.length > 1
+  if is_long_two_way(tokens.code, parts.first, parts.last)
+    LONG_TWO_WAY_VALUES
+  else
+    nil
+
+# The value of a statement that a block in its place can hold.
+export whole_value := (statement: Statement): Expression? ->
+  case statement
+    when Declaration, Assignment then statement.value
+    when Return then statement.value
+    when Conditional then statement
+    else nil
+
+# The whole value of the statement written as an `if` or a `case` in its place, where the statement
+# is on one line.
+export long_two_way_edit := (tokens: Tokens, statement: Statement): Edit? ->
+  conditional := whole_value(statement) as Conditional ? return nil
+  parts := parts_of(tokens, conditional) ? return nil
+  rule := rule_of(tokens, parts) ? return nil
+  at := tokens.start(parts.first)
+
+  # Parentheses around the whole value, which the rewrite of Parentheses takes out, go first.
+  return tokens.report(rule, at) if is_wrapped(tokens, parts.first)
+  last := tokens.line_end(parts.first) ? return tokens.report(rule, at)
+
+  # Only the brackets that close around a body on the line of `->` may follow the value.
+  closes := (at: Int) -> tokens.code[at].kind in [')', ']', '}']
+  return tokens.report(rule, at) unless [closes(i) for i in (parts.last + 1)..=last].all((c) -> c)
+
+  # A `return` goes into each branch, as it takes no value of blocks.
+  returns := statement is Return
+  first := returns then parts.first - 1 else parts.first
+
+  # The block goes one level deeper than the line of the value, which the layout then indents as
+  # its rules have it. The statement on the line of `->` or of an arm's `then` or `else`, where no
+  # `if` can start, goes in a block below it, as a body that its line cannot hold does.
+  line_columns := tokens.line_indentation(at.line) ? 0
+  var from = tokens.start(first)
+  var lead = ''
+  var columns = line_columns
+  on_head_line := first > 0 and tokens.code[first - 1].end_line == at.line
+  if on_head_line and (returns or statement is Conditional)
+    head := first - 1
+    return tokens.report(rule, at) unless tokens.code[head].kind in HEAD_ENDS
+    after_arm := tokens.is_kind(head, 'then')
+    from = tokens.end(after_arm then head - 1 else head)
+    columns = line_columns + 2
+    lead = "\n" + ' '.repeat(columns)
+  inner := "\n" + ' '.repeat(columns + 2)
+  slice := (span: Span) -> tokens.slice(tokens.start(span.first), tokens.end(span.last))
+  prefix := returns then 'return ' else ''
+  value := (span: Span) -> prefix + slice(span)
+  otherwise := prefix + (parts.otherwise then slice(parts.otherwise) else 'nil')
+  written :=
+    if rule == CHAINED_VALUES
+      arms := [
+        "#{inner}when #{slice(condition)} then #{value(parts.values[i])}"
+        for condition at i in parts.conditions
+      ]
+      "#{lead}case#{arms.join()}#{inner}else #{otherwise}"
+    else
+      outer := "\n" + ' '.repeat(columns)
+      condition := slice(parts.conditions[0])
+      "#{lead}if #{condition}#{inner}#{value(parts.values[0])}#{outer}else#{inner}#{otherwise}"
+
+  # The brackets after it go back to the line's depth below the block.
+  closing :=
+    if last > parts.last
+      "\n" + ' '.repeat(line_columns)
+    else
+      ''
+  change := Change(from, to: tokens.end(parts.last), text: written + closing)
+  tokens.edit_at(rule, at, [change])
+
+# The code tokens of a chain, from `first` up to `last`: the conditions before its `then`s, the
+# values between them and their `else`s, and the value after the last `else`, if it has one.
+struct Parts
+  first: Int
+  last: Int
+  conditions: Span[]
+  values: Span[]
+  otherwise: Span?
+
+# Those of the chain, found by its `then`s and `else`s outside brackets on the line of its start;
+# nil where they are not one for each link, as where a value spans lines or is parenthesized.
+parts_of := (tokens: Tokens, conditional: Conditional): Parts? ->
+  links := chain_of(conditional)
+  position := tokens.at(conditional.position) ? return nil
+  last := tokens.line_end(position) ? return nil
+
+  # The value in parentheses has the position of the outer `(`, inside which its words are.
+  var first = position
+  first += 1 while tokens.is_kind(first, '(') and words_of(tokens.code, first, last).is_empty()
+  words := words_of(tokens.code, first, last)
+  ends_with_else := not links.last()!.without_else
+  return nil if words.length != 2 * links.length - (ends_with_else then 0 else 1)
+  conditions: Span[]
+  values: Span[]
+  var start = first
+  for word at i in words
+    is_then := i % 2 == 0
+    expected: TokenKind = is_then then 'then' else 'else'
+    return nil unless tokens.is_kind(word, expected)
+    span: Span = { first: start, last: word - 1 }
+    if is_then
+      conditions.push span
+    else
+      values.push span
+    start = word + 1
+  value_end := find_value_end(tokens, start, last)
+  if ends_with_else
+    return {
+      first
+      last: value_end
+      conditions
+      values
+      otherwise: { first: start, last: value_end }
+    }
+  values.push { first: start, last: value_end }
+  { first, last: value_end, conditions, values }
+
+# Whether the value at `first` is in parentheses of its own, rather than those of a call.
+is_wrapped := (tokens: Tokens, first: Int) ->
+  return false unless tokens.is_kind(first - 1, '(')
+  opening := tokens.code[first - 1]
+  callee_end := first > 1 and tokens.code[first - 2].kind in [IDENTIFIER, ')', ']']
+  not callee_end or opening.spaced
+
+# Whether the two-way value of the code tokens from `first` up to `last` is a chain or has a part
+# of more leaves than TWO_WAY_LEAVES, which the rewrite of the value writes as an `if` or a `case`
+# where a block can take it, and reports elsewhere.
+export is_long_two_way := (code: Token[], first: Int, last: Int) ->
+  words := words_of(code, first, last)
+  return true if words.filter((word) -> code[word].kind == 'then').count() > 1
+  var start = first
+  for end in [words..., last + 1]
+    return true if leaves(code, { first: start, last: end - 1 }) > TWO_WAY_LEAVES
+    start = end + 1
+  false
+
+# The `then`s and `else`s outside brackets from `first` up to `last`.
+words_of := (code: Token[], first: Int, last: Int) ->
+  found: Int[]
+  var depth = 0
+  for at in first..=last
+    { kind } := code[at]
+    depth += 1 if kind in ['(', '[', '{']
+    depth -= 1 if kind in [')', ']', '}']
+    return found if depth < 0
+    found.push at if depth == 0 and kind in ['then', 'else']
+  found
+
+# The last token of the value that starts at `start`, before a bracket that closes around it, a
+# comma, or the keyword of a postfix form.
+find_value_end := (tokens: Tokens, start: Int, last: Int) ->
+  var depth = 0
+  for at in start..=last
+    { kind } := tokens.code[at]
+    depth += 1 if kind in ['(', '[', '{']
+    depth -= 1 if kind in [')', ']', '}']
+    return at - 1 if depth < 0 or (depth == 0 and kind in VALUE_ENDS)
+  last
+
+# The tokens that end the head of a body on their line: `->`, and the `then`, which the block below
+# takes the place of, or the `else` of an arm.
+HEAD_ENDS: TokenKind[] = ['->', 'then', 'else']
+
+VALUE_ENDS: TokenKind[] = [',', 'if', 'unless', 'while', 'until', 'for']

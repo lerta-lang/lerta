@@ -54,14 +54,21 @@ export range_test := (expression: Expression): RangeComparison? ->
   written_value := value_on_left then upper.left else upper.right
   end := value_on_left then upper.right else upper.left
   return nil if not runs_no_code(end) or not same(value, written_value)
-  start := same(lower.left, value) then lower.right else lower.left
+  start :=
+    if same(lower.left, value)
+      lower.right
+    else
+      lower.left
   { chain: is_chain then chain, lower, value, start, end, inclusive, at: upper.position }
 
 # The value that `x >= a` or `a <= x` compares with its start, or `x < a` or `a > x` outside.
 lower_value := (comparison: BinaryOperation, outside: Bool) ->
   { operator, left, right } := comparison
   return left if operator == (outside then '<' else '>=')
-  operator == (outside then '>' else '<=') then right
+  if operator == (outside then '>' else '<=')
+    right
+  else
+    nil
 
 same := (a: Expression, b: Expression) ->
   dump_ast_without_positions([a]) == dump_ast_without_positions([b])
@@ -69,7 +76,10 @@ same := (a: Expression, b: Expression) ->
 # The `b` of an end `b + 1`.
 export counted_end := (end: Expression?) ->
   sum := end as BinaryOperation ? return nil
-  sum.operator == '+' and is_one(sum.right) then sum.left
+  if sum.operator == '+' and is_one(sum.right)
+    sum.left
+  else
+    nil
 
 is_one := (expression: Expression) -> expression is IntegerLiteral and expression.value == 1
 
@@ -87,7 +97,8 @@ export runs_of_alike_arms := (case_value: Case) ->
     var end = start + 1
     while end < arms.length and not bodies[start].is_empty() and bodies[end] == bodies[start]
       end += 1
-    runs.push arms[start..end] if end - start > 1
+    if end - start > 1
+      runs.push arms[start..end]
     start = end
   runs
 
@@ -108,7 +119,10 @@ export copied_source := (call: Call) ->
     return nil
   last_copy := call.named_args.index_of(copies.last()!)!
   before := [named for named at i in call.named_args when i < last_copy and named not in copies]
-  before.all((named) -> has_no_effects(named.value)) then source
+  if before.all((named) -> has_no_effects(named.value))
+    source
+  else
+    nil
 
 # The field that the named argument copies: of its own name.
 copied_field := (named: NamedValue) ->

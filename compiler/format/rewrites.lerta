@@ -4,8 +4,8 @@
 import
   ArrayLiteral, ArrayTypeName, Assignment, BinaryOperation, Binding, Call, Coalesce, Comprehension,
   Condition, Conditional, Declaration, Expression, For, FunctionLiteral, Identifier, If, Index,
-  Interpolation, Member, MemberDeclaration, NamedType, NilLiteral, Pass, RecordLiteral, Statement,
-  StringLiteral, TypeDeclaration, UnaryOperation, UnionTypeName
+  Interpolation, Member, MemberDeclaration, NamedType, NilLiteral, Pass, RecordLiteral, Return,
+  Statement, StringLiteral, TypeDeclaration, UnaryOperation, UnionTypeName
 from '../ast'
 import TextPart from '../lexer/string_literal'
 import Lexed, Token, TokenKind from '../lexer/tokens'
@@ -32,6 +32,8 @@ import Tokens from './tokens'
 import annotating_of, annotation_edits, annotation_statement_edits from './annotations'
 import typed_edits, typed_statement_edits, Typed from './typed'
 import union_test_edits from './union_tests'
+import long_two_way_edit, long_two_way_report, whole_value from './two_way'
+import leaves, Span, TWO_WAY_LEAVES from './leaves'
 import written_return, written_type_edits from './written_types'
 
 export rewrites_of := (
@@ -50,19 +52,27 @@ export rewrites_of := (
   junctions: Set<BinaryOperation>
 
   with_else: Set<Condition>
+
+  # The two-way values that the rewrite of a statement or of a chain around them takes (see
+  # two_way.lerta).
+  taken: Set<Expression>
   places_of program, {
     before: (value, _) ->
       with_else.add value.condition if value is If and not value.else_body.is_empty()
     condition: (condition, _) ->
       add condition_edit(tokens, condition, condition not in with_else, claimed)
+    statement: (statement, _) ->
+      taken.add value if value := whole_value(statement)
   }
   annotated := annotating_of(program, typed)
   places_of program, {
     before: (value, _: Place) ->
-      add edit for edit in edits_within(tokens, value, claimed, junctions, parentheses.tight, typed)
+      tight := parentheses.tight
+      add edit for edit in edits_within(tokens, value, claimed, junctions, taken, tight, typed)
       if annotating := annotated
         add edit for edit in annotation_edits(tokens, value, annotating)
-        add written_return(tokens, value, annotating) if value is FunctionLiteral
+        if value is FunctionLiteral
+          add written_return(tokens, value, annotating)
     statement: (statement, _) ->
       add edit for edit in statement_edits(tokens, statement)
       if known := typed
@@ -74,8 +84,10 @@ export rewrites_of := (
       add edit for edit in destructured_value_edits(tokens, statements)
   }
   add edit for edit in parentheses.edits
-  add literal_edit(tokens, index) for index in 0..text.code.length
-  add semicolon_edit(tokens, lexed, index) for index in 0..lexed.tokens.length
+  for index in 0..text.code.length
+    add literal_edit(tokens, index)
+  for index in 0..lexed.tokens.length
+    add semicolon_edit(tokens, lexed, index)
   found
 
 # The lines of the statements on lines of their own that the comments mark to keep as they are
@@ -91,26 +103,30 @@ kept_lines := (program: Statement[], text: SourceTokens, kept: KeptLines) ->
 # the places inside of.
 edits_within := (
   tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, junctions: Set<BinaryOperation>,
-  tight: Set<Expression>, typed: Typed?
+  taken: Set<Expression>, tight: Set<Expression>, typed: Typed?
 ): Edit?[] ->
-  found := expression_edits(tokens, value, claimed, junctions, tight, typed)
-  found.append typed_edits(tokens, value, known) if known := typed
+  found := expression_edits(tokens, value, claimed, junctions, taken, tight, typed)
+  if known := typed
+    found.append typed_edits(tokens, value, known)
   for part in unvisited_parts(value)
-    found.push edit for edit in edits_within(tokens, part, claimed, junctions, tight, typed)
+    found.push edit for edit in edits_within(tokens, part, claimed, junctions, taken, tight, typed)
   found
 
 expression_edits := (
   tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, junctions: Set<BinaryOperation>,
-  tight: Set<Expression>, typed: Typed?
+  taken: Set<Expression>, tight: Set<Expression>, typed: Typed?
 ): Edit?[] ->
   case value
     when BinaryOperation then union_test_edits(tokens, value, junctions)
     when Member then [binary_literal(tokens, value)]
     when Coalesce then [cast_fallback(tokens, value, tight)]
-    when Conditional then [else_nil(tokens, value)]
+    when Conditional then [else_nil(tokens, value), long_two_way_report(tokens, value, taken)]
     when FunctionLiteral then [without_parameters(tokens, value)]
     when UnaryOperation
-      value in claimed then [] else [negation_edit(tokens, value, claimed, typed)]
+      if value in claimed
+        []
+      else
+        [negation_edit(tokens, value, claimed, typed)]
     when RecordLiteral then [shorthand(tokens, field.name, field.value) for field in value.fields]
     when Comprehension then [counted_range(tokens, value.iterable)]
     when Index then index_ranges(tokens, value)
@@ -131,14 +147,17 @@ negation_edit := (
 # A field keeps its value (see Empty initial values), as a member of a class or a struct is no
 # Declaration.
 statement_edits := (tokens: Tokens, statement: Statement): Edit?[] ->
+  long_value := long_two_way_edit(tokens, statement)
   case statement
     when Declaration
       [
         nil_initial_value(tokens, statement)
         empty_initial_value(tokens, statement)
         two_way_value(tokens, statement.value)
+        long_value
       ]
-    when Assignment then [two_way_value(tokens, statement.value)]
+    when Assignment then [two_way_value(tokens, statement.value), long_value]
+    when Return, Conditional then [long_value]
     when TypeDeclaration
       [
         unneeded_pass(tokens, statement)
@@ -201,6 +220,11 @@ two_way_value := (tokens: Tokens, value: Expression) ->
 
   # After the head, `x :=` and a space.
   return nil if tokens.end(if_at - 1).column + written.count() + parentheses > WIDTH
+  spans: Span[] =
+    { first: if_at + 1, last: condition_end }
+    { first: then_at, last: then_end }
+    { first: else_at, last: else_end }
+  return nil if spans.any((span) -> leaves(tokens.code, span) > TWO_WAY_LEAVES)
 
   tokens.report(TWO_WAY_VALUES, tokens.start(if_at))
 
@@ -210,7 +234,10 @@ added_parentheses := (tokens: Tokens, statement: Statement) ->
   call := statement as Call ? return 0
   first := call.args.first()?.position ? call.named_args.first()?.name.position ? return 0
   at := tokens.at(first) ? return 0
-  tokens.is_kind(at - 1, '(') then 0 else 1
+  if tokens.is_kind(at - 1, '(')
+    0
+  else
+    1
 
 # A statement that is one expression, which a two-way value can hold.
 is_value := (statement: Statement) -> is_inline(statement) and statement is not Assignment | Pass
@@ -226,7 +253,10 @@ literal_edit := (tokens: Tokens, index: Int) ->
       return tokens.edit(STRING_LITERALS, [tokens.replaced(index, quoted)])
   return nil if not written.starts_with('"') and not written.starts_with('b"')
   escaped := with_ascii_escapes(written)
-  escaped != written then tokens.edit(ESCAPES, [tokens.replaced(index, escaped)])
+  if escaped != written
+    tokens.edit(ESCAPES, [tokens.replaced(index, escaped)])
+  else
+    nil
 
 # The text of a literal written `"..."` or `b"..."` on one line, which interpolates nothing.
 single_quoted_text := (token: Token, written: String) ->
@@ -280,7 +310,11 @@ else_nil := (tokens: Tokens, conditional: Conditional) ->
   value := tokens.at(conditional.else_value.position) ? return nil
   word := value - 1
   return nil unless tokens.is_kind(word, 'else')
-  last := tokens.is_kind(value, '(') then (tokens.matching(value) ? return nil) else value
+  last :=
+    if tokens.is_kind(value, '(')
+      tokens.matching(value) ? return nil
+    else
+      value
   tokens.edit(ELSE_NIL, [{ from: tokens.end(word - 1), to: tokens.end(last), text: '' }])
 
 # `var x: T?` for `var x: T? = nil` (see Nil initial values), where `?` makes the type optional:

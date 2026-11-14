@@ -291,7 +291,9 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 - Use the postfix form (`return nil unless found`) if the body is one statement other than a declaration, without a postfix form of its own, of:
   - a `while` or a `for`;
   - an `if` without `else` whose value is not used and which is not the whole body of an `else`.
-- If it exceeds 100 columns or takes more than one line, use the block form even for one statement.
+- If the body has more than three leaves, or the form exceeds 100 columns or takes more than one line, use the block form even for one statement.
+  - The leaves of code are its names and its literals, a path of members (`a.b.c`) counting once, and `@x` once, as a string literal does, interpolations included: `return nil` has one, `print xs, ok` three, `end = after_digits(end + 1)` four. Operators, the words among them included, and keywords count none.
+  - Why: a long statement read as done, then turned into a condition by the `if` at its end, surprises; a short one reads at a glance.
 - Do not stack postfix forms (`x += 1 for x in xs while ok`).
 - A `for` whose body is one statement with a postfix `if` is written as a block holding it (`for x in xs`, then `total += x if x > 0`), not as `total += x for x in xs when x > 0`, which the formatter cannot tell from it.
 
@@ -300,7 +302,10 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 - Branch two ways with `if`/`else`, including for a value and on a subject (`if x is T`, `if kind == 'a'`), and three or more ways with `case`.
 - A two-way `case` without `else` that handles every type or member of its subject (see [case with a subject](control-flow.md#case-with-a-subject)) stays a `case`.
   - Why: a type or member added later then fails to compile, where an `if` would take it to `else`.
-- A two-way value that fits on one line is `c then a else b`.
+- A two-way value whose condition and values have two leaves each at most (see [Postfix forms](#postfix-forms)) and that fits on one line is `c then a else b`; otherwise it is an `if`, with `else nil` for a `then` without `else`. A chain of them, `a then x else b then y else z`, is a `case`.
+  - Where the value is the whole of a `return`, its `if` or its `case` returns in each branch.
+  - Where it is a body on the line of `->` or of an arm, it goes in a block below that line, as a postfix form whose body has more than three leaves does; inside brackets, those that close after it go on the line below the block.
+  - Where no block can take the value, as in an argument, name it first, by hand: `lerta fmt` reports it.
 - An arm whose body is one statement that its line can hold (see [case without a subject](control-flow.md#case-without-a-subject)) and that fits on it, all of it, is written on it, `when 1 then 'one'` or `else pass`, and otherwise as a block, as is one of a `'''` literal.
 - An `else` whose body is one `if` is `else if`, unless a comment comes before the `if`.
 - An `if`, a `case` or a `try` whose blocks are on the lines below starts a line of its own, one level deeper than the line that takes its value (`x :=`, then `case n` on the next line), where the grammar allows it (see [bracketless blocks](syntax.md#bracketless-blocks)).

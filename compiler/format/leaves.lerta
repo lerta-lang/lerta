@@ -1,0 +1,34 @@
+# The leaves of code, by which the style tells a form short enough for one line (see Postfix forms
+# and Branches): its names and its literals, a path of members, `a.b.c`, counting once.
+import Token, TokenKind from '../lexer/tokens'
+
+LEAF_KINDS: TokenKind[] =
+  IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, BINARY, 'true', 'false', 'nil'
+
+# The code tokens from `first` up to `last`.
+export struct Span
+  first: Int
+  last: Int
+
+export leaves := (code: Token[], span: Span) ->
+  { first, last } := span
+  var count = 0
+  for at in first..=last
+    count += 1 if is_leaf(code, at) and (at == first or code[at - 1].kind != '.')
+  count
+
+# The operators that are words, which the lexer gives as names (see contextual words).
+OPERATOR_WORDS := ['is', 'in', 'as']
+
+# Of `@x`, the name is the leaf; `@` alone is one itself.
+is_leaf := (code: Token[], at: Int) ->
+  { kind, text } := code[at]
+  return text not in OPERATOR_WORDS if kind == IDENTIFIER
+  return kind in LEAF_KINDS unless kind == '@'
+  at + 1 == code.length or code[at + 1].kind != IDENTIFIER or code[at + 1].spaced
+
+# The most leaves that the body of a postfix form may have (see Postfix forms).
+export POSTFIX_LEAVES := 3
+
+# The most leaves that the condition and each value of `c then a else b` may have (see Branches).
+export TWO_WAY_LEAVES := 2
