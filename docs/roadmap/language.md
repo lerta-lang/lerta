@@ -83,7 +83,11 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
 
 - Whether `-1.abs()` is `(-1).abs()` (the negative literal binds first) or `-(1.abs())` (as in Rust and Python). Decide when methods on literals are implemented.
 - Renaming in destructuring (`{ a: x } := value`).
-- Notation for an array inside an array without brackets (CoffeeScript has one).
+- Indentation that stops between two open levels, as CoffeeScript allows, instead of the error it is now (see [indentation](../reference/syntax.md#indentation)). The level it stops at would be a block opened above the deeper lines, which become its first item:
+  - A line starting with `,` would separate items that are each an indented block without a head: an array of anonymous structs or of arrays without brackets, and arguments after a function literal (`set_timeout ->`, the body, then `, 1000` between).
+  - A head that takes several lines could continue deeper than its body (`if a and`, `b` four columns deeper, then the body two deeper) instead of in brackets. No token starts the line, so the condition would be that the line before continues.
+  - A line starting with `.` or an operator could continue the expression outside a block value (`.join ', '` after the body of a function literal passed to `map`), which [member lines](../reference/syntax.md#member-lines) now do at the value's indentation.
+  - Allowing it only before `,` keeps a mistyped indentation an error; allowing it generally covers all three.
 - An index in an Iter comprehension, `(f(x, i) for x at i in xs)`.
 - How an Iter gives an item in one call rather than two (`has_next` and `next`, each through a pointer to code now; see [internals](../internals/iteration.md#iter)):
   - `next` giving the item with whether there was one, as Rust's `Option` and Swift's optional. Its `{ i1, T }` in IR can be that for the Iters the compiler generates, but an Iter written in Lerta, `{ has_next, next }`, cannot write `next: () -> T?` for an `Iter<T?>`.
