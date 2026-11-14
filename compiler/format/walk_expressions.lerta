@@ -208,7 +208,7 @@ extend Walker
       when BinaryOperation then @binary(node, before)
       when Coalesce
         @chain node.value, before
-        @take @at_kind('else') then 'else' else '?', ONE
+        @take 'else', ONE
         @operand node.fallback, ONE
       when Range then @range(node, before)
       when IsTest then @is_test(node, before, false)
@@ -375,15 +375,14 @@ extend Walker
     @list count, inside, (_, gap) -> @take(IDENTIFIER, gap), false
     @take(braced then '}' else ')', inside)
 
-  # `x as T?` or `x as T!`, or the `x as T` of `x as T ? y`, whose `?`, after a space, is the
-  # fallback's.
+  # `x as T?` or `x as T!`, or the `x as T` of `x as T else y`.
   cast := (node: Cast, before: CodeGap) ->
     @chain node.value, before
     @take_spelled 'as', ONE
     @type node.type, ONE, false
     if node.throws
       @take '!', NONE
-    else if not @code[@at].spaced
+    else if @at_kind('?')
       @take '?', NONE
 
   # `x?.rest`, which is read as an `if` that binds x to a name that rest starts with.

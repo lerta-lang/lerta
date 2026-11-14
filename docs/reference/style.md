@@ -197,10 +197,6 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 - Write `a..=b`, not `a..(b + 1)`, of integers.
 - Leave out the ends of an index that are its bounds: `xs[..n]`, not `xs[0..n]`, and `xs[i..]`, not `xs[i..xs.length]`.
 
-### Fallbacks
-
-- Write `x else d`, not `x ? d`.
-
 ### Cast fallbacks
 
 - Write `x as T else y`, not `(x as T?) else y`; in the value of a `then`, in parentheses, `(x as T else y)` (see [then and else](control-flow.md#then-and-else)).

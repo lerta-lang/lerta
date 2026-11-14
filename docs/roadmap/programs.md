@@ -111,7 +111,6 @@ LLVM emits objects, and `lld` links them, on all platforms.
 
 - **The rest of the style** in [`lerta fmt`](../reference/compiler.md):
   - reporting what it cannot fix, such as a name in the wrong case;
-  - a fallback written `x else d` rather than `x ? d` (see [Fallbacks](../reference/style.md#fallbacks)), once the compiler's source can be rewritten so, after which `x ? d` is no longer read;
   - the rules that change the syntax tree, such as implicit return;
   - applied only when the file type-checks, the rules that need types, such as whether a `case` handles every member of its subject.
   - The compiler reports only what concerns correctness, such as unused names.

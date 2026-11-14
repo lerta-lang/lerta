@@ -228,8 +228,7 @@ export class TokenStream
             'write `not x` for `!x`'
           else
             nil
-        when '?' then previous == '?' then 'write `x else default` for `x ?? default`'
-        when ':' then @line_has_coalesce(index) then 'write `c then a else b` for `c ? a : b`'
+        when '?' then @question_hint(index)
         when '='
           is_let := @tokens[@line_start(index)].is_word('let')
           hint := 'write `x := value` for `let x = value`, or `var x = value` to assign it again'
@@ -242,12 +241,26 @@ export class TokenStream
       start -= 1 while start > 0 and @tokens[start - 1].kind not in [NEWLINE, INDENT, DEDENT]
       start
 
-    # Whether a `?` of a value, `x ? d`, comes before the index on its line: spaced, unlike that of
-    # an optional type, `Int?`.
-    line_has_coalesce := (index: Int) ->
-      for i in @line_start(index)..index
-        token := @tokens[i]
-        return true if token.kind == '?' and token.spaced
+    # What to write for a `?` after a value, spaced unlike that of an optional type, `Int?`:
+    # `x ?? d`, `c ? a : b` or `x ? d`.
+    question_hint := (index: Int) ->
+      return nil if not @tokens[index].spaced or @line_start(index) == index
+      return 'write `x else default` for `x ?? default`' if @tokens[index + 1].kind == '?'
+      return 'write `c then a else b` for `c ? a : b`' if @has_ternary_colon(index)
+      'write `x else default` for `x ? default`'
+
+    # Whether a `:` comes after the index on its line outside brackets, as that of `c ? a : b`, not
+    # of a named argument or a field.
+    has_ternary_colon := (index: Int) ->
+      var depth = 0
+      var at = index
+      until @tokens[at].kind in [NEWLINE, INDENT, DEDENT, EOF]
+        { kind } := @tokens[at]
+        depth += 1 if kind in ['(', '[', '{']
+        depth -= 1 if kind in [')', ']', '}']
+        return false if depth < 0
+        return true if depth == 0 and kind == ':'
+        at += 1
       false
 
     at_file_end := ->
@@ -280,11 +293,8 @@ export class TokenStream
     @in_then_value = outer
     result
 
-  # Whether the next token starts the fallback of a nil: `?`, which goes, or `else` but after the
-  # value of a `then`.
-  at_fallback := ->
-    next := @peek_continuation()
-    next == '?' or (next == 'else' and not @in_then_value)
+  # Whether the next token starts the fallback of a nil: an `else` but after the value of a `then`.
+  at_fallback := -> @peek_continuation() == 'else' and not @in_then_value
 
   # The closing bracket `close`, which may start the line after the contents.
   expect_close := (close: TokenKind) ->

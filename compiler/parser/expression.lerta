@@ -227,15 +227,15 @@ parse_in := (tokens: TokenStream, item: Expression): Expression ->
   else
     test
 
-# The `?` is read as the type's, which the checker takes as the form instead. `x as T ? y`, with a
-# space before `?`, is read as `(x as T?) ? y`, and so is `x as T else y`.
+# The `?` of `x as T?` is read as the type's, which the checker takes as the form instead.
+# `x as T else y` is read as `(x as T?) else y`.
 parse_cast := (tokens: TokenStream, value: Expression): Expression ->
   as_token := tokens.next()
   type := parse_cast_type(tokens)
   next := tokens.peek()
   optional := next.kind == '?' and not next.spaced
   throws := next.kind == '!' and not next.spaced
-  falls_back := tokens.at_fallback() and (next.kind == 'else' or next.spaced)
+  falls_back := tokens.at_fallback()
   if next.kind == 'else' and tokens.in_then_value
     message := "write a cast's fallback in the value of a then in parentheses: '(x as T else y)'"
     tokens.fail as_token.position(), message
@@ -248,7 +248,8 @@ parse_cast := (tokens: TokenStream, value: Expression): Expression ->
   return cast unless falls_back
   Coalesce(value: cast, fallback: parse_cast_fallback(tokens), position: value.position)
 
-# The fallback of `x as T ? y`, which may itself be one, as `a ? b ? c` is `a ? (b ? c)`.
+# The fallback of `x as T else y`, which may itself be one, as `a else b else c` is
+# `a else (b else c)`.
 parse_cast_fallback := (tokens: TokenStream) ->
   fallback := tokens.nested(-> parse_coalesce(tokens))
   if tokens.continues_with_word('as')
@@ -260,7 +261,7 @@ parse_binary_comparison := (tokens: TokenStream, left: Expression): Expression -
   operator := tokens.next().kind.to_string()
   BinaryOperation(operator, left, right: parse_coalesce(tokens), position: left.position)
 
-# `a ? b ? c` is `a ? (b ? c)`.
+# `a else b else c` is `a else (b else c)`.
 parse_coalesce := (tokens: TokenStream): Expression ->
   value := parse_range(tokens)
   return value unless tokens.at_fallback()

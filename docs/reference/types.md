@@ -426,7 +426,6 @@ print n + 1 if n := '42'.parse_int()
 - `else` binds tighter than comparisons, so `ages[name] else 0 > 18` compares the age, and weaker than ranges and arithmetic.
 - `a else b else c` is `a else (b else c)`.
 - An `else` after the value of a `then` is that `then`'s instead (see [then and else](control-flow.md#then-and-else)).
-- `x ? fallback` is read as `x else fallback` too, until the code that writes it is rewritten.
 
 #### Comparison
 
