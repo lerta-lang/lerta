@@ -3,10 +3,10 @@
 # where nothing evaluated before them is still held, so that jumping away leaves nothing to
 # release. A `yield` jumps away for good if its Iter is dropped there.
 import
-  Assignment, Binding, Case, Coalesce, Condition, Conditional, Declaration, EnumDeclaration,
-  Expression, Extend, Extern, Intrinsic, For, FunctionLiteral, Identifier, If, Import,
-  InterfaceDeclaration, Jump, MemberDeclaration, operands_of, Pass, Position, Return, Statement,
-  Try, TypeAlias, TypeDeclaration, While, Yield
+  Assignment, Binding, Case, Coalesce, Comprehension, Condition, Conditional, Declaration,
+  EnumDeclaration, Expression, Extend, Extern, Intrinsic, For, FunctionLiteral, Identifier, If,
+  Import, InterfaceDeclaration, Jump, MemberDeclaration, operands_of, Pass, Position, Return,
+  Statement, Try, TypeAlias, TypeDeclaration, While, Yield
 from '../ast'
 import fail from './diagnostics'
 import ProgramWide from './shared'
@@ -27,6 +27,10 @@ all_jumps := Jumps(may_return: true, may_leave_loop: true)
 no_jumps := Jumps()
 
 FINALLY_YIELD_REASON := 'cannot be in a try that has a finally yet'
+
+# Its loop holds the array that it makes, which the Iter of a function that yields there could
+# drop with the array unfinished.
+COMPREHENSION_YIELD_REASON := 'cannot be in the block of a comprehension'
 
 within_finally := Jumps(reason: 'cannot leave a finally', yield_reason: FINALLY_YIELD_REASON)
 
@@ -114,6 +118,15 @@ visit := (program: ProgramWide, expression: Expression, jumps: Jumps): void ->
         visit_statements program, clause.body, inside
       if finally_body := expression.finally_body
         visit_statements program, finally_body, within_finally
+    # The block, and the element, of one written with its `for` first are a loop's, which `break`
+    # and `continue` leave, and which may return where the comprehension may, its array then let
+    # go (see generate_comprehension).
+    when Comprehension
+      operand expression.iterable
+      operand guard if guard := expression.guard
+      in_loop := Jumps(jumps..., may_leave_loop: true, yield_reason: COMPREHENSION_YIELD_REASON)
+      visit_statements program, expression.body, in_loop
+      visit program, expression.element, expression.prefix then in_loop else no_jumps
     # No loop is outside a function; a jump out of none is an error of its own.
     when FunctionLiteral
       for param in expression.params

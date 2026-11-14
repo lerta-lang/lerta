@@ -10,7 +10,7 @@ import function_type_of from './closure'
 import generate, generate_condition, release_if_reference, type_of from './expression'
 import
   generate_block, generate_block_with, generate_closure, generate_statements, hold, no_locals,
-  statements_code, store_in_slot
+  push_held_scope, statements_code, store_in_slot
 from './function'
 import CodegenLocal, deferred_value, Generator, ValueLocal from './generator'
 import held_value from './expression'
@@ -82,8 +82,17 @@ export generate_comprehension := (g: Generator, comprehension: Comprehension) ->
     return generate_iter_comprehension(g, iterable, lazy)
   array_type := type_of(g, comprehension) as ArrayType!
   result := emit_array_new(g.ir, array_type.element)
+
   push := -> push_comprehension(g, comprehension, result)
-  while_holding g, result, array_type, push
+  unless comprehension.prefix
+    while_holding g, result, array_type, push
+    return result
+
+  # Held in a scope, which a `return` from its block leaves, releasing it, as an exception does;
+  # once the loop ends, the array is the value, which the scope lets go of unreleased.
+  push_held_scope g, result, array_type
+  push()
+  g.locals.pop()
   result
 
 # Pushes the comprehension's elements to `result`, an array of them, which may hold others, as
@@ -93,6 +102,15 @@ export push_comprehension := (g: Generator, comprehension: Comprehension, result
   iterable := iterated(g, comprehension.iterable)
   element_type := (type_of(g, comprehension) as ArrayType!).element
   ir := g.ir
+
+  # The block's locals are a scope of their own, which is only entered where the condition holds.
+  push_element := ->
+    generate_statements g, comprehension.body
+    if is_nested(element)
+      return push_comprehension(g, element as Comprehension!, result)
+    value := generate(g, element)
+    emit_push ir, result, value, element_type
+    release_if_reference g, element, value
   body := ->
     generate_statements g, bindings
     test :=
@@ -100,12 +118,8 @@ export push_comprehension := (g: Generator, comprehension: Comprehension, result
         generate_condition g, guard
       else
         'true'
-    emit_when ir, test, ->
-      if is_nested(element)
-        return push_comprehension(g, element as Comprehension!, result)
-      value := generate(g, element)
-      emit_push ir, result, value, element_type
-      release_if_reference g, element, value
+    emit_when ir, test, -> generate_block_with(g, push_element, no_locals)
+
   generate_iteration g, iterable, variable, index, body
 
 # What a `for` or a comprehension goes through: the iterable, or the call of its `iter()` that

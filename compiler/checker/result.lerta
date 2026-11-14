@@ -165,13 +165,17 @@ export type_of_await := (body: Body, await_expression: Await) ->
   fail(program, operand.position, "expected a Promise, got #{format_type(type)}")
 
 # A yielded value must fit the item type, as a return value fits the return type.
+VOID_ELEMENT := 'an Iter cannot hold values of type void'
+
 export check_yield := (body: Body, yield_expression: Yield) ->
   if body.context == nil
     fail body.program, yield_expression.position, "'yield' outside a function"
   value := yield_expression.value
   type := type_of_result(body, value)
   if is_kind(type, 'void')
-    fail body.program, value.position, 'cannot yield a value of type void'
+    message :=
+      yield_expression.of_element then VOID_ELEMENT else 'cannot yield a value of type void'
+    fail body.program, value.position, message
   record_result body, type, value
 
 # A written return type is a hint for the value's type, which can type `[]` and literals; the

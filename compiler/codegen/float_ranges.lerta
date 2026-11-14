@@ -255,7 +255,13 @@ comprehension_found := (analysis: Analysis, comprehension: Comprehension) ->
   visit analysis, comprehension.iterable
   analysis.loop_depth += 1
   visit analysis, guard if guard := comprehension.guard
+
+  # Its block, before the element, is a loop's, which may assign the locals outside it.
+  forget_locals analysis, assigned_in_blocks(analysis, [comprehension.body])
+  before := analysis.ranges.to_array()
+  analyze_block analysis, comprehension.body
   visit analysis, comprehension.element
+  restore analysis, before
   analysis.loop_depth -= 1
   Found(range: UNKNOWN, nan_free: true)
 
@@ -496,6 +502,9 @@ add_assigned := (analysis: Analysis, node: Statement, assigned: Set<Identifier>)
       Pass, Import, TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern,
       Intrinsic, Extend
     then pass
+    when Comprehension
+      each child for child in operands_of(node)
+      each child for child in node.body
     else each(child) for child in operands_of(node)
 
 condition_value := (condition: Condition) ->

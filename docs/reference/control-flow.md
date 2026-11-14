@@ -221,6 +221,22 @@ for i in 0..3
 - The loop variable is only seen in the comprehension.
 - More `for`s, each with its own `when`, nest a loop in the one before, as `for` blocks would: `[f(x, y) for x in xs when x > 0 for y in g(x)]` goes through `g(x)` for each `x` that holds, and makes one array of all their elements, not an array of arrays. Each loop sees the variables of those before it.
 
+### Comprehensions with the for first
+
+```lerta
+labels := [
+  for (key, value) at i in pairs when value != nil
+    label := format_key(key, i)
+    "#{label}: #{value}"
+]
+```
+
+- `[`, a line end, then `for` as a `for` statement has it, with `at`, `when` and the item taken apart, and a block below it, makes an array of the block's last value for each item. The block may hold statements before it, which see the loop variables and those the condition narrows.
+- In the block, `continue` goes on to the next item without an element, and `break` ends the array with the elements so far. A `return` returns from the function, as from a `for`, where the comprehension is the value of a statement (see [break, continue and return](#break-continue-and-return)); `yield` cannot be there.
+- A block that ends with a `for` statement takes that loop's elements as its own, one array of them, as more `for`s on a line do: its block is one in turn, which `continue` and `break` leave. It takes no `when`; `continue unless` writes one.
+- A block that ends with no value, as an assignment or an `if` without `else`, is an error.
+- In parentheses, `(` and a line end, it is an [`Iter`](types.md#iter) of the same values, as a [function that yields](functions.md#functions-that-yield) them, called where the comprehension is. It cannot `return`, `yield` or `await`.
+
 ### Lazy comprehensions
 
 - `(<element> for <name> in <iterable> when <condition>)`, in parentheses, is an [`Iter`](types.md#iter) of the same values, which evaluates nothing until it is consumed. It takes one `for` so far.
