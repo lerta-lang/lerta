@@ -90,7 +90,8 @@ export type_of_identifier := (body: Body, identifier: Identifier, is_callee: Boo
     fail program, position, "'#{name}' is a module, which is no value: write #{name}.<export>"
   probe_locals body if name == COMPLETION_NAME
   is_nil_name := name in ['null', 'None', 'undefined']
-  hint := is_nil_name then ': write `nil`' else unseen_self_hint(body, name)
+  unseen_hint := unseen_self_hint(body, name) + unseen_part_hint(body, name)
+  hint := is_nil_name then ': write `nil`' else unseen_hint
   undefined_name := -> fail(program, position, "undefined name '#{name}'#{hint}")
   builtin := builtin_export(shared, name) ? undefined_name()
   type_of_export(body, builtin, identifier, is_callee)
@@ -111,6 +112,16 @@ unseen_self_hint := (body: Body, name: String): String ->
     return '; a local function sees itself only where its return type is written'
   enclosing := body.enclosing ? return ''
   unseen_self_hint(enclosing, name)
+
+# Why a default, or a function literal in it, does not see a name of a parameter taken apart: the
+# names are declared as the body starts, after the defaults are computed.
+unseen_part_hint := (body: Body, name: String): String ->
+  literal := body.context?.literal ? return ''
+  for param in literal.params
+    if param.parts.any((part) -> part.name == name)
+      return '; a default cannot read the names of a parameter taken apart'
+  enclosing := body.enclosing ? return ''
+  unseen_part_hint(enclosing, name)
 
 # `name.export` of a module imported as `name`, where no local takes the name, as the name that the
 # export is imported by (see qualified_import), recorded as the member's replacement (see

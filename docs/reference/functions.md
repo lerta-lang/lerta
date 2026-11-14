@@ -36,6 +36,7 @@ A parameter of a top-level function or a method may have a default, `name: Type 
 - The type may be left out when the default is an `Int`, `Float`, `String` or `Bool` literal.
 - A default is computed at each call that leaves it out, in order, before the body runs.
 - It sees the names of the function's module, `@` in a method and the parameters before it. It cannot `return`, `break` or `continue`.
+  - It does not see the names of a parameter taken apart (see [destructuring](types.md#destructuring)), which are declared as the body starts.
 - A default of a generic function or method is checked for an instance only where a call leaves it out, so that it need fit only the type arguments of such calls. With `total := <T: Add<T, T>>(xs: T[], zero: T = 0)`:
   - `total([1, 2])` takes 0 as an `Int`;
   - `total(['a'], '')` gives its own zero;
