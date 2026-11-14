@@ -24,6 +24,8 @@ syn match lertaControl "\%(\<for\s\+\%(\h\w*\|([^)]*)\)\s\+\)\@<=at\>\ze\s\+\h\w
 " before `var`, a field, a declaration or a function literal, and `default` before the operand of
 " a field, not before a binary operator, so that `default - 1` stays a subtraction.
 syn match lertaStorage "\%(^\s*\)\@<=private\ze\s\+\h"
+" `args` alone on its line opens the block of a class's constructor arguments.
+syn match lertaStorage "^\s\+\zsargs\ze\s*$"
 syn match lertaStorage "[.@]\@<!\<weak\ze\s\+\%(var\>\|\h\w*\s*:\|(\|->\)"
 syn match lertaStorage "\%([^=!<>]=\s*\)\@<=default\ze\s\+\%(\%(and\|or\|not\s\+in\|is\|as\|in\|if\|unless\|then\|for\|while\|until\|when\)\>\)\@!\%(-\S\|[^-+*/%<>=!&|^[:space:]]\)"
 syn keyword lertaBoolean true false nil

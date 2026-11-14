@@ -5,7 +5,7 @@ The planned design of classes and structs, interfaces, generics and equality.
 ## Classes and structs
 
 - Small structs as values, large ones still shared by reference counting: see [small values unboxed](language.md#types).
-- **Function fields.** A function literal member declared `var`, `var on_hover = -> log 'hover'`, is a function field held per instance, so that it can be replaced (class only). One declared with `:=` stays a method. The difference in representation follows from whether reassignment is allowed.
+- **Function fields.** A function literal member declared `var`, `var on_hover = -> log 'hover'`, is a function field held per instance, so that it can be replaced (class only). One declared with `:=` stays a method, except in `args`, where it is a function field that a constructor may replace, as a callback. The difference in representation follows from whether reassignment is allowed.
 - **Constructors as functions.** Constructing a class or struct, `Circle(r: 1)`, is also a call to a constructor that takes an anonymous struct with the type-only fields.
 - **Definite assignment.** Definite assignment analysis replaces the rule that an initializer may read only the fields set before it through `@` ([the reference](../reference/objects.md#members)). `@` still cannot leak before all the fields are initialized, but an initializer may use it otherwise, as by calling a method that reads only those fields.
 - **Static members,** called on the type, as `Date.parse(text)`.

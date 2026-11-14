@@ -138,10 +138,40 @@ export parse_type_declaration := (tokens: TokenStream) ->
   satisfies := tokens.accept(':') then parse_named_type(tokens)
   has_body := satisfies == nil or tokens.peek_at(1).kind == INDENT
   is_empty := has_body and accept_pass_block(tokens) != nil
-  members: MemberDeclaration[] = has_body and not is_empty then parse_members(tokens) else []
+  { members, args_position } :=
+    has_body and not is_empty then parse_type_body(tokens) else TypeBody([])
   is_struct := token.kind == 'struct'
+  if is_struct and args_position
+    tokens.fail args_position, "a struct has no 'args': its fields are its constructor's arguments"
   position := token.position()
-  TypeDeclaration(name, type_params, members, is_struct, position, satisfies)
+  TypeDeclaration(name, type_params, members, is_struct, position, satisfies, args_position)
+
+struct TypeBody
+  members: MemberDeclaration[]
+  args_position: Position?
+
+# The members of a type, one per line, the first line `args` and an indented block of the
+# constructor's arguments where it takes any.
+parse_type_body := (tokens: TokenStream) ->
+  members: MemberDeclaration[]
+  var args_position: Position?
+  tokens.expect NEWLINE, 'end of line'
+  tokens.expect INDENT, 'indented members'
+  if at_args_block(tokens)
+    args_position = tokens.next().position()
+    members.push { member..., in_args: true } for member in parse_members(tokens)
+    tokens.expect_line_end()
+  while tokens.peek().kind != DEDENT
+    if at_args_block(tokens)
+      tokens.fail tokens.peek().position(), "'args' must be the first line of the type's body"
+    members.push parse_member(tokens)
+    tokens.expect_line_end()
+  tokens.next()
+  TypeBody(members, args_position)
+
+# `args` alone on its line, before an indented block: a field may be named `args` too.
+at_args_block := (tokens: TokenStream) ->
+  tokens.at_word('args') and tokens.peek_at(1).kind == NEWLINE and tokens.peek_at(2).kind == INDENT
 
 # `interface Name`, or `interface Name<T>`, followed by an indented block of members, one per line,
 # written as a class's; the checker tells which an interface can have, and whether it can have

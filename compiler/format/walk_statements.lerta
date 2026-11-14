@@ -301,7 +301,19 @@ extend Walker
     if satisfies := node.satisfies
       @take ':', NONE
       @type satisfies, ONE
-    @members node.members, head
+    @type_members node, head
+
+  # The members of a class or struct; those in `args`, where it has them, in a block of their own
+  # on its first line.
+  type_members := (node: TypeDeclaration, head: Int) ->
+    { members } := node
+    args_at := node.args_position ? return @members(members, head)
+    args := [member for member in members when member.in_args]
+    others := [member for member in members when not member.in_args]
+    position := (i: Int) -> i == 0 then args_at else others[i - 1].position
+    @in_block head, others.length + 1, position, (i, gap) ->
+      return @member_declaration(others[i - 1], gap) if i > 0
+      @members args, @take_spelled('args', gap)
 
   interface_declaration := (node: InterfaceDeclaration, before: CodeGap) ->
     head := @declaration_head(node.exported, 'interface', before)

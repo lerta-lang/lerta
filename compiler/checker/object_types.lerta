@@ -2,8 +2,8 @@
 # an initializer alone are found on demand, and so are the instances of a generic class or struct
 # (see info_of).
 import
-  Expression, FunctionLiteral, Identifier, MemberDeclaration, NamedType, Position, TypeDeclaration,
-  TypeName
+  Expression, FunctionLiteral, Identifier, MemberDeclaration, NamedType, NilLiteral, Position,
+  TypeDeclaration, TypeName
 from '../ast'
 import check_equality_methods, check_object, check_satisfies from './bodies'
 import
@@ -90,7 +90,8 @@ export is_generic_object := (info: ObjectInfo) -> not info.declaration.type_para
 
 # The function literal of a member that is a method.
 export method_literal := (member: MemberDeclaration) ->
-  return nil if member.modifier == 'var'
+  # One in `args` is a field, whose function a constructor may replace.
+  return nil if member.modifier == 'var' or member.in_args
   member.value as FunctionLiteral?
 
 # Registers the names first, so that the members can refer to any of the types.
@@ -149,7 +150,21 @@ add_interface_fields := (shared: Shared, info: ObjectInfo, declared: Set<String>
   methods := method_names(program, interface_type)
   is_method := (member: InterfaceMember) -> member.name in methods
   reject_missing_method program, info, interface_type, method if method := missing.find(is_method)
+  reject_unset_interface_field program, info, interface_type, missing
   info.fields = [field_of(member) for member in missing] + info.fields
+
+# Where a class declares its arguments in `args`, a field that its interface asks for is declared
+# there too, as the class's other fields are computed.
+reject_unset_interface_field := (
+  program: ProgramWide, info: ObjectInfo, interface_type: InterfaceType, missing: InterfaceMember[]
+) ->
+  return if info.declaration.args_position == nil or missing.is_empty()
+  type_name := info.declaration.name
+  of_interface := "'#{missing[0].name}' of #{format_type(interface_type)}"
+  fail
+    program
+    type_name.position
+    "#{type_name.name} does not declare #{of_interface}: declare it in 'args'"
 
 # The members that the interface writes of a function type, its methods, which the type is to
 # declare: as a field that the constructor takes, one would only fail where the type is constructed,
@@ -207,9 +222,9 @@ is_void := (type: TypeName) -> (type as NamedType?)?.name == 'void' and not type
 field_of_member := (shared: Shared, info: ObjectInfo, member: MemberDeclaration) ->
   program := shared.program
   is_struct := info.declaration.is_struct
-  value := member.value
-  if value is FunctionLiteral
-    message := 'a function field is not supported yet; a method is written without var'
+  if member.value is FunctionLiteral
+    method := member.in_args then "outside 'args'" else 'without var'
+    message := "a function field is not supported yet; a method is written #{method}"
     fail program, member.position, message
   if is_struct and member.modifier == 'var'
     fail program, member.position, 'a struct field cannot be var'
@@ -219,9 +234,32 @@ field_of_member := (shared: Shared, info: ObjectInfo, member: MemberDeclaration)
   if member.throws and not weak
     fail program, member.position, "only a weak field's type is written with '!'"
   reject_invalid_weak program, member, is_struct, type if weak
-  reject_private_argument program, member if member.private
+  reject_private_argument program, member if member.private and not member.in_args
+  is_computed := info.declaration.args_position != nil and not member.in_args
+  reject_unset_field program, member, type if is_computed
+  if member.in_args and member.has_default
+    fail program, member.position, "a field in 'args' takes its default without 'default'"
+  # A `var` of an optional type starts nil, as a local does.
+  var value = member.value
+  value = NilLiteral(member.position) if value == nil and is_computed
+  # A struct's field with a value is an argument too, unless private (see reject_private_argument).
+  is_default := member.in_args or is_struct and not member.private
+  has_default := member.has_default or value != nil and is_default
   mutable := member.is_mutable()
-  FieldInfo(type, mutable, value, weak, name: member.name, has_default: member.has_default)
+  FieldInfo(type, mutable, value, weak, has_default, name: member.name)
+
+# Where a class declares its arguments in `args`, its other fields are computed.
+reject_unset_field := (program: ProgramWide, member: MemberDeclaration, type: Type?) ->
+  if member.value == nil and not (member.is_mutable() and type is OptionalType)
+    fail
+      program
+      member.position
+      "a field outside 'args' is no constructor argument: give it a value"
+  if member.has_default
+    fail
+      program
+      member.position
+      "a field outside 'args' is no constructor argument: it takes no default"
 
 # A private field is computed, as no code outside its module could give it.
 reject_private_argument := (program: ProgramWide, member: MemberDeclaration) ->
