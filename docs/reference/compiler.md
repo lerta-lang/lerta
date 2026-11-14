@@ -259,7 +259,7 @@ Checks that each file is in the [style](style.md). What of the style it does not
   - those of the [rewrites](#rewrites) below that say so;
   - a `not` of an `and` or an `or` (see [Negated conditions](style.md#negated-conditions));
   - a two-way value written as an `if` that fits on a line as `c then a else b`, or written `c then a else b` where it fits neither on its line nor on the next, which an `if` then writes (see [Branches](style.md#branches));
-  - a long two-way value or a chain of them where no block can take it, as in an argument (see [Branches](style.md#branches));
+  - a long two-way value or a chain of them where no block can take it, as in an operand (see [Branches](style.md#branches));
   - a change of the layout that a rewrite of tokens would make, as the commas between items or the brackets of a literal, where it would take out a comment;
   - a comment that it cannot place.
 

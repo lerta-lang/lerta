@@ -1,0 +1,126 @@
+# A call whose argument is a two-way value too long for one line by its leaves (see Branches): where
+# the call is on one line and is the whole value of a statement, the formatter writes all of its
+# arguments in a block below the callee, the long ones as an `if` or a `case`, so that no block
+# seems to belong to the argument before it; elsewhere the long value is reported.
+import
+  Assignment, Call, Conditional, Declaration, Expression, Identifier, Member, Return, Statement,
+  This, Throw
+from '../ast'
+import Change, Edit from './edits'
+import is_wrapped, Parts, parts_of, rule_of, two_way_block from './two_way'
+import StyleRule from './rules'
+import Tokens from './tokens'
+
+# The call that is the whole value of the statement, where a block of arguments may follow it.
+export whole_call := (statement: Statement): Call? ->
+  value: Expression? =
+    case statement
+      when Declaration, Assignment then statement.value
+      when Return then statement.value
+      when Throw then statement.message
+      when Call then statement
+      else nil
+  value as Call?
+
+# Its arguments, the positional ones and then the values of the named ones.
+export argument_values := (call: Call) ->
+  [call.args..., [named.value for named in call.named_args]...]
+
+# The arguments of the whole call of the statement in a block, if one of them is long; where they
+# cannot be, the long ones reported. Those already in a block are written each in its place.
+export long_argument_edits := (tokens: Tokens, statement: Statement): Edit?[] ->
+  call := whole_call(statement) else return []
+  longs := [long_of(tokens, value) for value in argument_values(call)]
+  found := [long for long in longs when long != nil]
+  return [] if found.is_empty()
+  report := -> [tokens.report(long.rule, tokens.start(long.parts.first)) for long in found]
+  first_line := call.position.line
+  if found.any((long) -> tokens.start(long.parts.first).line != first_line)
+    return [block_item_edit(tokens, long) for long in found]
+
+  # A block of arguments follows a name or a path of members; after a call it would add to its
+  # arguments.
+  return report() unless is_named(call.callee)
+
+  # The statement starts its line, and the call ends it, after the parentheses around its arguments
+  # if it has them.
+  { line, column } := statement.position
+  return report() unless column == (tokens.line_indentation(line) else 0) + 1
+  first := tokens.at(call.position) else return report()
+  last := tokens.line_end(first) else return report()
+  line_columns := tokens.line_indentation(tokens.code[first].line) else 0
+
+  # Lines indented deeper below continue it, as the body of a function literal does.
+  if last + 1 < tokens.code.length
+    below := tokens.code[last + 1].line
+    return report() if tokens.line_indentation(below) else 0 > line_columns
+  starts := [
+    for position in item_positions(call)
+      tokens.at(position) else return report()
+  ]
+  parenthesized := tokens.is_kind(starts[0] - 1, '(') and tokens.matching(starts[0] - 1) == last
+  callee_last := starts[0] - (parenthesized then 2 else 1)
+  return report() unless tokens.code[callee_last].line == tokens.code[first].line
+
+  columns := line_columns + 2
+  values_last := parenthesized then last - 1 else last
+  items: String[]
+  for start at i in starts
+    item_last :=
+      if i + 1 < starts.length
+        starts[i + 1] - 2
+      else
+        values_last
+    return report() if item_last != values_last and not tokens.is_kind(item_last + 1, ',')
+    long := longs[i]
+    written :=
+      if long
+        return report() if is_wrapped(tokens, long.parts.first)
+        head := tokens.slice(tokens.start(start), tokens.start(long.parts.first))
+        head + two_way_block(tokens, long.parts, long.rule, columns)
+      else
+        tokens.slice tokens.start(start), tokens.end(item_last)
+    items.push "\n#{' '.repeat(columns)}#{written}"
+  change := Change(from: tokens.end(callee_last), to: tokens.end(last), text: items.join())
+  [tokens.edit_at(found[0].rule, tokens.start(found[0].parts.first), [change])]
+
+# A long value that is an item of a block of arguments, alone on its line after its name if it has
+# one, written as an `if` or a
+# `case` in its place; reported elsewhere, as on a line that continues the one before it after a
+# comma, which starts with no layout token.
+block_item_edit := (tokens: Tokens, long: Long) ->
+  { parts, rule } := long
+  at := tokens.start(parts.first)
+  named := tokens.is_kind(parts.first - 1, ':')
+  line_start := named then parts.first - 2 else parts.first
+  after_comma := tokens.is_kind(line_start - 1, ',')
+  starts_line := line_start in tokens.text.line_starts and not after_comma
+  alone := starts_line and tokens.line_end(parts.first) == parts.last
+  return tokens.report(rule, at) unless alone
+  columns := tokens.line_indentation(at.line) else 0
+  text := two_way_block(tokens, parts, rule, columns)
+  tokens.edit_at(rule, at, [{ text, from: at, to: tokens.end(parts.last) }])
+
+is_named := (callee: Expression): Bool ->
+  case callee
+    when Identifier, This then true
+    when Member then is_named(callee.object)
+    else false
+
+# Where each argument starts: a positional one at its value, a named one at its name.
+item_positions := (call: Call) ->
+  [
+    call.args.map((value) -> value.position)...
+    call.named_args.map((named) -> named.name.position)...
+  ]
+
+# The parts of a value too long for one line, and the rule that it breaks.
+struct Long
+  parts: Parts
+  rule: StyleRule
+
+long_of := (tokens: Tokens, value: Expression): Long? ->
+  conditional := value as Conditional else return nil
+  parts := parts_of(tokens, conditional) else return nil
+  rule := rule_of(tokens, parts) else return nil
+  { parts, rule }

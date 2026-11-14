@@ -5,7 +5,7 @@ import
   ArrayLiteral, ArrayTypeName, Assignment, BinaryOperation, Binding, Call, Case, Coalesce,
   Comprehension, Condition, Conditional, Declaration, Expression, For, FunctionLiteral, Identifier,
   If, Index, Interpolation, Member, MemberDeclaration, NamedType, NilLiteral, Pass, RecordLiteral,
-  Return, Statement, StringLiteral, TypeDeclaration, UnaryOperation, UnionTypeName
+  Return, Statement, StringLiteral, Throw, TypeDeclaration, UnaryOperation, UnionTypeName
 from '../ast'
 import TextPart from '../lexer/string_literal'
 import Lexed, Token, TokenKind from '../lexer/tokens'
@@ -32,6 +32,7 @@ import Tokens from './tokens'
 import annotating_of, annotation_edits, annotation_statement_edits from './annotations'
 import typed_edits, typed_statement_edits, Typed from './typed'
 import union_test_edits from './union_tests'
+import argument_values, long_argument_edits, whole_call from './argument_block'
 import long_two_way_edit, long_two_way_report, whole_value from './two_way'
 import returned_branches from './returned_branches'
 import leaves, Span, TWO_WAY_LEAVES from './leaves'
@@ -109,6 +110,9 @@ class Rewriting
   # What a statement tells the rewrites of others, before they are found.
   prepare_statement := (statement: Statement): void ->
     @taken.add value if value := whole_value(statement)
+    if call := whole_call(statement)
+      for value in argument_values(call)
+        @taken.add value if value is Conditional
 
   # The rewrite of a condition, which keeps `if not` where the `if` has `else`.
   condition_rewrite := (condition: Expression) ->
@@ -155,6 +159,7 @@ class Rewriting
   statement_edits := (statement: Statement): Edit?[] ->
     tokens := @tokens
     long_value := long_two_way_edit(tokens, statement)
+    long_arguments := long_argument_edits(tokens, statement)
     case statement
       when Declaration
         [
@@ -162,9 +167,12 @@ class Rewriting
           empty_initial_value(tokens, statement)
           two_way_value(tokens, statement.value)
           long_value
+          long_arguments...
         ]
-      when Assignment then [two_way_value(tokens, statement.value), long_value]
-      when Return, Conditional then [long_value]
+      when Assignment then [two_way_value(tokens, statement.value), long_value, long_arguments...]
+      when Return then [long_value, long_arguments...]
+      when Conditional then [long_value]
+      when Call, Throw then long_arguments
       when If, Case then [returned_branches(tokens, statement, statement in @ends_functions)]
       when TypeDeclaration
         [

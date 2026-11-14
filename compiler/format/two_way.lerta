@@ -30,7 +30,7 @@ export long_two_way_report := (tokens: Tokens, conditional: Conditional, taken: 
   tokens.report(rule, tokens.start(parts.first))
 
 # The rule that the value breaks, if it breaks one.
-rule_of := (tokens: Tokens, parts: Parts): StyleRule? ->
+export rule_of := (tokens: Tokens, parts: Parts): StyleRule? ->
   return CHAINED_VALUES if parts.conditions.length > 1
   if is_long_two_way(tokens.code, parts.first, parts.last)
     LONG_TWO_WAY_VALUES
@@ -81,20 +81,7 @@ export long_two_way_edit := (tokens: Tokens, statement: Statement): Edit? ->
     from = tokens.end(after_arm then head - 1 else head)
     columns = line_columns + 2
     lead = "\n" + ' '.repeat(columns)
-  inner := "\n" + ' '.repeat(columns + 2)
-  slice := (span: Span) -> tokens.slice(tokens.start(span.first), tokens.end(span.last))
-  otherwise := parts.otherwise then slice(parts.otherwise) else 'nil'
-  written :=
-    if rule == CHAINED_VALUES
-      arms := [
-        "#{inner}when #{slice(condition)} then #{slice(parts.values[i])}"
-        for condition at i in parts.conditions
-      ]
-      "#{lead}case#{arms.join()}#{inner}else #{otherwise}"
-    else
-      outer := "\n" + ' '.repeat(columns)
-      condition := slice(parts.conditions[0])
-      "#{lead}if #{condition}#{inner}#{slice(parts.values[0])}#{outer}else#{inner}#{otherwise}"
+  written := lead + two_way_block(tokens, parts, rule, columns)
 
   # The brackets after it go back to the line's depth below the block.
   closing :=
@@ -105,9 +92,25 @@ export long_two_way_edit := (tokens: Tokens, statement: Statement): Edit? ->
   change := Change(from, to: tokens.end(parts.last), text: written + closing)
   tokens.edit_at(rule, at, [change])
 
+# The value written as an `if` or a `case` on a line `columns` deep, its branches below.
+export two_way_block := (tokens: Tokens, parts: Parts, rule: StyleRule, columns: Int) ->
+  inner := "\n" + ' '.repeat(columns + 2)
+  slice := (span: Span) -> tokens.slice(tokens.start(span.first), tokens.end(span.last))
+  otherwise := parts.otherwise then slice(parts.otherwise) else 'nil'
+  if rule == CHAINED_VALUES
+    arms := [
+      "#{inner}when #{slice(condition)} then #{slice(parts.values[i])}"
+      for condition at i in parts.conditions
+    ]
+    "case#{arms.join()}#{inner}else #{otherwise}"
+  else
+    outer := "\n" + ' '.repeat(columns)
+    condition := slice(parts.conditions[0])
+    "if #{condition}#{inner}#{slice(parts.values[0])}#{outer}else#{inner}#{otherwise}"
+
 # The code tokens of a chain, from `first` up to `last`: the conditions before its `then`s, the
 # values between them and their `else`s, and the value after the last `else`, if it has one.
-struct Parts
+export struct Parts
   first: Int
   last: Int
   conditions: Span[]
@@ -116,7 +119,7 @@ struct Parts
 
 # Those of the chain, found by its `then`s and `else`s outside brackets on the line of its start;
 # nil where they are not one for each link, as where a value spans lines or is parenthesized.
-parts_of := (tokens: Tokens, conditional: Conditional): Parts? ->
+export parts_of := (tokens: Tokens, conditional: Conditional): Parts? ->
   links := chain_of(conditional)
   position := tokens.at(conditional.position) else return nil
   last := tokens.line_end(position) else return nil
@@ -153,7 +156,7 @@ parts_of := (tokens: Tokens, conditional: Conditional): Parts? ->
   { first, last: value_end, conditions, values }
 
 # Whether the value at `first` is in parentheses of its own, rather than those of a call.
-is_wrapped := (tokens: Tokens, first: Int) ->
+export is_wrapped := (tokens: Tokens, first: Int) ->
   return false unless tokens.is_kind(first - 1, '(')
   opening := tokens.code[first - 1]
   callee_end := first > 1 and tokens.code[first - 2].kind in [IDENTIFIER, ')', ']']
