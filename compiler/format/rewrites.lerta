@@ -43,43 +43,24 @@ export rewrites_of := (
 ) ->
   tokens := Tokens(source, text, comments: lexed.comments, kept: kept_lines(program, text, kept))
   parentheses := parentheses_of(program, tokens)
+  rewriting := Rewriting(tokens, typed, tight: parentheses.tight)
   found: Edit[]
   add := (edit: Edit?) -> found.push(edit) if edit
-
-  # The negations that the rewrite of a condition takes, which no other rewrites.
-  claimed: Set<UnaryOperation>
-
-  # The junctions inside a chain of them, whose tests the rewrite of the chain takes.
-  junctions: Set<BinaryOperation>
-
-  with_else: Set<Condition>
-
-  # The two-way values that the rewrite of a statement or of a chain around them takes (see
-  # two_way.lerta).
-  taken: Set<Expression>
-
-  # The last statements of functions, which give their results.
-  ends_functions: Set<Statement>
   places_of program, {
-    before: (value, _) ->
-      with_else.add value.condition if value is If and not value.else_body.is_empty()
-      add_ends ends_functions, value.body if value is FunctionLiteral
-    condition: (condition, _) ->
-      add condition_edit(tokens, condition, condition not in with_else, claimed)
-    statement: (statement, _) ->
-      taken.add value if value := whole_value(statement)
+    before: (value, _) -> rewriting.prepare_value(value)
+    condition: (condition, _) -> add(rewriting.condition_rewrite(condition))
+    statement: (statement, _) -> rewriting.prepare_statement(statement)
   }
   annotated := annotating_of(program, typed)
   places_of program, {
     before: (value, _: Place) ->
-      tight := parentheses.tight
-      add edit for edit in edits_within(tokens, value, claimed, junctions, taken, tight, typed)
+      add edit for edit in rewriting.edits_within(value)
       if annotating := annotated
         add edit for edit in annotation_edits(tokens, value, annotating)
         if value is FunctionLiteral
           add written_return(tokens, value, annotating)
     statement: (statement, _) ->
-      add edit for edit in statement_edits(tokens, statement, ends_functions)
+      add edit for edit in rewriting.statement_edits(statement)
       if known := typed
         add edit for edit in typed_statement_edits(tokens, statement, known)
       if annotating := annotated
@@ -94,6 +75,105 @@ export rewrites_of := (
   for index in 0..lexed.tokens.length
     add semicolon_edit(tokens, lexed, index)
   found
+
+# The rewrites of a program, found in its expressions and its statements, and what they share as
+# they are found.
+class Rewriting
+  args
+    tokens: Tokens
+    tight: Set<Expression>
+    typed: Typed?
+
+  private
+    # The conditions of `if`s with `else`, which keep `if not` (see Negated conditions).
+    with_else := Set<Condition>()
+
+    # The negations that the rewrite of a condition takes, which no other rewrites.
+    claimed := Set<UnaryOperation>()
+
+    # The junctions inside a chain of them, whose tests the rewrite of the chain takes.
+    junctions := Set<BinaryOperation>()
+
+    # The two-way values that the rewrite of a statement or of a chain around them takes (see
+    # two_way.lerta).
+    taken := Set<Expression>()
+
+    # The last statements of functions, which give their results.
+    ends_functions := Set<Statement>()
+
+  # What a value tells the rewrites of others, before they are found.
+  prepare_value := (value: Expression): void ->
+    @with_else.add value.condition if value is If and not value.else_body.is_empty()
+    add_ends @ends_functions, value.body if value is FunctionLiteral
+
+  # What a statement tells the rewrites of others, before they are found.
+  prepare_statement := (statement: Statement): void ->
+    @taken.add value if value := whole_value(statement)
+
+  # The rewrite of a condition, which keeps `if not` where the `if` has `else`.
+  condition_rewrite := (condition: Expression) ->
+    condition_edit(@tokens, condition, condition not in @with_else, @claimed)
+
+  # Those of the expression, and of its parts that are no places (see Visit), which places_of
+  # visits the places inside of.
+  edits_within := (value: Expression): Edit?[] ->
+    found := @expression_edits(value)
+    if known := @typed
+      found.append typed_edits(@tokens, value, known)
+    for part in unvisited_parts(value)
+      found.push edit for edit in @edits_within(part)
+    found
+
+  expression_edits := (value: Expression): Edit?[] ->
+    tokens := @tokens
+    case value
+      when BinaryOperation then union_test_edits(tokens, value, @junctions)
+      when Member then [binary_literal(tokens, value)]
+      when Coalesce then [cast_fallback(tokens, value, @tight)]
+      when Conditional then [else_nil(tokens, value), long_two_way_report(tokens, value, @taken)]
+      when FunctionLiteral then [without_parameters(tokens, value)]
+      when UnaryOperation then value in @claimed then [] else [@negation_edit(value)]
+      when RecordLiteral then [shorthand(tokens, field.name, field.value) for field in value.fields]
+      when Comprehension then [counted_range(tokens, value.iterable)]
+      when Index then index_ranges(tokens, value)
+      else []
+
+  # A double negation of a Bool taken out, whose inner negation it claims, so that a third goes
+  # with a fourth; otherwise `x is not T` or `x not in xs` for `not` of the test. `not not x` of
+  # another type, as an optional, is a Bool, which `x` is not; that of a program that does not
+  # check waits.
+  negation_edit := (negation: UnaryOperation) ->
+    tokens := @tokens
+    inner := negation.operand as UnaryOperation ? return negated_test(tokens, negation)
+    return negated_test(tokens, negation) if @typed?.facts.types[inner.operand] != bool_type
+    edit := double_negation(tokens, negation) ? return negated_test(tokens, negation)
+    @claimed.add inner
+    edit
+
+  # A field keeps its value (see Empty initial values), as a member of a class or a struct is no
+  # Declaration.
+  statement_edits := (statement: Statement): Edit?[] ->
+    tokens := @tokens
+    long_value := long_two_way_edit(tokens, statement)
+    case statement
+      when Declaration
+        [
+          nil_initial_value(tokens, statement)
+          empty_initial_value(tokens, statement)
+          two_way_value(tokens, statement.value)
+          long_value
+        ]
+      when Assignment then [two_way_value(tokens, statement.value), long_value]
+      when Return, Conditional then [long_value]
+      when If, Case then [returned_branches(tokens, statement, statement in @ends_functions)]
+      when TypeDeclaration
+        [
+          unneeded_pass(tokens, statement)
+          [nil_field(tokens, statement, m) for m in statement.members]...
+          private_block_edits(tokens, statement)...
+        ]
+      when For then [counted_range(tokens, statement.iterable)]
+      else []
 
 # The last statement of the block, which gives its value, and those of the branches of an `if` or a
 # `case` that it is, which give that.
@@ -117,77 +197,6 @@ kept_lines := (program: Statement[], text: SourceTokens, kept: KeptLines) ->
     kept.keeps text.code[start].position(), next then text.first_position(next)
   }
   kept.kept
-
-# Those of the expression, and of its parts that are no places (see Visit), which places_of visits
-# the places inside of.
-edits_within := (
-  tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, junctions: Set<BinaryOperation>,
-  taken: Set<Expression>, tight: Set<Expression>, typed: Typed?
-): Edit?[] ->
-  found := expression_edits(tokens, value, claimed, junctions, taken, tight, typed)
-  if known := typed
-    found.append typed_edits(tokens, value, known)
-  for part in unvisited_parts(value)
-    found.push edit for edit in edits_within(tokens, part, claimed, junctions, taken, tight, typed)
-  found
-
-expression_edits := (
-  tokens: Tokens, value: Expression, claimed: Set<UnaryOperation>, junctions: Set<BinaryOperation>,
-  taken: Set<Expression>, tight: Set<Expression>, typed: Typed?
-): Edit?[] ->
-  case value
-    when BinaryOperation then union_test_edits(tokens, value, junctions)
-    when Member then [binary_literal(tokens, value)]
-    when Coalesce then [cast_fallback(tokens, value, tight)]
-    when Conditional then [else_nil(tokens, value), long_two_way_report(tokens, value, taken)]
-    when FunctionLiteral then [without_parameters(tokens, value)]
-    when UnaryOperation
-      if value in claimed
-        []
-      else
-        [negation_edit(tokens, value, claimed, typed)]
-    when RecordLiteral then [shorthand(tokens, field.name, field.value) for field in value.fields]
-    when Comprehension then [counted_range(tokens, value.iterable)]
-    when Index then index_ranges(tokens, value)
-    else []
-
-# A double negation of a Bool taken out, whose inner negation it claims, so that a third goes with a
-# fourth; otherwise `x is not T` or `x not in xs` for `not` of the test. `not not x` of another
-# type, as an optional, is a Bool, which `x` is not; that of a program that does not check waits.
-negation_edit := (
-  tokens: Tokens, negation: UnaryOperation, claimed: Set<UnaryOperation>, typed: Typed?
-) ->
-  inner := negation.operand as UnaryOperation ? return negated_test(tokens, negation)
-  return negated_test(tokens, negation) if typed?.facts.types[inner.operand] != bool_type
-  edit := double_negation(tokens, negation) ? return negated_test(tokens, negation)
-  claimed.add inner
-  edit
-
-# A field keeps its value (see Empty initial values), as a member of a class or a struct is no
-# Declaration.
-statement_edits := (
-  tokens: Tokens, statement: Statement, ends_functions: Set<Statement>
-): Edit?[] ->
-  long_value := long_two_way_edit(tokens, statement)
-  case statement
-    when Declaration
-      [
-        nil_initial_value(tokens, statement)
-        empty_initial_value(tokens, statement)
-        two_way_value(tokens, statement.value)
-        long_value
-      ]
-    when Assignment then [two_way_value(tokens, statement.value), long_value]
-    when Return, Conditional then [long_value]
-    when If, Case then [returned_branches(tokens, statement, statement in ends_functions)]
-    when TypeDeclaration
-      [
-        unneeded_pass(tokens, statement)
-        [nil_field(tokens, statement, m) for m in statement.members]...
-        private_block_edits(tokens, statement)...
-      ]
-    when For then [counted_range(tokens, statement.iterable)]
-    else []
 
 # The head alone of a type that satisfies an interface for one whose body is `pass` alone, as such a
 # type may leave out the body (see pass in docs/reference/syntax.md).
