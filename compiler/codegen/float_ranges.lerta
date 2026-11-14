@@ -80,12 +80,12 @@ analyze_statement := (analysis: Analysis, statement: Statement): void ->
   case statement
     when Declaration
       analysis.declared_depths[statement.name] = analysis.loop_depth
-      forget_assigned analysis, [statement.value]
+      forget_assigned analysis, statement.value
       found := found_of(analysis, statement.value)
       if is_float_node(analysis, statement.value)
         follow analysis, statement.name, found.range
     when Assignment
-      forget_assigned analysis, [statement.value]
+      forget_assigned analysis, statement.value
       found := found_of(analysis, statement.value)
       local := followed_local(analysis, statement.target)
       if local
@@ -106,7 +106,7 @@ analyze_expression := (analysis: Analysis, expression: Expression): void ->
     when Try then analyze_try(analysis, expression)
     when Case then analyze_case(analysis, expression)
     else
-      forget_assigned analysis, [expression]
+      forget_assigned analysis, expression
       visit analysis, expression
 
 analyze_if := (analysis: Analysis, statement: If) ->
@@ -132,7 +132,7 @@ analyze_while := (analysis: Analysis, loop: While) ->
   analysis.loop_depth -= 1
 
 analyze_for := (analysis: Analysis, loop: For) ->
-  forget_assigned analysis, [loop.iterable]
+  forget_assigned analysis, loop.iterable
   visit analysis, loop.iterable
   forget_locals analysis, assigned_in_blocks(analysis, [loop.body])
   before := analysis.ranges.to_array()
@@ -152,7 +152,7 @@ analyze_try := (analysis: Analysis, expression: Try) ->
 
 analyze_case := (analysis: Analysis, expression: Case) ->
   if subject := expression.subject
-    forget_assigned analysis, [subject]
+    forget_assigned analysis, subject
     visit analysis, subject
   blocks := [arm.body for arm in expression.arms] + [expression.otherwise else []]
   forget_locals analysis, assigned_in_blocks(analysis, blocks)
@@ -163,7 +163,7 @@ analyze_case := (analysis: Analysis, expression: Case) ->
 
 condition_found := (analysis: Analysis, condition: Condition) ->
   value := condition_value(condition)
-  forget_assigned analysis, [value]
+  forget_assigned analysis, value
   visit analysis, value
 
 restore := (analysis: Analysis, entries: (Identifier, FloatRange)[]) ->
@@ -173,11 +173,12 @@ restore := (analysis: Analysis, entries: (Identifier, FloatRange)[]) ->
 forget_locals := (analysis: Analysis, locals: Set<Identifier>) ->
   analysis.ranges.remove local for local in locals
 
-# Forgets the locals that the expressions assign in the blocks that they hold, as `if` and `case`
+# Forgets the locals that the expression assigns in the blocks that it holds, as `if` and `case`
 # expressions may, before their ranges are read.
-forget_assigned := (analysis: Analysis, expressions: Expression[]) ->
-  nodes: Statement[] = [expressions...]
-  forget_locals analysis, assigned_in_blocks(analysis, [nodes])
+forget_assigned := (analysis: Analysis, expression: Expression) ->
+  assigned: Set<Identifier>
+  add_assigned analysis, expression, assigned
+  forget_locals analysis, assigned
 
 follow := (analysis: Analysis, name: Identifier, range: FloatRange) ->
   return if name in analysis.facts.shared_vars or name in analysis.top_level_values
