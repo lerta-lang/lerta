@@ -54,7 +54,7 @@ export jobs := -> options().jobs
 # order they were asked for, so that the checks start in their order.
 export class Slots
   var free: Int
-  waiting: Signal[] = []
+  private waiting: Signal[] = []
 
   take := ->
     if @free > 0
@@ -167,13 +167,13 @@ struct Entry
 # How a suite's checks went: `started` and `finished` are when the first of them started, once the
 # suite was ready, and when the last finished, before any ran once more.
 class Tally
-  failed: String[] = []
-  var run_count = 0
-  var flaky_count = 0
-  var started: Float? = nil
-  var finished = 0.0
-  var setup_error: String? = nil
-  var setup_error_shown = false
+  private failed: String[] = []
+  private var run_count = 0
+  private var flaky_count = 0
+  private var started: Float? = nil
+  private var finished = 0.0
+  private var setup_error: String? = nil
+  private var setup_error_shown = false
 
 # The run of the checks of every suite as one list: several at once, each result shown as soon as it
 # has finished, then, with retry, those that failed, once more, one at a time; so the checks of a
@@ -184,21 +184,21 @@ class ChecksRun
   # Results are printed as they come, so the width also counts checks that turn out not to apply.
   name_width: Int
   tallies: Tally[]
-  retried: Entry[] = []
-  var next_to_start = 0
+  private retried: Entry[] = []
+  private var next_to_start = 0
 
-  key_of := (entry: Entry) -> key(@suites[entry.suite].title, entry.check.name)
+  private key_of := (entry: Entry) -> key(@suites[entry.suite].title, entry.check.name)
 
-  show := (status: String, check: Check, result: Result, reasons: String[]) ->
+  private show := (status: String, check: Check, result: Result, reasons: String[]) ->
     duration := format_duration(result.duration).pad_start(6)
     print "#{status.pad_end(5)} #{check.name.pad_end(@name_width)}  #{duration}"
     print "      #{reason}" for reason in reasons
 
-  fail := (entry: Entry) ->
+  private fail := (entry: Entry) ->
     @tallies[entry.suite].failed.push(entry.check.name)
     failed_keys.push @key_of(entry)
 
-  report := (entry: Entry, result: Result) ->
+  private report := (entry: Entry, result: Result) ->
     tally := @tallies[entry.suite]
     if error := tally.setup_error
       failed_keys.push @key_of(entry)
@@ -219,7 +219,7 @@ class ChecksRun
       @show 'FAIL', entry.check, result, reasons
 
   # The result of the check, or none if its suite could not get ready, which its tally then tells.
-  run_entry := (entry: Entry) ->
+  private run_entry := (entry: Entry) ->
     tally := @tallies[entry.suite]
     try
       await ready if ready := @suites[entry.suite].ready
@@ -232,15 +232,15 @@ class ChecksRun
     result
 
   # Runs the checks not started yet, one after another, and reports each as it finishes.
-  work := ->
+  private work := ->
     while @next_to_start < @entries.length
       entry := @entries[@next_to_start]
       @next_to_start += 1
       @report entry, await @run_entry(entry)
 
-  run_all := -> await all([@work() for _ in 0..jobs()])
+  private run_all := -> await all([@work() for _ in 0..jobs()])
 
-  retry := ->
+  private retry := ->
     unless @retried.is_empty()
       print "running the checks that failed once more, one at a time: #{@retried.length}"
     for entry in @retried
@@ -256,7 +256,7 @@ class ChecksRun
         @show 'FAIL', entry.check, result, reasons
 
   # Prints how each suite went, and gives the number of those that failed.
-  summarize := ->
+  private summarize := ->
     var failed_suites = 0
     for suite at i in @suites
       tally := @tallies[i]

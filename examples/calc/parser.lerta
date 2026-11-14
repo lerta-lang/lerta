@@ -4,16 +4,16 @@ import CalcError, Expr, Let, Number, Operation, Print, Statement, Variable from 
 
 export class Parser
   tokens: Token[]
-  var position = 0
+  private var position = 0
 
-  peek := -> @tokens[@position]
+  private peek := -> @tokens[@position]
 
   next := ->
     token := @tokens[@position]
     @position += 1
     token
 
-  expect := (kind: String) ->
+  private expect := (kind: String) ->
     token := @next()
     throw CalcError("expected #{kind}, found '#{token.text}'") if token.kind != kind
     token
@@ -25,33 +25,33 @@ export class Parser
       @expect ';' if @peek().kind != 'end'
     result
 
-  statement := (): Statement ->
+  private statement := (): Statement ->
     token := @next()
     case token.kind
       when 'let' then @let_statement()
       when 'print' then Print(@expression())
       else throw CalcError("unexpected '#{token.text}'")
 
-  let_statement := ->
+  private let_statement := ->
     name := @expect('name').text
     @expect '='
     Let(name, value: @expression())
 
-  expression := ->
+  private expression := ->
     var left = @term()
     while @peek().kind == '+' or @peek().kind == '-'
       operator := @next().kind
       left = Operation(operator, left, right: @term())
     left
 
-  term := ->
+  private term := ->
     var left = @factor()
     while @peek().kind == '*' or @peek().kind == '/'
       operator := @next().kind
       left = Operation(operator, left, right: @factor())
     left
 
-  factor := (): Expr ->
+  private factor := (): Expr ->
     token := @next()
     case token.kind
       when 'number' then Number(token.text.parse_int()!)
