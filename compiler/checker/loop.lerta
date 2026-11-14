@@ -90,12 +90,15 @@ expected_array_element := (expected: Type?) -> (expected as ArrayType?)?.element
 type_of_iter_comprehension := (
   body: Body, comprehension: Comprehension, item_type: Type, expected: Type?
 ) ->
-  { guard, element } := comprehension.lazy!
+  { guard, element, indexed } := comprehension.lazy!
+
+  # The functions of an indexed one take the index after the item.
+  params := indexed then [item_type, int_type] else [item_type]
   if guard
-    type_of_item_function body, guard, item_type, bool_type, nil
+    type_of_item_function body, guard, params, bool_type, nil
   expected_item := expected_iter_item(expected)
   holds := comprehension.guard
-  element_type := type_of_item_function(body, element, item_type, expected_item, holds)
+  element_type := type_of_item_function(body, element, params, expected_item, holds)
   at := comprehension.element.position
   item := check_value_type(body.program, element_type.result, at, 'an Iter')
   IterType(item)

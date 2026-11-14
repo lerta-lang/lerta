@@ -195,14 +195,12 @@ comprehension_of := (
   nested: Bool
 ) ->
   { variable, index, iterable, guard } := header
-  if is_lazy and index != nil
-    tokens.fail index.position, 'an Iter comprehension takes no index so far'
 
   # Each place that reads the parts declares them anew, as each is its own function or scope.
   bindings := -> take_apart_item(header)
   lazy :=
     if is_lazy
-      lazy_functions element, variable, guard, bindings
+      lazy_functions element, variable, index, guard, bindings
     else
       nil
 
@@ -501,10 +499,13 @@ parse_inline_arm := (tokens: TokenStream) ->
 # Comprehension). The guard's function tests its condition as an `if` would:
 # `guard then true else false`.
 lazy_functions := (
-  element: Expression, variable: Identifier, guard: Expression?, bindings: () -> Statement[]
+  element: Expression, variable: Identifier, index: Identifier?, guard: Expression?,
+  bindings: () -> Statement[]
 ) ->
   function_of := (value: Expression) ->
     params := [Parameter(copy_identifier(variable))]
+    if index
+      params.push Parameter(copy_identifier(index))
     body := [bindings()..., value]
     FunctionLiteral(
       params
@@ -520,7 +521,7 @@ lazy_functions := (
       function_of as_test(guard)
     else
       nil
-  LazyFunctions(guard: guard_function, element: function_of(element))
+  LazyFunctions(guard: guard_function, element: function_of(element), indexed: index != nil)
 
 as_test := (guard: Expression) ->
   position := guard.position

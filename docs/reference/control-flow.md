@@ -250,7 +250,7 @@ labels := [
   - Why a word rather than a comma, as in CoffeeScript's `for word, i`: Go's `for i, x` names the two the other way round, and a comma would let either reading compile wherever the items are `Int`s.
   - `at` is no keyword, so it stays usable as a name.
 - For a range it counts from 0 too, not from the start.
-- A postfix `for` and an array comprehension take one too, `[f(x, i) for x at i in xs]`; a lazy comprehension does not, so far.
+- A postfix `for` and both kinds of comprehension take one too, `[f(x, i) for x at i in xs]`, as its place in the iterable, counted before the condition.
 
 ### Tuples
 

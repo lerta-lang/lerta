@@ -103,6 +103,79 @@ emit_inclusive_range_iter := (ir: IrBuilder, start: String, end: String) ->
   kind := define_kind(ir, 'inclusive range', state, int_type, has_next, next)
   emit_iter(ir, kind, [start, end, 'false'])
 
+# The elements of an Iter comprehension that names the index, `for x at i in xs`: the element's
+# function, a closure of the item and its place, from 0, for each item for which the guard's, if
+# any, gives true. has_next finds the next such item and holds it, with its place, until next
+# takes it; the state is the source, the functions, the next place, whether an item is held, that
+# item and its place.
+export emit_indexed_comprehension_iter := (
+  ir: IrBuilder, source: String, item: Type, guard: String?, element: String, element_type: Type
+) ->
+  test_type := FunctionType(params: [item, int_type], result: bool_type)
+  result := function_type_of(element_type).result
+  has_next := (body: IrBuilder, kind: IterKind) ->
+    search_label := body.fresh_label('indexed.search')
+    take_label := body.fresh_label('indexed.take')
+    keep_label := body.fresh_label('indexed.keep')
+    found_label := body.fresh_label('indexed.found')
+    end_label := body.fresh_label('indexed.end')
+    body.branch_if load_state(body, kind, 4), found_label, search_label
+    body.start_block search_label
+    source_iter := load_state(body, kind, 0)
+    has_more := emit_has_next(body, source_iter)
+    emit_check_or_return_thrown body, bool_type
+    body.branch_if has_more, take_label, end_label
+    body.start_block take_label
+    value := emit_next(body, source_iter, item)
+    emit_check_or_return_thrown body, bool_type
+    place := load_state(body, kind, 3)
+    store_state body, kind, 3, body.assign("add i64 #{place}, 1")
+    if guard
+      skip_label := body.fresh_label('indexed.skip')
+      keep := emit_closure_call(body, load_state(body, kind, 1), test_type, [value, place])
+      release_and_return := ->
+        emit_release_value body, value, item
+        emit_return_thrown body, bool_type
+      emit_check_with body, release_and_return
+      body.branch_if keep, keep_label, skip_label
+      body.start_block skip_label
+      emit_release_value body, value, item
+      body.branch search_label
+    else
+      body.branch keep_label
+    body.start_block keep_label
+    store_state body, kind, 5, value
+    store_state body, kind, 6, place
+    store_state body, kind, 4, 'true'
+    body.branch found_label
+    body.start_block found_label
+    body.emit 'ret i1 true'
+    body.start_block end_label
+    body.emit 'ret i1 false'
+  next := (body: IrBuilder, kind: IterKind) ->
+    store_state body, kind, 4, 'false'
+    value := load_state(body, kind, 5)
+    if ownership(item) != NONE
+      store_state body, kind, 5, 'zeroinitializer'
+    place := load_state(body, kind, 6)
+    mapped := emit_closure_call(body, load_state(body, kind, 2), element_type, [value, place])
+    emit_release_value body, value, item
+    emit_check_or_return_thrown body, result
+    body.emit "ret #{ir_type(result)} #{mapped}"
+  state :=
+    fixed(value_field(IterType(item)))
+    fixed(value_field(test_type))
+    fixed(value_field(element_type))
+    value_field(int_type)
+    value_field(bool_type)
+    value_field(item)
+    value_field(int_type)
+
+  # The guard's call is generated only where there is one, which the kind's name tells.
+  key := "indexed #{guard then 'guarded ' else ''}#{type_key(item)} #{type_key(element_type)}"
+  kind := define_kind(ir, key, state, result, has_next, next)
+  emit_iter(ir, kind, [source, guard ? 'null', element, '0', 'false', 'zeroinitializer', '0'])
+
 # The results of a function of one item, a closure of the type, for each item of the source.
 emit_map_iter := (ir: IrBuilder, source: String, mapper: String, type: Type) ->
   function_type := function_type_of(type)

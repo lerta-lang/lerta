@@ -11,7 +11,7 @@
   - `map` and `filter`, which own their source `Iter` and closure;
   - an Iter written in Lerta, which holds its value as an interface value (see [Iters written in Lerta](../reference/types.md#iter));
   - the generator kind: see [functions that yield](#functions-that-yield).
-- A lazy comprehension is a `map` of its element's closure over its source, through a `filter` of its guard's closure if it has one. The methods `map` and `filter` are such comprehensions (see [builtins](representation.md#builtins)).
+- A lazy comprehension is a `map` of its element's closure over its source, through a `filter` of its guard's closure if it has one. One that names the index is an `Iter` of its own kind (`emit_indexed_comprehension_iter`), which counts the source's items and gives each function the item and its place. The methods `map` and `filter` are such comprehensions (see [builtins](representation.md#builtins)).
 - The started flag makes a second traversal throw (see [the reference](../reference/types.md#iter)).
 - **Over a `String`.** A `for` or a comprehension over a `String`, or over its `iter()`, makes no `Iter`: it reads the UTF-8 in the loop, as one over a `Binary` reads its bytes (`compiler/codegen/string_loop.lerta`). An ASCII byte is its `Char`; another lead byte is decoded by std's `char_at`, and the length of its sequence is told from the byte in the loop. The place of the next `Char` is stored before the body runs, so that a `continue` goes on from it. A `for c in s` then takes about 11 instructions for each ASCII character, against 10 for `for b in s.binary`.
 
