@@ -235,25 +235,47 @@ TREE_CHANGES :=
 
 # Only the rewrites of the source itself are reported: one that a round enables, as `b'...'` for the
 # `b"..."` that `"...".binary` is written as, shows once the text written is formatted again.
-# The source with the rewrites applied, round after round, as one may find another in what an
-# earlier one wrote, or in the lines that the layout between them decides, and laid out. Each round
-# checks that the rewrites that keep the syntax tree do, and the layout that it keeps the tree of
-# the source rewritten. A `;` goes last, once the layout has kept no statement on a line that holds
-# one (see Code kept as written): the layout puts the statement after it on a line of its own where
-# it decides where the statement starts, and its rewrite elsewhere.
+# The source with the rewrites applied by `rounds`, and laid out. A `;` goes last, once the layout
+# has kept no statement on a line that holds one (see Code kept as written): the layout puts the
+# statement after it on a line of its own where it decides where the statement starts, and its
+# rewrite elsewhere.
 # Where `types` leaves out the types whose values have them of their own, and the program rewritten
 # does not check or gives a declaration another type, nil: a value took its type from one left out
 # after all, and none is left out then (`types` false).
 rewritten_text := (
   parsed: Parsed, first_laid: LaidOut, first: Rewrites, path: String, types: Bool
 ): Promise<RewrittenText?> ->
+  done := await rounds(parsed, first_laid, first, path, types)
+  return nil unless kept_types(parsed, first, done)
+  { current, found } := done
+
+  # A comparison of trees cannot check the rewrites that change the tree (see TREE_CHANGES), but a
+  # program that checked must still check.
+  if first.typed != nil and found.typed == nil
+    throw changed(path, 'its rewrites would make the program fail to check')
+  annotations_kept := not types
+  separators := applicable([edit for edit in found.edits when edit.rule == SEMICOLONS])
+  return { annotations_kept, text: current.source } if separators.is_empty()
+  separated := written_program(applied(current.source, separators), path, 'its rewrites')
+  check_same separated, current, path, 'its rewrites'
+  { annotations_kept, text: separated.source }
+
+# The source rewritten and laid out by the rounds, the rewrites found in it, and whether a round
+# left out a type whose value has it of its own.
+struct Rounds
+  current: Parsed
+  found: Rewrites
+  left_out_types: Bool
+
+# The rewrites applied round after round, as one may find another in what an earlier one wrote, or
+# in the lines that the layout between them decides. Each round checks that the rewrites that keep
+# the syntax tree do, and the layout that it keeps the tree of the source rewritten.
+rounds := (
+  parsed: Parsed, first_laid: LaidOut, first: Rewrites, path: String, types: Bool
+): Promise<Rounds> ->
   var current = parsed
   var last_rewrites = first
   var left_out_types = false
-
-  # Whether the last round changed nothing, so that `last_rewrites` are those of `current`.
-  var settled = false
-
   for round in 0..MAX_ROUNDS
     if round > 0
       last_rewrites = await rewrites(current, path)
@@ -275,28 +297,18 @@ rewritten_text := (
     else if laid.text != current.source
       current = checked_layout(laid.text, current, path)
     else
-      settled = true
-      break
-  found :=
-    if settled
-      last_rewrites
-    else
-      await rewrites(current, path)
-  if left_out_types
-    before := declared_types(parsed.statements, first.typed)
-    after := declared_types(current.statements, found.typed) else return nil
-    return nil if before != after
+      # Nothing changed, so that `last_rewrites` are those of `current`.
+      return { current, found: last_rewrites, left_out_types }
+  { current, found: await rewrites(current, path), left_out_types }
 
-  # A comparison of trees cannot check the rewrites that change the tree (see TREE_CHANGES), but a
-  # program that checked must still check.
-  if first.typed != nil and found.typed == nil
-    throw changed(path, 'its rewrites would make the program fail to check')
-  annotations_kept := not types
-  separators := applicable([edit for edit in found.edits when edit.rule == SEMICOLONS])
-  return { annotations_kept, text: current.source } if separators.is_empty()
-  separated := written_program(applied(current.source, separators), path, 'its rewrites')
-  check_same separated, current, path, 'its rewrites'
-  { annotations_kept, text: separated.source }
+# Whether the declarations of the program rewritten have the types of those of the source, where
+# the rounds left out a type: false where one has another type, or the program does not check.
+kept_types := (parsed: Parsed, first: Rewrites, done: Rounds) ->
+  { current, found, left_out_types } := done
+  return true unless left_out_types
+  before := declared_types(parsed.statements, first.typed)
+  after := declared_types(current.statements, found.typed) else return false
+  before == after
 
 struct RewrittenText
   text: String
