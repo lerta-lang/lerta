@@ -2,9 +2,9 @@
 # so the facts that it records of them are found by those nodes; those of the types written are in
 # annotations.lerta.
 import
-  Assignment, BinaryOperation, Call, Case, CaseArm, Cast, Expression, FunctionLiteral, Identifier,
-  Import, ImportName, Index, Member, NamedValue, NilLiteral, Position, Range, Statement,
-  StringLiteral, This, UnaryOperation
+  Assignment, binary_literal_bytes, BinaryOperation, Call, Case, CaseArm, Cast, Expression, For,
+  FunctionLiteral, Identifier, Import, ImportName, Index, IntegerLiteral, Member, NamedValue,
+  NilLiteral, Position, Range, Statement, StringLiteral, This, UnaryOperation
 from '../ast'
 import is_file from 'std:io'
 import check_program from '../checker/modules'
@@ -17,14 +17,15 @@ import
   copied_source, counted_end, range_test as comparisons_of_range, runs_no_code, runs_of_alike_arms
 from './expressions'
 import
-  ArrayType, bool_type, char_type, FunctionType, INTEGER_KINDS, is_one_of_kinds, IterType, MapType,
-  NUMBER_KINDS, PromiseType, SimpleType, string_type, Type
+  ArrayType, bool_type, byte_type, char_type, FunctionType, INTEGER_KINDS, is_one_of_kinds,
+  IterType, MapType, NUMBER_KINDS, OptionalType, PromiseType, SimpleType, string_type, Type
 from '../types'
 import depth_change from '../lexer/tokens'
 import
-  CHAR_CONCATENATIONS, DEFAULT_COMPARISONS, EMPTINESS_TESTS, EXPECTED_TYPES, FOUND_TESTS,
-  ITERABLE_ARGUMENTS, MEMBERSHIP_LISTS, MEMBERSHIP_TESTS, RANGE_TESTS, REDUNDANT_CASTS,
-  SHARED_ARM_BODIES, SPREADS, SHORTHAND_ARGUMENTS, UNUSED_IMPORTS, VALUES_ALONE
+  APPENDS, BYTE_LITERALS, CHAR_CONCATENATIONS, DEFAULT_COMPARISONS, DEFAULT_SEPARATORS,
+  EMPTINESS_TESTS, EXPECTED_TYPES, FOUND_TESTS, ITERABLE_ARGUMENTS, LAST_ITEMS, MEMBERSHIP_LISTS,
+  MEMBERSHIP_TESTS, RANGE_TESTS, REDUNDANT_CASTS, SHARED_ARM_BODIES, SORT_KEYS, SPREADS,
+  SHORTHAND_ARGUMENTS, UNUSED_IMPORTS, VALUES_ALONE
 from './rules'
 import dump_ast_without_positions from '../dumps'
 import EntryModule, load_modules, module_key from '../loader'
@@ -144,6 +145,7 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
         range_test(tokens, value, facts)
         concatenation
         found_test(tokens, value, facts)
+        byte_literal(tokens, value, facts)
         membership_lists(tokens, value, typed)...
       ]
     when Case then shared_arm_bodies(tokens, value, typed.facts)
@@ -156,8 +158,11 @@ export typed_edits := (tokens: Tokens, value: Expression, typed: Typed): Edit?[]
         spread(tokens, value, facts)
         value_alone(tokens, value, facts)
         default_comparison(tokens, value, facts)
+        sort_key(tokens, value, facts)
+        default_separator(tokens, value, facts)
         iterable_argument(tokens, value, facts)
       ]
+    when Index then [last_item(tokens, value, typed.facts)]
     else []
 
 export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Typed): Edit?[] ->
@@ -171,6 +176,7 @@ export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Ty
         else
           nil
       [concatenation]
+    when For then [append_loop(tokens, statement, typed.facts)]
     else []
 
 # The import without the names that are never used (see Unused names); only reported where it gives
@@ -397,6 +403,142 @@ is_natural_order := (value: Expression) ->
   { params } := literal
   is_ordered := object.name == params[0].name.name and argument.name == params[1].name.name
   member.name.name == 'compare' and is_ordered
+
+# `xs.sorted_by((a) -> a.k)` for `xs.sorted((a, b) -> a.k.compare(b.k))` of an array, of a path of
+# fields of each, and so for `sort` (see Sort keys).
+sort_key := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  member := call.callee as Member else return nil
+  if member.name.name not in ['sorted', 'sort'] or facts.types[member.object] is not ArrayType
+    return nil
+  return nil if call.args.length != 1 or not call.named_args.is_empty()
+  literal := call.args[0] as FunctionLiteral else return nil
+  key := compared_key(literal) else return nil
+  name := tokens.at(member.name.position) else return nil
+  return nil unless tokens.is_kind(name + 1, '(')
+  close := tokens.matching(name + 1) else return nil
+  parameter := literal.params[0].name.name
+  changes: Change[] =
+    tokens.replaced(name, "#{member.name.name}_by")
+    { from: tokens.end(name + 1), to: tokens.start(close), text: "(#{parameter}) -> #{key}" }
+  tokens.edit_at(SORT_KEYS, member.name.position, changes)
+
+# The key that the literal compares, `a.k` of `(a, b) -> a.k.compare(b.k)`, where `k` is a path of
+# fields; nil for any other literal.
+compared_key := (literal: FunctionLiteral) ->
+  return nil if literal.params.length != 2 or literal.body.length != 1
+  call := literal.body[0] as Call else return nil
+  compare := call.callee as Member else return nil
+  return nil if compare.name.name != 'compare' or call.args.length != 1
+  left := field_path(compare.object, literal.params[0].name.name) else return nil
+  right := field_path(call.args[0], literal.params[1].name.name) else return nil
+  left == right then "#{literal.params[0].name.name}.#{left}"
+
+# The names of the fields, joined by `.`, of a path of one or more of them from the name; nil for
+# any other value.
+field_path := (value: Expression, name: String): String? ->
+  member := value as Member else return nil
+  object := member.object
+  return member.name.name if object is Identifier and object.name == name
+  above := field_path(object, name) else return nil
+  "#{above}.#{member.name.name}"
+
+# `xs.join()` for `xs.join('')` of strings or chars (see Default separators).
+default_separator := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  member := call.callee as Member else return nil
+  return nil if member.name.name != 'join' or call.args.length != 1
+  separator := call.args[0] as StringLiteral else return nil
+  return nil if not separator.value.is_empty() or not joins_text(facts.types[member.object])
+  at := tokens.at(separator.position) else return nil
+  return nil if not tokens.is_kind(at - 1, '(') or not tokens.is_kind(at + 1, ')')
+  change := Change(from: tokens.start(at), to: tokens.end(at), text: '')
+  tokens.edit_at(DEFAULT_SEPARATORS, separator.position, [change])
+
+# Whether the type is an array or an Iter of strings or chars, whose `join` takes `''` by default.
+joins_text := (type: Type?) ->
+  item :=
+    case type
+      when ArrayType then type.element
+      when IterType then type.item
+      else return false
+  item == string_type or item == char_type
+
+# `xs.last()!` for `xs[xs.length - 1]`, and `xs.all_but_last()` for `xs[..(xs.length - 1)]`, of an
+# array that runs no code, but not the last item of one whose items are optional (see Last items).
+last_item := (tokens: Tokens, index: Index, facts: NodeFacts) ->
+  return nil if index.default_value != nil
+  { object } := index
+  array := facts.types[object] as ArrayType else return nil
+  return nil unless runs_no_code(object)
+  name := text_of(tokens, object) else return nil
+  text :=
+    if is_all_but_last(index.index, object)
+      'all_but_last()'
+    # `!` would take the nil out of an optional item too, as `last` gives `T?`, which is T then.
+    else if is_before_length(index.index, object) and array.element is not OptionalType
+      'last()!'
+    else
+      return nil
+  first := tokens.at(first_position(object)) else return nil
+  object_last := last_token(tokens, object) else return nil
+  open := object_last + 1
+  return nil unless tokens.is_kind(open, '[')
+  close := tokens.matching(open) else return nil
+  change := Change(from: tokens.start(first), to: tokens.end(close), text: "#{name}.#{text}")
+  tokens.edit_at(LAST_ITEMS, index.position, [change])
+
+is_all_but_last := (value: Expression, object: Expression) ->
+  range := value as Range else return false
+  end := range.end else return false
+  range.start == nil and not range.inclusive and is_before_length(end, object)
+
+# Whether the value is `xs.length - 1` of the object.
+is_before_length := (value: Expression, object: Expression) ->
+  difference := value as BinaryOperation else return false
+  length := difference.left as Member else return false
+  one := difference.right as IntegerLiteral else return false
+  same := dump_ast_without_positions([length.object]) == dump_ast_without_positions([object])
+  difference.operator == '-' and length.name.name == 'length' and one.value == 1 and same
+
+# `xs.append ys` for `xs.push y for y in ys`, of arrays of the same items, where xs runs no code
+# and is not ys (see Appends).
+append_loop := (tokens: Tokens, loop: For, facts: NodeFacts) ->
+  return nil if loop.index != nil or loop.body.length != 1
+  call := loop.body[0] as Call else return nil
+  push := call.callee as Member else return nil
+  return nil if push.name.name != 'push' or call.args.length != 1 or not call.named_args.is_empty()
+  item := call.args[0] as Identifier else return nil
+  return nil if item.name != loop.variable.name or not runs_no_code(push.object)
+  pushed := facts.types[push.object] as ArrayType else return nil
+  iterated := facts.types[loop.iterable] as ArrayType else return nil
+  return nil if pushed.element != iterated.element
+
+  # A push of each item of the array onto itself never ends, which the append would.
+  same := dump_ast_without_positions([push.object]) == dump_ast_without_positions([loop.iterable])
+  return nil if same
+  first := tokens.at(first_position(push.object)) else return nil
+  keyword := tokens.at(loop.position) else return nil
+  return nil if first > keyword
+  object := text_of(tokens, push.object) else return nil
+  iterable_first := tokens.at(first_position(loop.iterable)) else return nil
+  last := statement_last(tokens, first, tokens.line_indentation(tokens.code[first].line) else 0)
+  iterable := tokens.slice(tokens.start(iterable_first), tokens.end(last))
+  change :=
+    Change(from: tokens.start(first), to: tokens.end(last), text: "#{object}.append #{iterable}")
+  tokens.edit_at(APPENDS, push.name.position, [change])
+
+# `b'x'` for `b'x'[0]` compared with a byte, where the literal is one (see Binary literals).
+byte_literal := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
+  return nil unless test.operator in ['==', '!=']
+  for (indexed, other) in [(test.left, test.right), (test.right, test.left)]
+    index := indexed as Index else continue
+    zero := index.index as IntegerLiteral else continue
+    bytes := binary_literal_bytes(index.object) else continue
+    continue if zero.value != 0 or bytes.length != 1 or facts.types[other] != byte_type
+    literal := tokens.at(index.object.position) else return nil
+    close := tokens.matching(literal + 1) else return nil
+    change := Change(from: tokens.end(literal), to: tokens.end(close), text: '')
+    return tokens.edit_at(BYTE_LITERALS, index.position, [change])
+  nil
 
 # `Set(xs)` for `Set(xs.to_array())` of an array, an Iter, a map or a set, as `Map()` and `Set()`
 # take any Iterable (see Iterable arguments).

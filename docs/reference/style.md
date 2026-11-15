@@ -42,6 +42,7 @@
 
 - Write `b'...'` or `b"..."`, not the bytes of a string literal, `'...'.binary`.
 - `b'...'` too whenever it can be written with `'...'`.
+- Compare a byte with `b'x'`, not `b'x'[0]`: `c == b'a'`.
 
 ### Escapes
 
@@ -235,6 +236,18 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 
 - Write `xs.sorted()`, not `xs.sorted((a, b) -> a.compare(b))`, and so for `sort`.
 
+### Sort keys
+
+- Write `xs.sorted_by((x) -> x.name)`, not `xs.sorted((a, b) -> a.name.compare(b.name))`, of the same path of fields of both items, and so for `sort`.
+
+### Default separators
+
+- Write `xs.join()`, not `xs.join('')`, of strings or chars.
+
+### Last items
+
+- Write `xs.last()!`, not `xs[xs.length - 1]`, and `xs.all_but_last()`, not `xs[..(xs.length - 1)]`, of an array `xs` that runs no code, but not `last()!` of optional items, whose nil it would take out. `all_but_last` gives an empty array for an empty one, where the slice throws.
+
 ### Iterable arguments
 
 - Give `Map()` and `Set()` an Iterable itself: `Set(m.keys())`, not `Set(m.keys().to_array())`.
@@ -293,6 +306,10 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 ### Semicolons
 
 - Put each statement on a line of its own. `;` is for a program given on the command line (see [`-e`](compiler.md#run)).
+
+### Appends
+
+- Write `xs.append ys`, not `xs.push y for y in ys`, of arrays of the same items, where `xs` runs no code.
 
 ### Postfix forms
 

@@ -306,6 +306,11 @@ The rewrites below depend on the checking of a program that holds the file.
 | [Named arguments written alone](#named-arguments-written-alone) | [Shorthand](style.md#shorthand) |
 | [Values written alone](#values-written-alone) | [Values alone](style.md#values-alone) |
 | [Default comparisons left out](#default-comparisons-left-out) | [Default comparisons](style.md#default-comparisons) |
+| [Sort keys written with `sorted_by`](#sort-keys-written-with-sorted_by) | [Sort keys](style.md#sort-keys) |
+| [Default separators left out](#default-separators-left-out) | [Default separators](style.md#default-separators) |
+| [Last items written with `last`](#last-items-written-with-last) | [Last items](style.md#last-items) |
+| [Pushes of each item written with `append`](#pushes-of-each-item-written-with-append) | [Appends](style.md#appends) |
+| [Bytes compared as literals](#bytes-compared-as-literals) | [Binary literals](style.md#binary-literals) |
 | [Arrays of Iterables left out](#arrays-of-iterables-left-out) | [Iterable arguments](style.md#iterable-arguments) |
 | [Chars added themselves](#chars-added-themselves) | [Char concatenations](style.md#char-concatenations) |
 | [Found tests written with `any`](#found-tests-written-with-any) | [Found tests](style.md#found-tests) |
@@ -381,6 +386,30 @@ Besides:
 #### Default comparisons left out
 
 - It writes `xs.sorted((a, b) -> a.compare(b))` of an array, whose comparison is that which `sorted` takes by default, as `xs.sorted()`, and so for `sort`, with or without parentheses.
+
+#### Sort keys written with `sorted_by`
+
+- It writes `xs.sorted((a, b) -> a.k.compare(b.k))` of an array, where `k` is the same path of fields of both items, as `xs.sorted_by((a) -> a.k)`, and so for `sort`, as `sort_by`.
+- Not of a call without parentheses.
+
+#### Default separators left out
+
+- It writes `xs.join('')` of an array or an Iter of strings or chars as `xs.join()`.
+
+#### Last items written with `last`
+
+- It writes `xs[xs.length - 1]` as `xs.last()!`, and `xs[..(xs.length - 1)]` as `xs.all_but_last()`, of an array `xs` that runs no code; but not `xs[xs.length - 1]` of optional items, as `!` would take out an item's nil too.
+- `all_but_last` gives an empty array for an empty one, where the slice throws; so the rewrite changes what a program does only where it would throw.
+
+#### Pushes of each item written with `append`
+
+- It writes `xs.push y for y in ys` as `xs.append ys`, where `xs` runs no code and is an array of the items of the array `ys`.
+- Only of the postfix form; a loop in a block takes it first (see [Postfix forms](style.md#postfix-forms)).
+- Not where `xs` is written as `ys`, a push of each item onto the array itself, which never ends, while `append` ends; one through another name, as `b := a` before `b.push x for x in a`, is not told apart, and ends once written so.
+
+#### Bytes compared as literals
+
+- It writes `b'x'[0]` as `b'x'`, of a literal of one byte, where `==` or `!=` compares it with a `Byte`, which makes the literal one.
 
 #### Arrays of Iterables left out
 
