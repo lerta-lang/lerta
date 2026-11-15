@@ -70,6 +70,7 @@ With `--source-lines`, each module's IR carries LLVM's debug information of the 
 - **POSIX.** The runtime relies on the guard page below the stack: touching it raises SIGSEGV (or SIGBUS). The handler, on a stack of its own (`sigaltstack`), panics if the faulting address is in the stack's range. A stack without a limit, or with one beyond the address space, has no such range. Other faults keep their default action.
   - It costs nothing per call.
 - **Windows** raises `EXCEPTION_STACK_OVERFLOW` in the overflowing thread, on what is left of its stack. A vectored exception handler panics on it; other exceptions go on to the handlers after it.
+  - An executable is linked with a stack of 8 MiB (`--stack`), as macOS and Linux give by default. The linker's default is too small for the compiler on code nested as deep as the [nesting limit](../reference/syntax.md#nesting-limit) allows.
   - `SetThreadStackGuarantee` keeps 64 KiB of the stack for the handler.
   - The handler writes the message and ends the process with `TerminateProcess` (exit code 3, as C's `abort` gives there), since the code that `ExitProcess` runs may need more stack.
 
