@@ -103,6 +103,10 @@ class Rewriting
     # The comprehensions that are the whole value of a statement that starts its line.
     whole_comprehensions := Set<Expression>()
 
+    # The comprehensions that are positional arguments of calls, which are named by hand (see
+    # Comprehensions); a named one is a named item.
+    argument_comprehensions := Set<Expression>()
+
     # The last statements of functions, which give their results.
     ends_functions := Set<Statement>()
 
@@ -110,6 +114,9 @@ class Rewriting
   prepare_value := (value: Expression): void ->
     @with_else.add value.condition if value is If and not value.else_body.is_empty()
     add_ends @ends_functions, value.body if value is FunctionLiteral
+    if value is Call
+      for arg in value.args
+        @argument_comprehensions.add arg if arg is Comprehension
 
   # What a statement tells the rewrites of others, before they are found.
   prepare_statement := (statement: Statement): void ->
@@ -152,7 +159,7 @@ class Rewriting
       when Comprehension
         [
           counted_range(tokens, value.iterable)
-          comprehension_edit(tokens, value, @whole_comprehensions)
+          comprehension_edit(tokens, value, @whole_comprehensions, @argument_comprehensions)
           spread_comprehension(tokens, value)
         ]
       when Index then index_ranges(tokens, value)

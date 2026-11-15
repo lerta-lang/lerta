@@ -13,9 +13,10 @@ import Tokens from './tokens'
 
 # The comprehension on one line written with its `for` first where it is long, or reported: where
 # it is alone on its line, after its name if it is a named item, or in `wholes`, the whole value of
-# a statement that starts its line.
+# a statement that starts its line; but not in `arguments`, a positional argument of a call, even
+# alone on its line in a block, which is named by hand.
 export comprehension_edit := (
-  tokens: Tokens, comprehension: Comprehension, wholes: Set<Expression>
+  tokens: Tokens, comprehension: Comprehension, wholes: Set<Expression>, arguments: Set<Expression>
 ) ->
   return nil if comprehension.spread
   open := tokens.at(comprehension.position) else return nil
@@ -29,7 +30,7 @@ export comprehension_edit := (
   line_start := named then open - 2 else open
   after_comma := tokens.is_kind(line_start - 1, ',')
   alone := line_start in tokens.text.line_starts and not after_comma and ends_line
-  placed := alone or (comprehension in wholes and ends_line)
+  placed := comprehension not in arguments and (alone or comprehension in wholes and ends_line)
   return tokens.report(COMPREHENSION_FORMS, at) if parts.fors > 1 or not placed
   columns := tokens.line_indentation(at.line) else 0
   slice := (span: Span) -> tokens.slice(tokens.start(span.first), tokens.end(span.last))

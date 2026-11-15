@@ -32,12 +32,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: a rewrite that wrote `a - b` for `b - a` of two numbers would be applied without a report; `tests/format/rewritten_forms.lerta` checks the forms that each rewrite writes instead.
 - How to fix it: check each tree-changing rewrite against the tree that it is meant to make, as by comparing the trees outside the spans that the rewrite changes, which the nodes, holding only where they start, cannot tell yet.
 
-## A long comprehension alone in an argument block is joined onto the call's line
-
-- Where: the rounds in `compiler/format/format.lerta` apply the layout of a call's argument block, which joins the arguments that fit on one line, with the rewrite of a comprehension alone on its line in it (see [Comprehensions](reference/style.md#comprehensions)), which the joined line then no longer leaves alone.
-- How to see it: `lerta fmt --fix` writes `show`, then `[x + n + 1 for x in xs]` and `b` in a block below it, as `show [x + n + 1 for x in xs], b`, and reports the comprehension, where it would write it with its `for` first in the block.
-- How to fix it: hold the layout of a statement that holds a comprehension that its rewrite writes with its `for` first, until it is written so.
-
 ## A called function literal that infers its parameters ignores the type expected of its result
 
 - Where: `type_of_literal_call` in `compiler/checker/expression.lerta` types the arguments of a function literal called where it is written without the type expected of the call.
