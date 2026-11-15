@@ -456,9 +456,18 @@ program_name_check := ->
     errors := expect_success('build', built)
     return errors unless errors.is_empty()
     by_path := await run_command(executable, [], dir)
-    [
+    run_errors := [
       expect_success('run by path', by_path)...
       compare_text('stdout by path', "named\n", by_path.stdout_text())...
+    ]
+    return run_errors unless host_platform == 'windows'
+
+    # Windows paths may separate their names by backslashes.
+    by_backslashes := await run_command(executable.replace('/', '\'), [], dir)
+    [
+      run_errors...
+      expect_success('run by backslashes', by_backslashes)...
+      compare_text('stdout by backslashes', "named\n", by_backslashes.stdout_text())...
     ]
   )
 
