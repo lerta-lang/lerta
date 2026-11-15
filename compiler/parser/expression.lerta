@@ -2,8 +2,8 @@
 # reads compound expressions.
 import
   Await, BinaryOperation, Binding, Call, Cast, Conditional, Coalesce, copy_identifier, Declaration,
-  Expression, FloatLiteral, Identifier, If, Index, IsTest, Member, NamedValue, NilLiteral, Position,
-  Range, Statement, TupleItem, TypeName, UnaryOperation, Unwrap
+  Expression, FloatLiteral, Identifier, If, Index, IsTest, Member, NamedValue, nil_safe_object,
+  NilLiteral, Position, Range, Statement, TupleItem, TypeName, UnaryOperation, Unwrap
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import at_block, parse_block_literal, starts_member from './block_literal'
@@ -439,10 +439,10 @@ at_nil_safe := (tokens: TokenStream) ->
   question.kind == '?' and not question.spaced and dot.kind == '.' and not dot.spaced
 
 # `x?.rest`, nil if x is nil and otherwise x with the rest of the postfix chain: an `if` that binds
-# x to a name of its position, which no source can write.
+# x to the nil_safe_object of its position.
 parse_nil_safe := (tokens: TokenStream, object: Expression) ->
   position := tokens.next().position()
-  name := Identifier(position, name: "?#{position.line}:#{position.column}")
+  name := nil_safe_object(position)
   rest := parse_postfix(tokens, copy_identifier(name))
   condition := Binding(name, position, value: object)
   nil_safe := If(condition, position, then_body: [rest], else_body: [NilLiteral(position)])
