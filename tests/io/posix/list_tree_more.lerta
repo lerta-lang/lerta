@@ -1,0 +1,22 @@
+# Links to directories outside the tree and the path as a link are followed, and a directory under
+# the path that cannot be listed fails the whole. macOS cannot make a name that is not UTF-8, so
+# there the last check checks nothing.
+import list_tree, make_dir, write_file from 'std:io'
+import run from 'std:process'
+
+make_dir 'outside'
+await write_file('outside/o.txt', 'o')
+make_dir 'top'
+await run('ln', '-s', '../outside', 'top/out')
+await run('ln', '-s', 'top', 'top_link')
+print list_tree('top').join(' ')
+print list_tree('top_link').join(' ')
+
+make_dir 'top/bad'
+made := (await run('sh', '-c', "touch \"top/bad/$(printf 'a\\377')\" 2> /dev/null")).code == 0
+try
+  list_tree 'top'
+  print
+    made then 'no failure' else 'ValueError: a name is not valid UTF-8 in the directory: top/bad'
+catch error: ValueError
+  print "ValueError: #{error.message}"

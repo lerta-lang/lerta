@@ -405,6 +405,7 @@ These responses, and the 500 below, have an empty body.
 | `FileStatus` | A struct of `kind: FileKind`, `size: Int`, in bytes, and `modified_time: Float`, when it was last modified, in seconds since the Unix epoch, as `time` of [std:time](#stdtime) tells them. |
 | `FileKind` | An enum of `FILE`, `DIR` and `OTHER`, as a device. |
 | `list_dir(path: String): String[]` | The names of the entries of a directory (below). |
+| `list_tree(path: String, enters: (String) -> Bool = (_) -> true): String[]` | The files under a directory, at any depth, as paths from it, entering only the directories whose names `enters` takes (below). |
 | `make_dir(path: String)` | Makes a directory and any of its parents that are missing; a directory that is there already is no failure. Throws `cannot make directory: <path>` on failure, including for an empty path or one that holds a NUL byte. |
 | `make_temp_dir(): String` | Makes a new, empty directory for temporary files, and gives its path (below). |
 | `rename(from: String, to: String)` | Moves a file or a directory (below). |
@@ -436,6 +437,13 @@ These responses, and the 500 below, have an empty body.
 - Throws `cannot list directory: <path>` if the path does not name a directory that can be read, is empty or holds a NUL byte.
 - Throws a `ValueError`, `a name is not valid UTF-8 in the directory: <path>`, if a name is not valid UTF-8.
 - On Windows, whose names are UTF-16, a name that is not valid UTF-16 is read with U+FFFD in place of what is not, as the other paths that Windows gives are.
+
+#### list_tree
+
+- A file is anything that is not a directory, a link that leads nowhere among them.
+- The paths are depth first, each directory's entries in the order that `list_dir` gives, and joined by `/`: `sub/a.txt`.
+- Links are followed, but a link to a directory that is being listed, as `..` is, is not entered, as its listing would never end.
+- Throws as `list_dir` does for the path and for each directory under it, and as `real_path` does.
 
 #### make_temp_dir
 

@@ -558,6 +558,26 @@ export list_dir := (path: String) ->
   ]
   names.sorted()
 
+# The files under the directory, at any depth, as paths from it (see list_tree in
+# docs/reference/std.md).
+export list_tree := (path: String, enters: (String) -> Bool = (_) -> true) ->
+  tree_files(path, '', [], enters)
+
+# The files under `dir`, as paths after `prefix`; none of a directory that the real paths of those
+# being listed hold, which a link back to one of them leads to and would never end.
+tree_files := (dir: String, prefix: String, above: String[], enters: (String) -> Bool): String[] ->
+  names := list_dir(dir)
+  real := real_path(dir)
+  return [] if real in above
+  files: String[]
+  for name in names
+    path := "#{dir}/#{name}"
+    if not is_dir(path)
+      files.push "#{prefix}#{name}"
+    else if enters(name)
+      files.append tree_files(path, "#{prefix}#{name}/", above + [real], enters)
+  files
+
 extern lerta_stdin_read: () -> Promise<Binary?>
 
 # A line with more bytes before its "\n" than a read of it takes.
