@@ -35,9 +35,12 @@ export struct Walked
   statements: StatementShape[]
   line_statements: Set<Int>
 
-export walk := (statements: Statement[], text: SourceTokens, kept: KeptLines, results: Set<Call>) ->
+export walk := (
+  statements: Statement[], text: SourceTokens, kept: KeptLines, results: Set<Call>, checked: Bool
+) ->
   { code, line_starts, ending_comments, own_line_comments } := text
-  walker := Walker(text, code, line_starts, ending_comments, own_line_comments, kept, results)
+  walker :=
+    Walker(text, code, line_starts, ending_comments, own_line_comments, kept, results, checked)
   block := walker.block(statements, 0, nil)
   walker.resume_at walker.code.length
   { gaps, stranded, skipped, closers, without_commas, line_statements } := walker
@@ -81,9 +84,13 @@ export class Walker
 
     kept: KeptLines
 
-    # The calls whose values are results, which keep their parentheses (see result_calls); none
-    # where the program does not check.
+    # The calls whose values are results, which keep their parentheses (see result_calls); where
+    # the program does not check, those that may be, which keep them as written (see
+    # possible_result_calls).
     results: Set<Call>
+
+    # Whether the program checks, so that its results are known.
+    checked: Bool
   var stranded: Int[] = []
   private skipped := Set<Int>()
 

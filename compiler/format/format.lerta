@@ -3,7 +3,7 @@
 # reports where the source differs from that by the rule of the rewrite or the decision, and writes
 # the tokens with the gaps decided.
 import scan from 'std:scanner'
-import Call, Position, Statement from '../ast'
+import Position, Statement from '../ast'
 import dump_ast_without_positions from '../dumps'
 import CompileError from '../errors'
 import lex, Lexed from '../lexer/tokens'
@@ -27,7 +27,7 @@ import CodeGap, LineStart, Spaces, StatementShape from './shapes'
 import Gap, literal_lines, source_tokens, SourceTokens, TextToken from './text'
 import Tokens from './tokens'
 import declared_types from './annotations'
-import result_calls, typed_program, Typed from './typed'
+import possible_result_calls, result_calls, typed_program, Typed from './typed'
 import walk, Walked from './walk'
 
 # A place where the source differs from the style, at its position in the source.
@@ -166,12 +166,12 @@ rewrites_with := (parsed: Parsed, typed: Typed?) ->
   )
 
 # Where the program checks, the calls whose values are results keep their parentheses; where it
-# does not, no call is known to be one.
+# does not, those that may be results keep them as written.
 laid_out := (parsed: Parsed, typed: Typed?) ->
   { source, lexed, statements, text } := parsed
   kept := kept_lines(source, lexed)
-  results := typed then result_calls(typed) else Set<Call>()
-  walked := walk(statements, text, kept, results)
+  results := typed then result_calls(typed) else possible_result_calls(statements)
+  walked := walk(statements, text, kept, results, typed != nil)
 
   # The walk skips the statements kept as they are written, which the lines leave alone.
   tokens := Tokens(source, text, comments: lexed.comments, kept: Set())

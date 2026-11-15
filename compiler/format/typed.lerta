@@ -21,6 +21,7 @@ import EntryModule, load_modules, module_key from '../loader'
 import standard_module_of from '../source'
 import Change, Edit from './edits'
 import Tokens from './tokens'
+import Place, places_of from './places'
 
 import
   char_concatenation, default_comparison, default_separator, iterable_argument, recorded,
@@ -111,6 +112,19 @@ export result_calls := (typed: Typed): Set<Call> ->
     type := known as FunctionType else continue
     continue if literal.yields or gives_no_value(literal, type.result, facts)
     add_result_calls found, result for result in results
+  found
+
+# The calls that may be results where the program does not check, whose types do not tell which
+# are: those in the last statements of the bodies of functions or of the arms of those, which keep
+# their parentheses as written.
+export possible_result_calls := (statements: Statement[]): Set<Call> ->
+  found: Set<Call>
+  at_function := (value: Expression, _: Place) ->
+    literal := value as FunctionLiteral else return
+    add_result_calls found, last if last := literal.body.last() as Expression?
+  places_of statements, {
+    before: at_function, after: nil, condition: nil, statement: nil, statements: nil
+  }
   found
 
 gives_no_value := (literal: FunctionLiteral, result: Type, facts: NodeFacts) ->
