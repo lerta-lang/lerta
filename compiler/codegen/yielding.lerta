@@ -1,27 +1,24 @@
 # Functions that yield (see docs/internals/iteration.md#functions-that-yield).
 import Yield from '../ast'
 import emit_final_suspension, emit_ramp, emit_suspend, generate_coroutine from './coroutine'
-import emit_check_or_return_thrown, emit_return_thrown from './exceptions'
 import generate from './expression'
 import Generator from './generator'
 import HeapField, plain_field, value_field from './heap_object'
 import emit_seldom_branch, IrBuilder from './ir_builder'
-import define_kind, emit_iter, IterKind, load_state, store_state from './iter_protocol'
-import ir_type, ownership, suffixed_symbol from './lerta_ir'
+import
+  define_kind, emit_check_or_end, emit_end, emit_end_unless, emit_give, emit_iter, IterKind,
+  load_state, store_state
+from './iter_protocol'
+import ownership, suffixed_symbol from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
-import bool_type, Type, type_key from '../types'
+import Type, type_key from '../types'
 
 HANDLE := 0
 RUNNING := 1
-HELD := 2
-ITEM := 3
+ITEM := 2
 
 generator_state := (item: Type) ->
-  return
-    HeapField(ir_type: 'ptr', owned: COROUTINE)
-    plain_field('i1')
-    plain_field('i1')
-    value_field(item)
+  return [HeapField(ir_type: 'ptr', owned: COROUTINE), plain_field('i1'), value_field(item)]
 
 # The function `symbol`, of the linkage and the parameters, as in `i64 %p0`: it makes the Iter and
 # runs the body, which `generate_body` generates, up to its first suspension. The body gets the
@@ -40,57 +37,45 @@ export generate_yielding_function := (
   generate_coroutine g, body_symbol, params_with_iter, generate_with_handle, ->
     emit_final_suspension g
   emit_ramp g.ir.module, linkage, symbol, body_symbol, params, (ir) ->
-    emit_iter(ir, kind, ['null', 'false', 'false', 'zeroinitializer'])
+    emit_iter(ir, kind, ['null', 'false', 'zeroinitializer'])
 
-# The value becomes the Iter's next item, which has_next finds held once the body suspends.
+# The value becomes the Iter's next item, which next finds held once the body suspends.
 export generate_yield := (g: Generator, yield_expression: Yield) ->
   if on_yield := g.on_yield
     on_yield generate(g, yield_expression.value)
     return ''
   kind := g.yield_kind!
   store_state g.ir, kind, ITEM, generate(g, yield_expression.value)
-  store_state g.ir, kind, HELD, 'true'
   emit_suspend g
   ''
 
-# The generator kind of Iter of the item type.
+# The generator kind of Iter of the item type. The body suspends either at a yield, which holds
+# the item, or at its end, after which the coroutine is done.
 generator_kind := (ir: IrBuilder, item: Type) ->
-  has_next := (body: IrBuilder, kind: IterKind) ->
-    look_label := body.fresh_label('generator.look')
-    check_label := body.fresh_label('generator.check')
+  next := (body: IrBuilder, kind: IterKind) ->
+    handle := load_state(body, kind, HANDLE)
+    emit_end_unless body, kind, body.negate(is_done(body, handle))
     reject_label := body.fresh_label('generator.reject')
     resume_label := body.fresh_label('generator.resume')
-    held_label := body.fresh_label('generator.held')
-    ended_label := body.fresh_label('generator.ended')
-    body.branch_if load_state(body, kind, HELD), held_label, look_label
-    body.start_block look_label
-    handle := load_state(body, kind, HANDLE)
-    is_done := call_runtime(body, 'i1 @llvm.coro.done(ptr)', "ptr #{handle}")
-    body.branch_if is_done, ended_label, check_label
-    body.start_block check_label
-    is_running := load_state(body, kind, RUNNING)
-    emit_seldom_branch body, is_running, reject_label, resume_label
+    emit_seldom_branch body, load_state(body, kind, RUNNING), reject_label, resume_label
     body.start_block reject_label
     call_void_runtime body, 'void @lerta_raise_iter_running()', ''
-    emit_return_thrown body, bool_type
+    emit_end body, kind
     body.start_block resume_label
     store_state body, kind, RUNNING, 'true'
     call_void_runtime body, 'void @llvm.coro.resume(ptr)', "ptr #{handle}"
     store_state body, kind, RUNNING, 'false'
-    emit_check_or_return_thrown body, bool_type
-    body.emit "ret i1 #{load_state(body, kind, HELD)}"
-    body.start_block held_label
-    body.emit 'ret i1 true'
-    body.start_block ended_label
-    body.emit 'ret i1 false'
+    emit_check_or_end body, kind
+    emit_end_unless body, kind, body.negate(is_done(body, handle))
 
-  # The held item passes to the caller; a reference is cleared, so that the drop does not release
-  # it.
-  next := (body: IrBuilder, kind: IterKind) ->
-    store_state body, kind, HELD, 'false'
+    # The held item passes to the caller; a reference is cleared, so that the drop does not
+    # release it.
     value := load_state(body, kind, ITEM)
     if ownership(item) != NONE
       store_state body, kind, ITEM, 'zeroinitializer'
-    body.emit "ret #{ir_type(item)} #{value}"
+    emit_give body, kind, value
 
-  define_kind(ir, "generator #{type_key(item)}", generator_state(item), item, has_next, next)
+  define_kind(ir, "generator #{type_key(item)}", generator_state(item), item, next)
+
+is_done := (ir: IrBuilder, handle: String) ->
+  call_runtime(ir, 'i1 @llvm.coro.done(ptr)', "ptr #{handle}")

@@ -129,6 +129,7 @@ typedef struct {
   LertaEquals equals;
 } LertaMap;
 
+// An Iter as the seed's code lays it out, which calls lerta_iter_start, until the seed is refreshed.
 // The header's fields are spelled out: the generated code lays them out flat, while a nested
 // LertaHeader would be padded to the alignment of its int64_t, which is 8 on 32-bit Windows.
 typedef struct LertaIter {
@@ -252,8 +253,9 @@ LertaMapCursor *lerta_map_cursor(LertaMap *map);
 bool lerta_map_cursor_has_next(LertaMapCursor *cursor);
 void lerta_map_cursor_next(LertaMapCursor *cursor, int64_t *key, void *value);
 
-// Iters (iter.c). Starting a traversal of an Iter that has started one throws, and so does next
-// past the end.
+// Iters (iter.c). Starting a traversal of an Iter that has started one, as its flag `started`
+// tells, throws, and so does next past the end.
+void lerta_start_traversal(bool *started);
 void lerta_iter_start(LertaIter *iter);
 void lerta_raise_iter_ended(void);
 // Asking an Iter for an item while its function, which yields, runs.

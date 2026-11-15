@@ -1,51 +1,79 @@
 # The protocol of Iters in the generated code (see docs/internals/iteration.md#iter).
 import
   access_tag, define_heap_object, emit_heap_allocate, emit_heap_field_pointer, emit_laundered,
-  fixed, HeapField, heap_object_type, plain_field
+  fixed, HeapField, heap_object_type, plain_field, value_field
 from './heap_object'
-import IrBuilder, IrModule from './ir_builder'
-import ir_type, suffixed_symbol from './lerta_ir'
+import emit_branch, emit_when, IrBuilder, IrModule from './ir_builder'
+import emit_check_with from './exceptions'
+import ir_type, ownership, suffixed_symbol from './lerta_ir'
 import call_void_runtime from './runtime_calls'
 import Type from '../types'
 
-# The fields every Iter starts with, and the layout through which those of any Iter are reached.
-# The code of has_next and next is fixed (see invariant).
+# The fields every Iter starts with: the code of next, which is fixed (see invariant), whether a
+# traversal has started, and the item that the method has_next took from next, if it holds one.
+# Those of any Iter of an item type are reached through the layout of these fields.
 CODE := fixed(plain_field('ptr'))
-PROTOCOL := [CODE, CODE, plain_field('i1')]
-HAS_NEXT_FIELD := 0
-NEXT_FIELD := 1
-STARTED_FIELD := 2
-PROTOCOL_LAYOUT := heap_object_type(PROTOCOL)
+NEXT_FIELD := 0
+STARTED_FIELD := 1
+HELD_FIELD := 2
+HELD_ITEM_FIELD := 3
 
-# A kind of Iter: its LLVM struct type, and the fields of its state.
+protocol := (item: Type) -> [CODE, plain_field('i1'), plain_field('i1'), value_field(item)]
+
+protocol_layout := (item: Type) -> heap_object_type(protocol(item))
+
+# A kind of Iter: its LLVM struct type, its item type, and the fields of its state.
 export struct IterKind
   layout: String
+  item: Type
   state: HeapField[]
 
-# The code of a kind is the bodies of has_next, which returns an i1, and of next, which returns the
-# item and runs only when has_next is true. They get the Iter as `%iter`.
+# The code of a kind is the body of next, which gets the Iter as `%iter` and returns a step: an i1
+# that tells whether it gives an item, and the item, owned. Past the end it gives none, again each
+# time it is called.
 type IterCode = (IrBuilder, IterKind) -> void
+
+step_type := (item: Type) -> "{ i1, #{ir_type(item)} }"
 
 symbol_of := (kind: IterKind, part: String) -> suffixed_symbol(kind.layout, part)
 
-all_fields := (kind: IterKind) -> PROTOCOL + kind.state
+all_fields := (kind: IterKind) -> protocol(kind.item) + kind.state
 
-# The kind of `key`, defined with the type of its Iters and code the first time it is given. Its
-# next does not check for the end: its callers ask has_next first (see emit_checked_next).
+# The kind of `key`, defined with the type of its Iters and code the first time it is given.
 export define_kind := (
-  ir: IrBuilder, key: String, state: HeapField[], item: Type, has_next: IterCode, next: IterCode
+  ir: IrBuilder, key: String, state: HeapField[], item: Type, next: IterCode
 ) ->
   define := (layout: String, module: IrModule) ->
-    kind := IterKind(layout, state)
+    kind := IterKind(layout, item, state)
     type := symbol_of(kind, 'type')
     define_heap_object module, layout, type, 'private ', all_fields(kind), 'Iter'
-    has_next_body := IrBuilder(module)
-    has_next has_next_body, kind
-    has_next_body.finish "private i1 #{symbol_of(kind, 'has_next')}(ptr %iter)"
-    next_body := IrBuilder(module)
-    next next_body, kind
-    next_body.finish "private #{ir_type(item)} #{symbol_of(kind, 'next')}(ptr %iter)"
-  IterKind(state, layout: ir.module.named("iter #{key}", '%lerta.iter', define))
+    body := IrBuilder(module)
+    next body, kind
+    body.finish "private #{step_type(item)} #{symbol_of(kind, 'next')}(ptr %iter)"
+  IterKind(item, state, layout: ir.module.named("iter #{key}", '%lerta.iter', define))
+
+# Returns the item, owned, from next.
+export emit_give := (body: IrBuilder, kind: IterKind, item: String) ->
+  type := step_type(kind.item)
+  item_type := ir_type(kind.item)
+  given :=
+    body.assign("insertvalue #{type} { i1 true, #{item_type} poison }, #{item_type} #{item}, 1")
+  body.emit "ret #{type} #{given}"
+
+# Returns from next without an item, at the end or when it throws.
+export emit_end := (body: IrBuilder, kind: IterKind) ->
+  body.emit "ret #{step_type(kind.item)} zeroinitializer"
+
+export emit_check_or_end := (body: IrBuilder, kind: IterKind) ->
+  emit_check_with body, -> emit_end(body, kind)
+
+export emit_end_unless := (body: IrBuilder, kind: IterKind, condition: String) ->
+  end_label := body.fresh_label('iter.end')
+  go_label := body.fresh_label('iter.go')
+  body.branch_if condition, go_label, end_label
+  body.start_block end_label
+  emit_end body, kind
+  body.start_block go_label
 
 # Throws an IterError unless the condition holds, which `check` then finds.
 emit_throw_unless := (ir: IrBuilder, condition: String, check: () -> void) ->
@@ -61,15 +89,14 @@ emit_throw_unless := (ir: IrBuilder, condition: String, check: () -> void) ->
 # A new Iter of the kind, not started, which takes over the values of its state.
 export emit_iter := (ir: IrBuilder, kind: IterKind, state_values: String[]) ->
   iter := emit_laundered(ir, emit_heap_allocate(ir, kind.layout, symbol_of(kind, 'type')))
-  values := [symbol_of(kind, 'has_next'), symbol_of(kind, 'next'), 'false', state_values...]
-  fields := all_fields(kind)
-  for field at i in fields
+  values := [symbol_of(kind, 'next'), 'false', 'false', 'zeroinitializer', state_values...]
+  for field at i in all_fields(kind)
     pointer := emit_heap_field_pointer(ir, kind.layout, iter, i)
     ir.store field.ir_type, values[i], pointer, access_tag(ir, field)
   iter
 
 state_pointer := (ir: IrBuilder, kind: IterKind, index: Int) ->
-  emit_heap_field_pointer(ir, kind.layout, '%iter', PROTOCOL.length + index)
+  emit_heap_field_pointer(ir, kind.layout, '%iter', protocol(kind.item).length + index)
 
 export load_state := (ir: IrBuilder, kind: IterKind, index: Int) ->
   field := kind.state[index]
@@ -82,36 +109,31 @@ export store_state := (ir: IrBuilder, kind: IterKind, index: Int, value: String)
   pointer := state_pointer(ir, kind, index)
   ir.store field.ir_type, value, pointer
 
-protocol_field := (ir: IrBuilder, iter: String, index: Int) ->
-  emit_heap_field_pointer(ir, PROTOCOL_LAYOUT, iter, index)
+protocol_field := (ir: IrBuilder, iter: String, item: Type, index: Int) ->
+  emit_heap_field_pointer(ir, protocol_layout(item), iter, index)
 
-# Whether the Iter, which is borrowed, has a next item.
-export emit_has_next := (ir: IrBuilder, iter: String) ->
-  pointer := protocol_field(ir, iter, HAS_NEXT_FIELD)
-  code := ir.load('ptr', pointer, access_tag(ir, CODE))
-  ir.assign("call i1 #{code}(ptr #{iter})")
+# What a call of next gave: whether there was an item, and the item, owned, which is one only then.
+export struct Step
+  more: String
+  item: String
 
-# The next item, owned, of a borrowed Iter whose has_next is true.
-export emit_next := (ir: IrBuilder, iter: String, item: Type) ->
-  pointer := protocol_field(ir, iter, NEXT_FIELD)
-  code := ir.load('ptr', pointer, access_tag(ir, CODE))
-  ir.assign("call #{ir_type(item)} #{code}(ptr #{iter})")
-
-# The next item, owned, of a borrowed Iter, which code outside the Iters asks for without knowing
-# that there is one: past the end, it throws.
-# `check` runs after each call, which may throw.
-export emit_checked_next := (ir: IrBuilder, iter: String, item: Type, check: () -> void) ->
-  more := emit_has_next(ir, iter)
-  check()
-  emit_throw_unless ir, more, check
-  emit_next(ir, iter, item)
+# A call of the next of a borrowed Iter, whose kind's code may throw.
+export emit_step := (ir: IrBuilder, iter: String, item: Type) ->
+  code := ir.load('ptr', protocol_field(ir, iter, item, NEXT_FIELD), access_tag(ir, CODE))
+  step := ir.assign("call #{step_type(item)} #{code}(ptr #{iter})")
+  Step(
+    more: ir.assign("extractvalue #{step_type(item)} #{step}, 0")
+    item: ir.assign("extractvalue #{step_type(item)} #{step}, 1")
+  )
 
 # Starts a traversal, which throws if the Iter has started one.
-export emit_iter_start := (ir: IrBuilder, iter: String) ->
-  call_void_runtime ir, 'void @lerta_iter_start(ptr)', "ptr #{iter}"
+export emit_iter_start := (ir: IrBuilder, iter: String, item: Type) ->
+  started := protocol_field(ir, iter, item, STARTED_FIELD)
+  call_void_runtime ir, 'void @lerta_start_traversal(ptr)', "ptr #{started}"
 
 # Runs `body` for each item, owned, of a borrowed Iter whose traversal has started. `body` gets the
 # item and the labels that leave the loop and go on to the next item.
+# `check` runs after each call, which may throw.
 export emit_iter_loop := (
   ir: IrBuilder, iter: String, item: Type, body: (String, String, String) -> void, check: () -> void
 ) ->
@@ -120,16 +142,47 @@ export emit_iter_loop := (
   exit_label := ir.fresh_label('iter.exit')
   ir.branch header_label
   ir.start_block header_label
-  more := emit_has_next(ir, iter)
+  step := emit_step(ir, iter, item)
   check()
-  ir.branch_if more, body_label, exit_label
+  ir.branch_if step.more, body_label, exit_label
   ir.start_block body_label
-  value := emit_next(ir, iter, item)
-  check()
-  body value, exit_label, header_label
+  body step.item, exit_label, header_label
   ir.branch header_label
   ir.start_block exit_label
 
-# Calling has_next or next traverses the Iter, so that it cannot be traversed again.
-export emit_mark_started := (ir: IrBuilder, iter: String) ->
-  ir.store 'i1', 'true', protocol_field(ir, iter, STARTED_FIELD)
+# The methods of a borrowed Iter, which go on with one traversal, so that it cannot be started
+# again. has_next holds the item it takes from next, until the method next gives it.
+export emit_has_next_method := (ir: IrBuilder, iter: String, item: Type, check: () -> void) ->
+  emit_mark_started ir, iter, item
+  held := protocol_field(ir, iter, item, HELD_FIELD)
+  take := ->
+    step := emit_step(ir, iter, item)
+    check()
+    emit_when ir, step.more, ->
+      ir.store ir_type(item), step.item, protocol_field(ir, iter, item, HELD_ITEM_FIELD)
+      ir.store 'i1', 'true', held
+    step.more
+  emit_branch(ir, 'i1', ir.negate(ir.load('i1', held)), take, 'true')
+
+# Past the end, next throws.
+export emit_next_method := (ir: IrBuilder, iter: String, item: Type, check: () -> void) ->
+  emit_mark_started ir, iter, item
+  held := protocol_field(ir, iter, item, HELD_FIELD)
+  held_item := protocol_field(ir, iter, item, HELD_ITEM_FIELD)
+  is_held := ir.load('i1', held)
+  held_value := ir.load(ir_type(item), held_item)
+
+  # The held item passes to the caller; a reference is cleared, so that the drop does not release
+  # it. One not held is cleared already.
+  ir.store 'i1', 'false', held
+  if ownership(item) != NONE
+    ir.store ir_type(item), 'zeroinitializer', held_item
+  take := ->
+    step := emit_step(ir, iter, item)
+    check()
+    emit_throw_unless ir, step.more, check
+    step.item
+  emit_branch(ir, ir_type(item), ir.negate(is_held), take, held_value)
+
+emit_mark_started := (ir: IrBuilder, iter: String, item: Type) ->
+  ir.store 'i1', 'true', protocol_field(ir, iter, item, STARTED_FIELD)

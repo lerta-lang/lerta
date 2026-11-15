@@ -3,7 +3,11 @@
 ## Iter
 
 - A `for` is desugared into the source iterator and a closure for the body. No coroutines are needed.
-- **Layout.** An `Iter` is a heap object (`LertaIter` in `runtime/lerta.h`): the header, the pointers to its `has_next` and `next` code, which take the `Iter` itself, a started flag, then the state of its kind.
+- **Layout.** An `Iter` is a heap object: the header, the pointer to its `next` code, which takes the `Iter` itself, a started flag, a held flag with an item, then the state of its kind (`compiler/codegen/iter_protocol.lerta`).
+- **One call per item.** `next` returns `{ i1, T }`: whether it gives an item, and the item. Past the end it gives none, again each time. The flag is outside `T`, so an `Iter<T?>` tells a nil item from the end.
+  - `for` and the other consumers call `next` alone.
+  - The methods `has_next` and `next` go through the held item: `has_next` calls `next` unless one is held and holds what it gives, and the method `next` takes the held item, or calls `next` and throws past the end.
+  - Why one call rather than `has_next` and `next`: an item takes one indirect call, and a kind that must look ahead to tell whether there is an item, as `filter` and the generator kind do, needs no item of its own held between the two.
 - **Kinds.** Each is generated once per type it depends on:
   - the items of an array or a `Binary`;
   - the integers of a range;
@@ -33,10 +37,10 @@ No intermediate data structures are made, but each item goes through calls of co
 - LLVM's CoroSplit pass, which clang runs at every optimization level, splits the body into the functions that start, resume and destroy it, and moves the values that live across a suspension into its frame.
 - The frame is allocated by `lerta_frame_alloc`, which counts it as a live object for the debug runtime's [leak check](memory.md#leak-checking).
 - **Arguments** are borrowed for the call only, so the body retains its parameters, `@` and its closure, and holds them in its outermost scope. It then suspends once before its statements, so that the call runs none of them.
-- **State.** The `Iter`'s state is the coroutine's handle, a running flag, and a held flag with the item.
-  - `yield` stores its value, owned, as the held item and suspends.
-  - `has_next` resumes the body unless an item is held or the body is at its final suspension (`llvm.coro.done`); `next` takes the held item.
-  - Resuming a running coroutine is undefined in LLVM, so `has_next` throws instead when the running flag is set.
+- **State.** The `Iter`'s state is the coroutine's handle, a running flag, and the item that `yield` gives.
+  - `yield` stores its value, owned, as the item and suspends.
+  - `next` resumes the body unless it is at its final suspension (`llvm.coro.done`), and takes the item unless the body has reached that suspension since.
+  - Resuming a running coroutine is undefined in LLVM, so `next` throws instead when the running flag is set.
 - **Ending.** The end of the body, `return`, and an exception that no `try` in the body takes release its scopes and go to its final suspension.
 - **Destroying.** The `Iter`'s drop destroys the coroutine (its handle field is held as `Ownership.COROUTINE`), which takes the destroy branch of the suspension it is at:
   - at a `yield`, it releases the temporaries and scopes held there, as an uncaught exception does, then frees the frame;

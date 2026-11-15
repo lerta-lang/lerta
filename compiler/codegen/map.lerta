@@ -8,7 +8,9 @@ import item_functions from './equality'
 import emit_float_word from './float'
 import emit_values, fixed from './heap_object'
 import emit_branch, IrBuilder from './ir_builder'
-import define_kind, emit_iter, IterKind, load_state from './iter_protocol'
+import
+  define_kind, emit_end_unless, emit_give, emit_iter, IterKind, load_state
+from './iter_protocol'
 import emit_release_value, emit_retain_value, ir_type, is_nil_by_null from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import
@@ -137,11 +139,10 @@ emit_cursor_iter := (ir: IrBuilder, map: String, type: MapType, keys_only: Bool)
       type.key
     else
       TupleType [type.key, type.value]
-  has_next := (body: IrBuilder, kind: IterKind) ->
+  next := (body: IrBuilder, kind: IterKind) ->
     cursor := load_state(body, kind, 0)
     more := call_runtime(body, 'i1 @lerta_map_cursor_has_next(ptr)', "ptr #{cursor}")
-    body.emit "ret i1 #{more}"
-  next := (body: IrBuilder, kind: IterKind) ->
+    emit_end_unless body, kind, more
     key_slot := body.alloca('i64')
 
     # The keys alone take no value from the cursor.
@@ -151,13 +152,14 @@ emit_cursor_iter := (ir: IrBuilder, map: String, type: MapType, keys_only: Bool)
       else
         emit_item_slot body, type.value
 
-    args := "ptr #{load_state(body, kind, 0)}, ptr #{key_slot}, ptr #{value_slot}"
+    args := "ptr #{cursor}, ptr #{key_slot}, ptr #{value_slot}"
     call_void_runtime body, 'void @lerta_map_cursor_next(ptr, ptr, ptr)', args
     key := from_item(body, body.load('i64', key_slot), type.key)
-    return body.emit("ret #{ir_type(item)} #{key}") if keys_only
+    if keys_only
+      return emit_give(body, kind, key)
     entry := emit_values(body, item, [key, emit_load_item(body, value_slot, type.value)])
-    body.emit "ret ptr #{entry}"
+    emit_give body, kind, entry
   state := [fixed({ ir_type: 'ptr', owned: REFERENCE })]
   traversed := keys_only then 'keys' else 'entries'
-  kind := define_kind(ir, "map #{traversed} #{type_key(type)}", state, item, has_next, next)
+  kind := define_kind(ir, "map #{traversed} #{type_key(type)}", state, item, next)
   emit_iter(ir, kind, [call_runtime(ir, 'ptr @lerta_map_cursor(ptr)', "ptr #{map}")])

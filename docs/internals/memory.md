@@ -67,7 +67,7 @@ Not borrowed:
 - a captured or top-level `var`, which a function called meanwhile may assign;
 - a weak local's object, which may go meanwhile;
 - a value converted to another type, which the conversion makes anew;
-- the object of an Iter's `has_next` and `next`, which they take over.
+- the object of an Iter's methods `has_next` and `next`, which they take over.
 
 ## Leak checking
 

@@ -32,7 +32,7 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 
 ## Open questions
 
-- Optional types do not nest (`T?` is `T | nil`), which is the common cause of several limits: an optional type argument of a generic body (below), a `Map` whose value type is optional, `first` and `find` missing for optional items, and an Iter that gives an item in two calls ([language](language.md#open-questions)). Whether to settle them together by a representation inside the compiler of whether there is a value besides the value, the surface staying flat.
+- Optional types do not nest (`T?` is `T | nil`), which is the common cause of several limits: an optional type argument of a generic body (below), a `Map` whose value type is optional, and `first` and `find` missing for optional items. Whether to settle them together by a representation inside the compiler of whether there is a value besides the value, the surface staying flat.
 - Of generic bodies, checked at definition (see [generic functions](../reference/functions.md#generic-functions)):
   - whether an optional type argument stays allowed, which a type that the body writes may not take, as a `Set<T>`'s key;
   - whether a `Numeric` bound, under which a number literal is a `T`, is worth a new implicit conversion. It would also settle `sum` of [Iterables](../reference/types.md#iter), whose default `zero` of `0` is an error for a `String[]` now: `sum()` fails to compile where `sum('')` is needed.

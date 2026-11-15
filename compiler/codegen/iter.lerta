@@ -3,14 +3,14 @@
 import emit_get, emit_length from './array'
 import emit_closure_call, function_type_of from './closure'
 import fixed, value_field from './heap_object'
-import emit_check_or_return_thrown, emit_check_with, emit_return_thrown from './exceptions'
+import emit_check_with from './exceptions'
 import emit_interface_call from './interface'
 import IrBuilder from './ir_builder'
 import
-  define_kind, emit_checked_next, emit_has_next, emit_iter, emit_iter_start, emit_mark_started,
-  emit_next, IterKind, load_state, store_state
+  define_kind, emit_check_or_end, emit_end, emit_end_unless, emit_give, emit_has_next_method,
+  emit_iter, emit_iter_start, emit_next_method, emit_step, IterKind, load_state, store_state
 from './iter_protocol'
-import emit_release, emit_release_value, ir_type, ownership from './lerta_ir'
+import emit_release, emit_release_value from './lerta_ir'
 import emit_binary_get, emit_binary_length from './string'
 import
   bool_type, FunctionType, int_type, is_kind, is_one_of_kinds, iterable_item, IterType, Type,
@@ -34,224 +34,155 @@ export emit_sequence_get := (ir: IrBuilder, sequence: String, index: String, typ
 # The items of an array or a Binary, which the Iter holds.
 emit_sequence_iter := (ir: IrBuilder, sequence: String, type: Type) ->
   element := iterable_item(type)!
-  has_next := (body: IrBuilder, kind: IterKind) ->
+  next := (body: IrBuilder, kind: IterKind) ->
     length := emit_sequence_length(body, load_state(body, kind, 0), type)
     index := load_state(body, kind, 1)
-    is_below := body.assign("icmp slt i64 #{index}, #{length}")
-    body.emit "ret i1 #{is_below}"
-  next := (body: IrBuilder, kind: IterKind) ->
-    index := load_state(body, kind, 1)
+    emit_end_unless body, kind, body.assign("icmp slt i64 #{index}, #{length}")
     item := emit_sequence_get(body, load_state(body, kind, 0), index, type)
     store_state body, kind, 1, body.assign("add nsw i64 #{index}, 1")
-    body.emit "ret #{ir_type(element)} #{item}"
+    emit_give body, kind, item
   state := [fixed(value_field(type)), value_field(int_type)]
-  kind := define_kind(ir, "sequence #{type_key(type)}", state, element, has_next, next)
+  kind := define_kind(ir, "sequence #{type_key(type)}", state, element, next)
   emit_iter(ir, kind, [sequence, '0'])
 
 # The items that a value with has_next and next gives, which the Iter holds as an interface value
 # of the type `source_type` (see iter_source_type), and calls through its itab.
 export emit_adapter_iter := (ir: IrBuilder, source: String, source_type: Type, item: Type) ->
-  has_next := (body: IrBuilder, kind: IterKind) ->
-    type := FunctionType(params: [], result: bool_type)
-    more := emit_interface_call(body, load_state(body, kind, 0), 0, type, [])
-    emit_check_or_return_thrown body, bool_type
-    body.emit "ret i1 #{more}"
   next := (body: IrBuilder, kind: IterKind) ->
-    type := FunctionType(params: [], result: item)
-    value := emit_interface_call(body, load_state(body, kind, 0), 1, type, [])
-    emit_check_or_return_thrown body, item
-    body.emit "ret #{ir_type(item)} #{value}"
+    source := load_state(body, kind, 0)
+    has_next_type := FunctionType(params: [], result: bool_type)
+    more := emit_interface_call(body, source, 0, has_next_type, [])
+    emit_check_or_end body, kind
+    emit_end_unless body, kind, more
+    next_type := FunctionType(params: [], result: item)
+    value := emit_interface_call(body, source, 1, next_type, [])
+    emit_check_or_end body, kind
+    emit_give body, kind, value
   state := [fixed(value_field(source_type))]
-  kind := define_kind(ir, "adapter #{type_key(source_type)}", state, item, has_next, next)
+  kind := define_kind(ir, "adapter #{type_key(source_type)}", state, item, next)
   emit_iter(ir, kind, [source])
 
 # The Ints from start up to, but not including, end.
 export emit_range_iter := (ir: IrBuilder, start: String, end: String, inclusive: Bool) ->
   if inclusive
     return emit_inclusive_range_iter(ir, start, end)
-  has_next := (body: IrBuilder, kind: IterKind) ->
-    current := load_state(body, kind, 0)
-    last := load_state(body, kind, 1)
-    is_below := body.assign("icmp slt i64 #{current}, #{last}")
-    body.emit "ret i1 #{is_below}"
 
   # The current Int is below the end, so the next one cannot overflow.
   next := (body: IrBuilder, kind: IterKind) ->
     current := load_state(body, kind, 0)
+    emit_end_unless body, kind, body.assign("icmp slt i64 #{current}, #{load_state(body, kind, 1)}")
     store_state body, kind, 0, body.assign("add nsw i64 #{current}, 1")
-    body.emit "ret i64 #{current}"
+    emit_give body, kind, current
 
   state := [value_field(int_type), fixed(value_field(int_type))]
-  emit_iter(ir, define_kind(ir, 'range', state, int_type, has_next, next), [start, end])
+  emit_iter(ir, define_kind(ir, 'range', state, int_type, next), [start, end])
 
 # The Ints of `a..=b`, whose state tells when the end has been given, so that the Int after it,
 # which the largest Int has not, is never made.
 emit_inclusive_range_iter := (ir: IrBuilder, start: String, end: String) ->
-  has_next := (body: IrBuilder, kind: IterKind) ->
-    current := load_state(body, kind, 0)
-    is_within := body.assign("icmp sle i64 #{current}, #{load_state(body, kind, 1)}")
-    is_left := body.assign("xor i1 #{load_state(body, kind, 2)}, true")
-    body.emit "ret i1 #{body.assign("and i1 #{is_within}, #{is_left}")}"
   next := (body: IrBuilder, kind: IterKind) ->
     current := load_state(body, kind, 0)
+    is_within := body.assign("icmp sle i64 #{current}, #{load_state(body, kind, 1)}")
+    is_left := body.negate(load_state(body, kind, 2))
+    emit_end_unless body, kind, body.assign("and i1 #{is_within}, #{is_left}")
     is_end := body.assign("icmp eq i64 #{current}, #{load_state(body, kind, 1)}")
     store_state body, kind, 2, is_end
     following := body.assign("add i64 #{current}, 1")
     store_state body, kind, 0, body.assign("select i1 #{is_end}, i64 #{current}, i64 #{following}")
-    body.emit "ret i64 #{current}"
+    emit_give body, kind, current
   state := [value_field(int_type), fixed(value_field(int_type)), value_field(bool_type)]
-  kind := define_kind(ir, 'inclusive range', state, int_type, has_next, next)
+  kind := define_kind(ir, 'inclusive range', state, int_type, next)
   emit_iter(ir, kind, [start, end, 'false'])
 
 # The elements of an Iter comprehension that names the index, `for x at i in xs`: the element's
 # function, a closure of the item and its place, from 0, for each item for which the guard's, if
-# any, gives true. has_next finds the next such item and holds it, with its place, until next
-# takes it; the state is the source, the functions, the next place, whether an item is held, that
-# item and its place.
+# any, gives true. The state is the source, the functions and the next place.
 export emit_indexed_comprehension_iter := (
   ir: IrBuilder, source: String, item: Type, guard: String?, element: String, element_type: Type
 ) ->
   test_type := FunctionType(params: [item, int_type], result: bool_type)
   result := function_type_of(element_type).result
-  has_next := (body: IrBuilder, kind: IterKind) ->
+  next := (body: IrBuilder, kind: IterKind) ->
     search_label := body.fresh_label('indexed.search')
-    take_label := body.fresh_label('indexed.take')
     keep_label := body.fresh_label('indexed.keep')
-    found_label := body.fresh_label('indexed.found')
-    end_label := body.fresh_label('indexed.end')
-    body.branch_if load_state(body, kind, 4), found_label, search_label
+    body.branch search_label
     body.start_block search_label
-    source_iter := load_state(body, kind, 0)
-    has_more := emit_has_next(body, source_iter)
-    emit_check_or_return_thrown body, bool_type
-    body.branch_if has_more, take_label, end_label
-    body.start_block take_label
-    value := emit_next(body, source_iter, item)
-    emit_check_or_return_thrown body, bool_type
+    step := emit_step(body, load_state(body, kind, 0), item)
+    emit_check_or_end body, kind
+    emit_end_unless body, kind, step.more
     place := load_state(body, kind, 3)
     store_state body, kind, 3, body.assign("add i64 #{place}, 1")
     if guard
       skip_label := body.fresh_label('indexed.skip')
-      keep := emit_closure_call(body, load_state(body, kind, 1), test_type, [value, place])
-      release_and_return := ->
-        emit_release_value body, value, item
-        emit_return_thrown body, bool_type
-      emit_check_with body, release_and_return
+      keep := emit_closure_call(body, load_state(body, kind, 1), test_type, [step.item, place])
+      release_and_end := ->
+        emit_release_value body, step.item, item
+        emit_end body, kind
+      emit_check_with body, release_and_end
       body.branch_if keep, keep_label, skip_label
       body.start_block skip_label
-      emit_release_value body, value, item
+      emit_release_value body, step.item, item
       body.branch search_label
     else
       body.branch keep_label
     body.start_block keep_label
-    store_state body, kind, 5, value
-    store_state body, kind, 6, place
-    store_state body, kind, 4, 'true'
-    body.branch found_label
-    body.start_block found_label
-    body.emit 'ret i1 true'
-    body.start_block end_label
-    body.emit 'ret i1 false'
-  next := (body: IrBuilder, kind: IterKind) ->
-    store_state body, kind, 4, 'false'
-    value := load_state(body, kind, 5)
-    if ownership(item) != NONE
-      store_state body, kind, 5, 'zeroinitializer'
-    place := load_state(body, kind, 6)
-    mapped := emit_closure_call(body, load_state(body, kind, 2), element_type, [value, place])
-    emit_release_value body, value, item
-    emit_check_or_return_thrown body, result
-    body.emit "ret #{ir_type(result)} #{mapped}"
+    mapped := emit_closure_call(body, load_state(body, kind, 2), element_type, [step.item, place])
+    emit_release_value body, step.item, item
+    emit_check_or_end body, kind
+    emit_give body, kind, mapped
   state :=
     fixed(value_field(IterType(item)))
     fixed(value_field(test_type))
     fixed(value_field(element_type))
     value_field(int_type)
-    value_field(bool_type)
-    value_field(item)
-    value_field(int_type)
 
   # The guard's call is generated only where there is one, which the kind's name tells.
   key := "indexed #{guard then 'guarded ' else ''}#{type_key(item)} #{type_key(element_type)}"
-  kind := define_kind(ir, key, state, result, has_next, next)
-  emit_iter(ir, kind, [source, guard else 'null', element, '0', 'false', 'zeroinitializer', '0'])
+  kind := define_kind(ir, key, state, result, next)
+  emit_iter(ir, kind, [source, guard else 'null', element, '0'])
 
 # The results of a function of one item, a closure of the type, for each item of the source.
 emit_map_iter := (ir: IrBuilder, source: String, mapper: String, type: Type) ->
   function_type := function_type_of(type)
   item := function_type.params[0]
-  has_next := (body: IrBuilder, kind: IterKind) ->
-    more := emit_has_next(body, load_state(body, kind, 0))
-    emit_check_or_return_thrown body, bool_type
-    body.emit "ret i1 #{more}"
   next := (body: IrBuilder, kind: IterKind) ->
-    value := emit_next(body, load_state(body, kind, 0), item)
-    emit_check_or_return_thrown body, function_type.result
-    result := emit_closure_call(body, load_state(body, kind, 1), type, [value])
-    emit_release_value body, value, item
-    emit_check_or_return_thrown body, function_type.result
-    body.emit "ret #{ir_type(function_type.result)} #{result}"
+    step := emit_step(body, load_state(body, kind, 0), item)
+    emit_check_or_end body, kind
+    emit_end_unless body, kind, step.more
+    result := emit_closure_call(body, load_state(body, kind, 1), type, [step.item])
+    emit_release_value body, step.item, item
+    emit_check_or_end body, kind
+    emit_give body, kind, result
   state := [fixed(value_field(IterType(item))), fixed(value_field(type))]
-  key := "map #{type_key(type)}"
-  kind := define_kind(ir, key, state, function_type.result, has_next, next)
+  kind := define_kind(ir, "map #{type_key(type)}", state, function_type.result, next)
   emit_iter(ir, kind, [source, mapper])
 
-# The items of the source for which a function, a closure, gives true. has_next finds the next
-# such item and holds it until next takes it; the state is the source, the function, whether an
-# item is held, and that item.
+# The items of the source for which a function, a closure, gives true.
 emit_filter_iter := (ir: IrBuilder, source: String, test: String, item: Type) ->
   test_type := FunctionType(params: [item], result: bool_type)
-  has_next := (body: IrBuilder, kind: IterKind) ->
+  next := (body: IrBuilder, kind: IterKind) ->
     search_label := body.fresh_label('filter.search')
-    test_label := body.fresh_label('filter.test')
     keep_label := body.fresh_label('filter.keep')
     skip_label := body.fresh_label('filter.skip')
-    found_label := body.fresh_label('filter.found')
-    end_label := body.fresh_label('filter.end')
-    is_held := load_state(body, kind, 2)
-    body.branch_if is_held, found_label, search_label
-    body.start_block search_label
-    source_iter := load_state(body, kind, 0)
-    has_more := emit_has_next(body, source_iter)
-    emit_check_or_return_thrown body, bool_type
-    body.branch_if has_more, test_label, end_label
-    body.start_block test_label
-    value := emit_next(body, source_iter, item)
-    emit_check_or_return_thrown body, bool_type
-    keep := emit_closure_call(body, load_state(body, kind, 1), test_type, [value])
-    release_and_return := ->
-      emit_release_value body, value, item
-      emit_return_thrown body, bool_type
-    emit_check_with body, release_and_return
-    body.branch_if keep, keep_label, skip_label
-    body.start_block keep_label
-    store_state body, kind, 3, value
-    store_state body, kind, 2, 'true'
-    body.branch found_label
-    body.start_block skip_label
-    emit_release_value body, value, item
     body.branch search_label
-    body.start_block found_label
-    body.emit 'ret i1 true'
-    body.start_block end_label
-    body.emit 'ret i1 false'
-
-  # The held item passes to the caller; a reference is cleared, so that the drop does not release
-  # it.
-  next := (body: IrBuilder, kind: IterKind) ->
-    store_state body, kind, 2, 'false'
-    value := load_state(body, kind, 3)
-    if ownership(item) != NONE
-      store_state body, kind, 3, 'zeroinitializer'
-    body.emit "ret #{ir_type(item)} #{value}"
-
-  state :=
-    fixed(value_field(IterType(item)))
-    fixed(value_field(test_type))
-    value_field(bool_type)
-    value_field(item)
-  kind := define_kind(ir, "filter #{type_key(item)}", state, item, has_next, next)
-  emit_iter(ir, kind, [source, test, 'false', 'zeroinitializer'])
+    body.start_block search_label
+    step := emit_step(body, load_state(body, kind, 0), item)
+    emit_check_or_end body, kind
+    emit_end_unless body, kind, step.more
+    keep := emit_closure_call(body, load_state(body, kind, 1), test_type, [step.item])
+    release_and_end := ->
+      emit_release_value body, step.item, item
+      emit_end body, kind
+    emit_check_with body, release_and_end
+    body.branch_if keep, keep_label, skip_label
+    body.start_block skip_label
+    emit_release_value body, step.item, item
+    body.branch search_label
+    body.start_block keep_label
+    emit_give body, kind, step.item
+  state := [fixed(value_field(IterType(item))), fixed(value_field(test_type))]
+  kind := define_kind(ir, "filter #{type_key(item)}", state, item, next)
+  emit_iter(ir, kind, [source, test])
 
 # An owned array, Binary or Iter as an Iter to read from: an Iter of the array's or the Binary's
 # items, or the Iter itself, whose traversal is not started yet: see emit_source_start.
@@ -263,18 +194,17 @@ export emit_reading_iter := (ir: IrBuilder, value: String, type: Type) ->
 
 # Starts the traversal of an Iter that emit_reading_iter reads from, which throws if one has.
 export emit_source_start := (ir: IrBuilder, value: String, type: Type) ->
-  emit_iter_start ir, value unless is_sequence(type)
+  unless is_sequence(type)
+    emit_iter_start ir, value, iterable_item(type)!
 
 is_sequence := (type: Type) -> is_one_of_kinds(type, [ARRAY, 'Binary'])
 
 # The methods of an Iter, has_next and next (see codegen builtins), which take over the object.
-export call_has_next := (ir: IrBuilder, object: String) ->
-  emit_mark_started ir, object
-  consume(ir, object, emit_has_next(ir, object))
+export call_has_next := (ir: IrBuilder, object: String, type: Type, check: () -> void) ->
+  consume(ir, object, emit_has_next_method(ir, object, iterable_item(type)!, check))
 
 export call_next := (ir: IrBuilder, object: String, type: Type, check: () -> void) ->
-  emit_mark_started ir, object
-  consume(ir, object, emit_checked_next(ir, object, iterable_item(type)!, check))
+  consume(ir, object, emit_next_method(ir, object, iterable_item(type)!, check))
 
 consume := (ir: IrBuilder, object: String, result: String) ->
   emit_release ir, object

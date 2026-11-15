@@ -694,7 +694,7 @@ countdown := (n: Int): Iter<Int> ->
 ### Why
 
 - Lazy: an `Iter` is not evaluated until consumed, the Rust approach, which avoids CoffeeScript's implicit arrays and the intermediate arrays of an eager `map` in Ruby and JS.
-- `has_next()` / `next()` rather than `next(): T?`: with the latter, the end could not be told apart when `T` is optional.
+- `has_next()` / `next()` rather than `next(): T?`: with the latter, the end could not be told apart when `T` is optional. The generated code calls one function per item all the same (see [internals](../internals/iteration.md#iter)).
 - A second traversal throws rather than silently giving nothing, as a Python generator does.
 
 ## Promise

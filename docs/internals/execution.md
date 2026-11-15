@@ -39,7 +39,7 @@
 
 - The trace is made as the exception unwinds, so that it costs nothing until one is thrown.
 - **Sites.** Where the generated code throws, or finds that a call has thrown, it calls `lerta_trace_push` with its **site**: a constant of the function's name, the module's file, and the position of the innermost statement or expression (`Generator.position`).
-  - Code that is no function of the program, such as an Iter's `has_next`, adds none.
+  - Code that is no function of the program, such as an Iter's `next`, adds none.
   - A function that the exception leaves adds one entry, at the check of the call that threw; so does an `await`, whose check is that of the promise's result.
   - A runtime error is thrown by the C function that the code calls, so the call's check is its site.
 - **One trace.** The runtime keeps one trace, of the pending exception (`runtime/lerta.c`): its **owner** (the exception's data) and the sites pushed.

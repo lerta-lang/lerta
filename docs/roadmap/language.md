@@ -90,9 +90,6 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
   - A line starting with `.` or an operator could continue the expression outside a block value (`.join ', '` after the body of a function literal passed to `map`), which [member lines](../reference/syntax.md#member-lines) now do at the value's indentation.
   - Allowing it only before `,` keeps a mistyped indentation an error; allowing it generally covers all three.
 - An index in an Iter comprehension, `(f(x, i) for x at i in xs)`.
-- How an Iter gives an item in one call rather than two (`has_next` and `next`, each through a pointer to code now; see [internals](../internals/iteration.md#iter)):
-  - `next` giving the item with whether there was one, as Rust's `Option` and Swift's optional. Its `{ i1, T }` in IR can be that for the Iters the compiler generates, but an Iter written in Lerta, `{ has_next, next }`, cannot write `next: () -> T?` for an `Iter<T?>`.
-  - Or the end signalled as an exception, as Python's `StopIteration`, which the check after each call that Lerta has anyway would carry.
 - A literal of an empty map, such as `{:}`, so that `to_literal` of one reads back: it gives `{}` now, an empty anonymous struct.
 - Whether a local declared with an array type alone, `names: String[]`, stays an empty array, while a field so declared is a required argument.
 - Which uses of the same tokens in different constructs could be removed, listed with the summary of the grammar ([follow-ups](README.md#follow-ups)). `?`, of `T?` and `x?.y`, stays: each is about nil.
