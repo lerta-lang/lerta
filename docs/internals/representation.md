@@ -137,7 +137,6 @@ What `std:builtins`, in the files of `std/builtins/`, cannot write in Lerta (see
 - A `Float` is a `double` and a `Float32` a `float` (`compiler/codegen/float.lerta`). They share their code but for the IR type.
 - **Literals.** A literal's text is converted by the runtime's `strtod`, or `strtof` for a `Float32`, which the compiler calls (`lerta_float_literal_bits`, `lerta_float32_literal_bits`). It is written into the IR by its bits in hexadecimal, as LLVM takes a decimal constant only if the double holds it exactly. A `float` constant is written as the `double` of the same value.
   - `strtof` rounds a `Float32`'s text to a `float` at once, as rounding it to a `double` first could round it twice.
-- The infinity that std:math names `INFINITY` is made of its bits (`lerta_float_from_bits`), rather than from `1.0 / 0.0`, as std is built by the seed too, whose code throws for that division.
 - The comparisons are the ordered ones of `fcmp`.
 - A 32-bit x86 target computes with SSE2 (`-msse2 -mfpmath=sse`). The x87, which it uses otherwise, keeps more precision and range than a double, so that a result too large for one would be finite rather than an infinity.
 - **In arrays and maps.**
