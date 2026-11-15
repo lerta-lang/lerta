@@ -26,11 +26,11 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `lerta fmt` reports nothing for `x := a then b then c else d else e`.
 - How to fix it: have the rewrite of Parentheses add them around the inner value, after which `parts_of` finds each value.
 
-## An array before a call whose function body spans lines goes into a block
+## An array before a call whose arguments go on lines of their own goes into a block
 
-- Where: the layout of a value whose array literal a member call follows (see [Multi-line literals](reference/style.md#multi-line-literals)), in `compiler/format/lines.lerta`.
-- How to see it: `lerta fmt --fix` writes `y := [1, 2].map((v) ->`, a body of several lines, `)` as `y :=`, then `1, 2` and `.map((v) ->` on lines below it, which reads as if the array were the value.
-- How to fix it: keep a literal in its brackets on the line of its value where a call after it takes lines of its own.
+- Where: `literal_block` in `compiler/format/lines.lerta` measures the line of the value with the arguments of a call after the literal flat, as their lines are not decided yet.
+- How to see it: `lerta fmt --fix` writes `y := [1, 2].fold(`, two arguments too long for one line on lines below, `)` as `y :=`, then `1, 2` and `.fold(` on lines below it, which reads as if the array were the value.
+- How to fix it: measure the line up to where the arguments of the call after the literal break, as with a function's body.
 
 ## A rewrite that changes the syntax tree can change the program unnoticed
 

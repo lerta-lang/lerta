@@ -529,10 +529,15 @@ export class Breaker
       literal := value.shapes[0] as ListShape!
       { bracketed, close } := literal
       members := bracketed then close < last else close <= last
-      fits := (extra: Int, whole: Bool) ->
-        @fits(first, last, @column_of(first) + extra, whole) and not @takes_lines(first, last)
+
+      # Where only the members after the literal take lines, as a function's body that a call
+      # passes, the literal still fits on its line.
+      items_end := bracketed then close else close - 1
+      fits := (extra: Int) ->
+        on_line := @fits(first, last, @column_of(first) + extra, false)
+        on_line and not @takes_lines(first, items_end)
       if bracketed
-        rewritten := not fits(0, false) and @unbracket(literal, members)
+        rewritten := not fits(0) and @unbracket(literal, members)
 
         # Laid out in its brackets until its items are where a block can take them.
         @flatten first, VALUE_LINES unless rewritten
@@ -542,7 +547,7 @@ export class Breaker
 
       # An item that spans lines keeps them until the layout joins them, as the brackets would not.
       joinable := not @spans_any(literal)
-      if joinable and fits(opening.count() + closing.count(), true)
+      if joinable and fits(opening.count() + closing.count())
         @bracket literal, opening, closing, members
         return true
 
