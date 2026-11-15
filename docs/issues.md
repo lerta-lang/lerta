@@ -2,6 +2,12 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
+## A heading's anchor drops the letters that are not ASCII
+
+- Where: `slug` in `site/markdown.lerta` keeps a character only if `Char.is_alphanumeric` holds, which is true of ASCII letters and digits alone.
+- How to see it: `# Déjà vu` gets the anchor `dj-vu`, where GitHub gives `déjà-vu`, so that a link written for GitHub does not reach the heading on the site.
+- How to fix it: keep the letters and digits that are not ASCII too, lowered as GitHub lowers them.
+
 ## A long two-way value over several lines is left as it is
 
 - Where: `parts_of` in `compiler/format/two_way.lerta` finds the parts of a two-way value only on the line where it starts.
