@@ -347,7 +347,7 @@ class PipeWriter
       # A write that is cancelled writes nothing if its chunk has not been taken, and is done if it
       # has, as its data has gone to the reader.
       return if chunk.was_taken
-      @queued = [each for each in @queued when each != chunk]
+      @queued.remove chunk
       throw error
 
   # The pipe is ended at once; on a system pipe, its end that writes is closed once the writes under
@@ -392,8 +392,7 @@ class PipeWriter
           throw failure if failure := @failure
           return nil
         await @arrivals.wait()
-      first := @queued[0]
-      @queued = @queued[1..]
+      first := @queued.remove_at(0)
       first.was_taken = true
       first.taken.resolve()
       first.bytes
@@ -530,7 +529,7 @@ class Waiters
       try
         await signal.promise()
       catch error: CancelledError
-        @signals = [each for each in @signals when each != signal]
+        @signals.remove signal
         throw error
 
     wake_all := ->
