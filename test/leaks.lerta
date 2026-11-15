@@ -7,7 +7,7 @@
 # checked.
 import Check, select, SuiteChecks from './lib/report'
 import FileRun, host_executable_suffix, root_dir, run_file, SetupError from './lib/lerta'
-import is_dir, is_file, list_dir from 'std:io'
+import is_file, list_tree from 'std:io'
 import env from 'std:process'
 
 # LERTA_TEST_CHECKED_COMPILER names another, for the self checks (see self.lerta).
@@ -21,15 +21,8 @@ LEAK_EXIT_CODE := 23
 # Every .lerta file under `dir`, relative to the root, lib/ included, unlike directory_tree in
 # run.lerta. The files are walked rather than listed by git: the containers of make test-targets
 # lack git, and a worktree's .git there names a place outside what they mount.
-sources_under := (dir: String): String[] ->
-  paths: String[]
-  for entry in list_dir("#{root_dir}/#{dir}")
-    path := "#{dir}/#{entry}"
-    if is_dir("#{root_dir}/#{path}")
-      paths.append sources_under(path)
-    else if entry.ends_with('.lerta')
-      paths.push path
-  paths
+sources_under := (dir: String) ->
+  ["#{dir}/#{path}" for path in list_tree("#{root_dir}/#{dir}") when path.ends_with('.lerta')]
 
 sources := -> sources_under('tests') + sources_under('examples')
 

@@ -1,6 +1,6 @@
 # The command line of `lerta fmt [--fix] <path>...`: the files it takes, what it reports and what it
 # writes.
-import is_dir, is_file, list_dir, read_text, write_file from 'std:io'
+import is_dir, is_file, list_tree, read_text, write_file from 'std:io'
 import CompileError from '../errors'
 import is_off_throughout from './kept'
 import EntryModule, module_key from '../loader'
@@ -89,13 +89,9 @@ source_files := (paths: String[]) ->
     if is_file(path)
       files.push path
     else if is_dir(path)
-      add_sources files, path.without_suffix('/') else path
+      files.append sources_under(path.without_suffix('/') else path)
   files
 
-add_sources := (files: String[], dir: String): void ->
-  for name in list_dir(dir)
-    path := "#{dir}/#{name}"
-    if is_dir(path)
-      add_sources files, path unless name.starts_with('.')
-    else if name.ends_with('.lerta')
-      files.push path
+sources_under := (dir: String) ->
+  entered := list_tree(dir, (name) -> not name.starts_with('.'))
+  ["#{dir}/#{path}" for path in entered when path.ends_with('.lerta')]
