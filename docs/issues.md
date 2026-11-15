@@ -2,6 +2,12 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
+## Building deeply nested code overflows the stack on Windows
+
+- Where: the compiler, built for Windows, parsing or compiling code nested as deep as the parser allows (see `deepen` in `compiler/parser/token_stream.lerta`).
+- How to see it: on Windows, `bin/test -k tests/parse/nesting -k too_deep` fails `tests/parse/nesting`, `nesting_too_deep`, `case_too_deep` and `interpolation_too_deep`, each with and without `-O`: the build exits with status 3 and `stack overflow`. Their checks of the compiler's diagnostics pass, as on macOS.
+- How to fix it: likely the main thread's stack, 1 MB by default on Windows against 8 MB on macOS (not confirmed): link Windows executables with a larger stack, or lower the depth that the parser allows.
+
 ## A long two-way value over several lines is left as it is
 
 - Where: `parts_of` in `compiler/format/two_way.lerta` finds the parts of a two-way value only on the line where it starts.
