@@ -1,6 +1,6 @@
 # The walk of lists in brackets, and of the parentheses that group an expression (see walk.lerta).
 import Comprehension, Expression, FunctionLiteral, TupleLiteral from '../ast'
-import CLOSING_BRACKETS, OPENING_BRACKETS, TokenKind from '../lexer/tokens'
+import depth_change, matching_bracket, TokenKind from '../lexer/tokens'
 import is_simple, is_written_in_block, leftmost from './forms'
 import CodeGap, ListShape from './shapes'
 import NONE, ONE, unhandled, Walker from './walk'
@@ -39,15 +39,9 @@ extend Walker
       when Comprehension then @has_kind(open + 1, close, 'for')
       else false
 
-  # The index of the bracket that closes the one at `open`.
-  closing_bracket := (open: Int) ->
-    var depth = 0
-    for index in open..@code.length
-      kind := @code[index].kind
-      depth += 1 if kind in OPENING_BRACKETS
-      depth -= 1 if kind in CLOSING_BRACKETS
-      return index if depth == 0
-    @code.length
+  # The index of the bracket that closes the one at `open`, or the end of the code if none does,
+  # which a walk of parsed code never meets.
+  closing_bracket := (open: Int) -> matching_bracket(@code, open) else @code.length
 
   # Whether a comma is between `start` and `end`, outside the brackets there.
   has_comma := (start: Int, end: Int) -> @has_kind(start, end, ',')
@@ -57,8 +51,7 @@ extend Walker
     var depth = 0
     for index in start..end
       kind := @code[index].kind
-      depth += 1 if kind in OPENING_BRACKETS
-      depth -= 1 if kind in CLOSING_BRACKETS
+      depth += depth_change(kind)
       return true if depth == 0 and kind == wanted
     false
 

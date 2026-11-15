@@ -4,7 +4,7 @@
 # statement on one line, which a block can hold, the formatter writes it so; elsewhere it reports
 # it.
 import Assignment, Conditional, Declaration, Expression, Return, Statement from '../ast'
-import CLOSING_BRACKETS, Token, TokenKind from '../lexer/tokens'
+import CLOSING_BRACKETS, depth_change, Token, TokenKind from '../lexer/tokens'
 import Change, Edit from './edits'
 import leaves, Span, TWO_WAY_LEAVES from './leaves'
 import CHAINED_VALUES, LONG_TWO_WAY_VALUES, StyleRule from './rules'
@@ -183,8 +183,7 @@ words_of := (code: Token[], first: Int, last: Int) ->
   var depth = 0
   for at in first..=last
     { kind } := code[at]
-    depth += 1 if kind in ['(', '[', '{']
-    depth -= 1 if kind in [')', ']', '}']
+    depth += depth_change(kind)
     return found if depth < 0 or (depth == 0 and kind in VALUE_ENDS)
     continue if depth != 0 or kind not in ['then', 'else']
     after_then := not found.is_empty() and code[found.last()!].kind == 'then'
@@ -197,8 +196,7 @@ find_value_end := (tokens: Tokens, start: Int, last: Int) ->
   var depth = 0
   for at in start..=last
     { kind } := tokens.code[at]
-    depth += 1 if kind in ['(', '[', '{']
-    depth -= 1 if kind in [')', ']', '}']
+    depth += depth_change(kind)
     return at - 1 if depth < 0 or (depth == 0 and kind in VALUE_ENDS)
   last
 
