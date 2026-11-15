@@ -32,11 +32,23 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: a rewrite that wrote `a - b` for `b - a` of two numbers would be applied without a report; `tests/format/rewritten_forms.lerta` checks the forms that each rewrite writes instead.
 - How to fix it: check each tree-changing rewrite against the tree that it is meant to make, as by comparing the trees outside the spans that the rewrite changes, which the nodes, holding only where they start, cannot tell yet.
 
-## An Iter comprehension with its for first is slower than one on a line
+## A long comprehension alone in an argument block is joined onto the call's line
 
-- Where: the parser makes a comprehension in parentheses with its `for` first a call of a function that yields (`prefix_iter` in `compiler/parser/compound.lerta`), while one on a line is an Iter of its own functions; the style writes one with a long part with its `for` first (see [Comprehensions](reference/style.md#comprehensions)).
-- How to see it: such a comprehension takes about 1.8 times the instructions of the same one on a line; `bench/iter/main.lerta` keeps its one on a line with `# fmt: skip` for that.
-- How to fix it: make the Iter of a comprehension with its `for` first as that of one on a line where its block is one value, or make a function that yields as fast.
+- Where: the rounds in `compiler/format/format.lerta` apply the layout of a call's argument block, which joins the arguments that fit on one line, with the rewrite of a comprehension alone on its line in it (see [Comprehensions](reference/style.md#comprehensions)), which the joined line then no longer leaves alone.
+- How to see it: `lerta fmt --fix` writes `show`, then `[x + n + 1 for x in xs]` and `b` in a block below it, as `show [x + n + 1 for x in xs], b`, and reports the comprehension, where it would write it with its `for` first in the block.
+- How to fix it: hold the layout of a statement that holds a comprehension that its rewrite writes with its `for` first, until it is written so.
+
+## An Iter comprehension with its for first and statements in its block is not fused with its source
+
+- Where: the parser makes such a comprehension a call of a function literal that yields, given the value iterated (`prefix_iter` in `compiler/parser/compound.lerta`), and a loop fuses only a call of a top-level function (`fused_call` in `compiler/codegen/fusion.lerta`).
+- How to see it: `bench/iter/main.lerta` with a statement in the block of its comprehension takes about 1.5 times the instructions of the same with its block one value, where its source is a call of a function that yields, which the loop inside the literal goes through as an Iter.
+- How to fix it: have a loop fuse a call of a function literal too, and, inside it, a loop over a parameter given a call that it would fuse, which the parameter stands for.
+
+## A called function literal that infers its parameters ignores the type expected of its result
+
+- Where: `type_of_literal_call` in `compiler/checker/expression.lerta` types the arguments of a function literal called where it is written without the type expected of the call.
+- How to see it: `x: Float = ((n) -> n)(1)` reports `expected Float, got Int`, where `x: Float = 1` checks.
+- How to fix it: pass the type expected to the literal as its result, and through it to the arguments that its parameters return.
 
 ## A comprehension with its for first keeps the spacing it is written with
 

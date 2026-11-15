@@ -144,7 +144,7 @@ print [1, 2, 3].map((x) -> x * x).to_array().length
 ```
 
 - A function literal can be written wherever a value is expected. Each evaluation gives a function with the values captured then.
-- Where a function type is expected (a parameter, an annotation, a return type), the literal's parameter types and return type may be left out and are taken from it: `(x) -> x * 2`. Otherwise the parameters' types must be written.
+- Where a function type is expected (a parameter, an annotation, a return type), the literal's parameter types and return type may be left out and are taken from it: `(x) -> x * 2`. A literal called where it is written takes those left out from its arguments: `((x) -> x * 2)(3)`. Otherwise the parameters' types must be written.
 - A literal that writes its return type writes its parameters' types too: `(x): T -> x` does not parse.
 - `return` in a function literal returns from the literal; `break` and `continue` cannot leave a loop around it.
 

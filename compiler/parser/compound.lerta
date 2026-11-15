@@ -2,9 +2,9 @@
 # anonymous structs, function literals, and `case`.
 import
   ArrayLiteral, BooleanLiteral, Call, Case, CaseArm, Catch, Comprehension, Conditional,
-  copy_identifier, Expression, For, FunctionLiteral, Identifier, If, is_spread, LazyFunctions,
-  MapEntry, MapLiteral, NamedValue, Parameter, Pass, Position, RecordLiteral, spread_of_value,
-  Statement, Try, TupleLiteral, Yield
+  copy_identifier, Expression, For, FunctionLiteral, Identifier, If, is_spread, Jump, LazyFunctions,
+  MapEntry, MapLiteral, NamedValue, Parameter, Pass, Position, Range, RecordLiteral,
+  spread_of_value, Statement, Try, TupleLiteral, Yield
 from '../ast'
 import CLOSING_BRACKETS, OPENING_BRACKETS, TokenKind from '../lexer/tokens'
 import at_block from './block_literal'
@@ -191,8 +191,13 @@ parse_comprehension := (
   nested
 
 comprehension_of := (
-  tokens: TokenStream, header: LoopHeader, element: Expression, position: Position, is_lazy: Bool,
+  tokens: TokenStream
+  header: LoopHeader
+  element: Expression
+  position: Position
+  is_lazy: Bool
   nested: Bool
+  prefix = false
 ) ->
   { variable, index, iterable, guard } := header
 
@@ -213,13 +218,15 @@ comprehension_of := (
     position
     index
     nested
+    prefix
     bindings: bindings()
   )
 
 # A comprehension written with its `for` first: `for x in xs when guard` and a block below it, whose
 # last value is the element. The block may hold statements before it, `continue`, which takes no
 # element, and `break`, which ends the comprehension; its last statement may be a `for` of its own,
-# whose elements it takes as its own (see nested). In parentheses, it is an Iter (see prefix_iter).
+# whose elements it takes as its own (see nested). In parentheses, it is an Iter: that of one on a
+# line where its block is one value, and otherwise a function that yields (see prefix_iter).
 parse_prefix_comprehension := (
   tokens: TokenStream, position: Position, close: TokenKind
 ): Expression ->
@@ -227,7 +234,12 @@ parse_prefix_comprehension := (
   if close == ')'
     parsed := tokens.in_function(-> parse_block(tokens))
     tokens.expect_close close
-    return prefix_iter(tokens, header, parsed.body, parsed.marks, position)
+    check_iter_marks tokens, parsed.marks, position
+    { body } := parsed
+    if body.length == 1 and body[0] is not For | Jump
+      if element := body[0] as Expression?
+        return comprehension_of(tokens, header, element, position, true, false, true)
+    return prefix_iter(tokens, header, body, position)
   body := parse_block(tokens)
   tokens.expect_close close
   { variable, index, iterable, guard } := header
@@ -279,33 +291,63 @@ element_of := (tokens: TokenStream, block: Statement[]): (Statement[], Expressio
 
 ENDS_WITH_ELEMENT := 'the block of a comprehension ends with its element, a value'
 
-# The Iter of a comprehension written with its `for` first: a function that yields its elements,
-# called where it is, whose loop a `return` would not leave but end.
-prefix_iter := (
-  tokens: TokenStream, header: LoopHeader, block: Statement[], marks: FunctionMarks,
-  position: Position
-) ->
+# What the block of an Iter comprehension written with its `for` first cannot hold: a `return`,
+# whose loop it would not leave but end, a `yield` or an `await`.
+check_iter_marks := (tokens: TokenStream, marks: FunctionMarks, position: Position) ->
   tokens.fail at, 'an Iter comprehension cannot return; `break` ends it' if at := marks.return_at
   if marks.yields
     tokens.fail position, 'an Iter comprehension cannot yield; its elements are what it yields'
   tokens.fail at, 'an Iter comprehension cannot await' if at := marks.await_at
+
+# The Iter of a comprehension written with its `for` first: a function that yields its elements,
+# called where it is with the value iterated, which is found there, as that of one on a line is.
+prefix_iter := (tokens: TokenStream, header: LoopHeader, block: Statement[], position: Position) ->
   { variable, index, iterable, guard } := header
+  passed := passed_iterable(iterable, position)
   yielded := yielding_body(tokens, block)
   guarded: Statement[] =
     if guard
       [If(condition: guard, then_body: yielded, else_body: [], position: guard.position)]
     else
       yielded
-  loop := For(variable, iterable, position, index, body: take_apart_item(header) + guarded)
+  body := take_apart_item(header) + guarded
+  loop := For(variable, position, index, body, iterable: passed.iterable)
   function := FunctionLiteral
     position
     body: [loop]
-    params: []
+    params: [
+      for name in passed.names
+        { name, type: nil, default: nil }
+    ]
     type_params: []
     yields: true
     await_at: nil
     weak: false
-  Call(position, callee: function, args: [], named_args: [], type_args: [])
+  Call(position, callee: function, args: passed.values, named_args: [], type_args: [])
+
+# The value iterated as the function of an Iter comprehension finds it: by the names of its
+# parameters, given the values found where the comprehension is. A range is passed as its bounds
+# and its step, as it is no value of its own.
+struct PassedIterable
+  iterable: Expression
+  names: Identifier[]
+  values: Expression[]
+
+passed_iterable := (iterable: Expression, position: Position): PassedIterable ->
+  names: Identifier[]
+  values: Expression[]
+  pass := (value: Expression?): Expression? ->
+    given := value else return nil
+    name := "iterated.#{position.line}.#{position.column}.#{names.length}"
+    names.push Identifier(name, position: given.position)
+    values.push given
+    names.last()
+  passed :=
+    if range := iterable as Range?
+      Range(range..., start: pass(range.start), end: pass(range.end), step: pass(range.step))
+    else
+      pass(iterable)!
+  { names, values, iterable: passed }
 
 # The block with its element yielded, through the `for`s that end it.
 yielding_body := (tokens: TokenStream, block: Statement[]): Statement[] ->

@@ -3,7 +3,7 @@
 # with its `for` first whose block is one short value is written on one line. The first is written
 # so where the comprehension is the whole value of a statement or an item alone on its line, and
 # reported elsewhere; the second wherever its line can hold it.
-import Call, Comprehension, Expression, For, FunctionLiteral, If, Yield from '../ast'
+import Call, Comprehension, Expression from '../ast'
 import Change from './edits'
 import depth_change, TokenKind from '../lexer/tokens'
 import COMPREHENSION_LEAVES, leaves, Span from './leaves'
@@ -50,24 +50,6 @@ export comprehension_edit := (
     at
     [{ text: text.join(), from: at, to: tokens.end(parts.close) }]
   )
-
-# The comprehension in parentheses with its `for` first, which the parser makes a call of a function
-# that yields, written on one line where it is short.
-export lazy_prefix_edit := (tokens: Tokens, call: Call) ->
-  function := call.callee as FunctionLiteral else return nil
-  return nil if not function.yields or not call.args.is_empty()
-  open := tokens.at(call.position) else return nil
-  return nil unless tokens.is_kind(open, '(')
-  element := yielded_element(function) else return nil
-  prefix_edit(tokens, open, element)
-
-# The element that the function made of a comprehension yields: the value of the `yield` that ends
-# the body of its `for`, inside the `if` of the condition if it has one.
-yielded_element := (function: FunctionLiteral): Expression? ->
-  loop := function.body.first() as For else return nil
-  last := loop.body.last() else return nil
-  yielded := (last as If?)?.then_body.last() else last
-  (yielded as Yield?)?.value
 
 # The tokens of a comprehension on one line: the bracket that closes it, its element, its header
 # from its first `for` up to that bracket, its conditions, and how many `for`s it has.

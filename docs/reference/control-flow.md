@@ -232,7 +232,7 @@ labels := [
 - In the block, `continue` goes on to the next item without an element, and `break` ends the array with the elements so far. A `return` returns from the function, as from a `for`, where the comprehension is the value of a statement (see [break, continue and return](#break-continue-and-return)); `yield` cannot be there.
 - A block that ends with a `for` statement takes that loop's elements as its own, one array of them, as more `for`s on a line do: its block is one in turn, which `continue` and `break` leave. It takes no `when`; `continue unless` writes one.
 - A block that ends with no value, as an assignment or an `if` without `else`, is an error.
-- In parentheses, `(` and a line end, it is an [`Iter`](types.md#iter) of the same values, as a [function that yields](functions.md#functions-that-yield) them, called where the comprehension is. It cannot `return`, `yield` or `await`.
+- In parentheses, `(` and a line end, it is an [`Iter`](types.md#iter) of the same values, as a [function that yields](functions.md#functions-that-yield) them, called where the comprehension is. As in a [lazy comprehension](#lazy-comprehensions), the iterable is evaluated there, and the block for each item as it is consumed. It cannot `return`, `yield` or `await`.
 
 ### Lazy comprehensions
 
