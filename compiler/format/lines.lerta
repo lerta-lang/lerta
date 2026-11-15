@@ -530,12 +530,16 @@ export class Breaker
       { bracketed, close } := literal
       members := bracketed then close < last else close <= last
 
-      # Where only the members after the literal take lines, as a function's body that a call
-      # passes, the literal still fits on its line.
+      # Members that fit on the line after the block count toward the literal's line, which they
+      # leave for that line where it is too short for them; members that take lines there too, as a
+      # function's body that a call passes or arguments too long for a line, gain nothing from the
+      # block, and the literal needs only to fit on its line up to them.
       items_end := bracketed then close else close - 1
+      members_break := members and not @fits(items_end + 1, last, 2 * (depth - 1) + 1, true)
+      measured_end := members_break then items_end else last
       fits := (extra: Int) ->
-        on_line := @fits(first, last, @column_of(first) + extra, false)
-        on_line and not @takes_lines(first, items_end)
+        on_line := @fits(first, measured_end, @column_of(first) + extra, false)
+        on_line and not @takes_lines(first, measured_end)
       if bracketed
         rewritten := not fits(0) and @unbracket(literal, members)
 
