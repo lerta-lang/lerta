@@ -284,7 +284,7 @@ Checks that each file is in the [style](style.md). What of the style it does not
 #### Self-check
 
 - Before it reports or writes, it parses the text that it writes, after each round.
-- If that does not parse, or is another program than the rewrites make, which would be a fault of the formatter, it reports `<path>: its rewrites would not parse: <error>, which is a fault of the formatter`, or `... would change the program ...`, `its layout ...` for the layout, and leaves the file.
+- If that does not parse, or is another program than the rewrites make, which would be a fault of the formatter, it reports `<path>: its rewrites would not parse: <error>, which is a fault of the formatter`, or `... would change the program ...`, or `... would make the program fail to check ...` where the program checked, `its layout ...` for the layout, and leaves the file.
 
 #### Programs checked
 

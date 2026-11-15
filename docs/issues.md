@@ -28,9 +28,9 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 
 ## A rewrite that changes the syntax tree can change the program unnoticed
 
-- Where: the rounds of rewrites in `compiler/format/format.lerta` compare the tree of the text written with that of the edits whose rules are in `TREE_CHANGES` alone, so an edit of one of those rules is checked only in that it parses.
-- How to see it: an argument block written after a callee that is a call, as `mk(a)(x, c then ... else ...)` written `mk(a)` with `x` and an `if` in a block below, parses as `mk(a, x, ...)`; the formatter wrote it so until the rewrite of long arguments learned to report such a callee.
-- How to fix it: check each tree-changing rewrite against the tree that it is meant to make, as by type-checking the result or by comparing the trees outside the spans that the rewrite changes.
+- Where: the rounds of rewrites in `compiler/format/format.lerta` compare the tree of the text written with that of the edits whose rules are in `TREE_CHANGES` alone, and check that a program that checked still does, so an edit of one of those rules that gives another program that checks goes unnoticed.
+- How to see it: a rewrite that wrote `a - b` for `b - a` of two numbers would be applied without a report; `tests/format/rewritten_forms.lerta` checks the forms that each rewrite writes instead.
+- How to fix it: check each tree-changing rewrite against the tree that it is meant to make, as by comparing the trees outside the spans that the rewrite changes, which the nodes, holding only where they start, cannot tell yet.
 
 ## An Iter comprehension with its for first is slower than one on a line
 
