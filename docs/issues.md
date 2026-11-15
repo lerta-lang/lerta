@@ -38,12 +38,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `lerta fmt --fix` writes `show`, then `[x + n + 1 for x in xs]` and `b` in a block below it, as `show [x + n + 1 for x in xs], b`, and reports the comprehension, where it would write it with its `for` first in the block.
 - How to fix it: hold the layout of a statement that holds a comprehension that its rewrite writes with its `for` first, until it is written so.
 
-## An Iter comprehension with its for first and statements in its block is not fused with its source
-
-- Where: the parser makes such a comprehension a call of a function literal that yields, given the value iterated (`prefix_iter` in `compiler/parser/comprehension.lerta`), and a loop fuses only a call of a top-level function (`fused_call` in `compiler/codegen/fusion.lerta`).
-- How to see it: `bench/iter/main.lerta` with a statement in the block of its comprehension takes about 1.5 times the instructions of the same with its block one value, where its source is a call of a function that yields, which the loop inside the literal goes through as an Iter.
-- How to fix it: have a loop fuse a call of a function literal too, and, inside it, a loop over a parameter given a call that it would fuse, which the parameter stands for.
-
 ## A called function literal that infers its parameters ignores the type expected of its result
 
 - Where: `type_of_literal_call` in `compiler/checker/expression.lerta` types the arguments of a function literal called where it is written without the type expected of the call.

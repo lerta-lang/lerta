@@ -2,7 +2,8 @@
 # with their `for` first, a block below it.
 import
   BooleanLiteral, Call, Comprehension, Conditional, copy_identifier, Expression, For,
-  FunctionLiteral, Identifier, If, Jump, LazyFunctions, Parameter, Position, Range, Statement, Yield
+  FunctionLiteral, Identifier, If, iterated_name, Jump, LazyFunctions, Parameter, Position, Range,
+  Statement, Yield
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import LoopHeader, parse_loop_header, take_apart_item from './expression'
@@ -143,7 +144,7 @@ check_iter_marks := (tokens: TokenStream, marks: FunctionMarks, position: Positi
 # called where it is with the value iterated, which is found there, as that of one on a line is.
 prefix_iter := (tokens: TokenStream, header: LoopHeader, block: Statement[], position: Position) ->
   { variable, index, iterable, guard } := header
-  passed := passed_iterable(iterable, position)
+  passed := passed_iterable(iterable)
   yielded := yielding_body(tokens, block)
   guarded: Statement[] =
     if guard
@@ -173,12 +174,12 @@ struct PassedIterable
   names: Identifier[]
   values: Expression[]
 
-passed_iterable := (iterable: Expression, position: Position): PassedIterable ->
+passed_iterable := (iterable: Expression): PassedIterable ->
   names: Identifier[]
   values: Expression[]
   pass := (value: Expression?): Expression? ->
     given := value else return nil
-    name := "iterated.#{position.line}.#{position.column}.#{names.length}"
+    name := iterated_name(names.length, given.position)
     names.push Identifier(name, position: given.position)
     values.push given
     names.last()

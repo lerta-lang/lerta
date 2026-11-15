@@ -3,7 +3,8 @@
 # Iter or coroutine is made (see docs/internals/iteration.md#fused-loops).
 import
   Assignment, Binding, Call, Case, Comprehension, Condition, Declaration, Expression, For,
-  FunctionLiteral, Identifier, If, Member, operands_of, Position, Statement, Try, While, Yield
+  FunctionLiteral, Identifier, If, is_iterated_name, Member, operands_of, Position, Statement, Try,
+  While, Yield
 from '../ast'
 import extended_type from '../checker/extensions'
 import Method from '../checker/member_targets'
@@ -28,35 +29,78 @@ import function_type_of from './closure'
 import BUILTINS_MODULE from '../loader'
 import InterfaceType, iterable_item, Type, void_type from '../types'
 
-# A call of a function that yields, of the module, which a loop takes in place: the function's
-# literal and name, and the arguments.
+# A call of a function that yields, which a loop takes in place: the function's literal and name,
+# and the arguments. A literal called where it is written is `local`: it is checked with the facts
+# of the function being generated, whose locals it captures.
 export struct FusedCall
   literal: FunctionLiteral
   name: String
   args: Expression[]
   yields: Int
+  local: Bool
+
+  # The calls given to the parameters that the function's loop alone goes through, which it takes in
+  # place in turn rather than as Iters, by the parameters' places (see forwarded_calls).
+  forwarded := Map<Int, FusedCall>()
+
+  # The arguments, held already where the call was given to the function that its loop is in.
+  held: String[]?
+
+  # What a local literal captures, as the locals of the function that the call is written in, by
+  # their names; found where the call is, for the calls given to it too (see with_captures).
+  captured: Map<String, CodegenLocal>?
 
 # The most copies of a loop's body that taking functions in place may make: each yield of the
 # function generates the body, and a loop in that body that takes another function in place copies
 # that function's yields as many times over.
 MOST_COPIES := 8
 
-# The call, if a loop can take it in place: a call of a top-level function of the module that
-# yields, not generic, given every argument, and not being taken in place already, as a recursive
-# one would be, within MOST_COPIES, and none of whose yields is in an expression (see
-# yield_count), so that it holds no temporaries where it yields.
+# The call, if a loop can take it in place: a call of a top-level function of the module, or of a
+# function literal where it is written that is not weak and captures nothing weakly, that yields,
+# not generic, given every argument, and not being taken in place already, as a recursive one would
+# be, within MOST_COPIES, and none of whose yields is in an expression (see yield_count), so that it
+# holds no temporaries where it yields.
 export fused_call := (g: Generator, iterable: Expression): FusedCall? ->
+  return g.forwarded[iterable.name] if iterable is Identifier
   return nil if iterable is not Call or g.facts.instances[iterable] != nil
+  if literal := iterable.callee as FunctionLiteral?
+    captures := g.facts.captures[literal] else []
+    return nil if literal.weak or captures.any(Capture.is_weak) or is_awaiting(g, literal)
+    return fused_of(g, iterable, literal, "#{g.function_name}.<anonymous>", true)
   callee := iterable.callee as Identifier else return nil
   reference := g.facts.references[callee] as FunctionReference else return nil
   return nil if reference.module_index != g.code.module.index
   literal := top_level_function(g, reference.name) else return nil
+  fused_of(g, iterable, literal, trace_name(reference.name, nil), false)
+
+fused_of := (g: Generator, call: Call, literal: FunctionLiteral, name: String, local: Bool) ->
   return nil if not literal.yields or not literal.type_params.is_empty()
   yields := yield_count(literal.body) else return nil
   return nil if literal in g.fusion.literals or g.fusion.copies * yields > MOST_COPIES
-  args := arguments_of(g.facts, iterable)
+  args := arguments_of(g.facts, call)
   return nil if args.length != literal.params.length
-  { literal, args, yields, name: reference.name }
+  fused := FusedCall(literal, name, args, yields, local)
+  return fused unless local
+  FusedCall(fused..., forwarded: forwarded_calls(g, fused))
+
+# The call given to the parameter that the literal's loop goes through, if the literal is one loop
+# over a parameter that nothing else reads, as that of an Iter comprehension with its `for` first
+# (see is_iterated_name), and a loop can take the call in place within MOST_COPIES: its loop takes
+# it in place too, so that its arguments are found where the literal's call is, as the call's are,
+# but no Iter is made of it.
+forwarded_calls := (g: Generator, fused: FusedCall): Map<Int, FusedCall> ->
+  { literal, args, yields } := fused
+  none: Map<Int, FusedCall>
+  loop := literal.body.first() as For else return none
+  return none if literal.body.length != 1 or loop.index != nil
+  name := (loop.iterable as Identifier?)?.name else return none
+  return none unless is_iterated_name(name)
+  for param at i in literal.params
+    continue if param.name.name != name
+    inner := fused_call(g, args[i]) else return none
+    return none if g.fusion.copies * yields * inner.yields > MOST_COPIES
+    return Map([(i, inner)])
+  none
 
 top_level_function := (g: Generator, name: String) ->
   for statement in g.code.module.program
@@ -69,27 +113,29 @@ top_level_function := (g: Generator, name: String) ->
 # IR: at each yield, the loop's body is generated by the loop's, with the function's scopes held
 # under it, which a break, a return or an exception out of the body releases.
 export generate_fused_loop := (
-  g: Generator, fused: FusedCall, item: Type, variable: Identifier, body: () -> void
+  g: Generator, given: FusedCall, item: Type, variable: Identifier, body: () -> void
 ) ->
   ir := g.ir
   position := g.position
-  { literal, name, args } := fused
-  (arguments_scope, operands) := hold_arguments(g, args, 'fused', (arg, _i) -> generate(g, arg))
+  fused := with_captures(g, given)
+  { literal, name, forwarded } := fused
+  generate_held := (arg: Expression, _i: Int) -> generate(g, arg)
+  var arguments_scope: Map<String, CodegenLocal>?
+  held :=
+    if given := fused.held
+      given
+    else
+      (scope, operands) := hold_arguments(g, held_arguments(fused), 'fused', generate_held)
+      arguments_scope = scope
+      operands
   exit_label := ir.fresh_label('fused.exit')
   outer_depth := g.locals.depth()
   code := g.code
 
   # A top-level function that is not generic is checked with its module's facts and extensions,
-  # whatever the loop's are.
-  { extensions, facts } := code.shared
-
-  inner := Generator
-    code
-    extensions
-    facts
-    ir
-    function_name: trace_name(name, nil)
-    top_level_code: false
+  # whatever the loop's are; a literal, with those of the function it is written in.
+  { extensions, facts } := fused.local then g else code.shared
+  inner := Generator(code, extensions, facts, ir, function_name: name, top_level_code: false)
 
   # The function's body is copied as many times as the loop; the loop's body, once more for each
   # yield.
@@ -122,14 +168,48 @@ export generate_fused_loop := (
     g.locals.truncate outer_depth
   params := function_type_of(type_of(inner, literal)).params
   scope := inner.locals.push()
+  scope[capture] = local for (capture, local) in fused.captured!
+  var at = 0
   for param at i in literal.params
-    scope[param.name.name] = ValueLocal(operand: operands[i], type: params[i])
+    if inner_call := forwarded[i]
+      count := held_arguments(inner_call).length
+      inner.forwarded[param.name.name] = { inner_call..., held: held[at..at + count] }
+      at += count
+    else
+      scope[param.name.name] = ValueLocal(operand: held[at], type: params[i])
+      at += 1
   generate_body_returning_last inner, literal.body, void_type
   inner.locals.pop()
   ir.start_block exit_label
   locate g, position
-  release_scope g, arguments_scope
-  g.locals.pop()
+  if arguments_scope
+    release_scope g, arguments_scope
+    g.locals.pop()
+
+# The call with what it captures found in `g`, where it is written, and so for the calls given to
+# it, which are written there too, unless found already.
+with_captures := (g: Generator, fused: FusedCall): FusedCall ->
+  return fused if fused.captured != nil
+  captured: Map<String, CodegenLocal>
+  if fused.local
+    for capture in g.facts.captures[fused.literal] else []
+      local := referred_local(g, capture.source, capture.name)
+      captured[capture.name] = borrowed_view(local)
+  forwarded: Map<Int, FusedCall>
+  for (i, inner) in fused.forwarded
+    forwarded[i] = with_captures(g, inner)
+  { fused..., captured, forwarded }
+
+# The arguments that the call holds, where each call given to a parameter is held as its own, in
+# turn (see forwarded_calls).
+held_arguments := (fused: FusedCall): Expression[] ->
+  held: Expression[]
+  for arg at i in fused.args
+    if inner := fused.forwarded[i]
+      held.append held_arguments(inner)
+    else
+      held.push arg
+  held
 
 # How many yields the statements hold, but for those of the function literals in them, which yield
 # for themselves; nil if one is in an expression, in a block of an `if`, a `case` or a `try` that

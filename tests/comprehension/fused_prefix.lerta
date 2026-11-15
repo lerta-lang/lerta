@@ -1,0 +1,161 @@
+# A loop over an Iter comprehension with its `for` first and statements in its block takes its
+# function in place, and the call of a function that yields that it goes through in turn, as the
+# Iters would: with a break, a continue and a return in the loop's body or in the block; with a var
+# that the block reads and the body changes; with @ in a method; with the source's arguments found
+# where the comprehension is.
+class Noisy
+  args
+    name: String
+  deinit := -> print("drop #{@name}")
+
+numbers := (label: String, n: Int) ->
+  print "#{label}: start"
+  yield i for i in 0..n
+  print "#{label}: end"
+
+counted := (label: String, n: Int) ->
+  print "#{label}: counted #{n}"
+  n
+
+squares := (
+  for x in numbers('squares', counted('squares', 4))
+    continue if x == 1
+    square := x * x
+    square
+)
+print 'made squares'
+print value for value in squares
+var offset = 0
+shifted := (
+  for x in numbers('shifted', 3)
+    shift := x + offset
+    shift
+)
+for value in shifted
+  offset += 10
+  print value
+named := (
+  for name in ['a', 'b', 'c']
+    noisy := Noisy(name)
+    noisy.name
+)
+for name in named
+  print name
+  break if name == 'b'
+print 'after break'
+first_big := ->
+  big := (
+    for x in numbers('first big', 10)
+      tripled := x * 3
+      tripled
+  )
+  for value in big
+    return value if value > 10
+  0
+print first_big()
+total := (
+  for x in numbers('total', 5)
+    doubled := x * 2
+    doubled
+).fold(0, (a, b) -> a + b)
+print total
+class Shelf
+  args
+    items: Int[]
+
+  sum := ->
+    doubled := (
+      for item in @items
+        twice := item * 2
+        twice
+    )
+    doubled.fold(0, (a, b) -> a + b)
+print Shelf([1, 2, 3]).sum()
+nested := (
+  for x in (
+    for y in numbers('inner', 3)
+      inner := y + 1
+      inner
+  )
+    outer := x * 100
+    outer
+)
+print nested.fold(0, (a, b) -> a + b)
+scaled := (factor: Int) ->
+  times := (
+    for x in numbers('scaled', 3)
+      product := x * factor
+      product
+  )
+  apply := -> times.fold(0, (a, b) -> a + b)
+  apply()
+print scaled(5)
+countdown := (n: Int): Iter<Int> ->
+  yield n
+  if n > 0
+    yield value for value in countdown(n - 1)
+recursive := (
+  for x in countdown(3)
+    negated := -x
+    negated
+)
+print recursive.to_array()
+pairs := (n: Int, step: Int) ->
+  yield n
+  yield n + step
+looped := (k: Int) ->
+  for v in (
+    for x in (
+      for y in pairs(k, 10)
+        inner := y + 1
+        inner
+    )
+      outer := x * 100
+      outer
+  )
+    print v
+looped 1
+direct := (limit: Int) ->
+  var seen = 0
+  var name = 'a'
+  for value in ((n) ->
+    for i in 0..n
+      seen += 1
+      name += i.to_string()
+      yield i * seen
+  )(limit)
+    seen += 10
+    print "#{value} #{name}"
+  print seen
+  print name
+direct 3
+shifted_inner := (m: Int) ->
+  var count = 0
+  for v in (
+    for x in (
+      for y in numbers('shifted inner', 2)
+        count += 1
+        inner := y + m
+        inner
+    )
+      outer := x * 10 + count
+      outer
+  )
+    count += 100
+    print v
+  print count
+shifted_inner 5
+failing := (n: Int) ->
+  throw ValueError('no source') if n > 2
+  n
+attempt := ->
+  try
+    made := (
+      for x in numbers('failing', failing(3))
+        kept := x
+        kept
+    )
+    print made.to_array()
+  catch error: ValueError
+    print "caught #{error.message}"
+attempt()

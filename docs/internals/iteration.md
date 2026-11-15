@@ -54,7 +54,8 @@ Fusion generates the loop's source in place (`compiler/codegen/fusion.lerta`), s
 
 ### Over a function that yields
 
-- **When.** A `for` without an index over a call of a top-level function of its own module that yields, is not generic, and is given every argument.
+- **When.** A `for` without an index over a call of a top-level function of its own module, or of a function literal where it is written, as an Iter comprehension with its `for` first and statements in its block is, that yields, is not generic, and is given every argument. The literal is not weak and captures nothing weakly; it is generated with the facts of the function it is in, and what it captures is that function's locals, borrowed.
+- **Forwarded calls.** Where the literal is one loop over a parameter that the source cannot name, as that of an Iter comprehension is, and the argument of that parameter is a call that a loop fuses, its loop fuses that call in turn: the call's arguments are evaluated and held with the literal's, where the literal is called, and no `Iter` is made of it.
 - **Not fused** (called as usual):
   - a function already being generated in place, where the loop is or around the function literal that the loop is in; so a recursive one still makes its `Iter`;
   - one with a `yield` in an expression, in a block of an `if`, a `case` or a `try` that gives a value, where it may hold temporaries as it yields;

@@ -60,7 +60,12 @@ export is_fused_source := (g: Generator, expression: Expression, reads_fields: B
   stable := (part: Expression) -> is_stable(g, part, reads_fields)
   if expression is Range
     return stable(expression.start!) and stable(expression.end!)
-  return fused.args.all(stable) if fused := fused_call(g, expression)
+  if fused := fused_call(g, expression)
+    for arg at i in fused.args
+      # A call given to the function goes through in place too (see forwarded_calls).
+      forwarded := fused.forwarded[i] != nil and is_fused_source(g, arg, reads_fields)
+      return false if not forwarded and not stable(arg)
+    return true
   lazy := fused_comprehension(g, expression) else return false
   stable(lazy.source) or is_fused_source(g, lazy.source, reads_fields)
 
