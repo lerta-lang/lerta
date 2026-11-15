@@ -290,7 +290,7 @@ From weakest to strongest:
 | `and` | left |
 | prefix `not` | - |
 | comparisons: `==` `!=` `<` `<=` `>` `>=`, `is`, `as`, `in` | none |
-| `?` (nil coalescing) | right |
+| [fallback](types.md#fallback) `else`, as `x else d` | right |
 | ranges `..` `..=` | none |
 | `+` `-` `\|` `^` | left |
 | `*` `/` `%` `&` `<<` `>>` | left |
@@ -330,7 +330,7 @@ From weakest to strongest:
 ### Nesting limit
 
 - An expression or a type nests at most 500 deep. Deeper is a compile error, `nesting deeper than 500`, so that the compiler does not overflow its stack.
-- Each of these counts as one level: a bracket, an interpolation, a prefix operator, `then`/`else`, `?`, a type argument or `[]`, and each operator, call, index or member of a chain, as `1 + 2 + 3` or `a.b.c`.
+- Each of these counts as one level: a bracket, an interpolation, a prefix operator, `then`/`else`, a fallback `else`, a type argument or `[]`, and each operator, call, index or member of a chain, as `1 + 2 + 3` or `a.b.c`.
 - Each `else if` of a chain counts as one level too, for the conditions and blocks after it as well.
 - Indented blocks are not counted, as their indentation makes the source grow with the square of their depth.
 
