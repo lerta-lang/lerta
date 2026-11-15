@@ -1,0 +1,252 @@
+# The rewrites of tests that need the types of the checking (see typed.lerta).
+import
+  binary_literal_bytes, BinaryOperation, Call, Expression, Identifier, Index, IntegerLiteral,
+  Member, NilLiteral, Range, StringLiteral, This
+from '../ast'
+import is_fixed, is_plainly_compared, NodeFacts from '../checker/shared'
+import counted_end, range_test as comparisons_of_range, runs_no_code from './expressions'
+import
+  ArrayType, bool_type, byte_type, INTEGER_KINDS, is_iterable, is_one_of_kinds, MapType,
+  NUMBER_KINDS, SimpleType, Type
+from '../types'
+import
+  BYTE_LITERALS, EMPTINESS_TESTS, FOUND_TESTS, MEMBERSHIP_LISTS, MEMBERSHIP_TESTS, RANGE_TESTS
+from './rules'
+import dump_ast_without_positions from '../dumps'
+import Change, Edit from './edits'
+import counted_range, is_zero from './ranges'
+import Tokens from './tokens'
+
+import first_position, is_balanced, last_token, text_of from './expression_tokens'
+
+# `b'x'` for `b'x'[0]` compared with a byte, where the literal is one (see Binary literals).
+export byte_literal := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
+  return nil unless test.operator in ['==', '!=']
+  for (indexed, other) in [(test.left, test.right), (test.right, test.left)]
+    index := indexed as Index else continue
+    zero := index.index as IntegerLiteral else continue
+    bytes := binary_literal_bytes(index.object) else continue
+    continue if zero.value != 0 or bytes.length != 1 or facts.types[other] != byte_type
+    literal := tokens.at(index.object.position) else return nil
+    close := tokens.matching(literal + 1) else return nil
+    change := Change(from: tokens.end(literal), to: tokens.end(close), text: '')
+    return tokens.edit_at(BYTE_LITERALS, index.position, [change])
+  nil
+
+# `x.is_empty()` for a test of the length of x against 0, or of x against '', and `not x.is_empty()`
+# for one that x is not empty (see Emptiness tests), where std gives the type of x `is_empty`; the
+# test as written, `0 == x.length` and `'' == x` too, but the latter of a name alone, whose end is
+# known.
+export emptiness_test := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
+  { operator, left, right } := test
+  return nil unless operator in ['==', '!=', '>']
+  written := tested_value(tokens, left, right) else return nil
+  { value, first, last, start, end } := written
+  return nil if operator == '>' and not written.length_first
+  return nil if not has_is_empty(facts.types[value]) or not is_balanced(tokens, first, last)
+  negation := operator == '==' then '' else 'not '
+  text := "#{negation}#{tokens.slice(tokens.start(first), tokens.end(last))}.is_empty()"
+  at := tokens.start(start)
+  tokens.edit_at(EMPTINESS_TESTS, at, [{ from: at, to: tokens.end(end), text }])
+
+# The value that a comparison tests the emptiness of, the tokens from `first` through `last`, and
+# those of the comparison, from `start` through `end`.
+struct TestedValue
+  value: Expression
+  first: Int
+  last: Int
+  start: Int
+  end: Int
+
+  # Whether it is `x.length` before the operator, which `>` may compare.
+  length_first: Bool
+
+tested_value := (tokens: Tokens, left: Expression, right: Expression): TestedValue? ->
+  if is_zero(right) and left is Member and left.name.name == 'length'
+    name := tokens.at(left.name.position) else return nil
+    zero := tokens.at(right.position) else return nil
+    first := tokens.at(left.object.position) else return nil
+    return nil if not tokens.is_kind(name - 1, '.') or zero != name + 2
+    return {
+      value: left.object
+      first
+      last: name - 2
+      start: first
+      end: zero
+      length_first: true
+    }
+  if is_zero(left) and right is Member and right.name.name == 'length'
+    zero := tokens.at(left.position) else return nil
+    name := tokens.at(right.name.position) else return nil
+    first := tokens.at(right.object.position) else return nil
+    return nil if not tokens.is_kind(name - 1, '.') or first != zero + 2
+    return {
+      value: right.object
+      first
+      last: name - 2
+      start: zero
+      end: name
+      length_first: false
+    }
+  if is_empty_string(right)
+    empty := tokens.at(right.position) else return nil
+    first := tokens.at(left.position) else return nil
+    last := empty - 2
+    return nil unless is_postfix(tokens, left, first, last)
+    return { value: left, first, last, start: first, end: empty, length_first: false }
+  if is_empty_string(left) and right is Identifier
+    empty := tokens.at(left.position) else return nil
+    name := tokens.at(right.position) else return nil
+    return nil if name != empty + 2
+    return { value: right, first: name, last: name, start: empty, end: name, length_first: false }
+  nil
+
+# Whether the value from `first` through `last` takes `.is_empty()` as written: a name, a member,
+# a call, an index or `@`, or a value in parentheses, not an operation, which would give it to its
+# last operand.
+is_postfix := (tokens: Tokens, value: Expression, first: Int, last: Int) ->
+  case value
+    when Identifier, Member, Call, Index, This then true
+    else tokens.is_kind(first, '(') and tokens.matching(first) == last
+
+is_empty_string := (value: Expression) -> value is StringLiteral and value.value.is_empty()
+
+# `(x in xs)` for `xs.contains(x)` (see Membership tests), where neither runs code, as `x in xs`
+# evaluates x first; the parentheses are left to Parentheses, and `not` before it to Negated in
+# tests.
+export membership_test := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  member := call.callee as Member else return nil
+  has_one := call.args.length == 1 and call.named_args.is_empty() and call.type_args.is_empty()
+  return nil if member.name.name != 'contains' or not has_one or facts.types[call] != bool_type
+  item := call.args[0]
+  return nil if not runs_no_code(member.object) or not runs_no_code(item)
+  first := tokens.at(member.object.position) else return nil
+  name := tokens.at(member.name.position) else return nil
+
+  # `@contains(x)` has no `.`.
+  last :=
+    if tokens.is_kind(name - 1, '.')
+      name - 2
+    else
+      name - 1
+
+  open := name + 1
+  return nil if not tokens.is_kind(open, '(') or not is_balanced(tokens, first, last)
+  close := tokens.matching(open) else return nil
+  collection := tokens.slice(tokens.start(first), tokens.end(last))
+  text := "(#{tokens.slice(tokens.start(open + 1), tokens.end(close - 1))} in #{collection})"
+  tokens.edit_at(
+    MEMBERSHIP_TESTS
+    member.name.position
+    [{ from: tokens.start(first), to: tokens.end(close), text }]
+  )
+
+# `x in a..=b` for `x in a..(b + 1)` where b is an integer (see Ranges).
+export tested_range := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
+  return nil if test.operator != 'in'
+  range := test.right as Range else return nil
+  counted := counted_end(range.end) else return nil
+  type := facts.types[counted] else return nil
+  if is_one_of_kinds(type, INTEGER_KINDS)
+    counted_range(tokens, range)
+  else
+    nil
+
+# `xs.any(f)` for `xs.find(f) != nil`, and `not xs.any(f)` for `xs.find(f) == nil` (see Found
+# tests), of an array, an Iter or a map, whose items cannot be optional for `find`, as nil would be
+# ambiguous then.
+export found_test := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
+  return nil if test.operator not in ['==', '!='] or test.right is not NilLiteral
+  call := test.left as Call else return nil
+  member := call.callee as Member else return nil
+  has_one := call.args.length == 1 and call.named_args.is_empty() and call.type_args.is_empty()
+  return nil if member.name.name != 'find' or not has_one
+  return nil unless is_iterable(facts.types[member.object])
+  first := tokens.at(member.object.position) else return nil
+  name := tokens.at(member.name.position) else return nil
+  nil_at := tokens.at(test.right.position) else return nil
+  close := nil_at - 2
+  return nil if not tokens.is_kind(name + 1, '(') or tokens.matching(name + 1) != close
+  return nil unless is_balanced(tokens, first, close)
+  negated := test.operator == '=='
+  changes: Change[] =
+    { from: tokens.start(first), to: tokens.start(first), text: negated then 'not ' else '' }
+    tokens.replaced(name, 'any')
+    { from: tokens.end(close), to: tokens.end(nil_at), text: '' }
+  tokens.edit_at(FOUND_TESTS, member.name.position, changes)
+
+# `x in [A, B]` for `x == A or x == B`, and `x not in [A, B]` for `x != A and x != B`, of each run
+# of two or more such tests of one `x` in a chain of `or`s or of `and`s (see Membership lists),
+# which makes no array then (see compared_items). Found from the root of the chain's tree, its last
+# junction, which is met before the others and marks them.
+export membership_lists := (
+  tokens: Tokens, test: BinaryOperation, facts: NodeFacts, inner_junctions: Set<BinaryOperation>
+): Edit?[] ->
+  junction := test.operator
+  return [] if junction not in ['or', 'and'] or test in inner_junctions
+  terms: Expression[]
+  var node: Expression = test
+  while node is BinaryOperation and node.operator == junction
+    inner_junctions.add node
+    terms.insert 0, node.right
+    node = node.left
+  terms.insert 0, node
+  comparison := junction == 'or' then '==' else '!='
+  edits: Edit?[]
+  var start = 0
+  while start < terms.length
+    var end = start
+    if tested := tested_word(terms[start], comparison, facts)
+      while end + 1 < terms.length and tests_same(terms[end + 1], tested, comparison, facts)
+        end += 1
+    if end > start
+      edits.push membership_list(tokens, terms[start..=end], junction)
+    start = end + 1
+  edits
+
+# The `x` of `x == A`, of the comparison, where `x` runs no code and is of a type that `==` compares
+# by itself, and `A` is a literal, a member of an enum or a constant (see compared_items).
+tested_word := (term: Expression, comparison: String, facts: NodeFacts) ->
+  test := term as BinaryOperation else return nil
+  return nil if test.operator != comparison or not runs_no_code(test.left)
+  type := facts.types[test.left] else return nil
+  if is_plainly_compared(type) and is_fixed(facts, test.right)
+    test.left
+  else
+    nil
+
+tests_same := (term: Expression, tested: Expression, comparison: String, facts: NodeFacts) ->
+  other := tested_word(term, comparison, facts) else return false
+  dump_ast_without_positions([other]) == dump_ast_without_positions([tested])
+
+membership_list := (tokens: Tokens, terms: Expression[], junction: String) ->
+  tests := [term as BinaryOperation! for term in terms]
+  first := tokens.at(first_position(tests[0].left)) else return nil
+  last := last_token(tokens, tests.last()!.right) else return nil
+  return nil unless is_balanced(tokens, first, last)
+  tested := text_of(tokens, tests[0].left) else return nil
+  items := [
+    for test in tests
+      item := text_of(tokens, test.right) else return nil
+      item
+  ]
+  operator := junction == 'and' then 'not in' else 'in'
+  text := "#{tested} #{operator} [#{items.join(', ')}]"
+  change := Change(text, from: tokens.start(first), to: tokens.end(last))
+  tokens.edit_at(MEMBERSHIP_LISTS, tests[0].position, [change])
+
+# `x in a..=b` for `x >= a and x <= b`, and `x not in a..=b` for `x < a or x > b`, of a number or a
+# Char (see Range tests), only reported.
+export range_test := (tokens: Tokens, test: BinaryOperation, facts: NodeFacts) ->
+  comparison := comparisons_of_range(test) else return nil
+  type := facts.types[comparison.value] else return nil
+  return nil unless is_one_of_kinds(type, [NUMBER_KINDS..., 'Char'])
+  tokens.report(RANGE_TESTS, comparison.value.position)
+
+# Whether std gives the type `is_empty` (see EMPTINESS_TESTS). One test serves the tests of a length
+# and the comparisons with '': a `String` has no `length`, and nothing else compares with ''.
+has_is_empty := (type: Type?) ->
+  case type
+    when ArrayType, MapType then true
+    when SimpleType then type.kind in ['String', 'Binary']
+    else false

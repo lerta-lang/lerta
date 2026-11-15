@@ -1,0 +1,77 @@
+# The tokens that the rewrites replace: where an expression starts and ends and its text, where a
+# statement ends, and the arguments of a call.
+import BinaryOperation, Expression, Member, Position, UnaryOperation from '../ast'
+import depth_change from '../lexer/tokens'
+import Change from './edits'
+import Tokens from './tokens'
+
+# The last token of the statement that starts on the line of the one at `first`, with the spaces
+# of `indentation`: before the next line, outside brackets, indented no deeper.
+export statement_last := (tokens: Tokens, first: Int, indentation: Int) ->
+  var depth = 0
+  var last = first
+  while last + 1 < tokens.code.length
+    token := tokens.code[last]
+    depth += depth_change(token.kind)
+    next := tokens.code[last + 1]
+    starts_line := next.line > token.end_line
+    next_indentation := tokens.line_indentation(next.line) else 0
+    break if depth <= 0 and starts_line and next_indentation <= indentation
+    last += 1
+  last
+
+# `()` for the arguments of a call without parentheses, which run from its name at `name` to the end
+# of its statement, as such a call starts one.
+export arguments_after := (tokens: Tokens, name: Int) ->
+  indentation := tokens.line_indentation(tokens.code[name].line) else 0
+  last := statement_last(tokens, name, indentation)
+  Change(from: tokens.end(name), to: tokens.end(last), text: '()')
+
+# Nothing for the arguments within the parentheses that open at `open`.
+export arguments_within := (tokens: Tokens, open: Int) ->
+  return nil unless tokens.is_kind(open, '(')
+  close := tokens.matching(open) else return nil
+  Change(from: tokens.end(open), to: tokens.start(close), text: '')
+
+# Whether the brackets that the tokens open they close, so that they are an expression whole.
+export is_balanced := (tokens: Tokens, first: Int, last: Int) ->
+  return false if first > last
+  var depth = 0
+  for token in tokens.code[first..=last]
+    depth += depth_change(token.kind)
+    return false if depth < 0
+  depth == 0
+
+# The text of a name, `@`, a literal, a path of fields from one or a constant, `-1` or `K + 1`, as
+# written; nil where parentheses hold part of it, which the text would leave unbalanced.
+export text_of := (tokens: Tokens, value: Expression) ->
+  first := tokens.at(first_position(value)) else return nil
+  last := last_token(tokens, value) else return nil
+  if is_balanced(tokens, first, last)
+    tokens.slice(tokens.start(first), tokens.end(last))
+  else
+    nil
+
+# The last token of the value, its last name, literal or operand.
+export last_token := (tokens: Tokens, value: Expression) ->
+  at := tokens.at(last_position(value)) else return nil
+
+  # `-1` is one literal of two tokens, found by the first.
+  if tokens.is_kind(at, '-')
+    at + 1
+  else
+    at
+
+# Where the value starts: its first operand, or the object of a path of fields.
+export first_position := (value: Expression): Position ->
+  case value
+    when Member then first_position(value.object)
+    when BinaryOperation then first_position(value.left)
+    else value.position
+
+last_position := (value: Expression): Position ->
+  case value
+    when Member then value.name.position
+    when UnaryOperation then last_position(value.operand)
+    when BinaryOperation then last_position(value.right)
+    else value.position

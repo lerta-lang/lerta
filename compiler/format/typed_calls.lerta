@@ -1,0 +1,253 @@
+# The rewrites of calls that need the types of the checking (see typed.lerta).
+import
+  Call, Expression, FunctionLiteral, Identifier, Member, NamedValue, StringLiteral
+from '../ast'
+import CollectionMaker from '../checker/references'
+import NodeFacts from '../checker/shared'
+import copied_source from './expressions'
+import ArrayType, char_type, is_iterable, IterType, MapType, string_type, Type from '../types'
+import
+  CHAR_CONCATENATIONS, DEFAULT_COMPARISONS, DEFAULT_SEPARATORS, EXPECTED_TYPES, ITERABLE_ARGUMENTS,
+  SORT_KEYS, SPREADS, SHORTHAND_ARGUMENTS, VALUES_ALONE
+from './rules'
+import Change, Edit from './edits'
+import Tokens from './tokens'
+
+import arguments_after, arguments_within, statement_last from './expression_tokens'
+
+# `{ x: 1 }` for `S(x: 1)` where S is expected (see Expected types). A construction without
+# parentheses is only reported (see record_changes).
+export recorded := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  return nil unless call in facts.recordable
+  changes := record_changes(tokens, call) else return tokens.report(EXPECTED_TYPES, call.position)
+  tokens.edit_at(EXPECTED_TYPES, call.position, changes)
+
+# The arguments of the construction as they are written, between braces for the parentheses, or
+# for the callee and after the arguments of one without them; nil for one of type arguments.
+export record_changes := (tokens: Tokens, call: Call) ->
+  callee := tokens.at(call.callee.position) else return nil
+  open := after_callee(tokens, call) else return nil
+  return nil if tokens.is_kind(open, '<')
+  unless tokens.is_kind(open, '(')
+    return unparenthesized_record(tokens, callee, open)
+  close := tokens.matching(open) else return nil
+
+  # A space inside each brace that has the arguments on its line.
+  opening :=
+    if tokens.code[open + 1].line == tokens.code[open].line
+      '{ '
+    else
+      '{'
+  closing :=
+    if tokens.code[close - 1].end_line == tokens.code[close].line
+      ' }'
+    else
+      '}'
+  [
+    Change(from: tokens.start(callee), to: tokens.end(open), text: opening)
+    tokens.replaced(close, closing)
+  ]
+
+# `{ x: 1 }` for `S x: 1`, and for `S` with the arguments in a block below it, the `}` on a line of
+# its own then. The arguments of a call without parentheses run to the end of its line, or of the
+# block below it.
+unparenthesized_record := (tokens: Tokens, callee: Int, first_argument: Int) ->
+  indentation := tokens.line_indentation(tokens.code[callee].line) else return nil
+  last := statement_last(tokens, callee, indentation)
+  return nil if last < first_argument
+  on_one_line := tokens.code[last].end_line == tokens.code[callee].line
+  closing := on_one_line then ' }' else "\n#{' '.repeat(indentation)}}"
+  [
+    tokens.replaced(callee, '{')
+    Change(from: tokens.end(last), to: tokens.end(last), text: closing)
+  ]
+
+# The token after the callee of the construction, its last name, as `Point` of `geo.Point`.
+export after_callee := (tokens: Tokens, call: Call) ->
+  { callee } := call
+  name := callee is Member then callee.name else callee
+  last := tokens.at(name.position) else return nil
+  last + 1
+
+# `S(x, y: 1)` for `S(x: x, y: 1)` in a construction (see Shorthand): the named arguments that are
+# variables of their names, from the first, up to one that is not or whose name and value are not
+# written alone, as `x: (x)`, in one edit, as each would leave a named argument before those after
+# it; the others, which would move before others, only reported.
+export shorthand_arguments := (tokens: Tokens, call: Call, facts: NodeFacts): Edit?[] ->
+  return [] unless call in facts.object_constructions
+  is_shorthand := (named: NamedValue) ->
+    named.value is Identifier and named.value.name == named.name.name
+  changes: Change[]
+  reports: Edit?[]
+  var stays = true
+  for named in call.named_args
+    shorthand := is_shorthand(named)
+    change :=
+      if shorthand and stays
+        alone tokens, named
+      else
+        nil
+    stays = change != nil
+    if change
+      changes.push change
+    else if shorthand
+      reports.push tokens.report(SHORTHAND_ARGUMENTS, named.name.position)
+  return reports if changes.is_empty()
+  [tokens.edit_at(SHORTHAND_ARGUMENTS, changes[0].from, changes), reports...]
+
+# The name alone for the named argument, where both are single tokens.
+alone := (tokens: Tokens, named: NamedValue) ->
+  name_at := tokens.at(named.name.position) else return nil
+  value_at := tokens.at(named.value.position) else return nil
+  return nil if value_at != name_at + 2 or not tokens.is_kind(value_at, IDENTIFIER)
+  Change(from: tokens.start(name_at), to: tokens.end(value_at), text: named.name.name)
+
+# `T(v)` for `T(name: v)`, a construction of only the one argument that it must give (see Values
+# alone); not a record, `{ name: v }`, which constructs a struct too, nor a copy of the field of
+# another value.
+export value_alone := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  # A copy of the field of another value is a spread (see Spreads).
+  return nil if call not in facts.alone_constructions or is_copy(call, facts)
+  named := call.named_args[0]
+  name_at := tokens.at(named.name.position) else return nil
+  value_at := tokens.at(named.value.position) else return nil
+  return nil if not tokens.is_kind(name_at - 1, '(') or not tokens.is_kind(name_at + 1, ':')
+  change := Change(from: tokens.start(name_at), to: tokens.start(value_at), text: '')
+  tokens.edit_at(VALUES_ALONE, named.name.position, [change])
+
+# `xs.sorted()` for `xs.sorted((a, b) -> a.compare(b))` of an array, and so for `sort` (see Default
+# comparisons).
+export default_comparison := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  member := call.callee as Member else return nil
+  if member.name.name not in ['sorted', 'sort'] or facts.types[member.object] is not ArrayType
+    return nil
+  return nil if call.args.length != 1 or not call.named_args.is_empty()
+  return nil unless is_natural_order(call.args[0])
+  name := tokens.at(member.name.position) else return nil
+  comparison := tokens.at(call.args[0].position) else return nil
+  without_parentheses := comparison == name + 1
+  within :=
+    if without_parentheses
+      arguments_after tokens, name
+    else
+      arguments_within tokens, name + 1
+  change := within else return nil
+  tokens.edit_at(DEFAULT_COMPARISONS, call.args[0].position, [change])
+
+# Whether the value is `(a, b) -> a.compare(b)`, the comparison that `sorted` takes by default.
+is_natural_order := (value: Expression) ->
+  literal := value as FunctionLiteral else return false
+  return false if literal.params.length != 2 or literal.body.length != 1
+  call := literal.body[0] as Call else return false
+  member := call.callee as Member else return false
+  object := member.object as Identifier else return false
+  return false if call.args.length != 1 or not call.named_args.is_empty()
+  argument := call.args[0] as Identifier else return false
+  { params } := literal
+  is_ordered := object.name == params[0].name.name and argument.name == params[1].name.name
+  member.name.name == 'compare' and is_ordered
+
+# `xs.sorted_by((a) -> a.k)` for `xs.sorted((a, b) -> a.k.compare(b.k))` of an array, of a path of
+# fields of each, and so for `sort` (see Sort keys).
+export sort_key := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  member := call.callee as Member else return nil
+  if member.name.name not in ['sorted', 'sort'] or facts.types[member.object] is not ArrayType
+    return nil
+  return nil if call.args.length != 1 or not call.named_args.is_empty()
+  literal := call.args[0] as FunctionLiteral else return nil
+  key := compared_key(literal) else return nil
+  name := tokens.at(member.name.position) else return nil
+  return nil unless tokens.is_kind(name + 1, '(')
+  close := tokens.matching(name + 1) else return nil
+  parameter := literal.params[0].name.name
+  changes: Change[] =
+    tokens.replaced(name, "#{member.name.name}_by")
+    { from: tokens.end(name + 1), to: tokens.start(close), text: "(#{parameter}) -> #{key}" }
+  tokens.edit_at(SORT_KEYS, member.name.position, changes)
+
+# The key that the literal compares, `a.k` of `(a, b) -> a.k.compare(b.k)`, where `k` is a path of
+# fields; nil for any other literal.
+compared_key := (literal: FunctionLiteral) ->
+  return nil if literal.params.length != 2 or literal.body.length != 1
+  call := literal.body[0] as Call else return nil
+  compare := call.callee as Member else return nil
+  return nil if compare.name.name != 'compare' or call.args.length != 1
+  left := field_path(compare.object, literal.params[0].name.name) else return nil
+  right := field_path(call.args[0], literal.params[1].name.name) else return nil
+  left == right then "#{literal.params[0].name.name}.#{left}"
+
+# The names of the fields, joined by `.`, of a path of one or more of them from the name; nil for
+# any other value.
+field_path := (value: Expression, name: String): String? ->
+  member := value as Member else return nil
+  object := member.object
+  return member.name.name if object is Identifier and object.name == name
+  above := field_path(object, name) else return nil
+  "#{above}.#{member.name.name}"
+
+# `xs.join()` for `xs.join('')` of strings or chars (see Default separators).
+export default_separator := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  member := call.callee as Member else return nil
+  return nil if member.name.name != 'join' or call.args.length != 1
+  separator := call.args[0] as StringLiteral else return nil
+  return nil if not separator.value.is_empty() or not joins_text(facts.types[member.object])
+  at := tokens.at(separator.position) else return nil
+  return nil if not tokens.is_kind(at - 1, '(') or not tokens.is_kind(at + 1, ')')
+  change := Change(from: tokens.start(at), to: tokens.end(at), text: '')
+  tokens.edit_at(DEFAULT_SEPARATORS, separator.position, [change])
+
+# Whether the type is an array or an Iter of strings or chars, whose `join` takes `''` by default.
+joins_text := (type: Type?) ->
+  item :=
+    case type
+      when ArrayType then type.element
+      when IterType then type.item
+      else return false
+  item == string_type or item == char_type
+
+# `Set(xs)` for `Set(xs.to_array())` of an array, an Iter, a map or a set, as `Map()` and `Set()`
+# take any Iterable (see Iterable arguments).
+export iterable_argument := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  callee := call.callee as Identifier else return nil
+  maker := facts.references[callee] as CollectionMaker else return nil
+  return nil if maker.type is not MapType or call.args.length != 1
+  argument := call.args[0] as Call else return nil
+  member := argument.callee as Member else return nil
+  return nil if member.name.name != 'to_array' or not argument.args.is_empty()
+  return nil unless is_iterable(facts.types[member.object])
+  name := tokens.at(member.name.position) else return nil
+  is_written := tokens.is_kind(name - 1, '.') and tokens.is_kind(name + 1, '(')
+  return nil if not is_written or not tokens.is_kind(name + 2, ')')
+  change := Change(from: tokens.start(name - 1), to: tokens.end(name + 2), text: '')
+  tokens.edit_at(ITERABLE_ARGUMENTS, member.name.position, [change])
+
+# A spread of the value whose fields a construction copies, where it gives every argument, of the
+# type constructed (see Spreads), only reported.
+export spread := (tokens: Tokens, call: Call, facts: NodeFacts) ->
+  if is_copy(call, facts)
+    tokens.report(SPREADS, call.position)
+  else
+    nil
+
+# Whether the construction gives every argument from the fields of a value of its type.
+is_copy := (call: Call, facts: NodeFacts) ->
+  source := copied_source(call) else return false
+  return false unless call in facts.full_constructions
+  source_type := facts.types[source] else return false
+  source_type == facts.types[call]
+
+# `s + c` for `s + c.to_string()` of a String `s` and a Char `c`, and so for `+=` (see Char
+# concatenations): `+` of a String appends a Char.
+export char_concatenation := (
+  tokens: Tokens, left: Expression, right: Expression, facts: NodeFacts
+) ->
+  return nil if facts.types[left] != string_type
+  call := right as Call else return nil
+  member := call.callee as Member else return nil
+  is_call := member.name.name == 'to_string' and call.args.is_empty() and call.named_args.is_empty()
+  return nil if not is_call or facts.types[member.object] != char_type
+  name := tokens.at(member.name.position) else return nil
+  is_written := tokens.is_kind(name - 1, '.') and tokens.is_kind(name + 1, '(')
+  return nil if not is_written or not tokens.is_kind(name + 2, ')')
+  change := Change(from: tokens.start(name - 1), to: tokens.end(name + 2), text: '')
+  tokens.edit_at(CHAR_CONCATENATIONS, member.name.position, [change])
