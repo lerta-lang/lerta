@@ -111,8 +111,8 @@ class Renderer
     escape_html(code)
 
   heading := (line: Line) ->
-    level := line.text.binary.iter().take_while((byte) -> byte == b'#').count()
-    rest := line.text.binary.text(level)!
+    level := line.text.take_while((c) -> c == '#').count()
+    rest := line.text.skip(level)
     fail line, 'a heading needs a space after its #' unless rest.starts_with(' ')
     fail line, 'a heading closed by #' if is_closing_sequence(rest.trim().split(' ').last()!)
     fail line, 'a heading of a level above 6' if level > 6
@@ -202,7 +202,7 @@ class Renderer
       for line in lines[1..]
         Line(text: dedent(line.text, width), number: line.number)
     ]
-    content: Line[] = [{ text: marked.text.binary.text(width)!, number: marked.number }, rest...]
+    content: Line[] = [{ text: marked.text.skip(width), number: marked.number }, rest...]
     "<li>#{@blocks(content, tight)}</li>\n"
 
   paragraph := (lines: Line[], at: Int, tight: Bool) ->
@@ -290,19 +290,19 @@ fail := (line: Line, message: String) -> throw MarkdownError("line #{line.number
 
 is_blank := (text: String) -> text.trim().is_empty()
 
-indentation := (text: String) -> text.binary.iter().take_while((byte) -> byte == b' ').count()
+indentation := (text: String) -> text.take_while((c) -> c == ' ').count()
 
 dedent := (text: String, width: Int) ->
   if is_blank(text)
     ''
   else
-    text.binary.text(min(width, indentation(text)))!
+    text.skip(min(width, indentation(text)))
 
 list_marker := (text: String): Marker? ->
   if text.starts_with('- ')
     return { ordered: false, number: 0, width: 2 }
   bytes := text.binary
-  digits := bytes.iter().take_while((byte) -> byte.is_digit()).count()
+  digits := bytes.take_while(Byte.is_digit).count()
   return nil if digits == 0 or not bytes.occurs_at(digits, b'. ')
   { ordered: true, number: bytes.text(0, digits)!.parse_int()!, width: digits + 2 }
 
@@ -336,7 +336,7 @@ has_blank_between_blocks := (lines: Line[], width: Int) ->
   false
 
 # Whether the last word of a heading is a run of `#`, which GitHub drops.
-is_closing_sequence := (word: String) -> word.binary.iter().all((byte) -> byte == b'#')
+is_closing_sequence := (word: String) -> word.all((c) -> c == '#')
 
 # Why a line starts a block that is not rendered, or nil.
 unsupported_block := (text: String) ->
@@ -351,9 +351,7 @@ unsupported_block := (text: String) ->
 is_rule := (text: String) ->
   bytes := text.trim().binary
   first := bytes.first() else return false
-  first in [b'-', b'*', b'_', b'='] and
-    bytes.length >= 3 and
-    bytes.iter().all((byte) -> byte == first)
+  first in [b'-', b'*', b'_', b'='] and bytes.length >= 3 and bytes.all((byte) -> byte == first)
 
 # Why the text at `at` is Markdown that is not rendered, or nil.
 unsupported_inline := (bytes: Binary, at: Int) ->
@@ -432,7 +430,7 @@ table_cells := (line: Line) ->
   cells
 
 is_delimiter_row := (cells: String[]) ->
-  cells.all((cell) -> not cell.is_empty() and cell.binary.iter().all((byte) -> byte == b'-'))
+  cells.all((cell) -> not cell.is_empty() and cell.all((c) -> c == '-'))
 
 # The text of a code span at `at`, without the spaces that pad it, and the offset after it; or nil
 # if no run of as many backticks closes it.
@@ -449,7 +447,7 @@ code_span := (bytes: Binary, at: Int) ->
       padded := code.starts_with(' ') and code.ends_with(' ') and not is_blank(code)
       text :=
         if padded
-          code.binary.text(1, code.binary.length - 1)!
+          code.without_prefix(' ')!.without_suffix(' ')!
         else
           code
       return (text, next + run)
