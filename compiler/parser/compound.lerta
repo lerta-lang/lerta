@@ -1,22 +1,21 @@
-# Compound expressions, made of other expressions or of blocks: arrays and comprehensions, maps and
-# anonymous structs, function literals, and `case`.
+# Compound expressions, made of other expressions or of blocks: arrays, maps and anonymous structs,
+# function literals, and `case`; comprehensions are in comprehension.lerta.
 import
-  ArrayLiteral, BooleanLiteral, Call, Case, CaseArm, Catch, Comprehension, Conditional,
-  copy_identifier, Expression, For, FunctionLiteral, Identifier, If, is_spread, Jump, LazyFunctions,
-  MapEntry, MapLiteral, NamedValue, Parameter, Pass, Position, Range, RecordLiteral,
-  spread_of_value, Statement, Try, TupleLiteral, Yield
+  ArrayLiteral, Case, CaseArm, Catch, Comprehension, copy_identifier, Expression, FunctionLiteral,
+  is_spread, MapEntry, MapLiteral, NamedValue, Parameter, Pass, Position, RecordLiteral,
+  spread_of_value, Statement, Try, TupleLiteral
 from '../ast'
 import CLOSING_BRACKETS, OPENING_BRACKETS, TokenKind from '../lexer/tokens'
 import at_block from './block_literal'
+import at_prefix, parse_comprehension, parse_prefix_comprehension from './comprehension'
 import
-  at_destructuring_names, at_spread, destructured_holder, LoopHeader, parse_destructuring_names,
-  parse_expression, parse_identifier, parse_loop_header, parse_or, SPREAD_FOLLOWERS,
-  take_apart_held, take_apart_item
+  at_destructuring_names, at_spread, destructured_holder, parse_destructuring_names,
+  parse_expression, parse_identifier, parse_or, SPREAD_FOLLOWERS, take_apart_held
 from './expression'
 import
   at_declaration, names_closing_offset, parse_block, parse_line_statement, parse_simple_statement
 from './statement'
-import FunctionMarks, TokenStream from './token_stream'
+import TokenStream from './token_stream'
 import parse_result_annotation, parse_type_annotation, parse_type_parameters from './type'
 
 # `(` starts a function literal when it opens typed parameters, `(a: Int` or `({ a }: T`, or when
@@ -168,195 +167,6 @@ export parse_parenthesized := (tokens: TokenStream, position: Position) ->
     first.position = position
     first
   tokens.inside(parse_contents)
-
-# `for x in xs when guard]`, after the element, or `... guard)` for an Iter. Each further `for`
-# nests a comprehension in the element of the one before.
-parse_comprehension := (
-  tokens: TokenStream, element: Expression, position: Position, close: TokenKind
-): Expression ->
-  headers := [parse_loop_header(tokens)]
-  tokens.continue_line_before 'for'
-  while tokens.peek().kind == 'for'
-    headers.push parse_loop_header(tokens)
-    tokens.continue_line_before 'for'
-  tokens.expect_close close
-  is_lazy := close == ')'
-  if is_lazy and headers.length > 1
-    tokens.fail headers[1].variable.position, 'an Iter comprehension takes one `for` so far'
-  var nested = element
-  for header at i in headers.reversed()
-    outermost := i == headers.length - 1
-    at := outermost then position else header.variable.position
-    nested = comprehension_of(tokens, header, nested, at, is_lazy, not outermost)
-  nested
-
-comprehension_of := (
-  tokens: TokenStream
-  header: LoopHeader
-  element: Expression
-  position: Position
-  is_lazy: Bool
-  nested: Bool
-  prefix = false
-) ->
-  { variable, index, iterable, guard } := header
-
-  # Each place that reads the parts declares them anew, as each is its own function or scope.
-  bindings := -> take_apart_item(header)
-  lazy :=
-    if is_lazy
-      lazy_functions element, variable, index, guard, bindings
-    else
-      nil
-
-  Comprehension(
-    element
-    variable
-    iterable
-    guard
-    lazy
-    position
-    index
-    nested
-    prefix
-    bindings: bindings()
-  )
-
-# A comprehension written with its `for` first: `for x in xs when guard` and a block below it, whose
-# last value is the element. The block may hold statements before it, `continue`, which takes no
-# element, and `break`, which ends the comprehension; its last statement may be a `for` of its own,
-# whose elements it takes as its own (see nested). In parentheses, it is an Iter: that of one on a
-# line where its block is one value, and otherwise a function that yields (see prefix_iter).
-parse_prefix_comprehension := (
-  tokens: TokenStream, position: Position, close: TokenKind
-): Expression ->
-  header := parse_loop_header(tokens)
-  if close == ')'
-    parsed := tokens.in_function(-> parse_block(tokens))
-    tokens.expect_close close
-    check_iter_marks tokens, parsed.marks, position
-    { body } := parsed
-    if body.length == 1 and body[0] is not For | Jump
-      if element := body[0] as Expression?
-        return comprehension_of(tokens, header, element, position, true, false, true)
-    return prefix_iter(tokens, header, body, position)
-  body := parse_block(tokens)
-  tokens.expect_close close
-  { variable, index, iterable, guard } := header
-  (statements, element) := element_of(tokens, body)
-  Comprehension(
-    element
-    variable
-    iterable
-    guard
-    position
-    index
-    lazy: nil
-    bindings: take_apart_item(header)
-    prefix: true
-    body: statements
-  )
-
-# Its `for` starts the line after the opening bracket at `position`, as the block below it would
-# otherwise look as if it went with the bracket's line.
-at_prefix := (tokens: TokenStream, position: Position) ->
-  token := tokens.peek()
-  return false if token.kind != 'for'
-  tokens.fail token.position(), PREFIX_LINE if token.line == position.line
-  true
-
-PREFIX_LINE := 'a comprehension with its `for` first starts it on the line after the bracket'
-
-# The statements of the block before its element, and the element: its last value, or the
-# comprehension that a `for` ending it makes, nested in this one.
-element_of := (tokens: TokenStream, block: Statement[]): (Statement[], Expression) ->
-  statements := block.all_but_last()
-  last := block.last()!
-  if inner := last as For?
-    (inner_statements, inner_element) := element_of(tokens, inner.body)
-    nested := Comprehension
-      element: inner_element
-      variable: inner.variable
-      iterable: inner.iterable
-      guard: nil
-      lazy: nil
-      position: inner.position
-      index: inner.index
-      nested: true
-      prefix: true
-      body: inner_statements
-    return (statements, nested)
-  element := last as Expression else tokens.fail(last.position, ENDS_WITH_ELEMENT)
-  (statements, element)
-
-ENDS_WITH_ELEMENT := 'the block of a comprehension ends with its element, a value'
-
-# What the block of an Iter comprehension written with its `for` first cannot hold: a `return`,
-# whose loop it would not leave but end, a `yield` or an `await`.
-check_iter_marks := (tokens: TokenStream, marks: FunctionMarks, position: Position) ->
-  tokens.fail at, 'an Iter comprehension cannot return; `break` ends it' if at := marks.return_at
-  if marks.yields
-    tokens.fail position, 'an Iter comprehension cannot yield; its elements are what it yields'
-  tokens.fail at, 'an Iter comprehension cannot await' if at := marks.await_at
-
-# The Iter of a comprehension written with its `for` first: a function that yields its elements,
-# called where it is with the value iterated, which is found there, as that of one on a line is.
-prefix_iter := (tokens: TokenStream, header: LoopHeader, block: Statement[], position: Position) ->
-  { variable, index, iterable, guard } := header
-  passed := passed_iterable(iterable, position)
-  yielded := yielding_body(tokens, block)
-  guarded: Statement[] =
-    if guard
-      [If(condition: guard, then_body: yielded, else_body: [], position: guard.position)]
-    else
-      yielded
-  body := take_apart_item(header) + guarded
-  loop := For(variable, position, index, body, iterable: passed.iterable)
-  function := FunctionLiteral
-    position
-    body: [loop]
-    params: [
-      for name in passed.names
-        { name, type: nil, default: nil }
-    ]
-    type_params: []
-    yields: true
-    await_at: nil
-    weak: false
-  Call(position, callee: function, args: passed.values, named_args: [], type_args: [])
-
-# The value iterated as the function of an Iter comprehension finds it: by the names of its
-# parameters, given the values found where the comprehension is. A range is passed as its bounds
-# and its step, as it is no value of its own.
-struct PassedIterable
-  iterable: Expression
-  names: Identifier[]
-  values: Expression[]
-
-passed_iterable := (iterable: Expression, position: Position): PassedIterable ->
-  names: Identifier[]
-  values: Expression[]
-  pass := (value: Expression?): Expression? ->
-    given := value else return nil
-    name := "iterated.#{position.line}.#{position.column}.#{names.length}"
-    names.push Identifier(name, position: given.position)
-    values.push given
-    names.last()
-  passed :=
-    if range := iterable as Range?
-      Range(range..., start: pass(range.start), end: pass(range.end), step: pass(range.step))
-    else
-      pass(iterable)!
-  { names, values, iterable: passed }
-
-# The block with its element yielded, through the `for`s that end it.
-yielding_body := (tokens: TokenStream, block: Statement[]): Statement[] ->
-  statements := block.all_but_last()
-  last := block.last()!
-  if inner := last as For?
-    return [statements..., For(inner..., body: yielding_body(tokens, inner.body))]
-  element := last as Expression else tokens.fail(last.position, ENDS_WITH_ELEMENT)
-  [statements..., Yield(value: element, position: element.position, of_element: true)]
 
 export parse_map_literal := (tokens: TokenStream, position: Position) ->
   tokens.inside(-> parse_map_contents(tokens, position))
@@ -540,37 +350,3 @@ parse_inline_arm := (tokens: TokenStream) ->
   message := 'a declaration in an arm must be in an indented block'
   tokens.fail_here message if at_declaration(tokens)
   parse_line_statement(tokens)
-
-# The guard and the element of an Iter comprehension as functions of the loop variable (see
-# Comprehension). The guard's function tests its condition as an `if` would:
-# `guard then true else false`.
-lazy_functions := (
-  element: Expression, variable: Identifier, index: Identifier?, guard: Expression?,
-  bindings: () -> Statement[]
-) ->
-  function_of := (value: Expression) ->
-    params := [Parameter(copy_identifier(variable))]
-    if index
-      params.push Parameter(copy_identifier(index))
-    body := [bindings()..., value]
-    FunctionLiteral(
-      params
-      body
-      type_params: []
-      position: value.position
-      yields: false
-      await_at: nil
-      weak: false
-    )
-  guard_function :=
-    if guard
-      function_of as_test(guard)
-    else
-      nil
-  LazyFunctions(guard: guard_function, element: function_of(element), indexed: index != nil)
-
-as_test := (guard: Expression) ->
-  position := guard.position
-  then_value := BooleanLiteral(position, value: true)
-  else_value := BooleanLiteral(position, value: false)
-  Conditional(then_value, else_value, position, condition: guard)
