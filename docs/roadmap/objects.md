@@ -32,7 +32,6 @@ What is implemented, interfaces as bounds and as types of values, is in [the ref
 
 ## Open questions
 
-- Optional types nest only inside an instance of a generic function (see [optional type arguments](../reference/functions.md#optional-type-arguments)). Whether a caller should see them too, by a conversion at the call or by nesting at the surface: a result `T?[]`, a parameter `T?`, a function that gives `U?`, or a field `T?` of a generic class, which takes the type argument now. And whether an array or a map should hold them, in an item larger than 16 bytes.
 - Of generic bodies, checked at definition (see [generic functions](../reference/functions.md#generic-functions)):
   - whether an optional type argument stays allowed, which a type that the body writes may not take, as a `Set<T>`'s key;
   - whether a `Numeric` bound, under which a number literal is a `T`, is worth a new implicit conversion. It would also settle `sum` of [Iterables](../reference/types.md#iter), whose default `zero` of `0` is an error for a `String[]` now: `sum()` fails to compile where `sum('')` is needed.
