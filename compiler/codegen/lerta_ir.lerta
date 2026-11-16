@@ -8,8 +8,7 @@ import IrBuilder, IrModule from './ir_builder'
 import call_void_runtime from './runtime_calls'
 import scalar_of from './scalar'
 import
-  inner_of, is_kind, is_one_of_kinds, is_reference_type, kind_of, ObjectType, OptionalType, Type,
-  type_key
+  is_kind, is_one_of_kinds, is_reference_type, kind_of, ObjectType, OptionalType, Type, type_key
 from '../types'
 
 export LERTA_IMMORTAL := '-9223372036854775808'
@@ -19,7 +18,10 @@ export INTERFACE_IR_TYPE := '{ ptr, ptr }'
 # Whether nil of the optional type is a null pointer: that of a reference, or the data of an
 # interface value.
 export is_nil_by_null := (type: Type) ->
-  is_reference_type(type) or is_kind(inner_of(type), INTERFACE)
+  is_reference_type(type) or is_kind(without_nil(type), INTERFACE)
+
+# The type without nil, however many times it is optional (see OptionalType).
+without_nil := (type: Type): Type -> type is OptionalType then without_nil(type.inner) else type
 
 export ir_type := (type: Type): String ->
   # A reference is nil when null, and so is an interface value when its data is; a value carries a
@@ -188,7 +190,7 @@ export enum Ownership
 export ownership := (type: Type): Ownership ->
   case
     when is_reference_type(type) then REFERENCE
-    when is_kind(inner_of(type), INTERFACE) then INTERFACE
+    when is_kind(without_nil(type), INTERFACE) then INTERFACE
     else NONE
 
 # Reference counting of a value of the type: of the references it holds, if any.

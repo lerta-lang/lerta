@@ -37,6 +37,9 @@
   - the methods of the extends in effect at the call that satisfy the bounds;
   - in turn, those that satisfy the bounds of a generic method that satisfies a bound's member, an extend's or a class's or struct's own.
   - Instances of the same type arguments whose witnesses differ are told apart by a number after the name.
+- **Optional type arguments.** An instance's body sees an optional type argument as an opaque `OptionalType` (`opaque_bindings` in `compiler/checker/generics.lerta`), so that it checks as the definition does (see [the reference](../reference/functions.md#optional-type-arguments)):
+  - It is the same type as the plain one, of the same values, and equal to it, but `optional_type` of it nests rather than flattens.
+  - Its callers see `caller_type`: the instance's type with the type arguments as they gave them, in which the result made optional of one is the type argument; codegen flattens the result so (`emit_as_caller`).
 
 ### Checking a definition
 

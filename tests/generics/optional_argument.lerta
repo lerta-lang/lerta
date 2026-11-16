@@ -1,0 +1,119 @@
+# An optional type argument is a type parameter as the body sees it, so `T?` of it is optional
+# again: its nil is apart from a nil of the type argument. A result of `T?` gives the caller a `T`,
+# nil for either.
+memo := <T>(make: () -> T): (() -> T) ->
+  var cache: T?
+  ->
+    cache = make() if cache == nil
+    cache!
+
+var calls = 0
+nothing := memo((): Int? ->
+  calls += 1
+  nil
+)
+print nothing() else -1
+print nothing() else -1
+print calls
+no_name := memo((): String? ->
+  calls += 1
+  nil
+)
+print no_name() else '-'
+print no_name() else '-'
+print calls
+
+# Whether the body held a value, which may be nil.
+is_held := <T>(x: T): Bool ->
+  held: T? = x
+  held != nil
+
+print is_held<Int?>(nil)
+print is_held<String?>(nil)
+
+# The body of an instance calls another with its type argument made optional, three times
+# optional inside.
+boxed := <U>(u: U): U? -> u
+reboxed := <T>(x: T): Bool ->
+  held: T? = x
+  boxed(held) != nil
+
+print reboxed<Int?>(nil)
+print reboxed<String?>(nil)
+print reboxed<String?>('a')
+first_of := <T>(xs: T[]): T? -> xs.length > 0 then xs[0]
+names: String?[]
+print first_of(names) else '-'
+names.push nil
+print first_of(names) else '-'
+names[0] = 'ann'
+print first_of(names) else '-'
+
+# An interface value, which is nil by its data as a reference is, is so optional again too.
+interface Named
+  name: String
+
+struct Cat
+  name: String
+
+no_one: Named? = nil
+tom: Named? = Cat('tom')
+print is_held(no_one)
+print reboxed(no_one)
+print reboxed(tom)
+
+# One instance serves a call inside a body, whose type argument is opaque, and one outside, whose
+# is not: each sees the result as its own type arguments make it.
+inside := <T>(x: T): Bool -> boxed(x) != nil
+print inside<Int?>(nil)
+outside: Int? = nil
+print boxed(outside) != nil
+
+# A map, an Iter and a generic struct inside the body hold the type argument as they would any.
+kept := <T>(x: T): String ->
+  values: Map<Int, T>
+  values[0] = x
+  held: T? = x
+  from_iter := [1].iter().map((_) -> held)
+  "#{values[0] != nil} #{values[1] != nil} #{from_iter.next() != nil} #{Shelf(held).item != nil}"
+
+struct Shelf<T>
+  item: T
+
+print kept<Int?>(nil)
+print kept<String?>(nil)
+
+# A call that gives one type argument opaque and another plain, of the same type, flattens the
+# result made optional of the plain one alone.
+pair := <A, B>(a: A, b: B): A? -> a
+paired := <T>(x: T): Bool ->
+  y: Int? = nil
+  pair(x, y) != nil
+
+print paired<Int?>(nil)
+
+# So too when the call inside the body is checked first, as one whose return type is inferred is
+# at its own call, and makes the instance that the call outside then shares.
+boxed_again := <U>(u: U): U? -> u
+inside_first := <T>(x: T) -> boxed_again(x) != nil
+print inside_first<Int?>(nil)
+print boxed_again(outside) != nil
+
+# An instance taken as a function value gives its result as the caller's type too.
+boxed_value: (String?) -> String? = boxed
+print boxed_value(nil) else '-'
+print boxed_value('b') else '-'
+maybe_ints: Int?[] = [nil, 2]
+print [x else -1 for x in maybe_ints.map(boxed).to_array()]
+
+# The nil inside a reference optional again reads back as the type argument's nil.
+unwrapped := <T: Equatable>(x: T): String ->
+  held: T? = x
+  var bound = 'unbound'
+  if v := held
+    bound = v == x then 'bound' else 'other'
+  fallback := held else x
+  "#{bound} #{fallback == x} #{held! == x}"
+
+print unwrapped<String?>(nil)
+print unwrapped<String?>('c')

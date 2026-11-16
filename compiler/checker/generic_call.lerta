@@ -10,7 +10,7 @@ import members_for from './interfaces'
 import extension_methods, parts_method from './parts'
 import ExtensionSource, find_method, MethodSource, OwnMethod from './methods'
 import
-  bindings, check_defaults, generic_of, GenericFunction, GenericRef, Instance, instantiate
+  bindings, caller_type, check_defaults, generic_of, GenericFunction, GenericRef, instantiate
 from './generics'
 import is_struct_type from './functions'
 import reject_unsatisfied from './satisfaction'
@@ -18,11 +18,11 @@ import Body, InstanceLink, ProgramWide from './shared'
 import infer_type_arguments, receiver_type_arguments, TypeBinding from './type_argument_inference'
 import infer, substitute, type_parameter_names from './type_patterns'
 import reject_invalid_type from './type_validity'
-import FunctionType, inner_of, InterfaceType, RecordType, Type, type_key from '../types'
+import inner_of, InterfaceType, RecordType, Type, type_key from '../types'
 
 # The result of a call of a generic function.
 export type_of_generic_call := (body: Body, call: Call, generic: GenericRef, expected: Type?) ->
-  function_type(instance_of_call(body, call, generic, expected, nil)).result
+  type_of_instance_call(body, call, generic, expected, nil).result
 
 # The type of the generic method that the call's callee names, a function type without the
 # receiver.
@@ -30,7 +30,7 @@ export type_of_generic_method_call := (
   body: Body, call: Call, member: Member, generic: GenericRef, receiver: Type, expected: Type?
 ) ->
   binding := TypeBinding(type: receiver, at: member.object.position)
-  function_type(instance_of_call(body, call, generic, expected, binding))
+  type_of_instance_call(body, call, generic, expected, binding)
 
 # The instance of a generic method that the receiver gives all the type arguments of, if it does;
 # `call`, if given, calls it.
@@ -46,8 +46,18 @@ export receiver_instance := (
     body.facts.instances[call] = InstanceLink(instance)
   instance
 
-# Each argument typed alone must fit its parameter once the type arguments are known.
-instance_of_call := (
+# The type of the instance of a generic method that the receiver gives all the type arguments of,
+# as the caller sees it (see caller_type), if it does; `call`, if given, calls it.
+export type_of_receiver_instance := (
+  body: Body, generic: GenericRef, receiver: Type, at: Position, call: Call?
+) ->
+  instance := receiver_instance(body, generic, receiver, at, call) else return nil
+  type_arguments := receiver_type_arguments(body, generic_of(body.program, generic), receiver, at)!
+  caller_type(body.program, instance, type_arguments, at)
+
+# The type of the call's instance as the call sees it. Each argument typed alone must fit its
+# parameter once the type arguments are known.
+type_of_instance_call := (
   body: Body, call: Call, ref: GenericRef, expected: Type?, receiver: TypeBinding?
 ) ->
   program := body.program
@@ -69,7 +79,7 @@ instance_of_call := (
   type_arguments := type_arguments_of(body, call, generic, inference.bindings)
   reject_invalid_signature body, generic, type_arguments, call.position
   instance := instantiate_here(body, ref, type_arguments, call.position)
-  type := function_type(instance)
+  type := caller_type(program, instance, type_arguments, call.position)
   for each in inference.inferred
     require_type body, each.arg, each.type, type.params[each.index]
   body.facts.instances[call] = InstanceLink(instance)
@@ -78,7 +88,7 @@ instance_of_call := (
   if passed.length < generic.params.length
     check_defaults program, generic, instance, call.position
 
-  instance
+  type
 
 # The argument gathered as for any call, but not into a struct whose type names a type parameter,
 # which instances may differ in.
@@ -175,8 +185,6 @@ reject_unsatisfied_bounds := (
     if bound := generic.bounds[i]
       bound_type := substitute(bound, type_bindings) as InterfaceType!
       reject_unsatisfied body, types[i], bound_type, places[i]
-
-function_type := (instance: Instance) -> instance.entry.type as FunctionType!
 
 reject_invalid_signature := (
   body: Body, generic: GenericFunction, type_arguments: Type[], at: Position

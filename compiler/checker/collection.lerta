@@ -21,13 +21,20 @@ import
 from '../types'
 
 # The type of the values of a container, such as 'an Iter', which `at` gives: any type with
-# values.
+# values. An array or a map holds an optional value in an item of 16 bytes, which a value optional
+# again (see OptionalType) does not fit.
 export check_value_type := (program: ProgramWide, type: Type, at: Position, container: String) ->
   if is_kind(type, 'nil')
     message := "nil alone does not give the type of #{container}; write it in an annotation"
     fail program, at, message
   if is_one_of_kinds(type, ['void', 'never'])
     fail program, at, "#{container} cannot hold values of type #{format_type(type)}"
+  if type is OptionalType and type.inner is OptionalType and container in ['an array', 'a map']
+    inner := format_type(type.inner)
+    fail
+      program
+      at
+      "#{container} cannot hold an optional type argument #{inner} made optional again"
   type
 
 # A key is any value that `==` compares but an optional one, since a missing key reads as nil, and
@@ -48,13 +55,10 @@ export check_map_types := (
   program: ProgramWide, key: Type, value: Type, key_at: Position, value_at: Position
 ) ->
   reject_map_key program, key, key_at
-  check_map_value program, value, value_at
+  check_map_value(program, value, value_at)
 
-# A map's value is not optional, since a missing key reads as nil.
 export check_map_value := (program: ProgramWide, value: Type, at: Position) ->
-  check_value_type program, value, at, 'a map'
-  if value is OptionalType
-    fail program, at, "a map cannot hold values of type #{format_type(value)}"
+  check_value_type(program, value, at, 'a map')
 
 # The element type comes from the expected type if there is one, so that `[[], [1]]` can be
 # typed; otherwise as docs/reference/types.md#array states.

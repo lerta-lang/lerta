@@ -509,7 +509,7 @@ print xs[0] + xs.length
 | `xs.iter()` | An [`Iter`](#iter) of the items. |
 
 - `contains`, `index_of` and `remove` take items that `==` compares; other items are an error.
-- `first`, `last` and `get` do not exist for an array of optional items, since their nil would be ambiguous.
+- Of an array of optional items, `first`, `last` and `get` give nil for a nil item as for none (see [optional type arguments](functions.md#optional-type-arguments)): `is_empty` and `length` tell them apart.
 - An array also has the lazy methods `map`, `filter`, `take` and `take_while`, and the other methods of an Iterable (see [Iter](#iter)).
 
 ## Map
@@ -523,7 +523,7 @@ print ages['ann'] else 0
 
 - `Map<K, V>` maps keys of type `K` to values of type `V`. Like arrays, maps are mutable and shared.
 - `K` is any type of values that `==` compares, but not an optional one: classes by identity; structs, anonymous structs, tuples and arrays by their contents; a class or struct with its own equality, only with its own `hash` (see [equality](objects.md#equality-and-order)). Maps and sets compare but are not keys, as they hash by no order.
-- `V` is any type with values, but not an optional one.
+- `V` is any type with values. Of an optional `V`, `m[k]` is nil for a nil value as for a missing key, which `k in m` tells apart.
 
 ### Construction
 
@@ -660,7 +660,7 @@ These methods of an Iterable go through its items and give a result:
 | `xs.to_array()` | The items as an array, of a `T` an array can hold. |
 
 - `any`, `all`, `find`, `find_index` and `find_map` stop reading at the first item that decides the result; `f` of the first four gives a `Bool`.
-- `find`, `min`, `max`, `min_by` and `max_by` give a `T?`, so for items of an optional type they are an error (see [optional values](#optional-values)). The last four give the first of equal items, and nil for no items.
+- `find`, `min`, `max`, `min_by` and `max_by` give a `T?`, so for items of an optional type, nil for a nil item as for none (see [optional type arguments](functions.md#optional-type-arguments)). The last four give the first of equal items, and nil for no items.
 - `sum` takes items whose `+` gives their own type ([`Add<T, T>`](builtins.md#operators)): `[1, 2, 3].sum()` is 6, `[0.5, 1.0].sum()` 1.5. Items of other types give their zero, as 0 is none of theirs: `['a', 'b'].sum('')` (see [defaults](functions.md)). It throws as `+` does, so `integer overflow` for a sum beyond its type.
 - `count` counts as `for` goes through the items:
   - of a `String`, its `Char`s, which no `length` gives: `'héllo'.count()` is 5. These are code points, not what a reader takes for one character: `'e\u{301}'.count()` is 2.

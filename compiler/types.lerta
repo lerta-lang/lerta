@@ -114,9 +114,20 @@ export format_enum_member := (member: EnumMember) ->
 export struct UnionType
   members: Type[]
 
-# `T?`: a T or nil.
+# `T?`: a T or nil. One that is opaque is an optional type argument, which the body of an instance
+# sees as its type parameter, a type that is not optional, as the body's check at its definition
+# does: so `T?` of it is optional again, its nil apart from the type argument's (see
+# docs/internals/compiler.md#generics).
 export struct OptionalType
   inner: Type
+
+  # The type parameter it is the type argument of, as `parameter_key` in checker generics names it.
+  opaque: String?
+
+  # An opaque type is the same type as a plain one, of values alike; it only says how `T?` of it is
+  # made, which the body of an instance sees as the body checked at its definition does.
+  equals := (other: OptionalType) -> @inner == other.inner
+  hash := (): Int -> @inner.hash()
 
 # A type parameter of a generic function, `T` in `<T>(x: T) -> x`, in the types of its parameters
 # before the type arguments replace it (see GenericFunction). One that stands for itself, as where
@@ -213,9 +224,12 @@ export is_iterable := (type: Type?) -> type is ArrayType | IterType | MapType
 
 export record_type := (fields: RecordField[]) -> RecordType(fields.sorted_by(RecordField.name))
 
-# `T?` of a T that may be nil already, as a type argument may be, is T.
+# `T?` of a T that may be nil already is T, but of an opaque one (see OptionalType).
 export optional_type := (inner: Type): Type ->
-  inner is OptionalType then inner else OptionalType(inner)
+  if inner is OptionalType and inner.opaque == nil
+    inner
+  else
+    OptionalType(inner)
 
 # The members are kept in the order of their keys, so that `A | B` and `B | A` are the same type.
 export union_type := (members: Type[]) -> UnionType(members.sorted_by(type_key))

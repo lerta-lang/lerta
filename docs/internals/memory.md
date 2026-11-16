@@ -20,6 +20,7 @@
 
 - nil is a null pointer for an optional reference.
 - For an optional `Int`, `Float`, `Byte`, `Bool` or enum value, it is `{ i1, T }` with a false flag. `T` is then unspecified, so it is read only where the flag is set.
+- An optional type argument made optional again (see [compiler](compiler.md#generics)) nests these: `{ i1, { i1, T } }` for a value. For a reference, or the data of an interface value, null is the outer nil, and the immortal objects `@lerta.nil.<n>`, which each module defines alike for the linker to keep one of, are the nils inside, the first for that of the type made optional again, and so on (`nil_objects` in `compiler/codegen/optional.lerta`). So it stays one pointer, retained and released as a reference is.
 
 ## Weak references
 

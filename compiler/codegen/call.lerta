@@ -42,7 +42,7 @@ from './lerta_ir'
 import generate_inlined_method, inlined_method from './inlined_methods'
 import emit_map_new, emit_map_set, emit_set_add from './map'
 import apply_operator_method from './operator'
-import nil_constant from './optional'
+import emit_as_caller, nil_constant from './optional'
 import emit_runtime_call, emit_valueless_call from './runtime_calls'
 import ArrayType, EnumType, is_set, MapType, ObjectType, TupleType, Type from '../types'
 
@@ -56,7 +56,9 @@ export generate_call := (g: Generator, call: Call): String ->
     return generate_member_call(g, call, callee)
   if instance := g.facts.instances[call]?.instance
     symbol := instance_symbol(g.code.program, instance)
-    return call_function(g, symbol, instance.entry.type!, arguments_of(g.facts, call), nil)
+    own := instance.entry.type!
+    result := call_function(g, symbol, own, arguments_of(g.facts, call), nil)
+    return emit_as_caller(g.ir, result, function_type_of(own).result, type_of(g, call))
   if callee is Identifier
     return generate_named_call(g, call, callee)
   call_closure(g, callee, arguments_of(g.facts, call))
@@ -300,7 +302,9 @@ call_written_method := (
   g: Generator, symbol: String, object: String, object_type: Type, call: MethodCall
 ) ->
   receiver := "#{ir_type(object_type)} #{object}"
-  emit_function_call(g, symbol, call.type, call.args, receiver)
+  own := call.instance?.entry.type else call.type
+  result := emit_function_call(g, symbol, own, call.args, receiver)
+  emit_as_caller(g.ir, result, function_type_of(own).result, function_type_of(call.type).result)
 
 # The symbol of a method written in Lerta: of a class or struct, or of an extend; or of the
 # instance of a generic method that the call calls.

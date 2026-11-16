@@ -311,8 +311,26 @@ Type arguments are inferred from the arguments, matched against the parameters' 
 - `nil`, a `throw` and similar values give no type. A type argument that nothing gives must be written.
 - Written type arguments come between the name and the parentheses, which are then required: `empty<String>()`, or for a [generic method](objects.md#generic-methods) its own, `xs.map<String>(...)`.
   - The first ones may be written alone, and the others are inferred: `decode<Config>(reader)` of `decode<T, D>(decoder: D)` takes `D` from `reader`.
-- The types that the type arguments make in the parameters and the result must be valid where the call is. `T[]` with `T = Int?`, an array that cannot hold its items, or `Map<K, V>` with a key type that a [map](types.md#map) cannot have, is an error at the call.
+- The types that the type arguments make in the parameters and the result must be valid where the call is. `Set<T>` with `T = Int?`, a set that cannot hold its items, or `Map<K, V>` with a key type that a [map](types.md#map) cannot have, is an error at the call.
 - A type parameter cannot stand for a union member so far.
+
+### Optional type arguments
+
+```lerta
+memo := <T>(make: () -> T): (() -> T) ->
+  var cache: T?
+  ->
+    cache = make() if cache == nil
+    cache!
+
+find_user := memo((): String? -> nil)
+```
+
+- The body sees an optional type argument, `T = String?`, as the type parameter it is checked with at its definition, a type that is not optional. So `T?` there is optional again, and its nil is apart from a nil of the type argument: `cache == nil` above holds until `make` has run, whatever it gave.
+- A result of type `T?` gives the caller a `T`, nil for either nil: `[nil, 'a'].first()` is nil, as is `[].first()`.
+- The caller sees no other type that holds `T?` of an optional type argument: a result `(T?, Int)`, a parameter `T?`, or a function that gives `U?` with `U = Int?` is an error at the call, `Int? cannot be optional again: its nil would be ambiguous`.
+- In the body, an array or a map cannot hold one, `an array cannot hold an optional type argument Int? made optional again`, as its item would not fit.
+- A generic class or struct sees an optional type argument as it is, so its `T?` is the type argument.
 
 ### Checking at the definition
 

@@ -10,9 +10,9 @@ import bound_interface from './interfaces'
 import NodeFacts, ProgramWide, Shared from './shared'
 import has_type, module_resolver, resolve_result, Resolver, with_type_parameters from './type_names'
 import
-  has_standing, placeholders, substitute, substitute_standing, type_depth
+  has_standing, map_parts, placeholders, substitute, substitute_standing, type_depth
 from './type_patterns'
-import format_type, InterfaceType, Type, type_key from '../types'
+import format_type, FunctionType, InterfaceType, OptionalType, Type, type_key from '../types'
 
 # How a generic function is referred to: by its module and its place in the module's generics.
 export struct GenericRef
@@ -230,7 +230,7 @@ new_instance := (
   variant: Int, at: Position
 ) ->
   generic := generic_of(program, ref)
-  type_bindings := bindings(generic, type_arguments)
+  type_bindings := opaque_bindings(ref, bindings(generic, type_arguments))
   resolver := with_type_parameters(module_resolver(generic.module_index), type_bindings)
   receiver := generic.receiver
   this_type :=
@@ -243,6 +243,57 @@ new_instance := (
   instance := Instance(entry, type_arguments, methods, extensions, resolver, variant, generic: ref)
   entry.type = resolve_annotation(program, generic, instance, at)
   instance
+
+# The type arguments as the body of an instance sees them: an optional one opaque (see
+# OptionalType).
+opaque_bindings := (ref: GenericRef, type_bindings: Map<String, Type>) ->
+  opaque_types: Map<String, Type>
+  for (name, type) in type_bindings
+    opaque_types[name] = opaque(type, parameter_key(ref, name))
+  opaque_types
+
+# Names the type parameter of the generic among those of every generic, as an opaque type argument
+# tells which it is of.
+parameter_key := (ref: GenericRef, name: String) -> "#{ref.module_index}.#{ref.index}.#{name}"
+
+is_plain_optional := (type: Type) -> type is OptionalType and type.opaque == nil
+
+# One opaque already, as the body of another instance gives it, is opaque by this parameter too, so
+# that the instance, which calls that give it plain share, is alike whichever call made it.
+opaque := (type: Type, key: String): Type ->
+  return type unless type is OptionalType
+  optional := type
+  OptionalType(optional..., opaque: key)
+
+# The instance's type as a call at `at` sees it, with the type arguments as the call gives them, as
+# an instance is shared by calls that give an opaque type argument and calls that give it plain: the
+# result made optional of an optional one, which the body tells apart from nil of the type argument,
+# is the type argument, whose nil is either. That holds of the result alone, which codegen converts
+# (see docs/internals/compiler.md#generics); a type elsewhere that holds one is an error.
+export caller_type := (
+  program: ProgramWide, instance: Instance, type_arguments: Type[], at: Position
+) ->
+  # The type arguments that the call gives plain, by the keys of their parameters.
+  given: Map<String, Type>
+  generic := generic_of(program, instance.generic)
+  for (name, type) in bindings(generic, type_arguments)
+    if is_plain_optional(type)
+      given[parameter_key(instance.generic, name)] = type
+  original := (type: Type) ->
+    return nil unless type is OptionalType
+    key := type.opaque else return nil
+    given[key]
+  inside := (part: Type): Type ->
+    return found if found := original(part)
+    if part is OptionalType and original(part.inner) != nil
+      message := "#{format_type(part.inner)} cannot be optional again: its nil would be ambiguous"
+      fail program, at, message
+    map_parts(part, inside)
+  type := instance.entry.type as FunctionType!
+  result := type.result
+  made_optional := result is OptionalType then original(result.inner)
+  params := [inside(param) for param in type.params]
+  FunctionType(params, result: made_optional else inside(result))
 
 # Checks the instances left unchecked; returns whether there were any.
 export check_pending := (program: ProgramWide, generic: GenericFunction) ->

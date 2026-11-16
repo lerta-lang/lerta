@@ -8,10 +8,11 @@ import item_functions from './equality'
 import emit_float_word from './float'
 import emit_values, fixed from './heap_object'
 import emit_branch, IrBuilder from './ir_builder'
+import emit_wrap, nil_constant from './optional'
 import
   define_kind, emit_end_unless, emit_give, emit_iter, IterKind, load_state
 from './iter_protocol'
-import emit_release_value, emit_retain_value, ir_type, is_nil_by_null from './lerta_ir'
+import emit_release_value, emit_retain_value, ir_type from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import
   is_float, is_identity_type, is_number, is_one_of_kinds, MapType, optional_type, TupleType, Type,
@@ -72,17 +73,21 @@ export emit_place := (ir: IrBuilder, map: String, key: String, type: MapType) ->
   args := "ptr #{map}, i64 #{key_word(ir, key, type.key)}"
   call_runtime(ir, 'ptr @lerta_map_place(ptr, i64)', args)
 
-# The value as a V?, owned; a missing reference, or interface value, reads as zeros, which are
-# nil.
+# The value as a V?, owned. A missing key reads as zeros, which are nil of an optional V, so that
+# it reads as a nil value does, but for an opaque V (see OptionalType), whose own nil is apart.
 export emit_map_get := (ir: IrBuilder, map: String, key: String, type: MapType) ->
   place := emit_find(ir, map, key, type)
   found := ir.is_not_null(place)
   value := emit_held_at(ir, place, found, type)
   optional := optional_type(type.value)
-  return value if is_nil_by_null(optional)
-  optional_ir := ir_type(optional)
-  flagged := ir.assign("insertvalue #{optional_ir} undef, i1 #{found}, 0")
-  ir.assign("insertvalue #{optional_ir} #{flagged}, #{ir_type(type.value)} #{value}, 1")
+  return value if optional == type.value
+  emit_branch(
+    ir
+    ir_type(optional)
+    found
+    -> emit_wrap(ir, value, type.value)
+    nil_constant(optional)
+  )
 
 # The value at the place that emit_find gave, owned, where `found` tells that it gave one; zeros
 # elsewhere.
