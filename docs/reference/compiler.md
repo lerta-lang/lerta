@@ -320,6 +320,7 @@ The rewrites below depend on the checking of a program that holds the file.
 | [Ranges written with fewer parts](#ranges-written-with-fewer-parts) | [Ranges](style.md#ranges) |
 | [Emptiness tests written with `is_empty`](#emptiness-tests-written-with-is_empty) | [Emptiness tests](style.md#emptiness-tests) |
 | [Arms of one body](#arms-of-one-body) | [Shared arm bodies](style.md#shared-arm-bodies) |
+| [Cases of types written with `is`](#cases-of-types-written-with-is) | [Union cases](style.md#union-cases) |
 | [Copies written as spreads](#copies-written-as-spreads) | [Spreads](style.md#spreads) |
 | [Casts left out](#casts-left-out) | [Redundant casts](style.md#redundant-casts) |
 | [Unused names left out](#unused-names-left-out) | [Unused names](style.md#unused-names) |
@@ -465,6 +466,12 @@ Besides:
   - a path of fields from `@`, which a method may read through;
   - any other subject but a call, or a path of fields from one.
 - Not an arm of `nil`, nor arms with a comment from the line where the first starts, which the arm kept could not hold where it is.
+
+#### Cases of types written with `is`
+
+- It writes a `case` of types with one arm that gives `true` and an `else` that gives `false`, `case x` / `when A, B then true` / `else false`, as `x is A | B`, and one that gives them the other way round as `x is not A | B`.
+- Only a `case` that is a statement or the whole value of one, as `y := case x`, whose subject is a name, a path of fields, a call or an index, and whose patterns are on the line of `when`. One whose arms each return is first written as a `return` of it (see [Branches](style.md#branches)).
+- Not an arm of `nil`, nor a `case` that holds a comment, which the test could not hold; that is only reported.
 
 #### Copies written as spreads
 
