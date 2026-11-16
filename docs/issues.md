@@ -37,9 +37,3 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - Where: `type_of_literal_call` in `compiler/checker/expression.lerta` types the arguments of a function literal called where it is written without the type expected of the call.
 - How to see it: `x: Float = ((n) -> n)(1)` reports `expected Float, got Int`, where `x: Float = 1` checks.
 - How to fix it: pass the type expected to the literal as its result, and through it to the arguments that its parameters return.
-
-## A comprehension with its for first keeps the spacing it is written with
-
-- Where: the walk of `compiler/format/walk_expressions.lerta` lays out a comprehension with its `for` first as it is written, and the rewrite that writes one so (see [Comprehensions](reference/style.md#comprehensions)) takes the text of its parts as they are.
-- How to see it: `lerta fmt --fix` writes `[x for x in xs  when x > n + 1]` with its `for` first as `for x in xs  when x > n + 1`, two spaces before `when` (see `tests/format/range_tests`).
-- How to fix it: lay out the header and the block of a comprehension with its `for` first as those of a `for` statement.

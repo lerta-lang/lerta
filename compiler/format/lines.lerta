@@ -13,8 +13,8 @@ from './rules'
 import Change, Edit from './edits'
 import
   ArmShape, ArmsShape, BlockShape, BodyShape, CallShape, ChainShape, Closer, CodeGap,
-  ComprehensionShape, ImportShape, LineStart, ListShape, OperationShape, PostfixShape, Shape,
-  Spaces, StatementShape, UnionShape, ValueKind, ValueShape
+  ComprehensionShape, ForFirstShape, ImportShape, LineStart, ListShape, OperationShape,
+  PostfixShape, Shape, Spaces, StatementShape, UnionShape, ValueKind, ValueShape
 from './shapes'
 import literal_lines, SourceTokens from './text'
 import Tokens from './tokens'
@@ -193,6 +193,9 @@ export class Breaker
           when PostfixShape then add_shapes(shape.body.shapes + shape.shapes) if shape.postfix
           when BodyShape then add_body(shape)
           when BlockShape then add_block(shape)
+          when ForFirstShape
+            add_shapes shape.shapes
+            add_block shape.block
           when ArmsShape
             continue unless on_decided_line(shape.head)
             for arm in shape.arms
@@ -225,6 +228,9 @@ export class Breaker
           when CallShape then @prepare(shape.shapes)
           when ImportShape then @undecided.add(shape.names.items[0])
           when PostfixShape then @prepare(shape.body.shapes + shape.shapes) if shape.postfix
+          when ForFirstShape
+            @gaps[shape.head] = LineStart(0)
+            @prepare shape.shapes
           when BodyShape then @prepare_body(shape)
           when ArmsShape
             for arm in shape.arms
@@ -272,6 +278,7 @@ export class Breaker
           when PostfixShape then @postfix(shape)
           when ImportShape then @import_names(shape)
           when ComprehensionShape then @comprehension(shape)
+          when ForFirstShape then @for_first(shape)
           when UnionShape then @union(shape)
           else pass
 
@@ -673,6 +680,15 @@ export class Breaker
       if body.joinable
         @gaps[body.block.statements[0].start] = LineStart(depth, rule: body.rule)
       @close body.head, depth - 1, body.rule
+
+    # The header one deeper than the line of the opening bracket, the block below it, and the
+    # closing bracket back at that line's depth.
+    for_first := (shape: ForFirstShape) ->
+      depth := @line_depth(shape.open) + 1
+      @gaps[shape.head] = LineStart(depth)
+      @decide shape.shapes
+      @block shape.block, depth + 1
+      @close shape.head, depth - 1, LAYOUT
 
     nested_block := (block: BlockShape) ->
       head := block.head else return

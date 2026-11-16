@@ -159,7 +159,7 @@ A list is parameters, arguments, an index, the items of an array or a map, the n
 ### Calls without parentheses
 
 - Call a function or a method without parentheses at the start of a statement on a line of its own whose value is dropped (`write_group writer, item, indent`, `xs.push x`), wherever the language allows it (see [calls](syntax.md#calls)).
-- Keep them on a call whose value is the result of its function: the last statement of the body, or of an arm of one that is (`parse(text)`), but not of a function of no value, which drops it. So a call without them never gives a value that is used. In a program that does not check, whose results are not known, `lerta fmt` keeps them as written on a call where a result may be, and takes them off the others at the start of a statement, which give no result.
+- Keep them on a call whose value is the result of its function: the last statement of the body, or of an arm of one that is (`parse(text)`), but not of a function of no value, which drops it. Keep them too on the element of a comprehension with its `for` first, the last value of its block, or of an arm of one that is, which is a value. So a call without them never gives a value that is used. In a program that does not check, whose results are not known, `lerta fmt` keeps them as written on a call where a result may be, and takes them off the others at the start of a statement, which give no result.
 - On the line of an arm or of a function literal, keep the parentheses (`when Call then generate_call(g, expression)`, `-> Group(fields)`).
 
 ### Shorthand
