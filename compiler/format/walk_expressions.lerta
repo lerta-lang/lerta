@@ -1,11 +1,10 @@
 # The walk of expressions (see walk.lerta).
 import
-  ArrayLiteral, ArrayTypeName, Await, BinaryOperation, Binding, BooleanLiteral, Call, Case, Cast,
-  Coalesce, Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, FunctionTypeName,
-  Identifier, If, Index, IntegerLiteral, Interpolation, is_nested, IsTest, Jump, MapLiteral, Member,
-  NamedType, NamedValue, NilLiteral, Parameter, Range, RecordLiteral, RecordTypeField,
-  RecordTypeName, Return, Statement, StringLiteral, This, Throw, Try, TupleLiteral, TupleTypeName,
-  TypeName, UnaryOperation, UnionTypeName, Unwrap, Yield
+  ArrayLiteral, Await, BinaryOperation, Binding, BooleanLiteral, Call, Case, Cast, Coalesce,
+  Comprehension, Conditional, Expression, FloatLiteral, FunctionLiteral, Identifier, If, Index,
+  IntegerLiteral, Interpolation, IsTest, Jump, MapLiteral, Member, NamedValue, NilLiteral,
+  Parameter, Range, RecordLiteral, Return, Statement, StringLiteral, This, Throw, Try, TupleLiteral,
+  TupleTypeName, TypeName, UnaryOperation, Unwrap, Yield
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import FUNCTION_BODIES from './rules'
@@ -14,14 +13,12 @@ import
   literal_under_members, starts_command
 from './forms'
 import binary_precedence, COMPARISON from './precedence'
-import
-  ChainShape, CodeGap, ComprehensionShape, ForFirstShape, LineStart, ListShape, OperationShape,
-  Shape, ValueKind, ValueShape
-from './shapes'
+import ChainShape, CodeGap, ListShape, OperationShape, Shape, ValueKind, ValueShape from './shapes'
 import INSIDE, NONE, ONE, unhandled, Walker from './walk'
+import './walk_comprehensions'
 import ListItems from './walk_lists'
 import './walk_statements'
-import add_result_calls from './typed'
+import './walk_types'
 
 extend Walker
   # The value after the token at `after`: after `=`, `:=`, a compound assignment or `return` if
@@ -66,78 +63,6 @@ extend Walker
           CHAIN
         else
           OTHER
-
-  # A type, on one line, in the parentheses that group it: those that the tree does not keep, as
-  # around a union or a function type that `?` or `[]` follows. One whose items line ends separate,
-  # which a line would need commas between, is left as written.
-  # Its `?` is taken where `optional` is true.
-  type := (type: TypeName, before: CodeGap, optional: Bool = type.optional): void ->
-    if type is ArrayTypeName
-      @type type.element, before
-      @take '[', NONE
-      @take ']', NONE
-      @take '?', NONE if optional
-      return
-    var groups = 0
-    var gap = before
-    while @at_kind('(') and not @opens_type(type, @at)
-      @take '(', gap
-      gap = NONE
-      groups += 1
-    @ungrouped_type type, gap
-
-    # The `?` of a named type follows its name, as in `(Int?)[]`, and that of another its brackets.
-    named := type is NamedType
-    @take '?', NONE if optional and named
-    @take ')', NONE for _ in 0..groups
-    @take '?', NONE if optional and not named
-
-  # Whether the `(` at `open` is the type's own: that of the parameters of a function type, which
-  # `->` follows, or of a tuple type, which holds a comma.
-  opens_type := (type: TypeName, open: Int) ->
-    close := @closing_bracket(open)
-    case type
-      when FunctionTypeName then @kind_at(close + 1) == '->'
-      when TupleTypeName then @has_comma(open + 1, close)
-      else false
-
-  ungrouped_type := (type: TypeName, before: CodeGap): void ->
-    case type
-      when NamedType
-        @take IDENTIFIER, before
-
-        # `module.Name`, whose name holds the `.`.
-        for _ in type.name.split('.')[1..]
-          @take '.', NONE
-          @take IDENTIFIER, NONE
-
-        @type_arguments type.args
-      when UnionTypeName
-        for member at i in type.members
-          @take '|', ONE if i > 0
-          @type member, i == 0 then before else ONE
-      when FunctionTypeName
-        @types '(', before, type.params, ')'
-        @take '->', ONE
-        @type type.result, ONE
-      when TupleTypeName then @types('(', before, type.items, ')')
-      when RecordTypeName
-        { fields } := type
-        @take '{', before
-        @list fields.length, INSIDE, (i, gap) -> @record_type_field(fields[i], gap), false
-        @take '}', fields.is_empty() then NONE else INSIDE
-      else unhandled()
-
-  # Types in brackets, on one line.
-  types := (open: TokenKind, before: CodeGap, types: TypeName[], close: TokenKind) ->
-    @take open, before
-    @list types.length, NONE, (i, gap) -> @type(types[i], gap), false
-    @take(close, NONE)
-
-  record_type_field := (field: RecordTypeField, before: CodeGap) ->
-    @take IDENTIFIER, before
-    @take ':', NONE
-    @type field.type, ONE
 
   # A whole value, as an item or a value after `=`, whose operations may break.
   whole := (node: Expression, before: CodeGap) ->
@@ -332,60 +257,6 @@ extend Walker
     else
       @take(kind, before)
 
-  # `[element for x in xs when guard]`, with a `for` more for each nested comprehension, or the same
-  # in parentheses, an Iter (see ComprehensionShape).
-  comprehension := (node: Comprehension, before: CodeGap) ->
-    lazy := node.lazy != nil
-    open := @take(lazy then '(' else '[', before)
-    outer := @save()
-    @shapes = []
-    @in_brackets = true
-    @on_own_line = false
-    @breaks_operations = true
-    parts := [@at]
-    chain := nested_chain(node)
-    @expression chain.last()!.element, NONE
-    for each in chain
-      parts.push @take('for', ONE)
-      @loop_names each.variable, each.index
-      @take_spelled 'in', ONE
-      @expression each.iterable, ONE
-      if guard := each.guard
-        parts.push @take_spelled('when', ONE)
-        @expression guard, ONE
-    close := @take(lazy then ')' else ']', NONE)
-    shape := ComprehensionShape(open, close, parts, shapes: @shapes)
-    @restore outer
-    @shapes.push shape
-
-  # A comprehension with its `for` first, laid out as a `for` statement in its brackets: its header
-  # on the line after the opening one, its block below it, and the closing bracket on a line of its
-  # own (see ForFirstShape). One whose block ends with a `for`, which the tree holds as a
-  # comprehension nested in its element, is laid out as it is written, so far. Its element is a
-  # value, whose calls keep their parentheses.
-  prefix_comprehension := (node: Comprehension, before: CodeGap) ->
-    unhandled() if node.element is Comprehension
-    lazy := node.lazy != nil
-    open := @take(lazy then '(' else '[', before)
-    outer := @save()
-    @shapes = []
-    @in_brackets = false
-    @on_own_line = true
-    head := @take('for', LineStart(@depth + 1))
-    @loop_names node.variable, node.index
-    @take_spelled 'in', ONE
-    @operand node.iterable, ONE
-    if guard := node.guard
-      @take_spelled 'when', ONE
-      @operand guard, ONE
-    header := @shapes
-    add_result_calls @elements, node.element
-    block := @block(node.body + [node.element], @depth + 2, head)
-    @restore outer
-    @shapes.push ForFirstShape(open, head, block, shapes: header)
-    @close head, true
-    @take(lazy then ')' else ']', NONE)
-
   # The variable of a loop, or the names in parentheses that its item is taken apart into, as the
   # source has them, as the tree keeps none for a part that is `_`; and `at` and the name of its
   # index.
@@ -445,14 +316,6 @@ extend Walker
 
       @take '.', NONE
     @take(IDENTIFIER, NONE)
-
-  # `<T, U>`, where there are type arguments, on one line, as the grammar takes no line end between
-  # them.
-  type_arguments := (args: TypeName[]) ->
-    return if args.is_empty()
-    @take '<', NONE
-    @list args.length, NONE, (i, gap) -> @type(args[i], gap), false
-    @take '>', NONE
 
   # A call with parentheses, or without them, whose arguments follow a space on its line or are in a
   # block below it.
@@ -715,10 +578,3 @@ extend Walker
       @take_spelled(half, NONE)
     else
       @take_spelled(operator, before)
-
-# The comprehension and those nested in it, each the element of the one before, in the order of
-# their `for`s.
-nested_chain := (comprehension: Comprehension) ->
-  chain := [comprehension]
-  chain.push chain.last()!.element as Comprehension! while is_nested(chain.last()!.element)
-  chain

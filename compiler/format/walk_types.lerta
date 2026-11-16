@@ -1,0 +1,90 @@
+# The walk of types (see walk.lerta).
+import
+  ArrayTypeName, FunctionTypeName, NamedType, RecordTypeField, RecordTypeName, TupleTypeName,
+  TypeName, UnionTypeName
+from '../ast'
+import TokenKind from '../lexer/tokens'
+import CodeGap from './shapes'
+import INSIDE, NONE, ONE, unhandled, Walker from './walk'
+import './walk_lists'
+
+extend Walker
+  # A type, on one line, in the parentheses that group it: those that the tree does not keep, as
+  # around a union or a function type that `?` or `[]` follows. One whose items line ends separate,
+  # which a line would need commas between, is left as written.
+  # Its `?` is taken where `optional` is true.
+  type := (type: TypeName, before: CodeGap, optional: Bool = type.optional): void ->
+    if type is ArrayTypeName
+      @type type.element, before
+      @take '[', NONE
+      @take ']', NONE
+      @take '?', NONE if optional
+      return
+    var groups = 0
+    var gap = before
+    while @at_kind('(') and not @opens_type(type, @at)
+      @take '(', gap
+      gap = NONE
+      groups += 1
+    @ungrouped_type type, gap
+
+    # The `?` of a named type follows its name, as in `(Int?)[]`, and that of another its brackets.
+    named := type is NamedType
+    @take '?', NONE if optional and named
+    @take ')', NONE for _ in 0..groups
+    @take '?', NONE if optional and not named
+
+  # Whether the `(` at `open` is the type's own: that of the parameters of a function type, which
+  # `->` follows, or of a tuple type, which holds a comma.
+  opens_type := (type: TypeName, open: Int) ->
+    close := @closing_bracket(open)
+    case type
+      when FunctionTypeName then @kind_at(close + 1) == '->'
+      when TupleTypeName then @has_comma(open + 1, close)
+      else false
+
+  ungrouped_type := (type: TypeName, before: CodeGap): void ->
+    case type
+      when NamedType
+        @take IDENTIFIER, before
+
+        # `module.Name`, whose name holds the `.`.
+        for _ in type.name.split('.')[1..]
+          @take '.', NONE
+          @take IDENTIFIER, NONE
+
+        @type_arguments type.args
+      when UnionTypeName
+        for member at i in type.members
+          @take '|', ONE if i > 0
+          @type member, i == 0 then before else ONE
+      when FunctionTypeName
+        @types '(', before, type.params, ')'
+        @take '->', ONE
+        @type type.result, ONE
+      when TupleTypeName then @types('(', before, type.items, ')')
+      when RecordTypeName
+        { fields } := type
+        @take '{', before
+        @list fields.length, INSIDE, (i, gap) -> @record_type_field(fields[i], gap), false
+        @take '}', fields.is_empty() then NONE else INSIDE
+      else unhandled()
+
+  # Types in brackets, on one line.
+  types := (open: TokenKind, before: CodeGap, types: TypeName[], close: TokenKind) ->
+    @take open, before
+    @list types.length, NONE, (i, gap) -> @type(types[i], gap), false
+    @take(close, NONE)
+
+  record_type_field := (field: RecordTypeField, before: CodeGap) ->
+    @take IDENTIFIER, before
+    @take ':', NONE
+    @type field.type, ONE
+
+  # `<T, U>`, where there are type arguments, on one line, as the grammar takes no line end between
+  # them.
+  type_arguments := (args: TypeName[]) ->
+    return if args.is_empty()
+    @take '<', NONE
+    @list args.length, NONE, (i, gap) -> @type(args[i], gap), false
+    @take '>', NONE
