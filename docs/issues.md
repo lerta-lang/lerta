@@ -113,12 +113,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: in a document of `count := <T>(x: T) -> counted(x)` and `counted := <T>(item: T) -> 1`, `textDocument/hover` and `textDocument/definition` answer `InternalError`, `weak object is gone`, at every position.
 - How to fix it: keep those instances alive as long as the facts that link to them, or pass over a link whose instance is gone.
 
-## A record item of two values before `...` makes the parser fail
-
-- Where: `parse_record_item` in `compiler/parser/compound.lerta` casts what `parse_element` gives to a `Comprehension` whenever `item_ends_with_spread` finds `...` at the item's end, though the item may be no spread.
-- How to see it: `q := { a b... }` ends the compiler with `failed cast` and a trace, where it should report a syntax error. So does `textDocument/completion` right before the `p` of `print { p..., z: 1 }.z`, which answers `InternalError`, as it puts a name of its own there.
-- How to fix it: report a syntax error where the element is no spread.
-
 ## A constant expression of a `UInt64` literal beyond `Int` is not evaluated
 
 - Where: `constant_value` in `compiler/checker/constants.lerta` takes an integer literal's `value`, which is nil for one beyond `Int`, so the literal and what it is an operand of are no constants.

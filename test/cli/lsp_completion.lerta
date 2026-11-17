@@ -111,6 +111,24 @@ completion_names_check := ->
     ]
   )
 
+# The name that completion puts at the cursor makes `{ p..., z: 1 }` read as `{ <name> p... }`.
+completion_before_spread_check := ->
+  Check(name: 'lerta lsp completes before a spread in an anonymous struct', run: ->
+    dir := new_cli_dir('lsp-completion-spread')
+    path := "#{dir}/a.lerta"
+    text := "p := { x: 1 }\nprint { p..., z: 1 }.z\n"
+    await write_file(path, text)
+    uri := uri_of(path)
+    messages := [did_open(uri, text), completion_request(uri, 1, 7)].join()
+    ran := await session(dir, messages)
+    output := ran.stdout_text()
+    [
+      expect_status(0, ran.status)...
+      reason_unless('"error"' not in output, 'completion answered an error')...
+      compare_text('response order', '0 1 end', response_ids(output).join(' '))...
+    ]
+  )
+
 completion_enum_check := ->
   Check(name: 'lerta lsp completes enum members after a dot', run: ->
     dir := new_cli_dir('lsp-completion-enum')
@@ -571,6 +589,7 @@ completion_coverage_check := ->
 export checks :=
   completion_check()
   completion_names_check()
+  completion_before_spread_check()
   completion_enum_check()
   completion_contexts_check()
   completion_imports_check()
