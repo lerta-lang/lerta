@@ -8,7 +8,7 @@
 import Token from '../lexer/tokens'
 import
   BRANCHES, COMMENTS, LAYOUT, LINE_LENGTH, LONG_CHAINS, LONG_LISTS, LONG_OPERATIONS,
-  MULTI_LINE_LITERALS, SPACING, StyleRule, TWO_WAY_VALUES, VALUE_LINES
+  MULTI_LINE_LITERALS, POSTFIX_FORMS, SPACING, StyleRule, TWO_WAY_VALUES, VALUE_LINES
 from './rules'
 import Change, Edit from './edits'
 import
@@ -782,7 +782,8 @@ export class Breaker
     # line, or follows another, or a guard, goes in a block, and a block form that a postfix form
     # can write, with a body of no more leaves, and that fits on the line of its head takes it (see
     # Postfix forms). A postfix form on the line of `->`, `then` or `else` that must go in a
-    # block goes in the block of the body first, where the layout puts it.
+    # block goes in the block of the body first, where the layout puts it. One whose head takes
+    # more than its line is reported, left to be done by hand.
     postfix := (shape: PostfixShape) ->
       { body } := shape
       short := leaves(@code, { first: body.start, last: body.end - 1 }) <= POSTFIX_LEAVES
@@ -796,7 +797,12 @@ export class Breaker
       on_line := @fits(body.start, shape.last, @column_of(body.start), true)
       in_block := body.start in @line_starts
       goes_in_block := shape.stacked or shape.guard != nil or not on_line or not short
-      @to_block shape if in_block and goes_in_block
+      if in_block and goes_in_block
+        # The block form's head goes on one line, which a head with line ends in it cannot.
+        if @code[shape.keyword].line != @code[shape.head_last].end_line
+          @report_only POSTFIX_FORMS, shape.keyword
+        else
+          @to_block shape
       @decide body.shapes + shape.shapes
 
     # The columns of the block form's postfix form, the body and its head on one line.
