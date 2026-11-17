@@ -109,37 +109,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 
 - How to fix it: check both lengths at each item, and hold the two items across the call of `equals`, as an item that it removes is released otherwise.
 
-## An array's `pop` through an interface frees an item that a loop borrows
-
-- Where: the checker records an array's items as taken (`record_taken_items` in `compiler/checker/taken_items.lerta`) for `xs[i] = x` and a direct call of the builtin `pop` alone (`record_pop` in `compiler/checker/member.lerta`), not for a call of `pop` through an interface value that the array is given as. Codegen then borrows the items of such an array (`are_items_taken`), which that `pop` frees.
-- How to see it: this program stops with a segmentation fault, with `-O` or without it: with it, as it reads the freed `Box` after `Other`s have taken its place.
-
-  ```lerta
-  class Box
-    args
-      s: String
-
-  class Other
-    args
-      a: Int
-      b: Int
-
-  interface Popper
-    pop: () -> Box
-
-  drain := (p: Popper) -> p.pop()
-
-  xs := [Box('hello world, this is a string')]
-  spray: Other[] = []
-  for x in xs
-    drain xs
-    for i in 0..100
-      spray.push Other(a: 0x41414141, b: 0x42424242)
-    print x.s
-  ```
-
-- How to fix it: record the item type as taken where an array is converted to an interface value whose members `pop` satisfies.
-
 ## A heading's anchor keeps capitals and symbols that are not ASCII
 
 - Where: `slug` in `site/markdown.lerta` lowers the ASCII letters alone and keeps every character that is not ASCII, as std tells no class of those.
