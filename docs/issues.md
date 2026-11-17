@@ -2,10 +2,10 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## An array's `==` reads past the end of an array that an item's `equals` shortens
+## An array's `==` and `hash` use items that an item's `equals` or `hash` releases
 
-- Where: `lerta_array_equals` in `runtime/array.c` compares the lengths once, and then reads the length of the left array alone at each item, so that an item's `equals`, the program's own, that removes items of the right one leaves it reading past its end, items already released.
-- How to see it: this program stops with a segmentation fault, with `-O` or without it.
+- Where: `lerta_array_equals` in `runtime/array.c` compares the lengths once, and then reads the length of the left array alone at each item, so that an item's `equals`, the program's own, that removes items of the right one leaves it reading past its end, items already released. `lerta_array_hash` likewise hands each item to the item's `hash` without holding it, so that a `hash` that clears the array runs on itself released.
+- How to see it: each of these programs stops with a segmentation fault, with `-O` or without it; the first through `==`, the second through `hash`, as a map's key.
 
   ```lerta
   class K
@@ -29,7 +29,30 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
   print xs == ys
   ```
 
-- How to fix it: check both lengths at each item, and hold the two items across the call of `equals`, as an item that it removes is released otherwise.
+  ```lerta
+  class K
+    args
+      s: String
+    hash := (): Int ->
+      xs.clear()
+      for i in 0..100
+        spray.push Other(a: 0x41414141, b: 0x42424242)
+      print @s
+      0
+    equals := (other: K): Bool -> @s == other.s
+
+  class Other
+    args
+      a: Int
+      b: Int
+
+  spray: Other[] = []
+  xs := [K(s: 'a0'), K(s: 'a1')]
+  m: Map<K[], Int> = Map()
+  m[xs] = 1
+  ```
+
+- How to fix it: check both lengths at each item, and hold the items across each call of `equals` or `hash`, as an item that it removes is released otherwise.
 
 ## A heading's anchor keeps capitals and symbols that are not ASCII
 
