@@ -2,10 +2,55 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
+## A weak box queued to be dropped is handed out again
+
+- Where: `lerta_weak_box` in `runtime/memory.c` retains and returns the box that the object's slot points at. A box released while another object is dropped, as in a `deinit`, is queued (`drop_released`) and keeps the slot pointing at it until it is dropped, so that a weak local of the object made meanwhile takes that box, whose count was 0. `drain_to` then frees it, whatever its count, and the weak local, or a function literal that captures it, holds the box freed.
+- How to see it: with `-O`, this program stops with a segmentation fault as it calls the literal; without it, or with `--memory-checks`, the debug runtime stops it with `retain of a dropped object`.
+
+  ```lerta
+  class Target
+    args
+      n: Int
+
+  class Other
+    args
+      a: Int
+      b: Int
+
+  class Trigger
+    deinit := ->
+      look()
+      weak again := keep[0]
+      later.push ->
+        if t := again
+          print t.n
+        else
+          print 'gone'
+
+  look := ->
+    weak first := keep[0]
+    if t := first
+      print t.n
+
+  keep := [Target(n: 7)]
+  later: (() -> void)[] = []
+  spray: Other[] = []
+  junk: String[] = []
+  make := -> Trigger()
+  make()
+  for i in 0..2000
+    spray.push Other(a: 0x41414141, b: 0x42424242)
+    junk.push "#{i}xxxxxxxxxxxxxxxx"
+  later[0]()
+  print 'end'
+  ```
+
+- How to fix it: have `lerta_weak_box` make a new box, and point the slot at it, where the slot's box has a count of 0; and have a box's drop clear the slot only while the slot still points at that box.
+
 ## A map's key whose `equals` changes the map is used after it is freed
 
-- Where: `find_slot` in `runtime/map.c` calls the keys' `equals`, which is the program's own for a class or struct that declares it, in the middle of its probe, and goes on with the slots, the entry and its key afterwards, as do `lerta_map_find`, `lerta_map_place` and `lerta_map_remove` with what it finds. An `equals` that removes the key, or that adds keys and so grows the map, leaves them freed or moved. `lerta_map_equals` likewise keeps an entry of one map across `lerta_map_find` in the other, whose `hash` and `equals` may change the first.
-- How to see it: with `-O`, this program stops with a segmentation fault; without it, the debug runtime reports nothing, and the lookup finds the value of the key removed.
+- Where: `find_slot` in `runtime/map.c` calls the keys' `hash` and `equals`, which are the program's own for a class or struct that declares it, in the middle of its probe, and goes on with the slots, the entry and its key afterwards, as do `lerta_map_find`, `lerta_map_place` and `lerta_map_remove` with what it finds. One that removes the key, or that adds keys and so grows the map, leaves them freed or moved. `lerta_map_equals` likewise keeps an entry of one map across `lerta_map_find` in the other, whose `hash` and `equals` may change the first.
+- How to see it: this program stops with a segmentation fault, as it reads the key freed, with `-O` or without it. Where `hash` or `equals` changes the map that `m[k] = v` places the key in, the value is written into the entries freed.
 
   ```lerta
   class K
@@ -38,7 +83,7 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 ## An array's `==` reads past the end of an array that an item's `equals` shortens
 
 - Where: `lerta_array_equals` in `runtime/array.c` compares the lengths once, and then reads the length of the left array alone at each item, so that an item's `equals`, the program's own, that removes items of the right one leaves it reading past its end, items already released.
-- How to see it: with `-O`, this program stops with a segmentation fault; without it, the debug runtime reports nothing, and the arrays compare equal.
+- How to see it: this program stops with a segmentation fault, with `-O` or without it.
 
   ```lerta
   class K
@@ -67,7 +112,7 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 ## An array's `pop` through an interface frees an item that a loop borrows
 
 - Where: the checker records an array's items as taken (`record_taken_items` in `compiler/checker/taken_items.lerta`) for `xs[i] = x` and a direct call of the builtin `pop` alone (`record_pop` in `compiler/checker/member.lerta`), not for a call of `pop` through an interface value that the array is given as. Codegen then borrows the items of such an array (`are_items_taken`), which that `pop` frees.
-- How to see it: with `-O`, this program reads the freed `Box` after `Other`s have taken its place, and stops with a segmentation fault; without it, the debug runtime reports nothing.
+- How to see it: this program stops with a segmentation fault, with `-O` or without it: with it, as it reads the freed `Box` after `Other`s have taken its place.
 
   ```lerta
   class Box
