@@ -25,9 +25,3 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - Where: `parts_of` in `compiler/format/two_way.lerta` expects one `then` and one `else` outside brackets for each link of a chain, and the rewrite of Parentheses does not add the parentheses that [Parentheses](reference/style.md#parentheses) asks for there.
 - How to see it: `lerta fmt` reports nothing for `x := a then b then c else d else e`.
 - How to fix it: have the rewrite of Parentheses add them around the inner value, after which `parts_of` finds each value.
-
-## A rewrite that changes the syntax tree can change the program unnoticed
-
-- Where: the rounds of rewrites in `compiler/format/format.lerta` compare the tree of the text written with that of the edits whose rules are in `TREE_CHANGES` alone, and check that a program that checked still does, so an edit of one of those rules that gives another program that checks goes unnoticed.
-- How to see it: a rewrite that wrote `a - b` for `b - a` of two numbers would be applied without a report; `tests/format/rewritten_forms.lerta` checks the forms that each rewrite writes instead.
-- How to fix it: check each tree-changing rewrite against the tree that it is meant to make, as by comparing the trees outside the spans that the rewrite changes, which the nodes, holding only where they start, cannot tell yet.
