@@ -3,11 +3,16 @@
 # them, `a then x else b then y else z`, as a `case`. Where the value is the whole value of a
 # statement on one line, which a block can hold, the formatter writes it so; elsewhere it reports
 # it.
-import Assignment, Conditional, Declaration, Expression, Return, Statement from '../ast'
-import CLOSING_BRACKETS, depth_change, Token, TokenKind from '../lexer/tokens'
+import
+  Assignment, Conditional, Declaration, Expression, Interpolation, operands_of, Position, Return,
+  Statement
+from '../ast'
+import CodePart from '../lexer/string_literal'
+import CLOSING_BRACKETS, depth_change, Token, tokenize_fragment, TokenKind from '../lexer/tokens'
 import Change, Edit from './edits'
 import leaves, Span, TWO_WAY_LEAVES from './leaves'
 import CHAINED_VALUES, LONG_TWO_WAY_VALUES, StyleRule from './rules'
+import is_layout from './text'
 import Tokens from './tokens'
 
 # The conditionals of a chain, the first and those of the `else`s after it.
@@ -25,14 +30,56 @@ is_chained := (conditional: Conditional) ->
 export long_two_way_report := (tokens: Tokens, conditional: Conditional, taken: Set<Expression>) ->
   taken.add link for link in chain_of(conditional)[1..]
   return nil if conditional in taken
+  return interpolated_report(tokens, conditional) if tokens.at(conditional.position) == nil
   parts := parts_of(tokens, conditional) else return nil
-  rule := rule_of(tokens, parts) else return nil
+  rule := rule_of(tokens.code, parts) else return nil
   tokens.report(rule, tokens.start(parts.first))
 
+# The two-way values in the interpolations of the literal, where no walk of the places of the
+# syntax tree goes, as their code is kept as written.
+export interpolated_values := (literal: Interpolation): Conditional[] ->
+  found: Conditional[]
+  add := (value: Expression): void ->
+    found.push value if value is Conditional
+    add part for part in operands_of(value)
+  add literal
+  found
+
+# A chain, or a long value, in an interpolation, which has no code tokens of its own: found in the
+# code of the interpolation, and only reported, as that code is kept as written.
+interpolated_report := (tokens: Tokens, conditional: Conditional) ->
+  { position } := conditional
+  literal := tokens.code.find((token) -> holds(token, position)) else return nil
+  code := fragment_at(literal, position) else return nil
+  at := code.find_index((token) -> token.position() == position) else return nil
+  parts := parts_in(code, conditional, at) else return nil
+  rule := rule_of(code, parts) else return nil
+  tokens.report(rule, code[parts.first].position())
+
+# The code tokens of the interpolation of the literal that holds `position`, where they are in the
+# source, or of a literal inside it that holds it.
+fragment_at := (literal: Token, position: Position): Token[]? ->
+  parts := literal.parts else return nil
+  for part in parts
+    source := part as CodePart else continue
+    fragment := tokenize_fragment(source.source, '', source.line, source.column)
+    code := [token for token in fragment when not is_layout(token)]
+    return code if code.any((token) -> token.position() == position)
+    inner := code.find((token) -> holds(token, position)) else continue
+    return fragment_at(inner, position)
+  nil
+
+# Whether the position is inside the literal's token, as that of a value in its interpolation is.
+holds := (token: Token, position: Position) ->
+  return false if token.parts == nil
+  after_start := token.position().compare(position) == LESS
+  end := Position(line: token.end_line, column: token.end_column)
+  after_start and position.compare(end) == LESS
+
 # The rule that the value breaks, if it breaks one.
-export rule_of := (tokens: Tokens, parts: Parts): StyleRule? ->
+export rule_of := (code: Token[], parts: Parts): StyleRule? ->
   return CHAINED_VALUES if parts.conditions.length > 1
-  if is_long_two_way(tokens.code, parts.first, parts.last)
+  if is_long_two_way(code, parts.first, parts.last)
     LONG_TWO_WAY_VALUES
   else
     nil
@@ -50,7 +97,7 @@ export whole_value := (statement: Statement): Expression? ->
 export long_two_way_edit := (tokens: Tokens, statement: Statement): Edit? ->
   conditional := whole_value(statement) as Conditional else return nil
   parts := parts_of(tokens, conditional) else return nil
-  rule := rule_of(tokens, parts) else return nil
+  rule := rule_of(tokens.code, parts) else return nil
   at := tokens.start(parts.first)
 
   # Parentheses around the whole value, which the rewrite of Parentheses takes out, go first.
@@ -121,14 +168,19 @@ export struct Parts
 # Those of the chain, found by its `then`s and `else`s outside brackets up to the end of its
 # statement; nil where they are not one for each link, as where the value is parenthesized.
 export parts_of := (tokens: Tokens, conditional: Conditional): Parts? ->
-  links := chain_of(conditional)
   position := tokens.at(conditional.position) else return nil
-  last := statement_end(tokens.code, position)
+  parts_in(tokens.code, conditional, position)
+
+# Those of the chain whose position is that of the code token at `position`.
+parts_in := (code: Token[], conditional: Conditional, position: Int): Parts? ->
+  links := chain_of(conditional)
+  last := statement_end(code, position)
 
   # The value in parentheses has the position of the outer `(`, inside which its words are.
   var first = position
-  first += 1 while tokens.is_kind(first, '(') and words_of(tokens.code, first, last).is_empty()
-  words := words_of(tokens.code, first, last)
+  while first < last and code[first].kind == '(' and words_of(code, first, last).is_empty()
+    first += 1
+  words := words_of(code, first, last)
   ends_with_else := not links.last()!.without_else
   return nil if words.length != 2 * links.length - (ends_with_else then 0 else 1)
   conditions: Span[]
@@ -137,14 +189,14 @@ export parts_of := (tokens: Tokens, conditional: Conditional): Parts? ->
   for word at i in words
     is_then := i % 2 == 0
     expected: TokenKind = is_then then 'then' else 'else'
-    return nil unless tokens.is_kind(word, expected)
+    return nil unless code[word].kind == expected
     span: Span = { first: start, last: word - 1 }
     if is_then
       conditions.push span
     else
       values.push span
     start = word + 1
-  value_end := find_value_end(tokens, start, last)
+  value_end := find_value_end(code, start, last)
   if ends_with_else
     return {
       first
@@ -208,10 +260,10 @@ words_of := (code: Token[], first: Int, last: Int) ->
 
 # The last token of the value that starts at `start`, before a bracket that closes around it, a
 # comma, or the keyword of a postfix form.
-find_value_end := (tokens: Tokens, start: Int, last: Int) ->
+find_value_end := (code: Token[], start: Int, last: Int) ->
   var depth = 0
   for at in start..=last
-    { kind } := tokens.code[at]
+    { kind } := code[at]
     depth += depth_change(kind)
     return at - 1 if depth < 0 or (depth == 0 and kind in VALUE_ENDS)
   last
