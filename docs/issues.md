@@ -2,39 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## A map's key whose `equals` changes the map is used after it is freed
-
-- Where: `find_slot` in `runtime/map.c` calls the keys' `hash` and `equals`, which are the program's own for a class or struct that declares it, in the middle of its probe, and goes on with the slots, the entry and its key afterwards, as do `lerta_map_find`, `lerta_map_place` and `lerta_map_remove` with what it finds. One that removes the key, or that adds keys and so grows the map, leaves them freed or moved. `lerta_map_equals` likewise keeps an entry of one map across `lerta_map_find` in the other, whose `hash` and `equals` may change the first.
-- How to see it: this program stops with a segmentation fault, as it reads the key freed, with `-O` or without it. Where `hash` or `equals` changes the map that `m[k] = v` places the key in, the value is written into the entries freed.
-
-  ```lerta
-  class K
-    args
-      s: String
-    equals := (other: K): Bool ->
-      if armed.length > 0
-        armed.pop()
-        m.remove other
-        for i in 0..100
-          spray.push Other(a: 0x41414141, b: 0x42424242)
-      print other.s
-      @s == other.s
-    hash := (): Int -> 0
-
-  class Other
-    args
-      a: Int
-      b: Int
-
-  spray: Other[] = []
-  armed := [1]
-  m: Map<K, Int> = Map()
-  m[K(s: 'stored')] = 1
-  print m[K(s: 'stored')] else -1
-  ```
-
-- How to fix it: have the runtime hold what it uses across a call of `hash` or `equals`, and find its place again after one, or have a map that is being searched throw where it is changed, as an Iter's cursor keeps entries in place.
-
 ## An array's `==` reads past the end of an array that an item's `equals` shortens
 
 - Where: `lerta_array_equals` in `runtime/array.c` compares the lengths once, and then reads the length of the left array alone at each item, so that an item's `equals`, the program's own, that removes items of the right one leaves it reading past its end, items already released.

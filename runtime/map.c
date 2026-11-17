@@ -13,10 +13,24 @@ static uint64_t mix(uint64_t hash) {
   return hash ^ (hash >> 31);
 }
 
+// The program's own hash and equals, of value keys and of values, may run any code, which must not
+// change the map meanwhile: its search, or its comparison, would go on with entries freed or moved.
+static void start_comparing(const LertaMap *map) { ((LertaMap *)map)->comparing++; }
+static void stop_comparing(const LertaMap *map) { ((LertaMap *)map)->comparing--; }
+
+static void check_not_comparing(const LertaMap *map) {
+  if (map->comparing > 0) lerta_panic("a map changed while its keys or values were compared");
+}
+
 static uint64_t hash_key(const LertaMap *map, int64_t key) {
   switch (map->key_kind) {
     case LERTA_STRING_KEYS: return lerta_string_hash((const LertaString *)(intptr_t)key);
-    case LERTA_VALUE_KEYS: return mix(map->hash(key));
+    case LERTA_VALUE_KEYS: {
+      start_comparing(map);
+      uint64_t hash = map->hash(key);
+      stop_comparing(map);
+      return mix(hash);
+    }
     default: return mix((uint64_t)key);
   }
 }
@@ -26,7 +40,12 @@ static bool same_key(const LertaMap *map, int64_t a, int64_t b) {
     case LERTA_STRING_KEYS:
       return lerta_string_equals((const LertaString *)(intptr_t)a,
                                  (const LertaString *)(intptr_t)b);
-    case LERTA_VALUE_KEYS: return map->equals(a, b);
+    case LERTA_VALUE_KEYS: {
+      start_comparing(map);
+      bool same = map->equals(a, b);
+      stop_comparing(map);
+      return same;
+    }
     default: return a == b;
   }
 }
@@ -97,6 +116,7 @@ LertaMap *lerta_map_create(LertaKeyKind key_kind, LertaItemKind value_kind, Lert
   map->entry_count = 0;
   map->entry_capacity = 0;
   map->cursors = 0;
+  map->comparing = 0;
   map->entries = NULL;
   map->slot_count = 0;
   map->slots = NULL;
@@ -151,6 +171,7 @@ void *lerta_map_find(const LertaMap *map, int64_t key) {
 }
 
 void *lerta_map_place(LertaMap *map, int64_t key) {
+  check_not_comparing(map);
   uint64_t hash = hash_key(map, key);
   if (map->entry_count > 0) {
     int64_t position = map->slots[find_slot(map, key, hash)];
@@ -170,6 +191,7 @@ void *lerta_map_place(LertaMap *map, int64_t key) {
 // Tells whether the key was there, which the release of its value, running a deinit that may
 // change the map, cannot change.
 bool lerta_map_remove(LertaMap *map, int64_t key) {
+  check_not_comparing(map);
   if (map->length == 0) return false;
   int64_t position = map->slots[find_slot(map, key, hash_key(map, key))];
   if (position == EMPTY) return false;
@@ -189,16 +211,23 @@ struct LertaMapCursor {
 
 bool lerta_map_equals(const LertaMap *a, const LertaMap *b, LertaEquals values) {
   if (a->length != b->length) return false;
-  for (int64_t i = 0; i < a->entry_count; i++) {
+  start_comparing(a);
+  start_comparing(b);
+  bool same = true;
+  for (int64_t i = 0; same && i < a->entry_count; i++) {
     LertaMapEntry *entry = entry_at(a, i);
     if (!entry->live) continue;
     void *other = lerta_map_find(b, entry->key);
-    if (!other) return false;
-    if (!values) continue;
-    int64_t value = lerta_item_word(a->value_kind, value_of(entry));
-    if (!values(value, lerta_item_word(b->value_kind, other))) return false;
+    if (!other) {
+      same = false;
+    } else if (values) {
+      int64_t value = lerta_item_word(a->value_kind, value_of(entry));
+      same = values(value, lerta_item_word(b->value_kind, other));
+    }
   }
-  return true;
+  stop_comparing(a);
+  stop_comparing(b);
+  return same;
 }
 
 static inline void visit_cursor(void *object, LertaVisitor visitor) {

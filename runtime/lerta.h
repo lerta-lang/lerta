@@ -118,6 +118,8 @@ typedef struct {
   int64_t entry_capacity;
   // The cursors alive, while which the entries stay at their positions (see LertaMapCursor).
   int64_t cursors;
+  // The calls of the program's own hash or equals going on, while which the map must not change.
+  int64_t comparing;
   // Each entry takes the size of an entry and a value (see entry_at in map.c).
   uint8_t *entries;
   int64_t slot_count;  // a power of two
