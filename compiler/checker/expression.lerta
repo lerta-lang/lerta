@@ -208,7 +208,7 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
   if callee is FunctionLiteral and call.named_args.is_empty() and not call.args.any(is_spread)
     untyped := callee.params.any((param) -> param.type == nil)
     if untyped
-      return type_of_literal_call(body, call, callee)
+      return type_of_literal_call(body, call, callee, expected)
   callee_type :=
     if callee is Identifier
       set_type body, callee, type_of_identifier(body, callee, true)
@@ -218,7 +218,7 @@ type_of_call := (body: Body, call: Call, expected: Type?): Type ->
 
 # The call of a function literal where it is written, whose arguments give the types of the
 # parameters that leave them out, as `((x) -> x + 1)(2)`; the others expect theirs.
-type_of_literal_call := (body: Body, call: Call, literal: FunctionLiteral) ->
+type_of_literal_call := (body: Body, call: Call, literal: FunctionLiteral, expected: Type?) ->
   { params } := literal
   given := [
     for arg at i in call.args
@@ -229,7 +229,7 @@ type_of_literal_call := (body: Body, call: Call, literal: FunctionLiteral) ->
         inferred_argument(body, arg, i < params.length then params[i].name)
   ]
   check_argument_count body, call, literal, given: given.length, params: literal.params.length
-  type := type_of_item_function(body, literal, given, nil, nil)
+  type := type_of_item_function(body, literal, given, expected, nil)
   for arg at i in call.args
     require_type body, arg, given[i], type.params[i]
   type.result

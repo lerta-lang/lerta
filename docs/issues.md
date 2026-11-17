@@ -32,8 +32,8 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: a rewrite that wrote `a - b` for `b - a` of two numbers would be applied without a report; `tests/format/rewritten_forms.lerta` checks the forms that each rewrite writes instead.
 - How to fix it: check each tree-changing rewrite against the tree that it is meant to make, as by comparing the trees outside the spans that the rewrite changes, which the nodes, holding only where they start, cannot tell yet.
 
-## A called function literal that infers its parameters ignores the type expected of its result
+## A called function literal that infers its parameters does not pass the type expected to the arguments it returns
 
-- Where: `type_of_literal_call` in `compiler/checker/expression.lerta` types the arguments of a function literal called where it is written without the type expected of the call.
-- How to see it: `x: Float = ((n) -> n)(1)` reports `expected Float, got Int`, where `x: Float = 1` checks.
-- How to fix it: pass the type expected to the literal as its result, and through it to the arguments that its parameters return.
+- Where: `type_of_literal_call` in `compiler/checker/expression.lerta` types the arguments of a function literal called where it is written without the type expected of the call, which it passes to the literal's result alone.
+- How to see it: `x: Float = ((n) -> n)(1)` reports `expected a return value of type Float, got Int` at the `n` it returns, where `x: Float = 1` checks.
+- How to fix it: pass the type expected to the arguments that the literal's parameters return.
