@@ -55,6 +55,7 @@ export long_two_way_edit := (tokens: Tokens, statement: Statement): Edit? ->
 
   # Parentheses around the whole value, which the rewrite of Parentheses takes out, go first.
   return tokens.report(rule, at) if is_wrapped(tokens, parts.first)
+  return tokens.report(rule, at) unless is_on_one_line(tokens, parts)
   last := tokens.line_end(parts.first) else return tokens.report(rule, at)
 
   # Only the brackets that close around a body on the line of `->` may follow the value.
@@ -117,12 +118,12 @@ export struct Parts
   values: Span[]
   otherwise: Span?
 
-# Those of the chain, found by its `then`s and `else`s outside brackets on the line of its start;
-# nil where they are not one for each link, as where a value spans lines or is parenthesized.
+# Those of the chain, found by its `then`s and `else`s outside brackets up to the end of its
+# statement; nil where they are not one for each link, as where the value is parenthesized.
 export parts_of := (tokens: Tokens, conditional: Conditional): Parts? ->
   links := chain_of(conditional)
   position := tokens.at(conditional.position) else return nil
-  last := tokens.line_end(position) else return nil
+  last := statement_end(tokens.code, position)
 
   # The value in parentheses has the position of the outer `(`, inside which its words are.
   var first = position
@@ -154,6 +155,21 @@ export parts_of := (tokens: Tokens, conditional: Conditional): Parts? ->
     }
   values.push { first: start, last: value_end }
   { first, last: value_end, conditions, values }
+
+# Whether the parts are on one line, which the rewrites of a long value can move into a block.
+export is_on_one_line := (tokens: Tokens, parts: Parts) ->
+  tokens.code[parts.first].line == tokens.code[parts.last].end_line
+
+# The last code token of the statement that holds the one at `first`: the last on a line where no
+# bracket opened from `first` on is still open.
+statement_end := (code: Token[], first: Int) ->
+  var depth = 0
+  var at = first
+  while at + 1 < code.length
+    depth += depth_change(code[at].kind)
+    return at if depth <= 0 and code[at + 1].line > code[at].end_line
+    at += 1
+  at
 
 # Whether the value at `first` is in parentheses of its own, rather than those of a call.
 export is_wrapped := (tokens: Tokens, first: Int) ->

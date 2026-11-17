@@ -827,12 +827,11 @@ no_trace_check := ->
     succeed 'build', built.result
     ran := await run_command(executable, [], built.cwd)
     program := await read_file(executable)
+    traced := program.index_of(b'<top level>') != nil
     [
       expect_status(1, ran.status)...
       compare_text('stderr', "failed\n", ran.stderr_text())...
-      (program.index_of(b'<top level>') != nil then [
-        'the program holds the names of traces'
-      ] else no_reasons)...
+      (traced then ['the program holds the names of traces'] else no_reasons)...
     ]
   )
 
@@ -879,15 +878,21 @@ target_checks: Check[] =
 
 runtime_checks := [build_and_run(flags) for flags in runtime_flags]
 
+universal_checks: Check[] =
+  if host_platform == 'macos'
+    [
+      universal_check(no_build_flags)
+      universal_check(['-O'])
+      universal_check(['--source-lines'])
+      universal_check(['-O', '--source-lines'])
+    ]
+  else
+    []
+
 export checks: Check[] = [
   runtime_checks...
   target_checks...
-  (host_platform == 'macos' then [
-    universal_check(no_build_flags)
-    universal_check(['-O'])
-    universal_check(['--source-lines'])
-    universal_check(['-O', '--source-lines'])
-  ] else [])...
+  universal_checks...
   default_output_check()
   platform_check()
   platform_dump_check()

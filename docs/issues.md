@@ -8,12 +8,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `# Été — 🌞` gets the anchor `Été-—-🌞`, where GitHub gives `été--`, so that a link written for GitHub does not reach the heading on the site.
 - How to fix it: lower the letters that are not ASCII and drop the other characters, as GitHub does, once std can tell them apart.
 
-## A long two-way value over several lines is left as it is
-
-- Where: `parts_of` in `compiler/format/two_way.lerta` finds the parts of a two-way value only on the line where it starts.
-- How to see it: `lerta fmt` reports nothing for `y := ok then xs.map((x) ->`, a body of two lines, `).to_array() else []`, and `--fix` leaves it, though its `then` value has more than two leaves (see [Branches](reference/style.md#branches)).
-- How to fix it: find the parts up to the end of the statement rather than of the line, and write the value as an `if` with the lines of each part moved into its block.
-
 ## A long two-way value in an interpolation is not reported
 
 - Where: `parts_of` in `compiler/format/two_way.lerta` finds a value by its code tokens, which an interpolation, inside a string literal's token, has none of.
