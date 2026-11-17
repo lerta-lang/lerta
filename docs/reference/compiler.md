@@ -258,6 +258,7 @@ Checks that each file is in the [style](style.md). What of the style it does not
 - Reports what remains: the lines over 100 columns, and the rewrites that are only reported, which are left to be made by hand:
   - those of the [rewrites](#rewrites) below that say so;
   - a `not` of an `and` or an `or` (see [Negated conditions](style.md#negated-conditions));
+  - a postfix form that goes in a block but whose head takes several lines (see [Postfix forms](style.md#postfix-forms));
   - a two-way value written `c then a else b` where it fits neither on its line nor on the next, which an `if` then writes (see [Branches](style.md#branches)); one written as an `if` that fits on a line so it rewrites, with the parentheses that a part needs there, where it is the value of a declaration, an assignment or a `return`, or, giving a value other than `void`, the end of a function;
   - a long two-way value or a chain of them where no block can take it, as in an operand, or that takes several lines (see [Branches](style.md#branches));
   - a comprehension on one line with a long part where it cannot write it with its `for` first, as in an argument (see [Comprehensions](style.md#comprehensions));
