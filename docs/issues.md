@@ -2,21 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## A second signal does not end a program whose code runs without awaiting
-
-- Where: `runtime/signal.c` takes SIGINT, SIGTERM and SIGHUP through libuv's signal handles, whose callback runs only in the loop; so code that runs without awaiting, after the top-level code has awaited once, never reaches `on_ending_signal`, and the signals stay watched, against [Signals](reference/functions.md#signals), by which a second signal ends the program at once.
-- How to see it: this program, sent SIGTERM twice, or Ctrl-C twice, goes on running, and only SIGKILL ends it.
-
-  ```lerta
-  import sleep from 'std:time'
-
-  await sleep(0)
-  var n = 0
-  n += 1 while n >= 0
-  ```
-
-- How to fix it: count the signals in a handler of the program's own, which runs as each arrives, besides libuv's, and have it take the default action at the second.
-
 ## A heading's anchor keeps capitals and symbols that are not ASCII
 
 - Where: `slug` in `site/markdown.lerta` lowers the ASCII letters alone and keeps every character that is not ASCII, as std tells no class of those.

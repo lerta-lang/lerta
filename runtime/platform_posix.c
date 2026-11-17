@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -110,6 +111,38 @@ void lerta_os_end_by_signal(int signal_number) {
   signal(signal_number, SIG_DFL);
   raise(signal_number);
   _exit(128 + signal_number);
+}
+
+// Atomic, as the signals may arrive on threads of their own, each running the handler.
+static atomic_int ending_signals_received = 0;
+static struct sigaction passed_on[NSIG];
+
+// The signal is blocked while this runs, so that the one raised again ends the program as it returns.
+static void on_ending_signal(int signal_number, siginfo_t *info, void *context) {
+  if (atomic_fetch_add(&ending_signals_received, 1) > 0) {
+    struct sigaction default_action = {.sa_handler = SIG_DFL};
+    sigaction(signal_number, &default_action, NULL);
+    raise(signal_number);
+    return;
+  }
+  struct sigaction *next = &passed_on[signal_number];
+  if (next->sa_flags & SA_SIGINFO) {
+    next->sa_sigaction(signal_number, info, context);
+  } else if (next->sa_handler != SIG_DFL && next->sa_handler != SIG_IGN) {
+    next->sa_handler(signal_number);
+  }
+}
+
+void lerta_os_end_at_second_signal(const int *signal_numbers, int count) {
+  for (int i = 0; i < count; i++) {
+    int signal_number = signal_numbers[i];
+    struct sigaction action;
+    if (sigaction(signal_number, NULL, &action) != 0) continue;
+    passed_on[signal_number] = action;
+    action.sa_sigaction = on_ending_signal;
+    action.sa_flags |= SA_SIGINFO;
+    sigaction(signal_number, &action, NULL);
+  }
 }
 
 void lerta_os_abort(void) {

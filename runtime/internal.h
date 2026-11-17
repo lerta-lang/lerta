@@ -258,6 +258,9 @@ bool lerta_os_signal_ignored(int signal_number);
 // Ends the program as the signal does by default, which the parent sees; on Windows, with the code
 // 128 plus its number, as std:process gives a signal.
 _Noreturn void lerta_os_end_by_signal(int signal_number);
+// Has the second of the signals, as it arrives, end the program as it does by default, while each
+// first one goes on to the handler watching it, libuv's, which runs it only in the loop.
+void lerta_os_end_at_second_signal(const int *signal_numbers, int count);
 // Ends the program as a failure that is not an exit code, as C's abort does.
 _Noreturn void lerta_os_abort(void);
 // Memory from the system for the allocator (allocator.c): `size` bytes, a multiple of

@@ -51,6 +51,12 @@ void lerta_signals_watch(LertaPromise *top_level) {
     uv_unref((uv_handle_t *)&handles[i]);
     watched[i] = true;
   }
+  int watched_signals[ENDING_SIGNAL_COUNT];
+  int watched_count = 0;
+  for (int i = 0; i < ENDING_SIGNAL_COUNT; i++) {
+    if (watched[i]) watched_signals[watched_count++] = ending_signals[i];
+  }
+  lerta_os_end_at_second_signal(watched_signals, watched_count);
 }
 
 int lerta_signal_received(void) { return received_signal; }

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <uv.h>
 #include <windows.h>
 
 #include "internal.h"
@@ -156,6 +157,33 @@ bool lerta_os_signal_ignored(int signal_number) {
 
 void lerta_os_end_by_signal(int signal_number) {
   ExitProcess((UINT)(128 + signal_number));
+}
+
+static volatile LONG ending_signals_received = 0;
+
+static int signal_of_console_event(DWORD event) {
+  switch (event) {
+    case CTRL_C_EVENT: return SIGINT;
+    case CTRL_BREAK_EVENT: return SIGBREAK;
+    case CTRL_CLOSE_EVENT: return SIGHUP;
+    default: return 0;
+  }
+}
+
+// Added after libuv's, it runs before it, on a thread of its own, and passes each first event on.
+static BOOL WINAPI on_console_event(DWORD event) {
+  int signal_number = signal_of_console_event(event);
+  if (signal_number != 0 && InterlockedIncrement(&ending_signals_received) > 1) {
+    lerta_os_end_by_signal(signal_number);
+  }
+  return FALSE;
+}
+
+// The signals are those of the console events, which libuv takes by a handler of the console too;
+// all of them are watched, as no parent leaves them ignored here (see lerta_os_signal_ignored).
+void lerta_os_end_at_second_signal(const int *signal_numbers, int count) {
+  (void)signal_numbers;
+  if (count > 0) SetConsoleCtrlHandler(on_console_event, TRUE);
 }
 
 void lerta_os_abort(void) {
