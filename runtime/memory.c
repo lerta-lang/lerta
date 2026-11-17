@@ -40,8 +40,10 @@ static LertaHeader *allocate_object(int64_t size) {
 static void free_object(void *object) {
   lerta_trace_forget(object);
 #ifdef LERTA_DEBUG
-  // The allocator keeps the count of a free place at 0 (see docs/internals/memory.md#allocation),
-  // but the prefix comes first in it.
+  // The count follows the prefix, where the allocator fills a freed place with FREED_BYTE; but
+  // where pointers are 4 bytes, the prefix is 8 bytes, and the count lies in the place's next 8,
+  // which hold its free-list link and are not filled (see
+  // docs/internals/memory.md#use-after-drop-checking).
   ((LertaHeader *)object)->ref_count = 0;
   LertaPrefix *prefix = (LertaPrefix *)object - 1;
   lerta_untrack(prefix);

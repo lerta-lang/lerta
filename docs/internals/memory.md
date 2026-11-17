@@ -141,12 +141,13 @@ The leak report is described in [the reference](../reference/compiler.md#build).
 ### Use-after-drop checking
 
 - The debug runtime keeps a prefix before each object (`LertaPrefix` in `runtime/internal.h`), and sets the object's count to 0 as it frees it.
-- The allocator keeps a free place's first 8 bytes at 0, and its free-list link next, both within the prefix, so that the count stays 0 while the place is free.
-- So a retain or release of a dropped object, or of one queued to be dropped, which one release too many in the generated code leads to, finds the count at 0, and the debug runtime stops the program.
+- The allocator keeps a free place's first 8 bytes at 0, and its free-list link next, and fills the rest with 0xDB bytes (`FREED_BYTE` in `runtime/allocator.c`). So the object's count, which follows the prefix, stays 0 or reads below 0 while the place is free.
+- So a retain or release of a dropped object, or of one queued to be dropped, which one release too many in the generated code leads to, finds the count at 0 or below, and the debug runtime stops the program.
+- A read of the place without them, as through a borrowed reference, reads 0xDB bytes: a pointer that faults, as 0xDBDB... is no address that a 64-bit program can map, or a number that a test's expected output tells apart.
 - **Reuse order.**
   - A release build reuses the place freed last, which is warm in the cache.
   - A debug build hands out the part of a slab never used before any freed place, then the place freed first; it keeps its last 4 empty slabs without reusing them, and unmaps those before. So a place stays free, and a misuse is caught, as long as possible.
-- Not caught: a misuse of an object whose place has been reused, and reads other than a retain or release. A misuse in a region returned to the system, as that of an object larger than 16 KiB is at once, faults, unless the system has mapped the region again.
+- Not caught: a misuse of an object whose place has been reused. A misuse in a region returned to the system, as that of an object larger than 16 KiB is at once, faults, unless the system has mapped the region again.
 
 ## Alias analysis
 

@@ -27,6 +27,10 @@ struct Region {
 
 #define PLACES_START (((int64_t)sizeof(Region) + 15) & ~(int64_t)15)
 #define SMALLEST_PLACE 16
+#ifdef LERTA_DEBUG
+// 0xDBDB... is no address that a 64-bit program can map, and as a count it is below 0.
+#define FREED_BYTE 0xDB
+#endif
 #define SMALL_LIMIT 256
 #define SLAB_LIMIT (16 << 10)
 #define SMALL_CLASSES ((SMALL_LIMIT - SMALLEST_PLACE) / 8 + 1)
@@ -271,6 +275,8 @@ void lerta_mem_free(void *memory) {
   Place *place = memory;
   place->count = 0;
 #ifdef LERTA_DEBUG
+  // So that what reads the place after it is freed reads pointers that fault and counts below 0.
+  memset(place + 1, FREED_BYTE, (size_t)region->place_size - sizeof(Place));
   place->next = NULL;
   if (region->free_first == NULL) region->free_first = place;
   else region->free_last->next = place;
