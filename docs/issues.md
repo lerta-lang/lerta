@@ -35,16 +35,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `x: UInt64 = 18446744073709551615 + 1` compiles and throws `integer overflow` as it runs, and `9223372036854775808 << 64` in a branch that never runs is no error, where a [constant expression](reference/types.md#constant-expressions) that would throw is a compile error.
 - How to fix it: take such a literal's value by `uint64_value` where a `UInt64` is expected.
 
-## `lerta fmt` fails on a long two-way value whose `else` value is on the next line
-
-- Where: `two_way_block` in `compiler/format/two_way.lerta` slices the tokens of a part that `parts_of` gave it past the line where the value starts.
-- How to see it: `lerta fmt` ends with `slice out of range` and a trace for:
-  ```lerta
-  x := c then 1 + 2 + 3 else
-    2
-  ```
-- How to fix it: find the `else` value on the lines that continue the statement, or report the value as one over several lines is.
-
 ## The formatter drops the parentheses of a negated call on a number literal
 
 - Where: the rewrite of Parentheses in `compiler/format/parentheses.lerta` takes the parentheses of `-(1.abs())` to change nothing, though `-1.abs()` is a call on the literal `-1`.

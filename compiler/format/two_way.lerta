@@ -9,6 +9,7 @@ import
 from '../ast'
 import CodePart from '../lexer/string_literal'
 import CLOSING_BRACKETS, depth_change, Token, tokenize_fragment, TokenKind from '../lexer/tokens'
+import COMPARISON_WORDS from '../parser/expression'
 import Change, Edit from './edits'
 import leaves, Span, TWO_WAY_LEAVES from './leaves'
 import CHAINED_VALUES, LONG_TWO_WAY_VALUES, StyleRule from './rules'
@@ -213,15 +214,28 @@ export is_on_one_line := (tokens: Tokens, parts: Parts) ->
   tokens.code[parts.first].line == tokens.code[parts.last].end_line
 
 # The last code token of the statement that holds the one at `first`: the last on a line where no
-# bracket opened from `first` on is still open.
+# bracket opened from `first` on is still open, and which ends with no operator or word that takes
+# an operand after it, which is then on the next line.
 statement_end := (code: Token[], first: Int) ->
   var depth = 0
   var at = first
   while at + 1 < code.length
-    depth += depth_change(code[at].kind)
-    return at if depth <= 0 and code[at + 1].line > code[at].end_line
+    token := code[at]
+    depth += depth_change(token.kind)
+    ends_line := code[at + 1].line > token.end_line
+    return at if depth <= 0 and ends_line and not takes_operand(token)
     at += 1
   at
+
+# Whether an operand or a body follows the token, as after a binary operator, `then`, `else`, `not`
+# or `->` (see parser/expression.lerta). Not after `<` or `>`, which may also close the type
+# arguments that end a statement, as in `x is Box<Int>`.
+takes_operand := (token: Token) ->
+  token.kind in OPERAND_TAKERS or token.kind == IDENTIFIER and token.text in COMPARISON_WORDS
+
+OPERAND_TAKERS: TokenKind[] =
+  '+', '-', '|', '^', '*', '/', '%', '&', '**', '==', '!=', '<=', '>=', '..', '..=', 'then', 'else',
+  'and', 'or', 'not', '->'
 
 # Whether the value at `first` is in parentheses of its own, rather than those of a call.
 export is_wrapped := (tokens: Tokens, first: Int) ->
