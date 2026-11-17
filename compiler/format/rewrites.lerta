@@ -8,8 +8,8 @@ import
   Return, Statement, StringLiteral, Throw, TypeDeclaration, UnaryOperation, UnionTypeName
 from '../ast'
 import TextPart from '../lexer/string_literal'
-import Lexed, Token, TokenKind from '../lexer/tokens'
-import bool_type from '../types'
+import Comment, Lexed, Token, TokenKind from '../lexer/tokens'
+import bool_type, void_type from '../types'
 import Place, places_of from './places'
 import private_block_edits from './private_blocks'
 import cast_of from './precedence'
@@ -22,7 +22,7 @@ import with_ascii_escapes from './escapes'
 import condition_edit, double_negation, negated_test from './conditions'
 import destructured_value_edits from './destructured'
 import Change, Edit from './edits'
-import is_inline, is_pass_body from './forms'
+import is_inline, is_pass_body, runs_to_end from './forms'
 import KeptLines from './kept'
 import WIDTH from './lines'
 import parentheses_of, unvisited_parts from './parentheses'
@@ -118,6 +118,15 @@ class Rewriting
       for arg in value.args
         @argument_comprehensions.add arg if arg is Comprehension
 
+  # The two-way value of the `if` that ends a function, where it gives a value other than void,
+  # which the types tell; one without them waits.
+  two_way_end := (branch: If) ->
+    return nil unless branch in @ends_functions
+    facts := @typed?.facts else return nil
+    bodies := branch.then_body + branch.else_body
+    return nil if bodies.any((body) -> facts.types[body] else void_type == void_type)
+    two_way_value(@tokens, branch)
+
   # What a statement tells the rewrites of others, before they are found.
   prepare_statement := (statement: Statement): void ->
     @taken.add value if value := whole_value(statement)
@@ -193,10 +202,13 @@ class Rewriting
           long_arguments...
         ]
       when Assignment then [two_way_value(tokens, statement.value), long_value, long_arguments...]
-      when Return then [long_value, long_arguments...]
+      when Return then [two_way_value(tokens, statement.value), long_value, long_arguments...]
       when Conditional then [long_value]
       when Call, Throw then long_arguments
-      when If, Case then [returned_branches(tokens, statement, statement in @ends_functions)]
+      when If
+        ends_function := statement in @ends_functions
+        [@two_way_end(statement), returned_branches(tokens, statement, ends_function)]
+      when Case then [returned_branches(tokens, statement, statement in @ends_functions)]
       when TypeDeclaration
         nil_fields := [
           for member in statement.members
@@ -246,10 +258,10 @@ unneeded_pass := (tokens: Tokens, node: TypeDeclaration) ->
   change := Change(from: tokens.end(last), to: tokens.end(pass_at), text: '')
   tokens.edit_at(LAYOUT, tokens.start(pass_at), [change])
 
-# A report of an `if` that gives a value, of two branches of one expression each, that would fit on
-# its line as `c then a else b`, with its head (see Branches), where each part is on a line of its
-# own without a comment.
-two_way_value := (tokens: Tokens, value: Expression) ->
+# `c then a else b` for an `if` that gives a value, of two branches of one expression each, that
+# would fit on its line so, after its head or where it starts its line (see Branches), where each
+# part is on a line of its own.
+two_way_value := (tokens: Tokens, value: Expression?) ->
   branch := value as If else return nil
   { then_body, else_body } := branch
 
@@ -262,9 +274,9 @@ two_way_value := (tokens: Tokens, value: Expression) ->
   then_at := tokens.at(then_body[0].position) else return nil
   else_at := tokens.at(else_body[0].position) else return nil
   return nil unless tokens.is_kind(else_at - 1, 'else')
-  first_line := tokens.code[if_at].line
-  last_line := tokens.code[else_at].end_line
-  return nil if tokens.comments.any((comment) -> comment.line in first_line..=last_line)
+
+  # That of `else if` is a branch of the `if` before it.
+  return nil if tokens.is_kind(if_at - 1, 'else')
 
   # Each part ends its line, as the next part, `else`, or a line no deeper than `else` follows.
   condition_end := tokens.line_end(if_at + 1) else return nil
@@ -275,34 +287,65 @@ two_way_value := (tokens: Tokens, value: Expression) ->
     after == tokens.code.length or tokens.code[after].column <= tokens.code[else_at - 1].column
   return nil if condition_end + 1 != then_at or then_end + 2 != else_at or not ends_block
 
-  part := (first: Int, last: Int) -> tokens.slice(tokens.start(first), tokens.end(last))
-  condition := part(if_at + 1, condition_end)
-  written := "#{condition} then #{part(then_at, then_end)} else #{part(else_at, else_end)}"
-  parentheses := added_parentheses(tokens, then_body[0]) + added_parentheses(tokens, else_body[0])
+  # Nor a comment inside it, as one deeper than `else` below its block is.
+  first_line := tokens.code[if_at].line
+  last_line := tokens.code[else_at].end_line
+  else_column := tokens.code[else_at - 1].column
+  inside := (comment: Comment) ->
+    before_next := after == tokens.code.length or comment.line < tokens.code[after].line
+    deeper := comment.line <= last_line or comment.column > else_column
+    comment.line >= first_line and before_next and deeper
+  return nil if tokens.comments.any(inside)
 
-  # After the head, `x :=` and a space.
-  return nil if tokens.end(if_at - 1).column + written.count() + parentheses > WIDTH
+  condition :=
+    part_text(tokens, branch.condition as Expression!, { first: if_at + 1, last: condition_end })
+  then_value := part_text(tokens, then_body[0], { first: then_at, last: then_end })
+  else_value := part_text(tokens, else_body[0], { first: else_at, last: else_end })
+  written := "#{condition} then #{then_value} else #{else_value}"
+  starts_line := if_at == 0 or tokens.code[if_at - 1].end_line < first_line
+  before :=
+    if starts_line
+      tokens.code[if_at].column - 1
+    else
+      tokens.end(if_at - 1).column
+  return nil if before + written.count() > WIDTH
   spans: Span[] =
     { first: if_at + 1, last: condition_end }
     { first: then_at, last: then_end }
     { first: else_at, last: else_end }
   return nil if spans.any((span) -> leaves(tokens.code, span) > TWO_WAY_LEAVES)
 
-  tokens.report(TWO_WAY_VALUES, tokens.start(if_at))
+  start := tokens.start(if_at)
+  change := Change(from: start, to: tokens.end(else_end), text: written)
+  tokens.edit_at(TWO_WAY_VALUES, start, [change])
 
-# The column that a call without parentheses takes for them as a part of an operation: one, as its
-# `(` takes the place of the space after its callee.
-added_parentheses := (tokens: Tokens, statement: Statement) ->
-  call := statement as Call else return 0
-  first := call.args.first()?.position else call.named_args.first()?.name.position else return 0
-  at := tokens.at(first) else return 0
-  if tokens.is_kind(at - 1, '(')
-    0
+# The text of a part of `c then a else b`: a call without parentheses takes them, and a value that
+# would take what follows it goes in them.
+part_text := (tokens: Tokens, part: Statement, span: Span) ->
+  written := tokens.slice(tokens.start(span.first), tokens.end(span.last))
+  if argument := bare_argument(tokens, part)
+    callee := tokens.slice(tokens.start(span.first), tokens.end(argument - 1))
+    arguments := tokens.slice(tokens.start(argument), tokens.end(span.last))
+    "#{callee}(#{arguments})"
+  else if part is Conditional | Coalesce or (part is Expression and runs_to_end(part))
+    "(#{written})"
   else
-    1
+    written
 
-# A statement that is one expression, which a two-way value can hold.
-is_value := (statement: Statement) -> is_inline(statement) and statement is not Assignment | Pass
+# The index of the first argument of a call written without parentheses.
+bare_argument := (tokens: Tokens, part: Statement) ->
+  call := part as Call else return nil
+  first := call.args.first()?.position else call.named_args.first()?.name.position else return nil
+  at := tokens.at(first) else return nil
+  if tokens.is_kind(at - 1, '(')
+    nil
+  else
+    at
+
+# A statement that is one expression, which a two-way value can hold, but not one that leaves the
+# function, which gives no value.
+is_value := (statement: Statement) ->
+  is_inline(statement) and statement is not Assignment | Pass | Throw | Return
 
 # `'...'` for `"..."`, and `b'...'` for `b"..."`, where they write the same (see String literals);
 # otherwise the escapes of ASCII characters as Escapes writes them.
