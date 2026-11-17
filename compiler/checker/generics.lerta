@@ -84,6 +84,10 @@ export class GenericFunction
     definition: Definition
   instances: Instance[] = []
 
+  # The instances that bodies checked at their definitions call (see signature). Only the weak
+  # links of the calls point to them, so the generic keeps them alive for the language server.
+  signatures: Instance[] = []
+
 # The check of the body at its definition, once, with the type parameters standing for themselves,
 # whose members are those of their bounds alone. What it finds goes to no instance, nor to codegen.
 export class Definition
@@ -205,9 +209,9 @@ add_instance := (
   instance
 
 # The instance of type arguments that name type parameters, which a body checked at its definition
-# calls: its type alone, from the callee's definition when the return type is inferred. No generic
-# keeps it, so codegen never sees it, and its defaults are not checked, as they need not fit
-# every type argument.
+# calls: its type alone, from the callee's definition when the return type is inferred. The generic
+# keeps it apart from its instances, so codegen never sees it, and its defaults are not checked, as
+# they need not fit every type argument.
 signature := (
   program: ProgramWide, ref: GenericRef, type_arguments: Type[], methods: ExtensionMethod[],
   at: Position
@@ -215,6 +219,7 @@ signature := (
   generic := generic_of(program, ref)
   instance := new_instance(program, ref, type_arguments, methods, 0, at)
   instance.defaults_checked = true
+  generic.signatures.push instance
   return instance if instance.entry.type
   check_definition program, generic
   definition := generic.definition.entry

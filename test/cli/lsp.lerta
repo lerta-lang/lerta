@@ -495,6 +495,41 @@ generic_hover_check := ->
       )...
     ]
 
+generic_callee_check := ->
+  Check(name: 'lerta lsp leads a generic callee in a generic body to its definition', run: ->
+    dir := new_cli_dir('lsp-generic-callee')
+    path := "#{dir}/a.lerta"
+    text :=
+      'count := <T>(x: T) -> counted(x)'
+      'counted := <T>(item: T) -> 1'
+      'class Plain'
+      '  pick := <U>(u: U): Int -> 1'
+      'total := <T>(x: T) -> Plain().pick(x)'
+      ''
+    .join("\n")
+    await write_file(path, text)
+    uri := uri_of(path)
+    messages :=
+      did_open(uri, text)
+      hover_request(uri, 0, 22, 1)
+      definition_request(uri, 0, 22, 2)
+      hover_request(uri, 4, 30, 3)
+      definition_request(uri, 4, 30, 4)
+    ran := await session(dir, messages.join())
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout_text()
+        [
+          hover_fragment(1, 'counted: (T) -> Int')
+          location_fragment(2, uri, 1, 0, 7)
+          hover_fragment(3, 'pick: (T) -> Int')
+          location_fragment(4, uri, 3, 2, 6)
+        ]
+      )...
+    ]
+  )
+
 definition_contexts_check := ->
   Check name: 'lerta lsp finds assigned fields, enum members, bindings, and methods', run: ->
     dir := new_cli_dir('lsp-definition-contexts')
@@ -1193,6 +1228,7 @@ export checks :=
   close_unsaved_import_check()
   hover_definition_check()
   generic_hover_check()
+  generic_callee_check()
   definition_contexts_check()
   hover_contexts_check()
   optional_and_interpolation_check()

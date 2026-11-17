@@ -107,12 +107,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `lerta fmt` reports nothing for `x := a then b then c else d else e`.
 - How to fix it: have the rewrite of Parentheses add them around the inner value, after which `parts_of` finds each value.
 
-## Hover and definition fail in a document where a generic function calls a generic function
-
-- Where: `add_generic_callees` in `compiler/lsp/locate.lerta` reads `link.instance` of each call in `facts.instances`, a weak reference, which is gone for the instance that a generic function's body calls when it is checked at its definition.
-- How to see it: in a document of `count := <T>(x: T) -> counted(x)` and `counted := <T>(item: T) -> 1`, `textDocument/hover` and `textDocument/definition` answer `InternalError`, `weak object is gone`, at every position.
-- How to fix it: keep those instances alive as long as the facts that link to them, or pass over a link whose instance is gone.
-
 ## A constant expression of a `UInt64` literal beyond `Int` is not evaluated
 
 - Where: `constant_value` in `compiler/checker/constants.lerta` takes an integer literal's `value`, which is nil for one beyond `Int`, so the literal and what it is an operand of are no constants.
