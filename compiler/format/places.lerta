@@ -7,13 +7,15 @@ import
   Return, Statement, Throw, Try, TupleItem, TupleLiteral, TypeDeclaration, UnaryOperation, Unwrap,
   While, Yield
 from '../ast'
+import is_taken_apart from './forms'
 
 # What puts a value in the place of an expression in the syntax tree.
 export type Place = (Expression) -> void
 
 # What is done at an expression in its place, in the order of the source: before its parts are
 # visited, and after; at the condition of an `if` or a `while` that binds no name, after it; and at
-# each statement, after its parts, with the statement after it in its block.
+# each statement, after its parts, with the statement written after it in its block (see
+# written_after).
 export struct Visit
   before: ((Expression, Place) -> void)?
   after: ((Expression, Place) -> void)?
@@ -35,7 +37,14 @@ visit_statements := (visit: Visit, statements: Statement[]): void ->
   for statement at i in statements
     visit_statement visit, statement, (value) -> statements[i] = value
     if at_statement := visit.statement
-      at_statement statement, statements.get(i + 1)
+      at_statement statement, written_after(statements, i)
+
+# The statement written after the one at `at`, past the declarations that take a destructuring
+# apart, which have no tokens.
+written_after := (statements: Statement[], at: Int) ->
+  for next in (at + 1)..statements.length
+    return statements[next] unless is_taken_apart(statements[next])
+  nil
 
 visit_statement := (visit: Visit, statement: Statement, place: Place) ->
   case statement
