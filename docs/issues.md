@@ -127,12 +127,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `x: UInt64 = 18446744073709551615 + 1` compiles and throws `integer overflow` as it runs, and `9223372036854775808 << 64` in a branch that never runs is no error, where a [constant expression](reference/types.md#constant-expressions) that would throw is a compile error.
 - How to fix it: take such a literal's value by `uint64_value` where a `UInt64` is expected.
 
-## `lerta fmt` fails on `unless not` and `until not`
-
-- Where: `double_negation` in `compiler/format/conditions.lerta` takes the `not` that `unless` and `until` stand for as one written, and edits a token that is not there.
-- How to see it: `lerta fmt` ends with `slice out of range` and a trace for `print 1 unless not done`, and for an `unless` or an `until` with a block likewise.
-- How to fix it: tell the negation of `unless` and `until` from a written `not`, and write `if x` for `unless not x`, and `while x` for `until not x`.
-
 ## `lerta fmt` fails on a long two-way value whose `else` value is on the next line
 
 - Where: `two_way_block` in `compiler/format/two_way.lerta` slices the tokens of a part that `parts_of` gave it past the line where the value starts.
