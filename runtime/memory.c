@@ -228,15 +228,21 @@ static const LertaType weak_box_type = {
 static char dropping;
 #define DROPPING ((void *)&dropping)
 
+// A box whose count is 0 is queued to be dropped (see drop_released): the slot takes a new one, and
+// the queued box lets go of the slot, which its drop would otherwise clear after the new box took it.
 void *lerta_weak_box(void *object, void **slot) {
-  if (*slot != NULL && *slot != DROPPING) {
-    lerta_retain(*slot);
-    return *slot;
+  LertaWeakBox *current = *slot;
+  if (current != NULL && current != DROPPING) {
+    if (current->header.ref_count > 0) {
+      lerta_retain(current);
+      return current;
+    }
+    current->object = NULL;
   }
   LertaWeakBox *box = lerta_new(sizeof(LertaWeakBox), &weak_box_type);
   box->object = *slot == DROPPING ? NULL : object;
   box->slot = slot;
-  if (*slot == NULL) *slot = box;
+  if (*slot != DROPPING) *slot = box;
   return box;
 }
 

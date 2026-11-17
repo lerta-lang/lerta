@@ -1,0 +1,39 @@
+# A weak local made in a deinit, of an object whose weak box another weak local released there and
+# so queued to be dropped, takes a box of its own, which outlives the drop of the queued one and
+# lets go of the object once it is gone.
+class Target
+  args
+    n: Int
+
+class Other
+  args
+    a: Int
+    b: Int
+
+class Trigger
+  deinit := ->
+    look()
+    weak again := keep[0]
+    later.push ->
+      if t := again
+        print t.n
+      else
+        print 'gone'
+
+look := ->
+  weak first := keep[0]
+  print t.n if t := first
+
+keep := [Target(7)]
+later: (() -> void)[]
+spray: Other[]
+junk: String[]
+make := -> Trigger()
+make()
+for i in 0..2000
+  spray.push Other(a: 0x41414141, b: 0x42424242)
+  junk.push "#{i}xxxxxxxxxxxxxxxx"
+later[0]()
+keep.pop()
+later[0]()
+print 'end'

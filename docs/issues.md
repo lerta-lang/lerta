@@ -2,51 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## A weak box queued to be dropped is handed out again
-
-- Where: `lerta_weak_box` in `runtime/memory.c` retains and returns the box that the object's slot points at. A box released while another object is dropped, as in a `deinit`, is queued (`drop_released`) and keeps the slot pointing at it until it is dropped, so that a weak local of the object made meanwhile takes that box, whose count was 0. `drain_to` then frees it, whatever its count, and the weak local, or a function literal that captures it, holds the box freed.
-- How to see it: with `-O`, this program stops with a segmentation fault as it calls the literal; without it, or with `--memory-checks`, the debug runtime stops it with `retain of a dropped object`.
-
-  ```lerta
-  class Target
-    args
-      n: Int
-
-  class Other
-    args
-      a: Int
-      b: Int
-
-  class Trigger
-    deinit := ->
-      look()
-      weak again := keep[0]
-      later.push ->
-        if t := again
-          print t.n
-        else
-          print 'gone'
-
-  look := ->
-    weak first := keep[0]
-    if t := first
-      print t.n
-
-  keep := [Target(n: 7)]
-  later: (() -> void)[] = []
-  spray: Other[] = []
-  junk: String[] = []
-  make := -> Trigger()
-  make()
-  for i in 0..2000
-    spray.push Other(a: 0x41414141, b: 0x42424242)
-    junk.push "#{i}xxxxxxxxxxxxxxxx"
-  later[0]()
-  print 'end'
-  ```
-
-- How to fix it: have `lerta_weak_box` make a new box, and point the slot at it, where the slot's box has a count of 0; and have a box's drop clear the slot only while the slot still points at that box.
-
 ## A map's key whose `equals` changes the map is used after it is freed
 
 - Where: `find_slot` in `runtime/map.c` calls the keys' `hash` and `equals`, which are the program's own for a class or struct that declares it, in the middle of its probe, and goes on with the slots, the entry and its key afterwards, as do `lerta_map_find`, `lerta_map_place` and `lerta_map_remove` with what it finds. One that removes the key, or that adds keys and so grows the map, leaves them freed or moved. `lerta_map_equals` likewise keeps an entry of one map across `lerta_map_find` in the other, whose `hash` and `equals` may change the first.
