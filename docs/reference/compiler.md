@@ -321,6 +321,7 @@ The rewrites below depend on the checking of a program that holds the file.
 | [Emptiness tests written with `is_empty`](#emptiness-tests-written-with-is_empty) | [Emptiness tests](style.md#emptiness-tests) |
 | [Arms of one body](#arms-of-one-body) | [Shared arm bodies](style.md#shared-arm-bodies) |
 | [Cases of types written with `is`](#cases-of-types-written-with-is) | [Union cases](style.md#union-cases) |
+| [Cases of one arm written with `if`](#cases-of-one-arm-written-with-if) | [Branches](style.md#branches) |
 | [Copies written as spreads](#copies-written-as-spreads) | [Spreads](style.md#spreads) |
 | [Casts left out](#casts-left-out) | [Redundant casts](style.md#redundant-casts) |
 | [Unused names left out](#unused-names-left-out) | [Unused names](style.md#unused-names) |
@@ -470,8 +471,18 @@ Besides:
 #### Cases of types written with `is`
 
 - It writes a `case` of types with one arm that gives `true` and an `else` that gives `false`, `case x` / `when A, B then true` / `else false`, as `x is A | B`, and one that gives them the other way round as `x is not A | B`.
-- Only a `case` that is a statement or the whole value of one, as `y := case x`, whose subject is a name, a path of fields, a call or an index, and whose patterns are on the line of `when`. One whose arms each return is first written as a `return` of it (see [Branches](style.md#branches)).
+- Only a `case` that is a statement or the whole value of a declaration or an assignment, as `y := case x`, whose subject is a name, a path of fields, a call or an index, and whose patterns are on the line of `when`. One whose arms each return is first written as a `return` of it (see [Branches](style.md#branches)).
 - Not an arm of `nil`, nor a `case` that holds a comment, which the test could not hold; that is only reported.
+
+#### Cases of one arm written with `if`
+
+- It writes a `case` of one arm and `else` as an `if` and its `else`, which `else pass` is left out of:
+  - one without a subject as an `if` of its condition;
+  - one of types, `when A, B`, as `if x is A | B`;
+  - one of values, `when a` or `when a, b`, as `if x == a` or `if x in [a, b]`.
+- Only a `case` that is a statement or the whole value of a declaration or an assignment, whose subject is a name, a path of fields, a call or an index, and whose patterns are on the line of `when`; those of values only where each is a name, a path of fields from one or a literal, and the subject is not of an optional.
+- Not a `case` without `else`, which handles each type or member of its subject; nor one with an arm of `nil`, or whose arm is `pass`; nor one that gives or returns a Bool literal in each branch, which for types is a test of their union (see [Cases of types written with `is`](#cases-of-types-written-with-is)).
+- Not one with a comment before its first arm or its `else`, which would go elsewhere in the `if`; that is only reported.
 
 #### Copies written as spreads
 

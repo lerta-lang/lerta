@@ -1,0 +1,111 @@
+# `if` for a `case` of one arm and `else` (see Branches).
+import BooleanLiteral, Case, NilLiteral, Pass, Return, Statement from '../ast'
+import NodeFacts from '../checker/shared'
+import OptionalType from '../types'
+import SINGLE_ARM_CASES from './rules'
+import runs_no_code from './expressions'
+import statement_last from './expression_tokens'
+import whole_value from './two_way'
+import branches_on_types, is_plain_subject, pattern_texts, patterns_end from './union_cases'
+import Change, Edit from './edits'
+import Tokens from './tokens'
+
+# The tokens of a case of one arm that the edit changes.
+struct ArmTokens
+  # The indices of `case`, of `when` and of the last token of the case.
+  keyword: Int
+  when_at: Int
+  last: Int
+
+  # The spaces of the line that holds `case`, which `if` and `else` take.
+  indentation: Int
+
+# The case that is the statement, or the whole value of one, as `x := case ...`; one without `else`
+# stays a case, which handles each type or member of its subject (see Branches), and so does one
+# that gives or returns a Bool literal in each branch, which Union cases writes as a test.
+export single_arm_case := (tokens: Tokens, statement: Statement, facts: NodeFacts): Edit? ->
+  # That of a `return` stays, as `return` would take the `if` on its line.
+  return nil if statement is Return
+  written := whole_value(statement) as Case else statement as Case else return nil
+  return nil if written.arms.length != 1 or written.otherwise == nil
+  return nil if written.arms[0].body.any((body) -> body is Pass)
+  return nil if gives_bool(written.arms[0].body) and gives_bool(written.otherwise)
+  arm_tokens := arm_tokens_of(tokens, written) else return nil
+  condition := condition_of(tokens, written, arm_tokens, facts) else return nil
+  head := head_change(tokens, arm_tokens, condition)
+  otherwise := else_changes(tokens, written, arm_tokens) else return nil
+  tokens.edit_at(SINGLE_ARM_CASES, written.position, [head, otherwise...])
+
+# Whether the body is a Bool literal alone, or a `return` of one.
+gives_bool := (body: Statement[]) ->
+  return false if body.length != 1
+  given := body[0]
+  value := given is Return then given.value else given
+  value is BooleanLiteral
+
+arm_tokens_of := (tokens: Tokens, value: Case): ArmTokens? ->
+  keyword := tokens.at(value.position) else return nil
+  first_pattern := tokens.at(value.arms[0].patterns[0].position) else return nil
+  when_at := first_pattern - 1
+  return nil if not tokens.is_kind(keyword, 'case') or not tokens.is_word(when_at, 'when')
+  indentation := tokens.line_indentation(tokens.code[keyword].line) else 0
+  { keyword, when_at, last: statement_last(tokens, keyword, indentation), indentation }
+
+# The condition of the `if`: that of a case without a subject, or a test of the subject,
+# `x is A | B` for patterns of types, and `x == a` or `x in [a, b]` for values, which the patterns
+# must be written alone for, as the subject compares with each, but not that of nil or of an
+# optional.
+condition_of := (tokens: Tokens, value: Case, arm: ArmTokens, facts: NodeFacts) ->
+  patterns := pattern_texts(tokens, arm.when_at) else return nil
+  subject := value.subject else return patterns[0]
+  return nil unless is_plain_subject(subject)
+  written := tokens.slice(tokens.start(arm.keyword + 1), tokens.end(arm.when_at - 1))
+  pattern_values := value.arms[0].patterns
+  return nil if pattern_values.any((pattern) -> pattern is NilLiteral)
+  return "#{written} is #{patterns.join(' | ')}" if branches_on_types(subject, facts)
+  return nil if facts.types[subject] is OptionalType or not pattern_values.all(runs_no_code)
+  return "#{written} == #{patterns[0]}" if patterns.length == 1
+  "#{written} in [#{patterns.join(', ')}]"
+
+# `if` and its condition for `case` up to the arm's body, which goes on the line below `if` where
+# it is on the line of `when`.
+head_change := (tokens: Tokens, arm: ArmTokens, condition: String): Change ->
+  end := patterns_end(tokens, arm.when_at)
+  from := tokens.start(arm.keyword)
+  if tokens.is_kind(end, 'then')
+    body := ' '.repeat(arm.indentation + 2)
+    { from, to: tokens.start(end + 1), text: "if #{condition}\n#{body}" }
+  else
+    { from, to: tokens.end(end - 1), text: "if #{condition}" }
+
+# The `else` on the spaces of `if`, and its body on the line below it where it is on its line; or,
+# for `else pass`, the `else` taken out.
+else_changes := (tokens: Tokens, value: Case, arm: ArmTokens): Change[]? ->
+  otherwise := value.otherwise!
+  else_at := else_of(tokens, arm) else return nil
+  if otherwise.length == 1 and otherwise[0] is Pass
+    return nil if else_at + 1 != arm.last
+    return [{ text: '', from: tokens.end(else_at - 1), to: tokens.end(arm.last) }]
+
+  # From the end of the arm, so that a comment before `else`, which would go into the `if`, leaves
+  # the edit only reported.
+  spaces := Change
+    text: "\n#{' '.repeat(arm.indentation)}"
+    from: tokens.end(else_at - 1)
+    to: tokens.start(else_at)
+  return [spaces] if tokens.code[else_at + 1].line > tokens.code[else_at].line
+  body := Change
+    text: "\n#{' '.repeat(arm.indentation + 2)}"
+    from: tokens.end(else_at)
+    to: tokens.start(else_at + 1)
+  [spaces, body]
+
+# The `else` of the case: the one that starts a line with the spaces of the arm.
+else_of := (tokens: Tokens, arm: ArmTokens) ->
+  arm_indentation := tokens.line_indentation(tokens.code[arm.when_at].line) else return nil
+  for at in arm.when_at + 1..=arm.last
+    token := tokens.code[at]
+    starts_line := token.line > tokens.code[at - 1].end_line
+    is_arm := tokens.line_indentation(token.line) == arm_indentation
+    return at if tokens.is_kind(at, 'else') and starts_line and is_arm
+  nil

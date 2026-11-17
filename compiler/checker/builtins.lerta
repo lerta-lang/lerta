@@ -111,21 +111,20 @@ equality_method := (program: ProgramWide, receiver: Type, name: String): Builtin
     nil
 
 value_method := (program: ProgramWide, receiver: Type, name: String) ->
-  case name
-    when 'compare'
-      return nil unless is_one_of_kinds(receiver, [NUMBER_KINDS..., 'Char', ENUM])
-      method(NUMBER_COMPARE, [receiver], ordering_type(program))
+  if name == 'compare'
+    return nil unless is_one_of_kinds(receiver, [NUMBER_KINDS..., 'Char', ENUM])
+    method(NUMBER_COMPARE, [receiver], ordering_type(program))
+  else
+    if receiver is EnumType
+      return method(ENUM_TO_STRING, [], string_type) if name == 'to_string'
+      return method(ENUM_TO_LITERAL, [], string_type) if name == 'to_literal'
+    return operator if operator := operator_method(receiver, name)
+    return char_method(name) if is_kind(receiver, 'Char')
+    return conversion if conversion := float_conversion(receiver, name)
+    if is_integer(receiver)
+      integer_method(receiver, name)
     else
-      if receiver is EnumType
-        return method(ENUM_TO_STRING, [], string_type) if name == 'to_string'
-        return method(ENUM_TO_LITERAL, [], string_type) if name == 'to_literal'
-      return operator if operator := operator_method(receiver, name)
-      return char_method(name) if is_kind(receiver, 'Char')
-      return conversion if conversion := float_conversion(receiver, name)
-      if is_integer(receiver)
-        integer_method(receiver, name)
-      else
-        nil
+      nil
 
 # The method that an operator calls, `add` for `+` and so on, of a type that the operator applies
 # to, which applies it: the numbers', and String's and Binary's add.

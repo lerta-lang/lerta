@@ -44,7 +44,8 @@ given_by_arm := (value: Case, facts: NodeFacts) ->
   given != otherwise then given
 
 # A subject that `is` binds tighter than, as the subject of a case binds whole.
-is_plain_subject := (subject: Expression?) -> subject is Identifier | Member | Call | Index | This
+export is_plain_subject := (subject: Expression?) ->
+  subject is Identifier | Member | Call | Index | This
 
 # The Bool of the body that is the literal alone.
 given_bool := (body: Statement[]) ->
@@ -53,24 +54,34 @@ given_bool := (body: Statement[]) ->
 
 # Whether the patterns of a case of the subject are types, as they are where it is of a union of
 # types that are no values, which the checking tells from its type.
-branches_on_types := (subject: Expression, facts: NodeFacts) ->
+export branches_on_types := (subject: Expression, facts: NodeFacts) ->
   written := facts.types[subject] else return false
   type := inner_of(written)
   type is UnionType and not is_value_type(type)
 
-# The patterns of the arm whose `when` is at `when_at`, each as written, up to its `then` on its
-# line.
-pattern_texts := (tokens: Tokens, when_at: Int) ->
+# The index after the patterns of the arm whose `when` is at `when_at`: its `then`, or the first
+# token of its body on the lines below.
+export patterns_end := (tokens: Tokens, when_at: Int) ->
+  line := tokens.code[when_at].line
+  var depth = 0
+  var at = when_at + 1
+  while at < tokens.code.length and tokens.code[at].line == line
+    break if depth == 0 and tokens.is_kind(at, 'then')
+    depth += depth_change(tokens.code[at].kind)
+    at += 1
+  at
+
+# The patterns of the arm whose `when` is at `when_at`, each as written.
+export pattern_texts := (tokens: Tokens, when_at: Int) ->
   texts: String[]
+  end := patterns_end(tokens, when_at)
   var first = when_at + 1
   var depth = 0
-  line := tokens.code[when_at].line
-  for at in first..tokens.code.length
-    return nil if tokens.code[at].line > line
-    if depth == 0 and (tokens.is_kind(at, ',') or tokens.is_kind(at, 'then'))
+  for at in first..=end
+    if at == end or depth == 0 and tokens.is_kind(at, ',')
       return nil if at == first
       texts.push tokens.slice(tokens.start(first), tokens.end(at - 1))
-      return texts if tokens.is_kind(at, 'then')
       first = at + 1
-    depth += depth_change(tokens.code[at].kind)
-  nil
+    if at < end
+      depth += depth_change(tokens.code[at].kind)
+  texts

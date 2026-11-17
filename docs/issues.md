@@ -14,6 +14,12 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `lerta fmt` fails with `failed cast` on a function whose body holds `return nil if xs.any((x) ->`, a body of two lines, and `)`.
 - How to fix it: leave such a statement as written, or move the condition's lines with it into the block.
 
+## `# fmt: off` keeps only the first line of a destructuring
+
+- Where: `kept_lines` in `compiler/format/rewrites.lerta` ends what a statement keeps where the next statement starts, and the declarations that take a destructuring apart start at its names, on its first line.
+- How to see it: `lerta fmt` reports Emptiness tests for `xs.length == 0` in `{ x, y } :=`, then `case xs.length` and its arms on the lines below, between `# fmt: off` and `# fmt: on`.
+- How to fix it: skip the declarations that take a destructuring apart (`is_taken_apart`) when finding the next statement.
+
 ## A long two-way value over several lines is left as it is
 
 - Where: `parts_of` in `compiler/format/two_way.lerta` finds the parts of a two-way value only on the line where it starts.
