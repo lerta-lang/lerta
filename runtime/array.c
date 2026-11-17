@@ -191,18 +191,45 @@ void lerta_array_take_last(LertaArray *array, void *item) {
   memcpy(item, item_at(array, array->length), (size_t)lerta_item_size(array->item_kind));
 }
 
+// An item that the program's own `equals` or `hash` is given is copied and held across the call, as
+// the call may remove items of the array, which would free them. As the call may change the array's
+// length too, the callers check it again at each item.
+static LertaItem hold_item(const LertaArray *array, int64_t index) {
+  LertaItem item;
+  memcpy(&item, item_at(array, index), (size_t)lerta_item_size(array->item_kind));
+  lerta_retain_item(array->item_kind, &item);
+  return item;
+}
+
+static bool same_items(const LertaArray *a, const LertaArray *b, int64_t index, LertaEquals equals) {
+  LertaItemKind kind = a->item_kind;
+  LertaItem a_item = hold_item(a, index);
+  LertaItem b_item = hold_item(b, index);
+  bool same = equals(lerta_item_word(kind, &a_item), lerta_item_word(kind, &b_item));
+  lerta_release_item(kind, &a_item);
+  lerta_release_item(kind, &b_item);
+  return same;
+}
+
+static uint64_t item_hash(const LertaArray *array, int64_t index, LertaHash hash) {
+  LertaItem item = hold_item(array, index);
+  uint64_t result = hash(lerta_item_word(array->item_kind, &item));
+  lerta_release_item(array->item_kind, &item);
+  return result;
+}
+
 bool lerta_array_equals(const LertaArray *a, const LertaArray *b, LertaEquals equals) {
   if (a->length != b->length) return false;
   for (int64_t i = 0; i < a->length; i++) {
-    if (!equals(lerta_word_item(a, i), lerta_word_item(b, i))) return false;
+    if (i >= b->length || !same_items(a, b, i, equals)) return false;
   }
-  return true;
+  return a->length == b->length;
 }
 
 uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash) {
   uint64_t result = (uint64_t)array->length;
   for (int64_t i = 0; i < array->length; i++) {
-    result = result * 31 + hash(lerta_word_item(array, i));
+    result = result * 31 + item_hash(array, i, hash);
   }
   return result;
 }

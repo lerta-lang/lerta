@@ -191,6 +191,7 @@ Rules:
 - They are methods of the type itself. No extend can declare `equals` or `hash`, which every type that `==` compares already has (`an extend cannot declare equals`), and an extend of a class or struct cannot declare `compare`.
 - They cannot throw. An exception that leaves one is a panic, `equals, compare or hash threw an exception`, since `==` and map keys cannot pass it on.
 - They cannot change a map that is comparing by them. While a map looks up, places or removes a key, or `==` compares two maps, a `hash` or `equals` that places or removes a key of that map is a panic, `a map changed while its keys or values were compared`.
+- They may change an array that `==` is comparing by them. Where it is then shorter or longer than the other, the arrays are not equal.
 - [Equatable, Comparable and Hashable](builtins.md#equatable-comparable-and-hashable) are the interfaces of these methods.
 
 ### Operators
