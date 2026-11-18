@@ -1,0 +1,59 @@
+# The normal forms of Unicode, by their code points, of texts that show each step: NormalizationTest
+# checks every case it lists (see normalization_test.lerta).
+codes := (text: String) -> [c.to_int().to_hex(4) for c in text].join(' ')
+forms: NormalForm[] = [NFC, NFD, NFKC, NFKD]
+show := (text: String) ->
+  normal := [
+    for form in forms
+      codes(text.normalize(form))
+  ]
+  print normal.join(' | ')
+
+# ASCII and the empty text are normal in every form, and given as they are.
+show 'plain text'
+show ''
+
+# é composed and decomposed; ﬁ, a ligature, decomposed only by compatibility.
+show "e\u{301}"
+show 'é'
+show 'ﬁ'
+
+# The combining marks below and above are put in canonical order, by their classes, 220 and 230;
+# the cedilla, of class 202, composes with the a first, and the others follow it.
+show "a\u{301}\u{323}\u{328}"
+
+# A mark of the same class as one before it is blocked from the starter: the second acute stays.
+show "e\u{301}\u{301}"
+
+# A text that starts with a mark composes nothing before it.
+show "\u{301}e"
+
+# Hangul: a syllable of a leading consonant, a vowel and a trailing one, and those composed back.
+show '한'
+show "\u{1112}\u{1161}\u{11AB}"
+
+# A syllable of a consonant and a vowel takes a trailing consonant, and one that has one takes no
+# other; a mark between a leading consonant and a vowel blocks them.
+show "\u{AC00}\u{11A8}"
+show "\u{AC01}\u{11A8}"
+show "\u{1100}\u{301}\u{1161}"
+
+# A starter composes with a starter after it unless a mark between them blocks it: the Oriya
+# vowel signs U+0B47 and U+0B3E compose, but not past a grave accent.
+show "\u{B47}\u{B3E}"
+show "\u{B47}\u{300}\u{B3E}"
+
+# ẛ decomposes canonically to a long s and a dot, and the long s again by compatibility to s.
+show "\u{1E9B}"
+
+# A vowel alone, whose quick check is Maybe, is normal in NFC, as no consonant comes before it.
+show "\u{1161}"
+
+# The ohm sign is a singleton, decomposed to omega and never composed back; U+0958, a Devanagari
+# letter excluded from composition, stays decomposed in NFC.
+show "\u{2126}"
+show "\u{958}"
+
+# A long run of marks is put in order without taking a time of its square.
+long_run := 'a' + "\u{301}\u{323}".repeat(20000)
+print long_run.normalize(NFD) == 'a' + "\u{323}".repeat(20000) + "\u{301}".repeat(20000)

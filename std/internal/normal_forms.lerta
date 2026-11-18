@@ -1,0 +1,186 @@
+# Unicode's normal forms, by UAX #15, which String.normalize gives (see std/builtins/text.lerta):
+# a text is decomposed, its combining marks put in canonical order, and composed again for NFC and
+# NFKC. Hangul syllables are decomposed and composed by arithmetic, and the rest by tables that
+# tools/unicode.lerta writes, which std/internal/unicode.lerta describes.
+import in_ranges, row_of, value_at from './unicode'
+import './unicode/canonical_index.bin' as CANONICAL_INDEX: Binary
+import './unicode/combining_classes.bin' as COMBINING_CLASSES: Binary
+import './unicode/compatibility_index.bin' as COMPATIBILITY_INDEX: Binary
+import './unicode/compositions.bin' as COMPOSITIONS: Binary
+import './unicode/decompositions.bin' as DECOMPOSITIONS: Binary
+import './unicode/nfc_check.bin' as NFC_CHECK: Binary
+import './unicode/nfd_check.bin' as NFD_CHECK: Binary
+import './unicode/nfkc_check.bin' as NFKC_CHECK: Binary
+import './unicode/nfkd_check.bin' as NFKD_CHECK: Binary
+
+# The rows of a combining class, a code point and its class; of an index of decompositions, a code
+# point, the place of its decomposition in DECOMPOSITIONS and its length; and of a composition, two
+# code points and the one they compose to.
+CLASS_WIDTH := 2
+INDEX_WIDTH := 3
+COMPOSITION_WIDTH := 3
+
+# The text in the normal form: of compatibility, NFKD or NFKC, or canonical, NFD or NFC, and
+# composed, NFC or NFKC, or not. A text that the quick check finds normal, as an ASCII one, is
+# given as it is.
+export normalized := (text: String, compatibility: Bool, composed: Bool) ->
+  return text if is_normal(text, quick_check(compatibility, composed))
+  codes := decomposed(text, compatibility)
+  put_in_canonical_order codes
+  compose codes if composed
+  var result = ''
+  result += code.to_char()! for code in codes
+  result
+
+# The characters whose quick check, by DerivedNormalizationProps.txt, is not Yes for the form.
+quick_check := (compatibility: Bool, composed: Bool) ->
+  case
+    when compatibility and composed then NFKC_CHECK
+    when compatibility then NFKD_CHECK
+    when composed then NFC_CHECK
+    else NFD_CHECK
+
+# Whether the text is normal already: each of its characters' quick check is Yes, and their
+# combining classes are in order. An ASCII byte is a character of class 0 that is normal in every
+# form, so that ASCII text reads no table.
+is_normal := (text: String, check: Binary) ->
+  var last_class = 0
+  for c in text
+    code := c.to_int()
+    if code < 0x80
+      last_class = 0
+      continue
+    combining := combining_class(code)
+    return false if combining != 0 and combining < last_class
+    return false if in_ranges(check, code)
+    last_class = combining
+  true
+
+combining_class := (code: Int) ->
+  row := row_of(COMBINING_CLASSES, CLASS_WIDTH, code) else return 0
+  value_at(COMBINING_CLASSES, row * CLASS_WIDTH + 1)
+
+# The code points of the text, each decomposed in full.
+decomposed := (text: String, compatibility: Bool) ->
+  index := compatibility then COMPATIBILITY_INDEX else CANONICAL_INDEX
+  codes: Int[]
+  for c in text
+    code := c.to_int()
+    if is_syllable(code)
+      codes.append hangul_decomposition(code)
+    else if row := row_of(index, INDEX_WIDTH, code)
+      start := value_at(index, row * INDEX_WIDTH + 1)
+      length := value_at(index, row * INDEX_WIDTH + 2)
+      for i in start..(start + length)
+        codes.push value_at(DECOMPOSITIONS, i)
+    else
+      codes.push code
+  codes
+
+# Each run of characters whose combining class is not 0 sorted by class, keeping the order of those
+# of the same class: by a merge sort, which a long run, as a text from outside may hold, takes in
+# n log n.
+put_in_canonical_order := (codes: Int[]) ->
+  classes := [combining_class(code) for code in codes]
+  var start = 0
+  while start < codes.length
+    if classes[start] == 0
+      start += 1
+      continue
+    var end = start + 1
+    end += 1 while end < codes.length and classes[end] != 0
+    if end - start > 1
+      sort_run codes, classes, start, end
+    start = end
+
+# The characters from `start` to `end` sorted by class, as (class, place) pairs order them.
+sort_run := (codes: Int[], classes: Int[], start: Int, end: Int) ->
+  places := [place for place in start..end].sorted_by((place) -> (classes[place], place))
+  sorted := [codes[place] for place in places]
+  for code at k in sorted
+    codes[start + k] = code
+
+# The canonical composition, in place: each character that composes with the last starter before
+# it, unless a character between them is a starter or of its class or above, is replaced by their
+# composite. A text that starts with no starter composes nothing before its first.
+compose := (codes: Int[]) ->
+  return if codes.is_empty()
+  var starter = 0
+  var last_class =
+    if combining_class(codes[0]) == 0
+      0
+    else
+      BLOCKING_CLASS
+  var written = 1
+  for i in 1..codes.length
+    code := codes[i]
+    combining := combining_class(code)
+    composite := composition(codes[starter], code)
+    if composite != nil and (last_class < combining or last_class == 0)
+      codes[starter] = composite
+      continue
+    starter = written if combining == 0
+    last_class = combining
+    codes[written] = code
+    written += 1
+  codes.pop() while codes.length > written
+
+# Above every combining class, so that no character composes with a starter before it.
+BLOCKING_CLASS := 256
+
+# The primary composite of the two characters, or nil.
+composition := (first: Int, second: Int) ->
+  return hangul_composition(first, second) if is_lead(first) or is_syllable(first)
+  key := pair_key(first, second)
+  var low = 0
+  var high = COMPOSITIONS.length / (4 * COMPOSITION_WIDTH)
+  while low < high
+    middle := (low + high) / 2
+    at := middle * COMPOSITION_WIDTH
+    middle_key := pair_key(value_at(COMPOSITIONS, at), value_at(COMPOSITIONS, at + 1))
+    if middle_key == key
+      return value_at(COMPOSITIONS, at + 2)
+    if middle_key < key
+      low = middle + 1
+    else
+      high = middle
+  nil
+
+# The pair as one number, which orders pairs as the table does: by the first, then by the second.
+pair_key := (first: Int, second: Int) -> first * 0x110000 + second
+
+# Hangul, by the arithmetic of the Unicode Standard's section 3.12: a syllable is a leading
+# consonant, a vowel and a trailing consonant, the 0th of which, TRAIL_BASE, stands for none.
+SYLLABLE_BASE := 0xAC00
+LEAD_BASE := 0x1100
+VOWEL_BASE := 0x1161
+TRAIL_BASE := 0x11A7
+LEAD_COUNT := 19
+VOWEL_COUNT := 21
+TRAIL_COUNT := 28
+SYLLABLE_COUNT := LEAD_COUNT * VOWEL_COUNT * TRAIL_COUNT
+
+is_syllable := (code: Int) -> code in SYLLABLE_BASE..(SYLLABLE_BASE + SYLLABLE_COUNT)
+is_lead := (code: Int) -> code in LEAD_BASE..(LEAD_BASE + LEAD_COUNT)
+is_vowel := (code: Int) -> code in VOWEL_BASE..(VOWEL_BASE + VOWEL_COUNT)
+is_trail := (code: Int) -> code in (TRAIL_BASE + 1)..(TRAIL_BASE + TRAIL_COUNT)
+
+hangul_decomposition := (syllable: Int) ->
+  index := syllable - SYLLABLE_BASE
+  lead := LEAD_BASE + index / (VOWEL_COUNT * TRAIL_COUNT)
+  vowel := VOWEL_BASE + index % (VOWEL_COUNT * TRAIL_COUNT) / TRAIL_COUNT
+  trail := index % TRAIL_COUNT
+  if trail == 0
+    [lead, vowel]
+  else
+    [lead, vowel, TRAIL_BASE + trail]
+
+# A syllable of a leading consonant and a vowel, or of such a syllable and a trailing consonant.
+hangul_composition := (first: Int, second: Int) ->
+  if is_lead(first)
+    return nil unless is_vowel(second)
+    index := (first - LEAD_BASE) * VOWEL_COUNT + second - VOWEL_BASE
+    return SYLLABLE_BASE + index * TRAIL_COUNT
+  has_trail := (first - SYLLABLE_BASE) % TRAIL_COUNT != 0
+  return nil if has_trail or not is_trail(second)
+  first + second - TRAIL_BASE

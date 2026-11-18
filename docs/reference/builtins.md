@@ -60,6 +60,10 @@ n := dbg(xs.length) + 1
 
 The least and the greatest [Int](types.md#int): `-9223372036854775808` and `9223372036854775807`.
 
+## NormalForm
+
+The normal forms of Unicode, an enum that [`s.normalize(form)`](types.md#string) takes: `NFC`, `NFD`, `NFKC` and `NFKD`.
+
 ## Stringable
 
 - An [interface](objects.md#interfaces) with one member, `to_string: () -> String`. [String interpolation](syntax.md) goes through it.
@@ -200,7 +204,7 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `add(count: Int): Char`, `sub(count: Int): Char`
 - `to_string(): String`, `to_literal(): String`
 - `to_int(): Int`
-- `is_digit(): Bool`, `is_letter(): Bool`, `is_alphanumeric(): Bool`, `is_space(): Bool`, `is_lower(): Bool`, `is_upper(): Bool`
+- `is_digit(): Bool`, `is_letter(): Bool`, `is_numeric(): Bool`, `is_alphanumeric(): Bool`, `is_space(): Bool`, `is_lower(): Bool`, `is_upper(): Bool`, `is_ascii(): Bool`
 - `to_upper(): Char`, `to_lower(): Char`, `hex_value(): Int?`
 
 ### Float and Float32
@@ -235,14 +239,14 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `before(part: String): String?`, `after(part: String): String?`
 - `skip(n: Int): String`, `skip_while(skipped: (Char) -> Bool): String`
 - `byte_count(): Int`
-- `is_digits(): Bool`
+- `is_digits(): Bool`, `is_ascii(): Bool`
 - `parse_int(): Int?`, `parse_float(): Float?`
 - `split(separator: String): String[]`, `split_once(separator: String): (String, String)?`, `split_whitespace(): String[]`, `lines(): String[]`
 - `replace(part: String, by: String): String`
 - `trim(): String`, `trim_start(): String`, `trim_end(): String`
 - `repeat(count: Int): String`
 - `pad_start(width: Int, fill = ' '): String`, `pad_end(width: Int, fill = ' '): String`
-- `to_upper(): String`, `to_lower(): String`
+- `to_upper(): String`, `to_lower(): String`, `normalize(form: NormalForm): String`
 - `reversed(): String`, by code points, so a combining mark moves away from its base
 
 ### Binary

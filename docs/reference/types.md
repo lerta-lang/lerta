@@ -315,6 +315,7 @@ So `not a number` may be reported at a line after the one that makes the NaN, an
 | `s.pad_start(width, fill = ' ')` | `s` after as many copies of `fill`, one code point, as make it `width` code points long, or `s` itself if it is no shorter: `'7'.pad_start(3, '0')` is `'007'`. |
 | `s.pad_end(width, fill = ' ')` | The same with the copies after `s`. |
 | `s.to_upper()`, `s.to_lower()` | `s` with its letters mapped by Unicode's full case mappings, which hold in any language, every other character as it is: `'straße'.to_upper()` is `'STRASSE'`, and `'ΟΔΟΣ'.to_lower()` is `'οδος'`, a capital sigma that ends a word lowered to `ς`. |
+| `s.normalize(form)` | `s` in the [normal form](builtins.md#normalform) of Unicode, by UAX #15: `NFD`, its canonical decomposition, with its combining marks in canonical order; `NFC`, that composed again; and `NFKD` and `NFKC`, likewise of its compatibility decomposition. `"e\u{301}".normalize(NFC)` is `'é'`, and `'ﬁ'.normalize(NFKC)` is `'fi'`. |
 | `s.reversed()` | Its code points in reverse order, so a combining mark moves away from its base. |
 
 These throw a `ValueError`:

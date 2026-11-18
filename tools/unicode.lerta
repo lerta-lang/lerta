@@ -1,6 +1,6 @@
-# Writes the tables of Unicode's classes and case mappings that std:builtins embeds (see
-# docs/internals/representation.md#unicode) from the files of the Unicode Character Database in
-# third_party/ucd.
+# Writes the tables of Unicode's classes, case mappings and normal forms that std:builtins embeds
+# (see docs/internals/representation.md#unicode) from the files of the Unicode Character Database
+# in third_party/ucd.
 # Run it from the repository's root, after those files change: `bin/lerta run tools/unicode.lerta`.
 import make_dir, read_text, write_file from 'std:io'
 
@@ -17,6 +17,14 @@ struct Character
   category: String
   upper: Int?
   lower: Int?
+  combining_class: Int
+  decomposition: Decomposition?
+
+# A decomposition mapping of UnicodeData.txt, canonical, or of compatibility, which its field marks
+# with a tag, as `<compat>`.
+struct Decomposition
+  compatibility: Bool
+  codes: Int[]
 
 # The code point that the hexadecimal text stands for.
 code_of := (hex: String) ->
@@ -41,9 +49,18 @@ characters := (text: String) ->
       category: fields[2]
       upper: mapped(fields[12])
       lower: mapped(fields[13])
+      combining_class: fields[3].parse_int()!
+      decomposition: decomposition_of(fields[5])
     }
     first = nil
   found
+
+decomposition_of := (field: String) ->
+  return nil if field.is_empty()
+  parts := field.split(' ')
+  compatibility := parts[0].starts_with('<')
+  codes := compatibility then parts[1..] else parts
+  Decomposition(compatibility, codes: [code_of(code) for code in codes])
 
 # The text of a line of the database before its comment.
 data_of := (line: String) ->
@@ -55,15 +72,25 @@ data_of := (line: String) ->
 category_ranges := (all: Character[], letter: String) ->
   merged([[c.first, c.last] for c in all when c.category.starts_with(letter)])
 
-# The ranges that DerivedCoreProperties.txt gives the property, merged where they meet.
-property_ranges := (text: String, property: String) ->
+# The ranges that a file of derived properties gives the property, of one of the values if any are
+# given, merged where they meet.
+property_ranges := (text: String, property: String, values: String[] = []) ->
   ranges: Int[][]
   for line in text.lines()
-    (codes, name) := data_of(line).split_once(';') else continue
-    continue if name.trim() != property
-    (first, last) := codes.split_once('..') else (codes, codes)
+    fields := [field.trim() for field in data_of(line).split(';')]
+    continue if fields.length < 2 or fields[1] != property
+    value := fields.get(2) else ''
+    continue if not values.is_empty() and value not in values
+    (first, last) := fields[0].split_once('..') else (fields[0], fields[0])
     ranges.push [code_of(first), code_of(last)]
   merged(ranges.sorted_by((range) -> range[0]))
+
+# The code points in the ranges.
+codes_in := (ranges: Int[][]) ->
+  codes: Set<Int>
+  for range in ranges
+    codes.add code for code in range[0]..=range[1]
+  codes
 
 merged := (ranges: Int[][]) ->
   result: Int[][]
@@ -96,6 +123,62 @@ special_mappings := (text: String, field: Int) ->
     found.push [code_of(fields[0]), mapped..., padding...]
   found.sorted_by((entry) -> entry[0])
 
+# The combining classes that are not 0, of a character each.
+combining_classes := (all: Character[]) ->
+  [[c.first, c.combining_class] for c in all when c.combining_class != 0]
+
+# The decompositions of the characters, by their code points.
+decompositions := (all: Character[]) ->
+  found: Map<Int, Decomposition>
+  for c in all
+    found[c.first] = decomposition if decomposition := c.decomposition
+  found
+
+# The full decomposition of the code point: each of its mapping's decomposed in turn, and of
+# compatibility too where `compatibility` is set; the code point itself where it has none.
+expanded := (code: Int, all: Map<Int, Decomposition>, compatibility: Bool): Int[] ->
+  decomposition := all[code] else return [code]
+  return [code] if decomposition.compatibility and not compatibility
+  result: Int[]
+  for each in decomposition.codes
+    result.append expanded(each, all, compatibility)
+  result
+
+# The code points of the full decompositions, one after another, and an index of each kind: a
+# character, the place of its decomposition among them, and their number. A decomposition that
+# both kinds give is written once.
+struct DecompositionTables
+  values: Int[][]
+  canonical: Int[][]
+  compatibility: Int[][]
+
+decomposition_tables := (all: Map<Int, Decomposition>) ->
+  values: Int[]
+  places: Map<String, Int>
+  index := (compatibility: Bool) ->
+    rows: Int[][]
+    for code in all.keys().to_array().sorted()
+      continue if all[code]!.compatibility and not compatibility
+      codes := expanded(code, all, compatibility)
+      key := codes.to_string()
+      if places[key] == nil
+        places[key] = values.length
+        values.append codes
+      rows.push [code, places[key]!, codes.length]
+    rows
+  canonical := index(false)
+  compatibility := index(true)
+  DecompositionTables(canonical, compatibility, values: [[value] for value in values])
+
+# The primary composites: each canonical mapping of two characters, but of those excluded from
+# composition, as a pair and the character it composes to, sorted by the pair.
+compositions := (all: Map<Int, Decomposition>, excluded: Set<Int>) ->
+  rows: Int[][]
+  for (code, decomposition) in all
+    continue if decomposition.compatibility or decomposition.codes.length != 2 or code in excluded
+    rows.push [decomposition.codes[0], decomposition.codes[1], code]
+  rows.sorted_by((row) -> row[0] * 0x110000 + row[1])
+
 # The table of the entries, each a row of UInt32 values in little-endian order, as
 # Binary.uint32_at reads them.
 table := (rows: Int[][]) ->
@@ -109,6 +192,10 @@ table := (rows: Int[][]) ->
 unicode_data := characters((await read_text("#{UCD_DIR}/UnicodeData.txt"))!)
 properties := (await read_text("#{UCD_DIR}/DerivedCoreProperties.txt"))!
 special_casing := (await read_text("#{UCD_DIR}/SpecialCasing.txt"))!
+normalization := (await read_text("#{UCD_DIR}/DerivedNormalizationProps.txt"))!
+decomposed := decompositions(unicode_data)
+excluded := codes_in(property_ranges(normalization, 'Full_Composition_Exclusion'))
+decomposition := decomposition_tables(decomposed)
 
 tables :=
   'letters': category_ranges(unicode_data, 'L')
@@ -121,6 +208,15 @@ tables :=
   'lower': simple_mappings(unicode_data, (c) -> c.lower)
   'special_upper': special_mappings(special_casing, 3)
   'special_lower': special_mappings(special_casing, 1)
+  'combining_classes': combining_classes(unicode_data)
+  'decompositions': decomposition.values
+  'canonical_index': decomposition.canonical
+  'compatibility_index': decomposition.compatibility
+  'compositions': compositions(decomposed, excluded)
+  'nfd_check': property_ranges(normalization, 'NFD_QC', ['N'])
+  'nfkd_check': property_ranges(normalization, 'NFKD_QC', ['N'])
+  'nfc_check': property_ranges(normalization, 'NFC_QC', ['N', 'M'])
+  'nfkc_check': property_ranges(normalization, 'NFKC_QC', ['N', 'M'])
 
 make_dir TABLES_DIR
 for (name, rows) in tables

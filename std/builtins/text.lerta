@@ -6,6 +6,7 @@ import
   char_at, is_continuation, lerta_binary_text, lerta_string_slice, sequence_length
 from '../internal/utf8'
 import INFINITY from './numbers'
+import normalized from '../internal/normal_forms'
 import '../internal/unicode' as unicode
 
 # Writes at once, unlike std:io's Writer (see runtime/io.c).
@@ -25,6 +26,14 @@ export interface Stringable
 # text writes its items: `'a'` for a String, where `to_string()` gives `a`.
 export interface Literal
   to_literal: () -> String
+
+# The normal forms of Unicode, which String.normalize gives: canonical decomposition, NFD, then
+# composition, NFC, and those of compatibility, NFKD and NFKC.
+export enum NormalForm
+  NFC
+  NFD
+  NFKC
+  NFKD
 
 export print := <T: Stringable>(x: T) -> print_stdout_line(x.to_string())
 export print_error := <T: Stringable>(x: T) -> print_stderr_line(x.to_string())
@@ -214,6 +223,11 @@ extend String
   # The full case mappings, which may give more than one character, as `ß` gives `SS`.
   to_upper := -> unicode.upper_text(@)
   to_lower := -> unicode.lower_text(@)
+
+  normalize := (form: NormalForm) ->
+    compatibility := form in [NFKC, NFKD]
+    composed := form in [NFC, NFKC]
+    normalized(@, compatibility, composed)
 
   # The String after as many of `fill`, one code point, as make it `width` code points long, or the
   # String itself if it is no shorter.

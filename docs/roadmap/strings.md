@@ -49,16 +49,6 @@ A rope keeps a concatenation as a tree, so that `+` is O(1).
 - A concatenation with a short result copies at once, without a node (as V8 does below 13 characters).
 - Beyond a depth limit, the rope is flattened.
 
-## Unicode
-
-The normal forms of Unicode, in the builtins, as its classes and case are (see [the reference](../reference/types.md#char)).
-
-- **Normal forms.** `s.normalize(form)`, of NFC, NFD, NFKC and NFKD, by UAX #15: the decompositions, canonical and compatibility, ordered by the combining classes, then composed, the compositions excluded left out, and Hangul by its arithmetic. A quick check by the NFC_QC and NFKC_QC properties returns a String already normal as it is, as an ASCII one is.
-
-### Tables
-
-- The tables of the normal forms are made and found as those of the classes and case are (see [representation](../internals/representation.md#unicode)), from CompositionExclusions.txt, DerivedNormalizationProps.txt and UnicodeData.txt; NormalizationTest.txt, kept in `third_party/ucd/` too, tests them.
-
 ## Regular expressions
 
 The patterns of [std:regex](../reference/std.md#stdregex), as literals too, and faster.
