@@ -1,7 +1,7 @@
-# Builds each benchmark in Lerta, Swift, Go, JavaScript (Node.js) and C, runs each 3 times, checks
-# that every run of every language prints the benchmark's main.out, and prints the version of each
-# language, the best wall-clock time of each in seconds, and last the geometric mean of those of
-# each language.
+# Builds each benchmark in Lerta, Swift, Go, JavaScript (Node.js) and C, but in the languages that
+# NOT_WRITTEN names for it, runs each 3 times, checks that every run of every language prints the
+# benchmark's main.out, and prints the version of each language, the best wall-clock time of each
+# in seconds, and last the geometric mean of those of each language.
 # In each row, the least time of the languages but C is in bold where stdout is colored. C is built
 # with the system's own compiler, cl on Windows and cc elsewhere; Swift only where swiftc is, Go
 # only where go is; Node.js, 22 or later, must be there.
@@ -22,6 +22,10 @@ BENCHMARKS := [
 # reference, is last, and never in bold.
 EXTENSIONS := { 'lerta': 'lerta', 'swift': 'swift', 'go': 'go', 'node': 'js', 'c': 'c' }
 LANGUAGES := EXTENSIONS.keys().to_array()
+
+# The benchmarks not written in a language, by name: C's standard library has no regular
+# expressions, and Windows has no POSIX regex.h.
+NOT_WRITTEN := { 'regex': ['c'] }
 
 RUNS := 3
 
@@ -71,8 +75,9 @@ version := (language: String) ->
   await first_line("the version of #{language}", command)
 
 # The command that runs the benchmark in the language, built first if it is compiled; nil where the
-# language's compiler is missing.
+# language's compiler is missing, or the benchmark is one of those not written in it.
 build := (name: String, language: String) ->
+  return nil if language in NOT_WRITTEN[name] else []
   source := "bench/#{name}/main.#{EXTENSIONS[language]!}"
   executable := "#{OUT}/#{name}-#{language}"
   output := ['-o', executable]

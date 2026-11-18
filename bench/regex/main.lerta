@@ -1,0 +1,48 @@
+# Makes log lines from a pseudo-random generator, with 0 to 2 more addresses and a tab now and
+# then, then over all of them tests a pattern, sums a group's numbers, counts the matches of
+# another, replaces the matches of a third and splits by a fourth, and prints the counts and sums.
+LINES := 100000
+METHODS := ['GET', 'POST', 'PUT', 'DELETE']
+RESOURCES := ['items', 'users', 'orders']
+STATUSES := [200, 404, 500]
+
+# MINSTD, whose products fit in the integers of every language compared.
+var seed = 1
+next := (limit: Int) ->
+  seed = seed * 48271 % 2147483647
+  seed % limit
+
+two_digits := (n: Int) -> n.to_string().pad_start(2, '0')
+
+line_of := ->
+  day := two_digits(next(28) + 1)
+  time := "#{two_digits(next(24))}:#{two_digits(next(60))}:#{two_digits(next(60))}"
+  user := "user#{next(1000)}@example.com"
+  method := METHODS[next(METHODS.length)]
+  path := "/#{RESOURCES[next(RESOURCES.length)]}/#{next(10000)}"
+  gap := next(4) == 0 then "\t" else ' '
+  status := STATUSES[next(STATUSES.length)]
+  ms := next(1000)
+  copies := ["cc#{next(1000)}@example.com" for _ in 0..next(3)]
+  head := "2026-11-#{day} #{time} #{user} #{method} #{path}#{gap}#{status} #{ms}ms"
+  [head, copies...].join(' ')
+
+lines := [line_of() for _ in 0..LINES]
+
+var item_reads = 0
+var total_ms = 0
+var emails = 0
+var replaced_length = 0
+var fields = 0
+for line in lines
+  item_reads += 1 if /\b(?:GET|POST) \/items\/\d+/.test(line)
+  total_ms += /(\d+)ms/.find(line)!.groups[1]!.parse_int()!
+  emails += /\w+@\w+\.com/.find_all(line).count()
+  replaced_length += line.replace(/\d+/, '#').count()
+  fields += line.split(/\s+/).length
+
+print "item reads: #{item_reads}"
+print "total ms: #{total_ms}"
+print "emails: #{emails}"
+print "replaced length: #{replaced_length}"
+print "fields: #{fields}"
