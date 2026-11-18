@@ -294,6 +294,25 @@ stripped_check := (flags: String[]) ->
       named == keeps then no_reasons else ["the symbols are #{keeps then 'stripped' else 'kept'}"]
   )
 
+# libuv's loop is linked only into a program that waits on it, as on a sleep's timer; --source-lines
+# keeps the symbols that tell. The sleep is not awaited, as clang 15 fails to build a coroutine
+# with --source-lines -O (see docs/issues.md).
+SLEEPS := b"import sleep from 'std:time'\n\n_slept := sleep(0.01)\n"
+
+loop_linked_check := (what: String, source: Binary, linked: Bool) ->
+  Check(
+    name: "lerta build -O #{linked then 'links' else 'does not link'} libuv's loop into #{what}"
+    run: ->
+      (cwd, temp) := new_cli_dirs()
+      await write_file("#{cwd}/main.lerta", source)
+      flags := ['build', 'main.lerta', '-o', 'main', '-O', '--source-lines']
+      built := await run_in_dir(compiler, flags, cwd, temp)
+      succeed 'build', built.result
+      program := await read_file("#{cwd}/main#{host_executable_suffix}")
+      has_loop := program.index_of(b'uv_run') != nil
+      has_loop == linked then no_reasons else ["uv_run is #{linked then 'missing' else 'linked'}"]
+  )
+
 dump_llvm_check := ->
   Check(name: 'lerta dump-llvm prints the IR and leaves no file', run: ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', hello])
@@ -925,6 +944,8 @@ export checks: Check[] = [
   optimized_runtime_check()
   stripped_check(no_build_flags)
   stripped_check(['--source-lines'])
+  loop_linked_check('a program that prints', b"print 'hi'\n", false)
+  loop_linked_check('a program that sleeps', SLEEPS, true)
   dump_llvm_check()
   escaped_run_check('escaped_path', no_build_flags)
   escaped_run_check('escaped_path', ['-O'])

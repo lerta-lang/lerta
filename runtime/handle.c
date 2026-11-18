@@ -82,7 +82,7 @@ static void set_stream(Handle *handle, uv_stream_t *stream) {
 
 static void open_tcp(Handle *handle) {
   uv_tcp_t *tcp = lerta_checked_malloc(sizeof(uv_tcp_t));
-  uv_tcp_init(uv_default_loop(), tcp);
+  uv_tcp_init(lerta_loop(), tcp);
   set_stream(handle, (uv_stream_t *)tcp);
 }
 
@@ -133,7 +133,7 @@ int64_t lerta_tcp_new(void) {
 int64_t lerta_pipe_new(const LertaString *name) {
   Handle *handle = lerta_checked_calloc(1, sizeof(Handle));
   uv_pipe_t *pipe = lerta_checked_malloc(sizeof(uv_pipe_t));
-  uv_pipe_init(uv_default_loop(), pipe, 0);
+  uv_pipe_init(lerta_loop(), pipe, 0);
   set_stream(handle, (uv_stream_t *)pipe);
   lerta_retain((void *)name);
   handle->address = (LertaString *)name;
@@ -226,7 +226,7 @@ int64_t lerta_tcp_listen(int64_t pointer, const LertaString *host, int64_t port)
   uint8_t buffer[LERTA_INT_TEXT_MAX + 1];
   uv_getaddrinfo_t request;
   // Without a callback, libuv resolves the name at once.
-  bool resolved = uv_getaddrinfo(uv_default_loop(), &request, NULL, name,
+  bool resolved = uv_getaddrinfo(lerta_loop(), &request, NULL, name,
                                  lerta_port_text(port, buffer), &tcp_hints) == 0;
   bool listening = resolved && uv_tcp_bind(tcp_of(handle), request.addrinfo->ai_addr, 0) == 0 &&
                    uv_listen(handle->stream, SOMAXCONN, come_connection) == 0;
@@ -354,7 +354,7 @@ LertaPromise *lerta_tcp_connect(int64_t pointer, const LertaString *host, int64_
   hold_pending(socket, promise, LERTA_STR(cannot_connect), cancel_connect);
   uint8_t buffer[LERTA_INT_TEXT_MAX + 1];
   socket->resolving.data = socket;
-  int status = uv_getaddrinfo(uv_default_loop(), &socket->resolving, end_resolve, name,
+  int status = uv_getaddrinfo(lerta_loop(), &socket->resolving, end_resolve, name,
                               lerta_port_text(port, buffer), &tcp_hints);
   free(name);
   if (status == 0) socket->requests++;

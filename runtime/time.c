@@ -36,7 +36,7 @@ static void resolve_after(uint64_t milliseconds, LertaPromise *promise) {
   timer->promise = promise;
   timer->handle.data = timer;
   lerta_retain(promise);
-  uv_loop_t *loop = uv_default_loop();
+  uv_loop_t *loop = lerta_loop();
   uv_timer_init(loop, &timer->handle);
   // libuv counts from the time it last read, as it ran; the program may have run long since.
   uv_update_time(loop);

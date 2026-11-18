@@ -230,7 +230,7 @@ static void end_written(uv_async_t *handle) {
 static void start_thread(void) {
   thread_started = true;
   bool started = uv_cond_init(&wanted) == 0 &&
-                 uv_async_init(uv_default_loop(), &written_async, end_written) == 0 &&
+                 uv_async_init(lerta_loop(), &written_async, end_written) == 0 &&
                  uv_thread_create(&thread, write_out_requests, NULL) == 0;
   if (!started) lerta_panic("cannot start the thread that writes out stdout and stderr");
   uv_unref((uv_handle_t *)&written_async);

@@ -83,7 +83,7 @@ static void wait_in_run_loop(uv_loop_t *loop) {
 
 // See docs/internals/iteration.md#functions-that-await.
 
-bool lerta_loop_wait(void) {
+static bool wait_on_libuv(void) {
   uv_loop_t *loop = uv_default_loop();
   if (!uv_loop_alive(loop)) return false;
 #ifdef __APPLE__
@@ -94,6 +94,21 @@ bool lerta_loop_wait(void) {
 #endif
   uv_run(loop, UV_RUN_ONCE);
   return true;
+}
+
+// Set by the first feature that takes libuv's loop; until then, nothing is left to wait for.
+// Volatile, as LLVM otherwise turns the call through it into a direct call of the one function
+// ever stored, which links libuv's loop into every program.
+static bool (*volatile waiter)(void) = NULL;
+
+uv_loop_t *lerta_loop(void) {
+  waiter = wait_on_libuv;
+  return uv_default_loop();
+}
+
+bool lerta_loop_wait(void) {
+  bool (*wait)(void) = waiter;
+  return wait != NULL && wait();
 }
 
 typedef struct {
@@ -119,5 +134,5 @@ void lerta_loop_work(void *data, void (*work)(void *data), void (*done)(void *da
   Work *queued = lerta_checked_malloc(sizeof(Work));
   *queued = (Work){.data = data, .work = work, .done = done};
   queued->request.data = queued;
-  uv_queue_work(uv_default_loop(), &queued->request, run_work, end_work);
+  uv_queue_work(lerta_loop(), &queued->request, run_work, end_work);
 }

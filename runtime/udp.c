@@ -77,7 +77,7 @@ static void set_lerta_string(LertaString **field, LertaString *value) {
 int64_t lerta_udp_new(void) {
   Udp *socket = lerta_checked_calloc(1, sizeof(Udp));
   socket->udp = lerta_checked_malloc(sizeof(uv_udp_t));
-  uv_udp_init(uv_default_loop(), socket->udp);
+  uv_udp_init(lerta_loop(), socket->udp);
   socket->udp->data = socket;
   uv_unref((uv_handle_t *)socket->udp);
   return (int64_t)(intptr_t)socket;
@@ -120,7 +120,7 @@ int64_t lerta_udp_bind(int64_t pointer, const LertaString *host, int64_t port) {
   uint8_t buffer[LERTA_INT_TEXT_MAX + 1];
   uv_getaddrinfo_t request;
   // Without a callback, libuv resolves the name at once.
-  bool resolved = uv_getaddrinfo(uv_default_loop(), &request, NULL, name,
+  bool resolved = uv_getaddrinfo(lerta_loop(), &request, NULL, name,
                                  lerta_port_text(port, buffer), &bind_hints) == 0;
   bool bound = resolved && uv_udp_bind(socket->udp, request.addrinfo->ai_addr, 0) == 0;
   if (resolved) uv_freeaddrinfo(request.addrinfo);
@@ -311,7 +311,7 @@ static void resolve(Send *send) {
     .ai_family = socket->family, .ai_socktype = SOCK_DGRAM, .ai_flags = AI_NUMERICSERV};
   uint8_t buffer[LERTA_INT_TEXT_MAX + 1];
   send->resolving.data = send;
-  int status = uv_getaddrinfo(uv_default_loop(), &send->resolving, end_resolve, send->host,
+  int status = uv_getaddrinfo(lerta_loop(), &send->resolving, end_resolve, send->host,
                               lerta_port_text(send->port, buffer), &hints);
   if (status != 0) end_send(send, status);
 }

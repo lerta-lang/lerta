@@ -40,7 +40,7 @@ static void on_ending_signal(uv_signal_t *handle, int signal_number) {
 // the loop running.
 void lerta_signals_watch(LertaPromise *top_level) {
   watched_promise = top_level;
-  uv_loop_t *loop = uv_default_loop();
+  uv_loop_t *loop = lerta_loop();
   for (int i = 0; i < ENDING_SIGNAL_COUNT; i++) {
     if (lerta_os_signal_ignored(ending_signals[i])) continue;
     uv_signal_init(loop, &handles[i]);

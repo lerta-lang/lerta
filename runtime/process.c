@@ -128,7 +128,7 @@ void lerta_program_stop(int64_t pointer) {
   Program *program = program_of(pointer);
   if (program->stopping || program->exited) return;
   program->stopping = true;
-  uv_timer_init(uv_default_loop(), &program->kill_timer);
+  uv_timer_init(lerta_loop(), &program->kill_timer);
   program->kill_timer.data = program;
   program->open_handles++;
   uv_process_kill(&program->process, SIGTERM);
@@ -200,7 +200,7 @@ static bool spawn(Program *program, char *file, char **args, char **env, const c
     .stdio = stdio,
   };
   program->process.data = program;
-  bool spawned = opened && uv_spawn(uv_default_loop(), &program->process, &options) == 0;
+  bool spawned = opened && uv_spawn(lerta_loop(), &program->process, &options) == 0;
   for (int i = 0; i < 3; i++) {
     if (made[i]) lerta_os_close(children[i]);
   }

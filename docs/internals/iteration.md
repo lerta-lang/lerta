@@ -160,6 +160,7 @@ Fusion generates the loop's source in place (`compiler/codegen/fusion.lerta`), s
 - `lerta_loop_run` runs at the end of the program's top-level code, before the top-level values are released.
   - It resumes the ready coroutines in the order they became ready, then waits once, on libuv, for what settles promises, such as a sleep's timer or a program's end.
   - It stops when no coroutine is ready and libuv has nothing left to wait for.
+  - It waits on libuv only once a feature has taken libuv's loop (`lerta_loop`), as the network, a timer or the thread pool does; until then, libuv has nothing to wait for. A program without such a feature does not link libuv's loop, nor what it reaches, as `uv_run` reaches every kind of handle.
 - The runtime cannot resume a coroutine itself, as C has no way to call `llvm.coro.resume`, so the generated code passes the loop a function that does.
 - **Files.** `runtime/loop.c` holds the loop itself and the thread pool. Each feature that waits uses libuv in its own file, such as `runtime/handle.c` for the network.
   - Why: a backend without libuv replaces the files of the features it has, rather than functions behind a layer of their own that would fit none of them, as on a system without processes or with a network stack of its own.
