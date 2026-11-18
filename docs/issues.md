@@ -8,8 +8,14 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `# Été — 🌞` gets the anchor `Été-—-🌞`, where GitHub gives `été--`, so that a link written for GitHub does not reach the heading on the site.
 - How to fix it: lower the letters that are not ASCII and drop the other characters, as GitHub does, once std can tell them apart.
 
-## The site renders some Markdown otherwise than GitHub, without an error
+## The site renders emphasis closed by a longer run of `*` as its text
 
-- Where: `site/markdown.lerta`, which is to fail on what it does not render: `closing_emphasis` and `closing_bracket` do not pass over a `\` escape, `emphasis` takes no run of three `*`, and `unsupported_inline` and `unsupported_block` do not name what follows.
-- How to see it: `*b \* c*` gives `<em>b \</em> c*`, and `[a \] b](x)` is no link; `***x***`, `~~x~~`, a task `- [ ] x` and a bare `https://lerta.org` come out as their text, where GitHub renders them; `<!-- x -->` is shown, where GitHub hides it. None is in `docs/` so far.
-- How to fix it: pass over escapes when looking for what closes, and fail on the others as on any Markdown that is not rendered.
+- Where: `closing_emphasis` in `site/markdown.lerta` closes emphasis only at a run of as many `*` as open it.
+- How to see it: `**x***` and `a *b***` come out as their text, without an error, where GitHub renders `<strong>x</strong>*` and `a <em>b</em>**`.
+- How to fix it: close at the first `*`s of a longer run, as GitHub does, or fail on such a run.
+
+## The site renders an email address as its text, where GitHub links it
+
+- Where: `unsupported_inline` in `site/markdown.lerta` fails on a bare URL, but not on an email address, which GitHub links as well.
+- How to see it: `mail me@lerta.org` comes out as its text, without an error, where GitHub links the address. None is in `docs/` so far.
+- How to fix it: fail on a word with an `@` between a name and a domain, as on a bare URL.

@@ -48,6 +48,9 @@ class Renderer
     rewrite: (String) -> String
   var title: String?
   links: String[] = []
+
+  # Whether the text being rendered is that of a link, where GitHub links no bare URL.
+  var in_link_text = false
   warnings: String[] = []
 
   # How many headings have taken each slug, so that a later one takes a suffix, as on GitHub.
@@ -203,7 +206,11 @@ class Renderer
       for line in lines[1..]
         Line(text: dedent(line.text, width), number: line.number)
     ]
-    content: Line[] = [{ text: marked.text.skip(width), number: marked.number }, rest...]
+    first := marked.text.skip(width)
+    boxes := ['[ ] ', '[x] ', '[X] ', "[ ]\t", "[x]\t", "[X]\t"]
+    is_task := boxes.any((box) -> first.starts_with(box))
+    fail marked, 'a task list item' if is_task
+    content: Line[] = [{ text: first, number: marked.number }, rest...]
     "<li>#{@blocks(content, tight)}</li>\n"
 
   paragraph := (lines: Line[], at: Int, tight: Bool) ->
@@ -254,10 +261,14 @@ class Renderer
       when b'*' then @emphasis(bytes, at)
       when b'[' then @link(bytes, at)
       else
-        unsupported := unsupported_inline(bytes, at) else return nil
+        unsupported := unsupported_inline(bytes, at, not @in_link_text) else return nil
         throw InlineError(unsupported)
 
   emphasis := (bytes: Binary, at: Int): (String, Int)? ->
+    # A run of three that opens, before a word, rather than one that closes after it.
+    after := bytes.get(at + 3) else b' '
+    opens := after not in [b' ', b"\n"]
+    throw InlineError('emphasis by ***') if opens and bytes.occurs_at(at, b'***')
     delimiter :=
       if bytes.occurs_at(at, b'**')
         b'**'
@@ -279,7 +290,10 @@ class Renderer
     throw InlineError('a link target with parentheses') if '(' in target
     throw InlineError('a link title') if ' ' in target
     @links.push target
+    outer := @in_link_text
+    @in_link_text = true
     text := @inline(bytes.text(at + 1, text_end)!)
+    @in_link_text = outer
     href :=
       try
         @rewrite target
@@ -355,12 +369,19 @@ is_rule := (text: String) ->
   first in [b'-', b'*', b'_', b'='] and bytes.length >= 3 and bytes.all((byte) -> byte == first)
 
 # Why the text at `at` is Markdown that is not rendered, or nil.
-unsupported_inline := (bytes: Binary, at: Int) ->
+unsupported_inline := (bytes: Binary, at: Int, autolinks: Bool) ->
   next := bytes.get(at + 1) else return nil
   case bytes[at]
     when b'!' then next == b'[' then 'an image'
+    when b'~'
+      if next not in [b' ', b"\n"] and is_struck(bytes, at)
+        'strikethrough'
+      else
+        nil
     when b'<'
-      if is_tag(bytes, at + 1)
+      if bytes.occurs_at(at, b'<!--')
+        'an HTML comment'
+      else if is_tag(bytes, at + 1)
         'HTML'
       else
         nil
@@ -370,12 +391,42 @@ unsupported_inline := (bytes: Binary, at: Int) ->
       else
         nil
     when b'_'
-      starts_word := at == 0 or not is_word_byte(bytes[at - 1])
-      if starts_word and is_word_byte(next)
+      if starts_word(bytes, at) and is_word_byte(next)
         'emphasis by _'
       else
         nil
+    when b'h', b'w'
+      if autolinks and is_bare_url(bytes, at)
+        'a bare URL, which GitHub links'
+      else
+        nil
     else nil
+
+starts_word := (bytes: Binary, at: Int) -> at == 0 or not is_word_byte(bytes[at - 1])
+
+# Whether the run of `~` at `at` is closed by one as long after it, after a byte that is not a
+# space or a line feed, as GitHub strikes through only text so closed, not that of `~/.config`.
+is_struck := (bytes: Binary, at: Int) ->
+  run := run_length(bytes, at, b'~')
+  var next = at + run
+  while next < bytes.length
+    closing := run_length(bytes, next, b'~')
+    if closing == 0
+      next += 1
+      continue
+    return true if closing == run and bytes[next - 1] not in [b' ', b"\n"]
+    next += closing
+  false
+
+# Whether a URL that GitHub links starts at `at`: after a space, a tab, `*`, `_`, `~` or `(`, or at
+# the start, with a letter or a digit after its scheme or `www.`.
+is_bare_url := (bytes: Binary, at: Int) ->
+  return false if at > 0 and bytes[at - 1] not in [b' ', b"\t", b"\n", b'*', b'_', b'~', b'(']
+  for prefix in [b'https://', b'http://', b'www.']
+    if bytes.occurs_at(at, prefix)
+      after := bytes.get(at + prefix.length) else return false
+      return is_word_byte(after)
+  false
 
 # Whether an `&` before `start` starts an entity, as `&copy;` or `&#169;`, which GitHub shows as
 # its character.
@@ -465,12 +516,16 @@ run_length := (bytes: Binary, at: Int, byte: Byte) ->
   end += 1 while end < bytes.length and bytes[end] == byte
   end - at
 
-# Where the emphasis that `delimiter` opens before `start` closes, past code spans; or nil.
+# Where the emphasis that `delimiter` opens before `start` closes, past code spans and escapes; or
+# nil.
 closing_emphasis := (bytes: Binary, start: Int, delimiter: Binary) ->
   var next = start
   while next < bytes.length
     if bytes[next] == b'`'
       next = past_code(bytes, next)
+      continue
+    if bytes[next] == b'\'
+      next += 2
       continue
     unless bytes[next] == b'*'
       next += 1
@@ -483,8 +538,8 @@ closing_emphasis := (bytes: Binary, start: Int, delimiter: Binary) ->
     next += run
   nil
 
-# The index of the `]` that closes a `[` before `start`, past code spans and nested brackets; or
-# nil.
+# The index of the `]` that closes a `[` before `start`, past code spans, escapes and nested
+# brackets; or nil.
 closing_bracket := (bytes: Binary, start: Int) ->
   var depth = 0
   var next = start
@@ -492,6 +547,9 @@ closing_bracket := (bytes: Binary, start: Int) ->
     byte := bytes[next]
     if byte == b'`'
       next = past_code(bytes, next)
+      continue
+    if byte == b'\'
+      next += 2
       continue
     if byte == b']'
       return next if depth == 0
