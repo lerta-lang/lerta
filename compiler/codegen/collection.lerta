@@ -1,7 +1,7 @@
 # Arrays and maps in the generated code: their literals, and indexing (of a Binary too).
 import
-  ArrayLiteral, Comprehension, Expression, Identifier, Index, IntegerLiteral, is_spread, MapLiteral,
-  operands_of, Range, StringLiteral
+  ArrayLiteral, BinaryOperation, Comprehension, Expression, Identifier, Index, IntegerLiteral,
+  is_spread, MapLiteral, operands_of, Range, StringLiteral
 from '../ast'
 import
   emit_array_new, emit_array_slice, emit_checked_items, emit_get_from, emit_is_out_of_range,
@@ -10,6 +10,7 @@ from './array'
 import push_comprehension from './control_flow'
 import emit_exception_check, emit_exception_check_if, holding, while_holding from './exceptions'
 import borrowing_all, generate_borrowed from './borrowing'
+import apply_integer_operator from './checked_int'
 import generate, release_if_reference, type_at_use, type_of from './expression'
 import Generator from './generator'
 import INDEX_OUT_OF_RANGE, throw_if from './runtime_errors'
@@ -22,7 +23,7 @@ from './map'
 import
   emit_binary_get_unless, emit_binary_length, emit_binary_out_of_range, emit_binary_slice
 from './string'
-import ArrayType, is_kind, MapType, Type from '../types'
+import ArrayType, int_type, is_kind, MapType, Type from '../types'
 
 # Each item is pushed, so the array retains it; the item's own reference is then released.
 export generate_array := (g: Generator, array: ArrayLiteral) ->
@@ -125,16 +126,29 @@ export generate_index := (g: Generator, index: Index, borrowed = false) ->
   later.push default_value if default_value := index.default_value
   (object, is_owned) :=
     generate_borrowed(g, index.object, later, can_borrow_in_place(g, index, object_type))
-  generate_position := -> generate(g, index.index)
-  position :=
+  is_binary := is_kind(object_type, 'Binary')
+  stepped := is_binary then stepped_position(index.index)
+
+  while_object := (generate_part: () -> String) ->
     if is_owned
-      holding g, object, object_type, generate_position
+      holding(g, object, object_type, generate_part)
     else
-      generate_position()
+      generate_part()
+
+  # A stepped position is generated as its operator would, its base kept for the byte's address;
+  # another is its own base.
+  base := while_object(-> generate(g, stepped then stepped.left else index.index))
+  position :=
+    if stepped
+      step_from := -> generate(g, stepped.right)
+      while_object -> apply_integer_operator(g, stepped.operator, base, step_from(), int_type)
+    else
+      base
   (item, check) :=
     case
       when object_type is MapType then map_item(g, index, object, object_type, is_owned, position)
-      when is_kind(object_type, 'Binary') then binary_item(g, object, position)
+      when is_binary
+        binary_item g, object, position, base, stepped then step_of(stepped) else 0
       else array_item(g, index, object, position, borrowed)
   release_if_reference g, index.index, position
   emit_release g.ir, object if is_owned
@@ -158,10 +172,26 @@ map_item := (
       held_key()
   (item, check)
 
-# A Binary's index out of range is raised here.
-binary_item := (g: Generator, binary: String, position: String): (String, () -> void) ->
+# A Binary's position `x + c` or `x - c` of a literal `c` not below 0, as `b[at + 3]` reads; the
+# literal on the right alone, as code that reads a word writes it.
+stepped_position := (position: Expression) ->
+  operation := position as BinaryOperation else return nil
+  return nil unless operation.operator in ['+', '-']
+  step := (operation.right as IntegerLiteral?)?.value else return nil
+  step >= 0 then operation
+
+# The bytes that a stepped position moves from its base, `c` or `-c`.
+step_of := (operation: BinaryOperation) ->
+  step := (operation.right as IntegerLiteral!).value!
+  operation.operator == '+' then step else -step
+
+# A Binary's index out of range is raised here. The byte is read `step` bytes on from `base`, the
+# position less its step (see emit_binary_get).
+binary_item := (
+  g: Generator, binary: String, position: String, base: String, step: Int
+): (String, () -> void) ->
   outside := emit_binary_out_of_range(g.ir, binary, position)
-  item := emit_binary_get_unless(g.ir, binary, position, outside)
+  item := emit_binary_get_unless(g.ir, binary, base, step, outside)
   (item, -> throw_if(g, outside, INDEX_OUT_OF_RANGE))
 
 # The runtime has raised an index out of range where the array's items tell.

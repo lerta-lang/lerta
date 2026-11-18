@@ -60,14 +60,20 @@ export emit_binary_slice := (ir: IrBuilder, binary: String, start: String, end: 
   args := "ptr #{binary}, i64 #{start}, i64 #{end}"
   call_runtime(ir, 'ptr @lerta_binary_slice(ptr, i64, i64)', args)
 
-# The byte at the index, which is in the Binary's range.
-export emit_binary_get := (ir: IrBuilder, binary: String, index: String) ->
-  byte :=
+# The byte `step` bytes on from the index, which is in the Binary's range. A constant step is kept
+# out of the index, so that LLVM sees the bytes of `b[at]`, `b[at + 1]` and so on as neighbours,
+# and merges their reads into one load: it does not where the index is `at | 1`, as it makes
+# `at + 1` of an `at` it knows to be even.
+export emit_binary_get := (ir: IrBuilder, binary: String, index: String, step = 0) ->
+  at_index :=
     ir.assign("getelementptr #{LAYOUT}, ptr #{binary}, i32 0, i32 #{BYTES_FIELD}, i64 #{index}")
+  byte := step == 0 then at_index else ir.assign("getelementptr i8, ptr #{at_index}, i64 #{step}")
   ir.load('i8', byte)
 
-# As emit_binary_get, of an index that may be out of range, as `outside` tells: 0 then. The read is
+# As emit_binary_get, of a byte that may be out of range, as `outside` tells: 0 then. The read is
 # guarded rather than made after the caller's throw, as the caller releases the Binary first.
-export emit_binary_get_unless := (ir: IrBuilder, binary: String, index: String, outside: String) ->
+export emit_binary_get_unless := (
+  ir: IrBuilder, binary: String, index: String, step: Int, outside: String
+) ->
   inside := ir.negate(outside)
-  emit_branch(ir, 'i8', inside, -> emit_binary_get(ir, binary, index), '0')
+  emit_branch(ir, 'i8', inside, -> emit_binary_get(ir, binary, index, step), '0')

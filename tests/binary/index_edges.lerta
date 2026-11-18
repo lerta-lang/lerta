@@ -60,3 +60,32 @@ for (from, ahead) in [(0, 0), (-1, 0), (0, 1), (1, -1)]
     print "from #{from}, ahead #{ahead}: #{sum_from(from, ahead)}"
   catch e
     print "from #{from}, ahead #{ahead}: #{e.message}"
+
+# A position that adds a literal to another, or takes one from it, reads the byte at their sum,
+# where the other alone is out of range too, and throws as any other where the sum is out of range
+# or overflows; so do those of a Binary that an expression makes. The bytes read at one place and
+# its neighbours make a word.
+at := (i: Int) -> i
+attempt 'stepped on', -> bytes[at(0) + 2]
+attempt 'stepped back', -> bytes[at(2) - 2]
+attempt 'stepped by none', -> bytes[at(1) + 0]
+attempt 'stepped into range', -> bytes[at(-1) + 1]
+attempt 'stepped back into range', -> bytes[at(3) - 1]
+attempt 'stepped past the end', -> bytes[at(1) + 2]
+attempt 'stepped below 0', -> bytes[at(1) - 2]
+attempt 'stepped beyond Int', -> bytes[at(9223372036854775807) + 1]
+attempt 'stepped from a throw', -> bytes[refuse() + 1]
+attempt 'stepped in a made one', -> (b'x' + bytes)[at(2) + 1]
+attempt 'stepped past a made one', -> (b'x' + bytes)[at(2) + 2]
+start := 2
+attempt 'stepped from a local in a made one', -> (b'x' + bytes)[start + 1]
+attempt 'stepped from a literal', -> bytes[1 + 1]
+word_at := (data: Binary, index: Int) ->
+  start := index * 4
+  data[start].to_int() |
+    data[start + 1].to_int() << 8 |
+    data[start + 2].to_int() << 16 |
+    data[start + 3].to_int() << 24
+words: Byte[] = [0x01, 0x02, 0x03, 0x04, 0xFF, 0xFF, 0xFF, 0xFF]
+print word_at(words.to_binary(), 0).to_hex()
+print word_at(words.to_binary(), 1).to_hex()
