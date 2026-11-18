@@ -107,7 +107,7 @@
   - A runtime check (`test/runtime/spawn_fails.c`) fails while libuv does so; the line is to stay out of a newer libuv until libuv drops it.
 - The compiler carries libuv's sources as it does the runtime's, and compiles them into the runtime's cache for each target, with the flags and the system's libraries that `runtime/<system>.mk` lists for its system, taken from libuv's CMakeLists.txt. Its warnings are silenced, as they are not the program's.
 - The runtime's own files take only libuv's headers, which ask nothing more of their users, so that libuv's feature macros, such as `_FILE_OFFSET_BITS`, do not change what the runtime sees.
-- Its object files are linked as they are, with no archive: an optimized build drops what the program does not use, through `-flto`, and an unoptimized one holds all of libuv, whose size does not matter there.
+- Its object files are linked as they are, with no archive: an optimized build drops what the program does not use, through `-flto` and the linker's dropping of what nothing reaches (see [`-O`](../reference/compiler.md#-o)), and an unoptimized one holds all of libuv, whose size does not matter there.
 - A system's libuv is not used instead:
   - the distributions' packages lag behind (Debian bookworm's is 1.44);
   - none provides one for mingw-w64 off Windows;

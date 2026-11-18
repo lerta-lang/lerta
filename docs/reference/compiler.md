@@ -103,6 +103,7 @@ Usage errors:
 - Optimizes, including across the modules and the runtime (link-time optimization, ThinLTO), each module on a thread of its own.
 - The linker keeps what it has optimized in [the cache](#cache), so that a build optimizes again only the modules that have changed, and those that inline from them.
 - A `.c`, `.m` or `.ll` file linked with the program is an exception: clang compiles it into a temporary file of its own, which every build optimizes again, as it does what inlines from it.
+- The link drops the code and the data that nothing reaches (`-dead_strip` on macOS, `--gc-sections` elsewhere), and the local symbols on macOS (`-x`) or the whole symbol table elsewhere (`-s`), unless [`--source-lines`](#--source-lines) keeps them for a debugger. A trace does not need them.
 
 #### Memory checks
 
@@ -143,7 +144,7 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 #### `--no-trace`
 
 - Leaves out the trace that an uncaught exception prints (see [errors](errors.md#exceptions)), and with it the names of the functions and the files and the positions that the trace tells, which the program would otherwise hold.
-- The symbols of the executable still name the functions, unless it is stripped.
+- The symbols of the executable still name the functions, unless it is stripped, as [`-O`](#-o) does.
 
 #### `--source-lines`
 
@@ -158,7 +159,7 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 | Linux | The program itself. |
 | Windows | The program itself, for gdb or lldb to read. WinDbg and Visual Studio read a PDB instead, which is not made. |
 
-- It is off by default, and changes nothing else of the program.
+- It is off by default, and changes nothing else of the program, but keeps the symbols that [`-O`](#-o) strips.
 
 #### `--eager-nan-checks`
 

@@ -41,6 +41,14 @@ export lto_link_flags := (system: String, dir: String) ->
     when 'windows' then ["-Wl,--thinlto-cache-dir=#{dir}", "-Wl,-mllvm,#{devirt}"]
     else ["-Wl,-plugin-opt,cache-dir=#{dir}", "-Wl,-plugin-opt=#{devirt}"]
 
+# What the link of an optimized build is given to make the executable small: it drops the sections
+# that nothing reaches, which the link-time optimization leaves, and, unless `keeps_symbols`, the
+# symbols, which a trace does not read but a debugger does.
+export size_link_flags := (system: String, keeps_symbols: Bool) ->
+  dropped := system == 'macos' then '-Wl,-dead_strip' else '-Wl,--gc-sections'
+  stripped := system == 'macos' then '-Wl,-x' else '-Wl,-s'
+  keeps_symbols then [dropped] else [dropped, stripped]
+
 # The directory of the cache of the link-time optimization in the cache directory, named after
 # DEVIRT_ITERATIONS, which the linker does not count in the keys of its entries, so that a build
 # with another limit takes none made with this one.
