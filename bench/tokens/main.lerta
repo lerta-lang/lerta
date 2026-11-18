@@ -1,0 +1,93 @@
+# Makes a source of lines of tokens picked by a pseudo-random generator, lexes it 10 times into
+# tokens that hold their kinds and positions, then prints how many tokens of each kind there are,
+# the 5 names whose first positions are the latest, and how many distinct names there are.
+LINES := 60000
+ROUNDS := 10
+TOKENS_PER_LINE := 8
+VOCABULARY := 5000
+SYMBOLS := ['+', '-', '*', '/', '=', '(', ')']
+
+enum Kind
+  NAME
+  NUMBER
+  SYMBOL
+
+struct Position
+  line: Int32
+  column: Int32
+
+struct Token
+  kind: Kind
+  start: Int32
+  pos: Position
+
+# MINSTD, whose products fit in the integers of every language compared.
+var seed = 1
+next_random := ->
+  seed = seed * 48271 % 2147483647
+  seed
+
+next_text := ->
+  case next_random() % 3
+    when 0 then "v#{next_random() % VOCABULARY}"
+    when 1 then "#{next_random() % 100000}"
+    else SYMBOLS[next_random() % SYMBOLS.length]
+
+class Lexer
+  args
+    bytes: Binary
+  var at = 0
+  var line = 1
+  var line_start = 0
+
+  skip_spaces := ->
+    while @at < @bytes.length and @bytes[@at].is_space()
+      if @bytes[@at] == b"\n"
+        @line += 1
+        @line_start = @at + 1
+      @at += 1
+
+  # The end of the name or number at `start`.
+  word_end := (start: Int) ->
+    var end = start
+    end += 1 while end < @bytes.length and @bytes[end].is_alphanumeric()
+    end
+
+  next := (): Token? ->
+    @skip_spaces()
+    return nil if @at == @bytes.length
+    start := @at
+    first := @bytes[start]
+    kind: Kind =
+      if first.is_letter()
+        NAME
+      else if first.is_digit()
+        NUMBER
+      else
+        SYMBOL
+    @at = kind == SYMBOL then start + 1 else @word_end(start)
+    pos := Position(line: @line.to_int32()!, column: (start - @line_start + 1).to_int32()!)
+    { kind, pos, start: start.to_int32()! }
+
+source := [
+  for _ in 0..LINES
+    [next_text() for _ in 0..TOKENS_PER_LINE].join(' ')
+].join("\n")
+counts: Map<Kind, Int>
+first_positions: Map<String, Position>
+for _ in 0..ROUNDS
+  lexer := Lexer(source.binary)
+  tokens: Token[]
+  tokens.push token while token := lexer.next()
+  for token in tokens
+    counts[token.kind, default: 0] += 1
+    if token.kind == NAME
+      start := token.start.to_int()
+      name := source.binary.text(start, lexer.word_end(start))!
+      first_positions[name] = token.pos unless name in first_positions
+
+print "#{kind} #{counts[kind]!}" for kind in [Kind.NAME, NUMBER, SYMBOL]
+latest := first_positions.to_array()
+latest.sort_by ((_, pos)) -> (-pos.line, -pos.column)
+print "#{name} #{pos.line}:#{pos.column}" for (name, pos) in latest.take(5)
+print first_positions.length
