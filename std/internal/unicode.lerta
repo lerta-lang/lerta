@@ -3,7 +3,10 @@
 # Character Database: UInt32 values, little-endian, in rows of a fixed width, sorted by their first
 # value, which a binary search finds.
 import char_at, is_continuation, sequence_length from './utf8'
+import CATEGORIES from './unicode_categories'
 import './unicode/case_ignorable.bin' as CASE_IGNORABLE: Binary
+import './unicode/case_orbits.bin' as CASE_ORBITS: Binary
+import './unicode/categories.bin' as CATEGORY_RANGES: Binary
 import './unicode/cased.bin' as CASED: Binary
 import './unicode/letters.bin' as LETTERS: Binary
 import './unicode/lower.bin' as LOWER: Binary
@@ -13,6 +16,34 @@ import './unicode/special_lower.bin' as SPECIAL_LOWER: Binary
 import './unicode/special_upper.bin' as SPECIAL_UPPER: Binary
 import './unicode/upper.bin' as UPPER: Binary
 import './unicode/uppercase.bin' as UPPERCASE: Binary
+
+# The ranges of the characters of a general category, of one letter, as `L`, or two, as `Lu`, each
+# its first and last code points, in order; or nil for no category of the name.
+export category_ranges := (name: String) ->
+  # Each category is of two letters, so a name that one starts is of one letter or two.
+  return nil if name.is_empty() or not CATEGORIES.any((category) -> category.starts_with(name))
+  ranges: (Int, Int)[]
+  for row in 0..(CATEGORY_RANGES.length / (4 * CATEGORY_WIDTH))
+    category := CATEGORIES[value_at(CATEGORY_RANGES, row * CATEGORY_WIDTH + 2)]
+    continue unless category.starts_with(name)
+    first := value_at(CATEGORY_RANGES, row * CATEGORY_WIDTH)
+    ranges.push (first, value_at(CATEGORY_RANGES, row * CATEGORY_WIDTH + 1))
+  ranges
+
+# The other characters that Unicode's simple case folding folds with each of those from `low` to
+# `high`, as `K` and the Kelvin sign with `k`.
+export folded_with := (low: Int, high: Int) ->
+  folded: Int[]
+  var row = first_row_from(CASE_ORBITS, MAPPING_WIDTH, low)
+  while row * MAPPING_WIDTH < CASE_ORBITS.length / 4
+    code := value_at(CASE_ORBITS, row * MAPPING_WIDTH)
+    break if code > high
+    var next = value_at(CASE_ORBITS, row * MAPPING_WIDTH + 1)
+    while next != code
+      folded.push next
+      next = value_at(CASE_ORBITS, row_of(CASE_ORBITS, MAPPING_WIDTH, next)! * MAPPING_WIDTH + 1)
+    row += 1
+  folded
 
 # The classes of a character: Unicode's general categories L and N, and its properties Lowercase,
 # Uppercase and White_Space. An ASCII character is tested alone, so that ASCII text reads no table,
@@ -118,6 +149,7 @@ cased_after := (bytes: Binary, i: Int) ->
 # The rows of a range, its first and last code points; of a simple mapping, a code point and the
 # one it maps to; and of a full mapping, a code point and those it maps to, with zeros after them.
 RANGE_WIDTH := 2
+CATEGORY_WIDTH := 3
 MAPPING_WIDTH := 2
 FULL_WIDTH := 4
 
@@ -158,6 +190,11 @@ row_at_or_before := (table: Binary, width: Int, code: Int) ->
     else
       high = middle
   low > 0 then low - 1
+
+# The first row whose first value is at least the code.
+first_row_from := (table: Binary, width: Int, code: Int) ->
+  before := row_at_or_before(table, width, code - 1) else return 0
+  before + 1
 
 # The value at the index, counted in values, of the table.
 export value_at := (table: Binary, i: Int) -> table.uint32_at(i).to_int()

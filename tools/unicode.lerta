@@ -3,6 +3,7 @@
 # in third_party/ucd.
 # Run it from the repository's root, after those files change: `bin/lerta run tools/unicode.lerta`.
 import make_dir, read_text, write_file from 'std:io'
+import CATEGORIES from '../std/internal/unicode_categories'
 
 UCD_DIR := 'third_party/ucd'
 TABLES_DIR := 'std/internal/unicode'
@@ -71,6 +72,35 @@ data_of := (line: String) ->
 # the letter, merged where they meet.
 category_ranges := (all: Character[], letter: String) ->
   merged([[c.first, c.last] for c in all when c.category.starts_with(letter)])
+
+# The general category of every character that has one, as ranges, each its first and last code
+# points and the place of its category in CATEGORIES, merged where they meet.
+categories := (all: Character[]) ->
+  rows: Int[][]
+  for c in all
+    category := CATEGORIES.index_of(c.category)!
+    previous := rows.last()
+    if previous and previous[1] + 1 == c.first and previous[2] == category
+      previous[1] = c.last
+    else
+      rows.push [c.first, c.last, category]
+  rows
+
+# The characters that CaseFolding.txt's simple folding, of its statuses C and S, folds alike, as a
+# cycle within each set of them: a character and the next of its set, the last's next its first.
+case_orbits := (text: String) ->
+  sets: Map<Int, Int[]>
+  for line in text.lines()
+    fields := [field.trim() for field in data_of(line).split(';')]
+    continue if fields.length < 3 or fields[1] not in ['C', 'S']
+    folded := code_of(fields[2])
+    sets[folded, default: [folded]].push(code_of(fields[0]))
+  rows: Int[][]
+  for codes in sets.values()
+    sorted := codes.sorted()
+    for code at i in sorted
+      rows.push [code, sorted[(i + 1) % sorted.length]]
+  rows.sorted_by((row) -> row[0])
 
 # The ranges that a file of derived properties gives the property, of one of the values if any are
 # given, merged where they meet.
@@ -193,6 +223,7 @@ unicode_data := characters((await read_text("#{UCD_DIR}/UnicodeData.txt"))!)
 properties := (await read_text("#{UCD_DIR}/DerivedCoreProperties.txt"))!
 special_casing := (await read_text("#{UCD_DIR}/SpecialCasing.txt"))!
 normalization := (await read_text("#{UCD_DIR}/DerivedNormalizationProps.txt"))!
+case_folding := (await read_text("#{UCD_DIR}/CaseFolding.txt"))!
 decomposed := decompositions(unicode_data)
 excluded := codes_in(property_ranges(normalization, 'Full_Composition_Exclusion'))
 decomposition := decomposition_tables(decomposed)
@@ -217,6 +248,8 @@ tables :=
   'nfkd_check': property_ranges(normalization, 'NFKD_QC', ['N'])
   'nfc_check': property_ranges(normalization, 'NFC_QC', ['N', 'M'])
   'nfkc_check': property_ranges(normalization, 'NFKC_QC', ['N', 'M'])
+  'categories': categories(unicode_data)
+  'case_orbits': case_orbits(case_folding)
 
 make_dir TABLES_DIR
 for (name, rows) in tables

@@ -413,15 +413,16 @@ print ' a  b '.split(/\s+/)
 | | |
 |---|---|
 | Characters | A character matches itself; `\` before a character that is not a letter or a digit makes it one, as `\.`; `\n`, `\t`, `\r`, `\f`, `\v`, `\a`, `\xHH`, up to `\x7F`, and `\u{H...}` are those code points, as in a [string literal](syntax.md#escapes-and-interpolation). |
-| Classes | `.` any code point but `\n`; `[abc]`, `[a-z]`, `[^...]`; `\d` `0` to `9`, `\w` `[0-9A-Za-z_]`, `\s` the spaces of [`c.is_space()`](#methods-and-conversions), and `\D`, `\W`, `\S` the others. `\d` and `\w` stay ASCII. |
+| Classes | `.` any code point but `\n`; `[abc]`, `[a-z]`, `[^...]`; `\d` `0` to `9`, `\w` `[0-9A-Za-z_]`, `\s` the spaces of [`c.is_space()`](#methods-and-conversions), and `\D`, `\W`, `\S` the others. `\d` and `\w` stay ASCII. `\p{L}` a general category of Unicode, of one letter or two, as `\p{Lu}`, of those that UnicodeData.txt gives characters, so not `Cn`, and `\P{L}` the others. |
 | Assertions | `^` and `$` the start and the end of the text, `\A` and `\z` always so; `\b` and `\B` at and not at a boundary of `\w`. `$` does not match before a last `\n`, as in RE2. |
 | Groups | `(...)` captures, `(?<name>...)` or `(?P<name>...)` with a name, `(?:...)` does not. |
 | Repeats | `*`, `+`, `?`, `{n}`, `{n,}`, `{n,m}`, each lazy with `?` after it. A count is at most 1000; a `{` that starts no count is itself. |
 | Flags | `(?i)` case-insensitive, `(?m)` `^` and `$` at lines too, `(?s)` `.` matches `\n`, to the end of the group; `(?i-s)` sets and clears; `(?i:...)` within the group. |
 
-- `(?i)` is for ASCII so far, with the Kelvin sign and the long s that Unicode folds with `k` and `s`: a character beyond ASCII under it is an error. So is `\p{...}`, a class of Unicode. Both are planned (see [the roadmap](../roadmap/strings.md#regular-expressions)), and are errors until then so that no pattern accepted changes its meaning.
+- `(?i)` matches the characters that Unicode's simple case folding folds alike, as `k`, `K` and the Kelvin sign `K`, `σ`, `ς` and `Σ`, of a class too, `\p{...}` among them; not of `\d`, `\w` and `\s`.
 - POSIX classes, `[[:alpha:]]`, are errors.
 - A code point beyond ASCII is written `\u{H...}`, as in a string literal, where RE2 writes `\x{H...}`, and `\x` takes ASCII alone, as `\x` is a byte in a string literal: `\x{263A}` and `\xA0` are errors, which say to write `\u{...}`.
+- A Unicode class is written one way, as in JavaScript: `\p{L}` with its braces, and `\P{L}` for the others, where RE2 also takes `\pL` and `\p{^L}`, which are errors that say how to write them. Scripts, as `\p{Greek}`, are errors so far.
 
 ## Constant expressions
 

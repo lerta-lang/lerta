@@ -1,6 +1,7 @@
 # The syntax of Regex's patterns, RE2's (see docs/reference/types.md#regex): a pattern parsed
 # into a tree, with its flags applied, so that the tree has none: `(?i)` makes classes of letters,
 # `(?s)` and `(?m)` choose the class of `.` and the assertions of `^` and `$`.
+import category_ranges, folded_with from './unicode'
 
 export struct Literal
   char: Char
@@ -142,7 +143,7 @@ class Parser
       when '\' then @parse_escape(start)
       when '*', '+', '?' then @fail('missing argument to repetition operator', start)
       when ')' then @fail("unmatched ')'", start)
-      else @literal(c, start)
+      else @literal(c)
 
   # The repetition operators after an atom, if any: one, then `?` for the fewest repeats.
   parse_repeat := (atom: Node) ->
@@ -284,9 +285,9 @@ class Parser
         @at += 1
         high := @class_item()
         @fail 'invalid character class range', item_start if high is not Int or high < low
-        @add_range ranges, low, high, item_start
+        @add_range ranges, low, high
       else if low is Int
-        @add_range ranges, low, low, item_start
+        @add_range ranges, low, low
       else
         is_range := @peek() == '-' and @peek_next() != nil and @peek_next() != ']'
         @fail 'invalid character class range', item_start if is_range
@@ -308,16 +309,15 @@ class Parser
       else @fail('invalid escape in character class', start)
 
   # A range of a class, with the other case of its letters under `(?i)`.
-  add_range := (ranges: (Int, Int)[], low: Int, high: Int, at: Int) ->
+  add_range := (ranges: (Int, Int)[], low: Int, high: Int) ->
     ranges.push (low, high)
-    return unless @flags.case_insensitive
-    @fail 'case-insensitive match beyond ASCII is not supported', at if high >= 0x80
-    ranges.append folded_ranges(low, high)
+    if @flags.case_insensitive
+      ranges.append folded_ranges(low, high)
 
   # An escape outside a class, after its `\`: a char escaped is matched as a literal is.
   parse_escape := (start: Int): Node ->
     escaped := @escape(start)
-    escaped is Char then @literal(escaped, start) else escaped
+    escaped is Char then @literal(escaped) else escaped
 
   # An escape, after its `\`: a char as it is, which a class takes as the end of a range before
   # the cases of the range are added, or a class or an assertion.
@@ -338,7 +338,7 @@ class Parser
       when 'z' then Assertion(TEXT_END)
       when 'x' then @read_ascii(start)
       when 'u' then @read_code_point(start)
-      when 'p', 'P' then @fail('Unicode classes are not supported yet', start)
+      when 'p', 'P' then @unicode_class(start, c == 'P')
       when 'k' then @fail('backreferences are not supported', start)
       else
         @fail 'backreferences are not supported', start if c in '1'..='9'
@@ -357,6 +357,27 @@ class Parser
     @fail beyond, start if value >= 0x80
     value.to_char()!
 
+  # A class of Unicode's general categories, `\p{L}` or `\p{Lu}`, or of the others, `\P{L}`, after
+  # its `p` or `P`, of the other cases too under `(?i)`. The braces are always written, as `\u{...}`
+  # writes them, and `\P` alone negates, as `\D` does.
+  unicode_class := (start: Int, negated: Bool) ->
+    escape := negated then 'P' else 'p'
+    @fail "write '\\#{escape}{...}' with its braces", start unless @take('{')
+    @fail "'^' is not taken: write '\\p{...}' or '\\P{...}'", start if @peek() == '^'
+    var name = ''
+    while c := @peek()
+      break if c == '}'
+      name += c
+      @at += 1
+    @fail "missing '}'", start unless @take('}')
+    ranges := category_ranges(name) else @fail("unknown Unicode class '#{name}'", start)
+    with_cases: (Int, Int)[] = [ranges...]
+    if @flags.case_insensitive
+      for (low, high) in ranges
+        with_cases.append folded_ranges(low, high)
+    normal := normalized(with_cases)
+    CharClass(negated then complement(normal) else normal)
+
   # The code point of `\u{H...}`, after its `u`, as in a string literal: not a surrogate.
   read_code_point := (start: Int) ->
     @fail 'invalid escape sequence', start unless @take('{')
@@ -371,10 +392,9 @@ class Parser
     value.to_char() else @fail('invalid escape sequence', start)
 
   # A char as itself, or as the class of its cases under `(?i)`.
-  literal := (c: Char, at: Int): Node ->
+  literal := (c: Char): Node ->
     return Literal(c) unless @flags.case_insensitive
     code := c.to_int()
-    @fail 'case-insensitive match beyond ASCII is not supported', at if code >= 0x80
     folded := folded_ranges(code, code)
     return Literal(c) if folded.is_empty()
     CharClass(normalized([(code, code), folded...]))
@@ -392,18 +412,9 @@ control_char := (letter: Char): Char? ->
 
 is_lookaround_mark := (c: Char?) -> c == '=' or c == '!'
 
-# The other cases of the letters from `low` to `high`, of ASCII, as ranges of one code point: the
-# other ASCII case, and the Kelvin sign of `k` and the long s of `s`, which Unicode folds with them,
-# so that a pattern keeps its meaning once `(?i)` folds beyond ASCII.
-folded_ranges := (low: Int, high: Int) ->
-  folded: (Int, Int)[]
-  for code in low..=high
-    c := code.to_char()!
-    other := c.is_lower() then c.to_upper() else c.to_lower()
-    folded.push (other.to_int(), other.to_int()) if other != c
-    folded.push (0x212A, 0x212A) if c in ['k', 'K']
-    folded.push (0x17F, 0x17F) if c in ['s', 'S']
-  folded
+# The characters that Unicode's simple case folding folds with those from `low` to `high`, as
+# ranges of one code point: `K` and the Kelvin sign with `k`.
+folded_ranges := (low: Int, high: Int) -> [(code, code) for code in folded_with(low, high)]
 
 # The ranges sorted, those that touch or overlap merged.
 export normalized := (ranges: (Int, Int)[]) ->
