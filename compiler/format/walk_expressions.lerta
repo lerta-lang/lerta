@@ -12,7 +12,7 @@ import
   is_block_call, is_block_literal, is_simple, is_taken_apart, is_written_in_block,
   literal_under_members, starts_command
 from './forms'
-import binary_precedence, COMPARISON from './precedence'
+import binary_precedence, COMPARISON, POSTFIX, precedence from './precedence'
 import ChainShape, CodeGap, ListShape, OperationShape, Shape, ValueKind, ValueShape from './shapes'
 import INSIDE, NONE, ONE, unhandled, Walker from './walk'
 import './walk_comprehensions'
@@ -211,9 +211,19 @@ extend Walker
     # after its last member, on its line.
     is_unbracketed := (shape: Shape) -> shape is ListShape and not shape.bracketed
     takes_unbracketed := inner.any(is_unbracketed)
+    kept := [dot for dot in dots when dot in @line_starts]
+
+    # Member lines after an operation without parentheses apply to the whole of it, as `b + c` and
+    # `.length` below it; joined, they would apply to its last operand. After `(b + c)`, whose
+    # chain starts at the `(` before its base, they are joined as any others.
+    base := chain_base(node)
+    { line, column } := base.position
+    at_base := @code[first].line == line and @code[first].column == column
+    after_operation := at_base and precedence(base) < POSTFIX and not kept.is_empty()
+    keeps_lines := takes_unbracketed or after_operation
     is_chain := breaks and
       dots.length >= 2 and
-      not takes_unbracketed and
+      not keeps_lines and
       not @chain_nil_safe and
       not @chain_in_group and
       literal_under_members(node) == nil
@@ -221,8 +231,7 @@ extend Walker
     # The shapes inside follow it: a call's arguments stay the last shapes of its statement.
     if is_chain
       @shapes.push ChainShape(first, dots, last: @at - 1)
-    kept := [dot for dot in dots when dot in @line_starts]
-    if takes_unbracketed and not kept.is_empty() and literal_under_members(node) == nil
+    if keeps_lines and not kept.is_empty() and literal_under_members(node) == nil
       @shapes.push ChainShape(first, last: @at - 1, dots: kept, kept: true)
     @shapes.append inner
 
@@ -585,3 +594,11 @@ extend Walker
       @take_spelled(half, NONE)
     else
       @take_spelled(operator, before)
+
+# The value that a chain of members starts with, under its members, calls and indexes.
+chain_base := (node: Expression): Expression ->
+  case node
+    when Member then chain_base(node.object)
+    when Call then chain_base(node.callee)
+    when Index then chain_base(node.object)
+    else node

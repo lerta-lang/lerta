@@ -14,16 +14,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `lerta fmt` reports nothing for `x := a then b then c else d else e`.
 - How to fix it: have the rewrite of Parentheses add them around the inner value, after which `parts_of` finds each value.
 
-## The formatter joins a member line to the last operand of an operation
-
-- Where: the layout of member lines in `compiler/format/`, which joins a line of members to the line before without the parentheses that the whole value then needs. *Unverified* where.
-- How to see it: `lerta fmt` reports `its layout would change the program, which is a fault of the formatter` for this, which is `(b + c).binary.length`:
-  ```lerta
-  sum := b + c
-  .binary.length
-  ```
-- How to fix it: add the parentheses around the value, or keep the member on its line.
-
 ## The formatter fails on a tuple with a comment after an item's comma
 
 - Where: the layout of a tuple in `compiler/format/`, which writes the items after such a comment so that the tuple does not close. *Unverified* where.
