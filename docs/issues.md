@@ -14,12 +14,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `lerta fmt` reports nothing for `x := a then b then c else d else e`.
 - How to fix it: have the rewrite of Parentheses add them around the inner value, after which `parts_of` finds each value.
 
-## A constant expression of a `UInt64` literal beyond `Int` is not evaluated
-
-- Where: `constant_value` in `compiler/checker/constants.lerta` takes an integer literal's `value`, which is nil for one beyond `Int`, so the literal and what it is an operand of are no constants.
-- How to see it: `x: UInt64 = 18446744073709551615 + 1` compiles and throws `integer overflow` as it runs, and `9223372036854775808 << 64` in a branch that never runs is no error, where a [constant expression](reference/types.md#constant-expressions) that would throw is a compile error.
-- How to fix it: take such a literal's value by `uint64_value` where a `UInt64` is expected.
-
 ## The formatter drops the parentheses of a negated call on a number literal
 
 - Where: the rewrite of Parentheses in `compiler/format/parentheses.lerta` takes the parentheses of `-(1.abs())` to change nothing, though `-1.abs()` is a call on the literal `-1`.
