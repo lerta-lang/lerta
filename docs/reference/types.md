@@ -80,7 +80,7 @@
 | `b.is_digit()` | An ASCII digit. |
 | `b.is_letter()` | An ASCII letter, `a` to `z`, `A` to `Z`. |
 | `b.is_alphanumeric()` | An ASCII letter or digit. |
-| `b.is_space()` | A space, `\t`, `\n` or `\r`. |
+| `b.is_space()` | An ASCII space: a space, `\t`, `\n`, `\v`, `\f` or `\r`. |
 | `b.is_lower()`, `b.is_upper()` | An ASCII letter of that case. |
 | `b.is_utf8_continuation()` | A byte that continues a UTF-8 sequence, 0x80 to 0xBF, as when counting the code points of a `Binary`. |
 | `b.hex_value()` | The value of a hexadecimal digit of either case, 0 to 15, or nil. |
@@ -179,7 +179,9 @@ print [kana(c) for c in 'ひらがな'].join()
 - `c.to_string()`, which `print` and interpolation use, gives the `String` of the code point.
 - `c.to_int()` gives its number.
 - `n.to_char()`, of any integer type, gives the `Char` of a number as a `Char?`, nil for a number that is none; of a `Byte`, which always is one, a `Char`.
-- `c.is_digit()`, `c.is_letter()`, `c.is_alphanumeric()` and `c.is_space()` tell what those of a [`Byte`](#byte-methods) tell, so they are true only for ASCII: `'０'`, `'é'` and U+3000 are in no class. So are `c.is_lower()` and `c.is_upper()`, of the ASCII letters of each case.
+- `c.is_space()` tells a character of Unicode's White_Space: those of `b.is_space()`, and NEL (U+0085), NBSP (U+00A0), U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F and U+3000.
+- `c.is_digit()`, `c.is_letter()` and `c.is_alphanumeric()` tell what those of a [`Byte`](#byte-methods) tell, so they are true only for ASCII so far: `'０'` and `'é'` are in no class (see [the roadmap](../roadmap/strings.md#unicode)). So are `c.is_lower()` and `c.is_upper()`, of the ASCII letters of each case. Below 0x80, every class of a `Char` is that of the `Byte` of the same number.
+- `c.is_ascii()` tells a character below 0x80, for the code that takes ASCII alone, as a format or a protocol does: `c.is_ascii() and c.is_letter()`.
 - `c.to_upper()` and `c.to_lower()` change the case of an ASCII letter, as those of a `String` do, and give any other `Char` as it is; `c.hex_value()` gives what that of a `Byte` gives, or nil for a `Char` beyond the `Byte`s.
 
 ### Keys, items and JSON
@@ -293,7 +295,7 @@ So `not a number` may be reported at a line after the one that makes the NaN, an
 |---|---|
 | `s.split(separator)` | The pieces between the occurrences of `separator`, empty ones too, as a `String[]`: `'a,,b'.split(',')` is `['a', '', 'b']`, `''.split(',')` is `['']`. |
 | `s.split_once(separator)` | What comes before the first occurrence and after it, as a `(String, String)`, or nil: `'k = v = w'.split_once(' = ')` is `('k', 'v = w')`. |
-| `s.split_whitespace()` | The pieces between runs of the ASCII spaces, tabs, carriage returns and newlines, none empty: `' a  b '.split_whitespace()` is `['a', 'b']`. |
+| `s.split_whitespace()` | The pieces between runs of the spaces of [`c.is_space()`](#methods-and-conversions), none empty: `' a  b '.split_whitespace()` is `['a', 'b']`. |
 | `s.lines()` | The lines of `s` without their `\n` or `\r\n`, and no empty line after a last `\n`: `"a\r\nb\n".lines()` is `['a', 'b']`, `''.lines()` is `[]`. |
 | `s.starts_with(prefix)`, `s.ends_with(suffix)` | Whether `s` begins or ends with those bytes. |
 | `s.without_prefix(prefix)` | What follows `prefix`, or nil if `s` does not begin with it: `'std:io'.without_prefix('std:')` is `'io'`. |
@@ -304,8 +306,9 @@ So `not a number` may be reported at a line after the one that makes the NaN, an
 | `s.byte_count()` | The number of its bytes, its UTF-8's, where `s.count()` counts its code points. |
 | `s.contains(part)` | Whether the bytes of `part` occur in `s`; every `String` contains the empty one. A `Char` is taken as its `String`: `'abc'.contains(c)`. |
 | `s.is_digits()` | Whether `s` is one or more ASCII digits: no sign, not empty. |
+| `s.is_ascii()` | Whether every character of `s` is ASCII, as those of `''` are. |
 | `s.replace(part, by)` | `s` with each occurrence of `part`, from the start and without overlapping, replaced by `by`. |
-| `s.trim()`, `s.trim_start()`, `s.trim_end()` | `s` without the ASCII spaces, tabs, carriage returns and newlines at both ends, the start or the end. |
+| `s.trim()`, `s.trim_start()`, `s.trim_end()` | `s` without the spaces of [`c.is_space()`](#methods-and-conversions) at both ends, the start or the end. |
 | `s.repeat(n)` | `n` copies of `s` one after another. |
 | `s.pad_start(width, fill = ' ')` | `s` after as many copies of `fill`, one code point, as make it `width` code points long, or `s` itself if it is no shorter: `'7'.pad_start(3, '0')` is `'007'`. |
 | `s.pad_end(width, fill = ' ')` | The same with the copies after `s`. |

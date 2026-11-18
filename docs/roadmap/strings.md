@@ -52,17 +52,13 @@ A rope keeps a concatenation as a tree, so that `+` is O(1).
 
 ## Unicode
 
-The classes, the case and the normal forms of the characters beyond ASCII, which the methods of `Char` and `String` tell and change for ASCII alone so far (see [the reference](../reference/types.md#char)). They become Unicode's under the same names, in the builtins; no method is kept for ASCII alone. In three steps:
+The classes, the case and the normal forms of the characters beyond ASCII, which the methods of `Char` and `String` but `is_space` tell and change for ASCII alone so far (see [the reference](../reference/types.md#char)). They become Unicode's under the same names, in the builtins; no method is kept for ASCII alone, and `c.is_ascii()` or `s.is_ascii()` tests first for the code that takes ASCII alone. In two steps:
 
-1. **Spaces.** `c.is_space()` tells every character of Unicode's White_Space, as U+3000, which takes no table: a test of the 25 characters by ranges. Below 0x80 it tests as now, and the characters above take a second branch, so that ASCII text pays a comparison at most.
-   - `c.is_ascii()` and `s.is_ascii()` are added, for the code that takes ASCII alone, as a format or a protocol does: `c.is_ascii() and c.is_alphanumeric()`.
-   - A `Byte`'s methods stay those of ASCII, by tests of their own rather than those of the `Char` of the same number: a byte above 0x7F is part of a UTF-8 sequence, not a character, and `0xA0.is_space()` or `0xC3.is_letter()` would break the code that reads text byte by byte.
-   - JSON's spaces are its four alone, so its reader stops taking them by `is_space`.
-2. **Classes and case.** Whether a character is a letter (general category L), a number (N), lower or upper case, and its case mapped: simple, one character to one, for a `Char`, and full, as `ß` to `SS`, for a `String`.
+1. **Classes and case.** Whether a character is a letter (general category L), a number (N), lower or upper case, and its case mapped: simple, one character to one, for a `Char`, and full, as `ß` to `SS`, for a `String`.
    - `c.is_digit()` stays `0` to `9`, as code tests it before it takes the value as `c.to_int() - '0'.to_int()`, which `'٣'` would break.
    - What takes ASCII alone tests it first: the tokens of HTTP and the schemes of URLs, whose names a case mapped beyond ASCII would match otherwise, as the Kelvin sign `K` lowered is `k`; and Lerta's names, in the editor's completion and in the formatter, as the lexer reads them.
    - The headings' anchors of the site then take GitHub's (see [docs/issues.md](../issues.md)).
-3. **Normal forms.** `s.normalize(form)`, of NFC, NFD, NFKC and NFKD, by UAX #15: the decompositions, canonical and compatibility, ordered by the combining classes, then composed, the compositions excluded left out, and Hangul by its arithmetic. A quick check by the NFC_QC and NFKC_QC properties returns a String already normal as it is, as an ASCII one is.
+2. **Normal forms.** `s.normalize(form)`, of NFC, NFD, NFKC and NFKD, by UAX #15: the decompositions, canonical and compatibility, ordered by the combining classes, then composed, the compositions excluded left out, and Hangul by its arithmetic. A quick check by the NFC_QC and NFKC_QC properties returns a String already normal as it is, as an ASCII one is.
 
 ### Tables
 

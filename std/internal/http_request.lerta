@@ -6,7 +6,7 @@ import LineTooLongError, Reader from 'std:io'
 import Socket from 'std:net'
 import Deadline from './deadline'
 import ChunkedBody, SizedBody from './http_chunks'
-import Headers, is_token, keeps_alive, Request from './http_message'
+import Headers, is_token, keeps_alive, Request, without_ows from './http_message'
 
 # Where a server listens, at a free port if `port` is 0, and how much and how long it waits for of a
 # request: the bytes of its request line or of a field, its fields, and the bytes of its body; the
@@ -109,7 +109,7 @@ read_headers := (reader: Reader, options: ServerOptions) ->
     if headers.fields.length == options.max_fields
       throw RequestError(status: 431, message: 'too many fields')
     (name, value) := line.split_once(':') else throw bad_request()
-    headers.append name, value.trim()
+    headers.append name, without_ows(value)
   throw bad_request()
 
 # A line of at most `max` bytes before its CR LF, or its LF alone; a longer one is answered with
@@ -129,7 +129,7 @@ read_limited_line := (reader: Reader, max: Int, status: Int) ->
 is_chunked := (headers: Headers, version: String) ->
   coding := headers.get('transfer-encoding') else return false
   throw bad_request() if 'content-length' in headers or version == 'HTTP/1.0'
-  names := [each.trim().to_lower() for each in coding.split(',')]
+  names := [without_ows(each).to_lower() for each in coding.split(',')]
 
   # An empty element of a list is no element.
   codings := [name for name in names when not name.is_empty()]

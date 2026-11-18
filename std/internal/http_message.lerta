@@ -55,9 +55,21 @@ is_token_char := (c: Char) -> c.is_alphanumeric() or c in TOKEN_SYMBOLS
 
 TOKEN_SYMBOLS := "!#$%&'*+-.^_`|~"
 
+# The value without the spaces and tabs at its ends, which HTTP allows around it (OWS), and no other
+# whitespace, so that check_field refuses another control character there.
+export without_ows := (value: String) ->
+  bytes := value.binary
+  is_ows := (i: Int) -> bytes[i] in [b' ', b"\t"]
+  var start = 0
+  start += 1 while start < bytes.length and is_ows(start)
+  var end = bytes.length
+  end -= 1 while end > start and is_ows(end - 1)
+  bytes.text(start, end)!
+
 # Whether a connection goes on after a message of the version, by its Connection field.
 export keeps_alive := (version: String, headers: Headers) ->
-  options := [option.trim().to_lower() for option in (headers.get('connection') else '').split(',')]
+  options :=
+    [without_ows(option).to_lower() for option in (headers.get('connection') else '').split(',')]
   return false if 'close' in options
   version == 'HTTP/1.1' or 'keep-alive' in options
 

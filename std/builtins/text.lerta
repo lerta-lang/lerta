@@ -2,7 +2,9 @@
 # docs/reference/builtins.md).
 import is_control from '../internal/chars'
 import double_quoted from '../internal/escape'
-import char_at, lerta_binary_text, lerta_string_slice, sequence_length from '../internal/utf8'
+import
+  char_at, is_continuation, lerta_binary_text, lerta_string_slice, sequence_length
+from '../internal/utf8'
 import INFINITY from './numbers'
 
 # Writes at once, unlike std:io's Writer (see runtime/io.c).
@@ -77,14 +79,19 @@ extend Char
   # Quoted as a String of the one Char is.
   to_literal := -> @to_string().to_literal()
 
-  # True only for ASCII characters: a digit, letter or space beyond them, as `０`, `é` or U+3000,
-  # is in no class.
+  # True only for ASCII characters: a digit or letter beyond them, as `０` or `é`, is in no class.
   is_digit := -> @ in '0'..='9'
   is_letter := -> @is_lower() or @is_upper()
   is_alphanumeric := -> @is_letter() or @is_digit()
   is_lower := -> @ in 'a'..='z'
   is_upper := -> @ in 'A'..='Z'
-  is_space := -> @ in [' ', "\t", "\n", "\r"]
+  is_ascii := -> @to_int() < 0x80
+
+  # Unicode's White_Space. ASCII text pays a comparison more at most, as the others are apart.
+  is_space := ->
+    code := @to_int()
+    return is_ascii_space(code) if code < 0x80
+    is_wide_space(code)
 
   # Only the ASCII letters change, as those of a String do.
   to_upper := -> mapped_ascii_char(@, upper_of)
@@ -96,6 +103,13 @@ extend Char
   # The Char that many places on, or back, which throws where no Char is.
   add := (count: Int) -> (@to_int() + count).to_char() else throw not_a_char()
   sub := (count: Int) -> (@to_int() - count).to_char() else throw not_a_char()
+
+# The ASCII characters of White_Space: a space, and `\t`, `\n`, `\v`, `\f` and `\r`.
+is_ascii_space := (code: Int) -> code == 0x20 or code in 0x09..=0x0D
+
+# The characters of White_Space beyond ASCII.
+is_wide_space := (code: Int) ->
+  code in [0x85, 0xA0, 0x1680, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000] or code in 0x2000..=0x200A
 
 # The escape of a Char in a "..." literal (see docs/reference/syntax.md), or nil if it needs none.
 escape_in_double_quotes := (c: Char) ->
@@ -180,17 +194,19 @@ extend String
     ended.push rest unless rest.is_empty()
     ended
 
-  # The pieces between runs of spaces (see is_space), none empty.
+  # The pieces between runs of spaces (see Char.is_space), none empty.
   split_whitespace := ->
     bytes := @binary
     words: String[]
     var start = 0
     while start < bytes.length
-      if bytes[start].is_space()
-        start += 1
+      space := space_length(bytes, start)
+      if space > 0
+        start += space
         continue
-      var end = start + 1
-      end += 1 while end < bytes.length and not bytes[end].is_space()
+      var end = start + sequence_length(bytes[start])
+      while end < bytes.length and space_length(bytes, end) == 0
+        end += sequence_length(bytes[end])
       words.push lerta_string_slice(@, start, end)
       start = end
     words
@@ -219,8 +235,10 @@ extend String
   # Whether the String is one or more ASCII digits (see Char.is_digit).
   is_digits := -> not @is_empty() and @all(Char.is_digit)
 
-  # Without the whitespace at both ends: the ASCII spaces of Byte.is_space, which no byte of a
-  # multi-byte character is, so that what is left is cut at code points.
+  # Whether every byte is ASCII, which no byte of a multi-byte character is.
+  is_ascii := -> @binary.all((b) -> b < 0x80)
+
+  # Without the spaces at both ends (see Char.is_space).
   trim := ->
     start := text_start(@binary)
     lerta_string_slice(@, start, text_end(@binary, start))
@@ -361,16 +379,32 @@ byte_index := (bytes: Binary, byte: Byte, from: Int) ->
     return i if bytes[i] == byte
   nil
 
-# The start of the bytes without the spaces at it.
+# The number of bytes of the space whose sequence starts at `i`, or 0 if its character is none: an
+# ASCII byte is tested alone, so that ASCII text decodes no character.
+space_length := (bytes: Binary, i: Int) ->
+  lead := bytes[i]
+  return lead.is_space() then 1 else 0 if lead < 0x80
+  char := char_at(bytes, i)
+  char.is_space() then sequence_length(lead) else 0
+
+# The start of the UTF-8 without the spaces at it.
 text_start := (bytes: Binary) ->
   var start = 0
-  start += 1 while bytes.get(start)?.is_space() == true
+  while start < bytes.length
+    space := space_length(bytes, start)
+    break if space == 0
+    start += space
   start
 
-# The end of the bytes without the spaces at it, which is no earlier than `start`.
+# The end of the UTF-8 without the spaces at it, which is no earlier than `start`, a character's
+# start: each character back is found from its last byte, past those that continue it.
 text_end := (bytes: Binary, start: Int) ->
   var end = bytes.length
-  end -= 1 while end > start and bytes[end - 1].is_space()
+  while end > start
+    var lead = end - 1
+    lead -= 1 while is_continuation(bytes[lead])
+    break if space_length(bytes, lead) == 0
+    end = lead
   end
 
 # The copies of `fill` that make `text` `width` code points long (see pad_start).

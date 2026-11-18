@@ -1,7 +1,8 @@
 # A field of a response folded onto lines that start with a space or a tab is read as one value, the
 # lines joined by a space, but a fold before any field is malformed, as are more than 256 lines of
 # fields, folded or not, and a value joined longer than 64 KiB. A folded Content-Length is read as
-# it is joined, which is malformed here.
+# it is joined, which is malformed here. A form feed or a vertical tab around a value or a line is
+# no space of HTTP, but a control character, which is malformed too.
 import fetch from 'std:http'
 import RawRequest, raw_server, Reply from './lib/raw_server'
 
@@ -17,6 +18,8 @@ heads :=
   head("x-folded: a\r\n#{" b\r\n".repeat(255)}")
   head("x-folded: #{'a'.repeat(40000)}\r\n #{'b'.repeat(25535)}\r\n")
   head("x-folded: #{'a'.repeat(40000)}\r\n #{'b'.repeat(25536)}\r\n")
+  head("x-folded: \x0Ca\r\n")
+  head("x-folded: a\r\n \x0Bb\r\n")
   "HTTP/1.1 200 OK\r\ncontent-length: 1\r\n 0\r\n\r\n#{'x'.repeat(10)}"
 reply := (request: RawRequest) ->
   Reply(text: heads[request.line.split(' ')[1].without_prefix('/')!.parse_int()!], close: true)
