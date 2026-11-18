@@ -870,8 +870,7 @@ print compile('\s+').split(' a  b ')
 | `r.find(text: String): Match?` | The first match, or nil. |
 | `r.find_all(text: String): Iter<Match>` | The matches, from the start, that do not overlap. After an empty match, the next is looked for a code point on; after another, at its end, where an empty one may follow it, as in JavaScript: `a*` finds `''`, `'aaa'`, `''` and `''` in `'baaac'`. |
 | `r.split(text: String): String[]` | The pieces between the matches, as `s.split(separator)` gives them. As in JavaScript, an empty match at the end of the text, or where a piece would start, splits nothing off: `x*` splits `'abc'` into `['a', 'b', 'c']`. |
-| `r.replace(text: String, by: String): String` | The text with each match of `find_all` replaced by `by`, as it is: `$1` is no group. |
-| `r.replace_with(text: String, by: (Match) -> String): String` | The text with each match replaced by what `by` gives for it. |
+| `r.replace(text: String, by: String \| ((Match) -> String)): String` | The text with each match of `find_all` replaced by `by`, a `String` as it is, `$1` being no group, or what the function gives for the match. |
 | `m.text: String` | The text matched. |
 | `m.groups: String?[]` | The text of each group, from 0, the whole match, then the groups in the order of their `(`; nil for a group that took no part. |
 | `m.named(name: String): String?` | The text of the group of the name, `(?<name>...)`, or nil if it took no part. Throws a `ValueError` for a name the pattern does not give. |
