@@ -101,7 +101,7 @@ When the last parameter is of a struct type, a call may give it as named argumen
   - top-level code above its declaration cannot read it;
   - top-level code that calls a function whose return type is inferred, or constructs an object whose field type is inferred from an initializer, where that function or initializer uses the value, is an error. Move the declaration up, or write the type of the function or field.
 - A `const` whose value is one of these is initialized from the start and never released, so that reading it never throws:
-  - a literal of its own type, a `Bool`, a number or a `String`, as `LIMIT := 3`;
+  - a literal of its own type, a `Bool`, a number, a `String` or a `Binary` that interpolates nothing, as `LIMIT := 3`, or a file [embedded](modules.md#embedded-files);
   - a [constant expression](types.md#constant-expressions) of its own type, as `SIZE := 64 * 1024`.
 
 ## Function values

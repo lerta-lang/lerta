@@ -163,16 +163,24 @@ export shared_string_constant := (ir: IrBuilder, value: String) ->
     module.define_global symbol, string_definition(value.binary)
   ir.module.named("string #{value}", '@lerta.name', define)
 
+# As binary_constant, of the const whose slot is `slot`: each IR module that reads it defines it
+# alike, by a symbol of the slot's, which the linker keeps one of, as an embedded file may be large.
+export shared_binary_constant := (ir: IrBuilder, slot: String, bytes: Binary) ->
+  symbol := suffixed_symbol(slot, 'bytes')
+  ir.module.define_once "bytes #{slot}", (module) ->
+    module.define_global symbol, string_definition(bytes, 'linkonce_odr constant')
+  symbol
+
 # The LLVM type of a LertaString (see runtime/lerta.h) whose bytes have the IR type: the header
 # (reference count and type, none), the length and the bytes.
 export string_layout := (bytes_type: String) -> "{ i64, ptr, i64, #{bytes_type} }"
 
-string_definition := (bytes: Binary) ->
+string_definition := (bytes: Binary, linkage = 'private unnamed_addr constant') ->
   bytes_type := "[#{bytes.length} x i8]"
   type := string_layout(bytes_type)
   bytes_init := "#{bytes_type} c\"#{ir_string_bytes(bytes)}\""
   init := "{ i64 #{LERTA_IMMORTAL}, ptr null, i64 #{bytes.length}, #{bytes_init} }"
-  "private unnamed_addr constant #{type} #{init}"
+  "#{linkage} #{type} #{init}"
 
 # How a value holds what it owns: nothing, a reference, the data of an interface value; in a
 # generator's Iter alone (see yielding), the coroutine of the function that yields, which is

@@ -647,7 +647,7 @@ lerta clean
 lerta license
 ```
 
-- Prints the license notices that the compiler carries, which go with an executable given to others (see [Cache](#cache)): `LICENSE-MIT`, `LICENSE-APACHE`, `third_party/libuv/LICENSE` and `third_party/libuv/LICENSE-extra`, in that order, each under a line `== <path> ==`.
+- Prints the license notices that the compiler carries, which go with an executable given to others (see [Cache](#cache)): `LICENSE-MIT`, `LICENSE-APACHE`, `third_party/libuv/LICENSE`, `third_party/libuv/LICENSE-extra` and `third_party/ucd/LICENSE`, in that order, each under a line `== <path> ==`.
 - It takes no arguments.
 
 ### Dumps
@@ -699,7 +699,7 @@ lerta license
 ## Cache
 
 - The runtime, with [libuv](../internals/platforms.md#platforms), whose sources the compiler carries, is compiled once for each kind of build and kept in a cache. A build only links it, with the system's libraries that libuv needs.
-- An executable holds Lerta's runtime and standard modules, and libuv: given to others, it goes with the notice of whichever of Lerta's licenses its distributor follows, `LICENSE-MIT` or `LICENSE-APACHE`, and libuv's, `third_party/libuv/LICENSE` and `third_party/libuv/LICENSE-extra`, which [`license`](#license) prints.
+- An executable holds Lerta's runtime and standard modules, libuv, and tables made from the Unicode Character Database: given to others, it goes with the notice of whichever of Lerta's licenses its distributor follows, `LICENSE-MIT` or `LICENSE-APACHE`, libuv's, `third_party/libuv/LICENSE` and `third_party/libuv/LICENSE-extra`, and Unicode's, `third_party/ucd/LICENSE`, which [`license`](#license) prints.
 - The runtime's directory keeps the object of each standard module that a build compiles too, which a later build of the same module's code links instead of compiling it again (see [Names](#names)). A program's own modules are compiled each time, so that the cache does not grow with each change of them.
 - A build that links a `.c` or `.m` file keeps the runtime's header there too (see [`cflags`](#cflags)), and an optimized build what ThinLTO optimizes.
 

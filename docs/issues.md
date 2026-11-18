@@ -2,11 +2,11 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## A heading's anchor keeps capitals and symbols that are not ASCII
+## A heading's anchor drops the combining marks
 
-- Where: `slug` in `site/markdown.lerta` lowers the ASCII letters alone and keeps every character that is not ASCII, as std tells no class of those.
-- How to see it: `# Été — 🌞` gets the anchor `Été-—-🌞`, where GitHub gives `été--`, so that a link written for GitHub does not reach the heading on the site.
-- How to fix it: lower the letters that are not ASCII and drop the other characters, as GitHub does, once std can tell them apart.
+- Where: `slug` in `site/markdown.lerta` keeps the letters and numbers of a heading, and `_`, but not its combining marks (general category M) nor its connector punctuation (Pc) but `_`, which GitHub keeps too, as std tells no class of them.
+- How to see it: `# Cafe\u{301}`, with U+0301 after the `e`, gets the anchor `cafe`, where GitHub gives `cafe\u{301}`, so that a link written for GitHub does not reach the heading on the site.
+- How to fix it: keep the marks and the connector punctuation, once std tells them.
 
 ## The site renders emphasis closed by a longer run of `*` as its text
 

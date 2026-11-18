@@ -13,7 +13,7 @@
 - Reading a top-level value through a function before it is initialized is detected with an initialized flag, and so is reading an imported value of a module of the same import cycle.
 - The check is optimized away where initialization is certain: in top-level code, for the module's own values and those of modules outside the cycle, which have run.
 - A function always checks, since a `deinit` can run while the values are released at exit, each unset before its release.
-- A `const` whose value is a literal or a constant expression of its own type is read as that value, in place, in its module and in others, never through its global (`constant_of` in `compiler/codegen/top_level.lerta`).
+- A `const` whose value is a literal or a constant expression of its own type is read as that value, in place, in its module and in others, never through its global (`constant_of` in `compiler/codegen/top_level.lerta`). Nor is its global read as the values are released at exit, so that an optimized program, linked with LTO, keeps no such value that it does not read, as the tables of std's Unicode (see [representation](representation.md#unicode)).
 - The checker evaluates constant expressions in the compiler's own arithmetic of their types, as the program would, catching the `ArithmeticError` it throws for a compile error (`compiler/checker/constants.lerta`). It records their values in its facts, which codegen writes in their places; a top-level const's value goes with its local and its export.
 
 ### Checking order

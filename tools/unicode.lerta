@@ -1,0 +1,128 @@
+# Writes the tables of Unicode's classes and case mappings that std:builtins embeds (see
+# docs/internals/representation.md#unicode) from the files of the Unicode Character Database in
+# third_party/ucd.
+# Run it from the repository's root, after those files change: `bin/lerta run tools/unicode.lerta`.
+import make_dir, read_text, write_file from 'std:io'
+
+UCD_DIR := 'third_party/ucd'
+TABLES_DIR := 'std/internal/unicode'
+
+# The most characters that a full case mapping gives one, in SpecialCasing.txt.
+MAX_MAPPED := 3
+
+# A character of UnicodeData.txt, or a range of them, as its first and last lines name it.
+struct Character
+  first: Int
+  last: Int
+  category: String
+  upper: Int?
+  lower: Int?
+
+# The code point that the hexadecimal text stands for.
+code_of := (hex: String) ->
+  var code = 0
+  for byte in hex.trim().binary
+    code = code * 16 + byte.hex_value()!
+  code
+
+characters := (text: String) ->
+  found: Character[]
+  var first: Int?
+  for line in text.lines()
+    fields := line.split(';')
+    code := code_of(fields[0])
+    if fields[1].ends_with(', First>')
+      first = code
+      continue
+    mapped := (field: String) -> field.is_empty() then nil else code_of(field)
+    found.push {
+      first: first else code
+      last: code
+      category: fields[2]
+      upper: mapped(fields[12])
+      lower: mapped(fields[13])
+    }
+    first = nil
+  found
+
+# The text of a line of the database before its comment.
+data_of := (line: String) ->
+  (data, _) := line.split_once('#') else return line
+  data
+
+# The ranges, each its first and last code points, of the characters whose category starts with
+# the letter, merged where they meet.
+category_ranges := (all: Character[], letter: String) ->
+  merged([[c.first, c.last] for c in all when c.category.starts_with(letter)])
+
+# The ranges that DerivedCoreProperties.txt gives the property, merged where they meet.
+property_ranges := (text: String, property: String) ->
+  ranges: Int[][]
+  for line in text.lines()
+    (codes, name) := data_of(line).split_once(';') else continue
+    continue if name.trim() != property
+    (first, last) := codes.split_once('..') else (codes, codes)
+    ranges.push [code_of(first), code_of(last)]
+  merged(ranges.sorted_by((range) -> range[0]))
+
+merged := (ranges: Int[][]) ->
+  result: Int[][]
+  for range in ranges
+    previous := result.last()
+    if previous and previous[1] + 1 == range[0]
+      previous[1] = range[1]
+    else
+      result.push [range[0], range[1]]
+  result
+
+# The simple mappings that the field gives, as pairs of a character and its mapping.
+simple_mappings := (all: Character[], mapping: (Character) -> Int?) ->
+  [
+    for c in all when mapping(c) != nil
+      [c.first, mapping(c)!]
+  ]
+
+# The full mappings of SpecialCasing.txt that hold whatever the context and the language, of the
+# field: 1 for lower case, 3 for upper case. Each is the character, and the characters it maps to,
+# with zeros after them.
+special_mappings := (text: String, field: Int) ->
+  found: Int[][]
+  for line in text.lines()
+    fields := data_of(line).split(';')
+    continue if fields.length != 5
+    mapped := [code_of(code) for code in fields[field].split_whitespace()]
+    continue if mapped.length == 1 and mapped[0] == code_of(fields[0])
+    padding := Array(MAX_MAPPED - mapped.length, 0)
+    found.push [code_of(fields[0]), mapped..., padding...]
+  found.sorted_by((entry) -> entry[0])
+
+# The table of the entries, each a row of UInt32 values in little-endian order, as
+# Binary.uint32_at reads them.
+table := (rows: Int[][]) ->
+  bytes: Byte[]
+  for row in rows
+    for value in row
+      for shift in [0, 8, 16, 24]
+        bytes.push (value >> shift & 0xFF).to_byte()!
+  bytes.to_binary()
+
+unicode_data := characters((await read_text("#{UCD_DIR}/UnicodeData.txt"))!)
+properties := (await read_text("#{UCD_DIR}/DerivedCoreProperties.txt"))!
+special_casing := (await read_text("#{UCD_DIR}/SpecialCasing.txt"))!
+
+tables :=
+  'letters': category_ranges(unicode_data, 'L')
+  'numbers': category_ranges(unicode_data, 'N')
+  'lowercase': property_ranges(properties, 'Lowercase')
+  'uppercase': property_ranges(properties, 'Uppercase')
+  'cased': property_ranges(properties, 'Cased')
+  'case_ignorable': property_ranges(properties, 'Case_Ignorable')
+  'upper': simple_mappings(unicode_data, (c) -> c.upper)
+  'lower': simple_mappings(unicode_data, (c) -> c.lower)
+  'special_upper': special_mappings(special_casing, 3)
+  'special_lower': special_mappings(special_casing, 1)
+
+make_dir TABLES_DIR
+for (name, rows) in tables
+  await write_file("#{TABLES_DIR}/#{name}.bin", table(rows))
+  print "#{TABLES_DIR}/#{name}.bin: #{rows.length} entries"

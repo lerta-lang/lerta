@@ -180,9 +180,11 @@ print [kana(c) for c in 'ひらがな'].join()
 - `c.to_int()` gives its number.
 - `n.to_char()`, of any integer type, gives the `Char` of a number as a `Char?`, nil for a number that is none; of a `Byte`, which always is one, a `Char`.
 - `c.is_space()` tells a character of Unicode's White_Space: those of `b.is_space()`, and NEL (U+0085), NBSP (U+00A0), U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F and U+3000.
-- `c.is_digit()`, `c.is_letter()` and `c.is_alphanumeric()` tell what those of a [`Byte`](#byte-methods) tell, so they are true only for ASCII so far: `'０'` and `'é'` are in no class (see [the roadmap](../roadmap/strings.md#unicode)). So are `c.is_lower()` and `c.is_upper()`, of the ASCII letters of each case. Below 0x80, every class of a `Char` is that of the `Byte` of the same number.
+- `c.is_letter()` tells a letter of Unicode's general category L, as `'é'` and `'ア'`; `c.is_numeric()` a number of N, as `'٣'`, `'Ⅻ'` and `'½'`; `c.is_alphanumeric()` either. `c.is_lower()` and `c.is_upper()` tell Unicode's properties Lowercase and Uppercase: `'ª'` is lower case, `'Ⅰ'` upper case, and `'ǅ'`, of title case, neither.
+- `c.is_digit()` tells `0` to `9` alone, whose value is `c.to_int() - '0'.to_int()`.
+- Below 0x80, every class of a `Char` is that of the `Byte` of the same number (see [Byte](#byte-methods)), and `c.is_numeric()` is `c.is_digit()`.
 - `c.is_ascii()` tells a character below 0x80, for the code that takes ASCII alone, as a format or a protocol does: `c.is_ascii() and c.is_letter()`.
-- `c.to_upper()` and `c.to_lower()` change the case of an ASCII letter, as those of a `String` do, and give any other `Char` as it is; `c.hex_value()` gives what that of a `Byte` gives, or nil for a `Char` beyond the `Byte`s.
+- `c.to_upper()` and `c.to_lower()` map a letter by Unicode's simple case mappings, of one character to one, and give any other `Char` as it is: `'ß'.to_upper()` is `'ß'`, as its full mapping, `SS`, is two; `c.hex_value()` gives what that of a `Byte` gives, or nil for a `Char` beyond the `Byte`s.
 
 ### Keys, items and JSON
 
@@ -312,7 +314,7 @@ So `not a number` may be reported at a line after the one that makes the NaN, an
 | `s.repeat(n)` | `n` copies of `s` one after another. |
 | `s.pad_start(width, fill = ' ')` | `s` after as many copies of `fill`, one code point, as make it `width` code points long, or `s` itself if it is no shorter: `'7'.pad_start(3, '0')` is `'007'`. |
 | `s.pad_end(width, fill = ' ')` | The same with the copies after `s`. |
-| `s.to_upper()`, `s.to_lower()` | `s` with the case of the ASCII letters changed, every other character as it is: `'café'.to_upper()` is `'CAFé'`. |
+| `s.to_upper()`, `s.to_lower()` | `s` with its letters mapped by Unicode's full case mappings, which hold in any language, every other character as it is: `'straße'.to_upper()` is `'STRASSE'`, and `'ΟΔΟΣ'.to_lower()` is `'οδος'`, a capital sigma that ends a word lowered to `ς`. |
 | `s.reversed()` | Its code points in reverse order, so a combining mark moves away from its base. |
 
 These throw a `ValueError`:

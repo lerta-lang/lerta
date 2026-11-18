@@ -191,6 +191,13 @@ An operation that would check its result, a tree's root or one of no tree, check
   - `+=` and the like on it (`update_with_default` in `compiler/codegen/assignment.lerta`) read the value, or the default, and write the result at the place found, where the key was there, as nothing but the operator runs between the find and the write.
   - A missing key, for which the default ran, is placed anew, and so is any key where `+=` goes through a method of the value's type, which may change the map.
 
+## Unicode
+
+- The classes and the case mappings of the characters beyond ASCII are tables of std, `std/internal/unicode/*.bin`, which `std/internal/unicode.lerta` [embeds](../reference/modules.md#embedded-files) and `std/builtins/text.lerta` reads only for a character beyond ASCII, whose classes it tests by comparisons alone.
+- `tools/unicode.lerta` writes them from the files of the Unicode Character Database in `third_party/ucd/`, of one version, and is run by hand when those change.
+- Each is UInt32 values, little-endian, in rows of a fixed width, sorted by their first value, which a binary search finds: a range of a class, its first and last code points; a simple case mapping, a code point and its mapping; a full one, a code point and the up to three it maps to, with zeros after them.
+- `is_letter` and `is_numeric` read the general categories L and N, `is_lower` and `is_upper` the properties Lowercase and Uppercase, and a String's `to_lower` the properties Cased and Case_Ignorable, for a capital sigma that ends a word (Final_Sigma). The full mappings are those of SpecialCasing.txt that hold in any context and language.
+
 ## Strings
 
 - Strings are flat only, for now.

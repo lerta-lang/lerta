@@ -1,5 +1,5 @@
 # Top-level values in the generated code (see docs/internals/compiler.md#modules).
-import BooleanLiteral, Declaration, FloatLiteral, IntegerLiteral from '../ast'
+import binary_literal_bytes, BooleanLiteral, Declaration, FloatLiteral, IntegerLiteral from '../ast'
 import Shared from '../checker/shared'
 import top_level_value from '../checker/top_level_values'
 import Module from '../loader'
@@ -8,10 +8,11 @@ import Generator, TopLevelGlobal from './generator'
 import throw_if from './runtime_errors'
 import IrBuilder, IrModule from './ir_builder'
 import
-  constant_operand, emit_release_stored, ir_type, ownership, suffixed_symbol, top_level_symbol
+  constant_operand, emit_release_stored, ir_type, ownership, shared_binary_constant,
+  suffixed_symbol, top_level_symbol
 from './lerta_ir'
 import scalar_literal from './scalar'
-import format_type, Type from '../types'
+import format_type, is_kind, Type from '../types'
 
 export define_top_level_globals := (ir_module: IrModule, module: Module, shared: Shared) ->
   globals: Map<String, TopLevelGlobal>
@@ -27,21 +28,26 @@ export define_top_level_globals := (ir_module: IrModule, module: Module, shared:
     ir_module.define_variable pointer, ir_type(type), 'zeroinitializer'
     ir_module.define_variable flag, 'i1', 'false'
 
-    constant := constant_of(declaration, type, shared)
+    constant := constant_of(declaration, type, shared, pointer)
     globals[name] = { name, type, pointer, flag, is_var: declaration.mutable, constant }
   globals
 
 # The operand of the const's value, if it is of its own type and a constant expression (see
 # checker/constants) or a literal, a Bool or a number: such a const is initialized from the start
 # and never released, so that reading it, in its module or another, checks nothing. The value is
-# known only to its module's facts, so its operand is worked out here, but for a String's, which
-# each IR module defines for itself.
-constant_of := (declaration: Declaration, type: Type, shared: Shared): ((IrBuilder) -> String)? ->
+# known only to its module's facts, so its operand is worked out here, but for a String's and a
+# Binary's, which each IR module defines for itself (see shared_binary_constant).
+constant_of := (
+  declaration: Declaration, type: Type, shared: Shared, slot: String
+): ((IrBuilder) -> String)? ->
   return nil if declaration.mutable
   value := declaration.value
   return nil if format_type(shared.facts.types[value]!) != format_type(type)
   if constant := shared.facts.constants[value]
     return (ir) -> constant_operand(ir, constant)
+  if is_kind(type, 'Binary')
+    if bytes := binary_literal_bytes(value)
+      return (ir) -> shared_binary_constant(ir, slot, bytes)
   if value is BooleanLiteral | FloatLiteral | IntegerLiteral
     operand := scalar_literal(value, type)
     (_) -> operand
@@ -59,8 +65,11 @@ export emit_initialized_check := (g: Generator, global: TopLevelGlobal) ->
   throw_if g, is_unset, { message, type_name: 'InitError' }
 
 # At the end of the program, the references the values hold. Each value is unset first, so that a
-# deinit run by the releases fails the initialized check instead of reading a released value.
+# deinit run by the releases fails the initialized check instead of reading a released value. A
+# constant's value is immortal, and is not read, so that an optimized program keeps no constant
+# that it does not use otherwise, as a table of std.
 export emit_release_globals := (ir: IrBuilder, globals: TopLevelGlobal[]) ->
   for global in globals
     ir.store 'i1', 'false', global.flag, top_level_tag(ir)
+    continue if global.constant
     emit_release_stored ir, global.pointer, ir_type(global.type), ownership(global.type)

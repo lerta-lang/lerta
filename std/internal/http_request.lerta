@@ -6,7 +6,7 @@ import LineTooLongError, Reader from 'std:io'
 import Socket from 'std:net'
 import Deadline from './deadline'
 import ChunkedBody, SizedBody from './http_chunks'
-import Headers, is_token, keeps_alive, Request, without_ows from './http_message'
+import ascii_lower, Headers, is_token, keeps_alive, Request, without_ows from './http_message'
 
 # Where a server listens, at a free port if `port` is 0, and how much and how long it waits for of a
 # request: the bytes of its request line or of a field, its fields, and the bytes of its body; the
@@ -70,7 +70,7 @@ export read_rest_of_request := (
   body := BodyChunks(chunks, deadline, seconds: body_timeout)
 
   # HTTP/1.0 has no 100 Continue.
-  expects := (headers.get('expect') else '').to_lower() == '100-continue'
+  expects := ascii_lower(headers.get('expect') else '') == '100-continue'
   body.continue_on = socket if expects and version == 'HTTP/1.1' and (chunked or length > 0)
 
   url := url_of(host, target) else throw bad_request()
@@ -129,7 +129,10 @@ read_limited_line := (reader: Reader, max: Int, status: Int) ->
 is_chunked := (headers: Headers, version: String) ->
   coding := headers.get('transfer-encoding') else return false
   throw bad_request() if 'content-length' in headers or version == 'HTTP/1.0'
-  names := [without_ows(each).to_lower() for each in coding.split(',')]
+  names := [
+    for each in coding.split(',')
+      ascii_lower(without_ows(each))
+  ]
 
   # An empty element of a list is no element.
   codings := [name for name in names when not name.is_empty()]
@@ -162,7 +165,7 @@ NOT_IN_HOST := '/\?#@'
 # A target in absolute form is the URL itself, and one in origin form a path on the host; nil for
 # another, as `*`.
 url_of := (host: String, target: String) ->
-  lower := target.to_lower()
+  lower := ascii_lower(target)
   return target if lower.starts_with('http://') or lower.starts_with('https://')
   target.starts_with('/') then "http://#{host}#{target}"
 

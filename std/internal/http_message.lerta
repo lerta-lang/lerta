@@ -16,7 +16,7 @@ export class Headers
 
   # The values of the name, each apart, as those of Set-Cookie, which a ", " would not part.
   get_all := (name: String) ->
-    lower := name.to_lower()
+    lower := ascii_lower(name)
     [value for (field, value) in @fields when field == lower]
 
   contains := (name: String) -> @get(name) != nil
@@ -29,11 +29,11 @@ export class Headers
   # written on, so that a value taken from a request cannot add fields of its own to a response.
   append := (name: String, value: String) ->
     check_field name, value
-    @fields.push (name.to_lower(), value)
+    @fields.push (ascii_lower(name), value)
 
   # Removes every field of the name, and tells whether there was one.
   remove := (name: String) ->
-    lower := name.to_lower()
+    lower := ascii_lower(name)
     kept := [(field, value) for (field, value) in @fields when field != lower]
     removed := kept.length != @fields.length
     @fields = kept
@@ -51,7 +51,7 @@ is_field_value_char := (c: Char) -> c == "\t" or not is_control(c)
 # Whether the text is a token of HTTP, as a field name or a method is.
 export is_token := (text: String) -> not text.is_empty() and text.all(is_token_char)
 
-is_token_char := (c: Char) -> c.is_alphanumeric() or c in TOKEN_SYMBOLS
+is_token_char := (c: Char) -> (c.is_ascii() and c.is_alphanumeric()) or c in TOKEN_SYMBOLS
 
 TOKEN_SYMBOLS := "!#$%&'*+-.^_`|~"
 
@@ -66,10 +66,16 @@ export without_ows := (value: String) ->
   end -= 1 while end > start and is_ows(end - 1)
   bytes.text(start, end)!
 
+# The text in lower case if it is ASCII, as the tokens of HTTP are, and else as it is: a text beyond
+# ASCII lowered could pass for a token, as the Kelvin sign `K` lowered is `k`.
+export ascii_lower := (text: String) -> text.is_ascii() then text.to_lower() else text
+
 # Whether a connection goes on after a message of the version, by its Connection field.
 export keeps_alive := (version: String, headers: Headers) ->
-  options :=
-    [without_ows(option).to_lower() for option in (headers.get('connection') else '').split(',')]
+  options := [
+    for option in (headers.get('connection') else '').split(',')
+      ascii_lower(without_ows(option))
+  ]
   return false if 'close' in options
   version == 'HTTP/1.1' or 'keep-alive' in options
 

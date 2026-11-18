@@ -11,7 +11,7 @@ import
   well_formed
 from './http_chunks'
 import
-  Body, check_field, Headers, is_token, keeps_alive, Response, without_ows
+  ascii_lower, Body, check_field, Headers, is_token, keeps_alive, Response, without_ows
 from './http_message'
 import bytes_of from './utf8'
 
@@ -243,7 +243,7 @@ struct Target
 parse_url := (url: String) ->
   not_url := -> ValueError("not an http URL: #{url}")
   (scheme, rest) := url.split_once('://') else throw not_url()
-  lower_scheme := scheme.to_lower()
+  lower_scheme := ascii_lower(scheme)
   throw IOError("https is not supported so far: #{url}") if lower_scheme == 'https'
   throw not_url() if lower_scheme != 'http'
   scanner := scan(rest)
@@ -305,7 +305,7 @@ request_bytes := (request: Outgoing) ->
   { target, method, body } := request
   var head = "#{method} #{target.path} HTTP/1.1\r\nhost: #{target.authority}\r\n"
   for (name, value) in request.headers.fields
-    head += "#{name}: #{value}\r\n" unless FRAMING_FIELDS.contains(name.to_lower())
+    head += "#{name}: #{value}\r\n" unless FRAMING_FIELDS.contains(ascii_lower(name))
   return (head + "transfer-encoding: chunked\r\n\r\n").binary if body is Reader
   head += "content-length: #{body.length}\r\n" if not body.is_empty() or method in SENDING_BODY
   (head + "\r\n").binary + body
@@ -402,7 +402,7 @@ framing := (head: Head, method: String): Framing ->
   { status, headers } := head
   return { left: 0 } if method == 'HEAD' or status in [204, 304]
   if coding := headers.get('transfer-encoding')
-    throw IOError("a transfer coding not supported: #{coding}") if coding.to_lower() != 'chunked'
+    throw IOError("a transfer coding not supported: #{coding}") if ascii_lower(coding) != 'chunked'
     return { left: 0, chunked: true }
   text := headers.get('content-length') else return { left: nil }
   throw malformed() unless text.is_digits()
@@ -473,7 +473,7 @@ has_scheme := (location: String) ->
   (scheme, _rest) := location.split_once(':') else return false
   not scheme.is_empty() and scheme.all(is_scheme_char)
 
-is_scheme_char := (c: Char) -> c.is_alphanumeric() or c in '+-.'
+is_scheme_char := (c: Char) -> (c.is_ascii() and c.is_alphanumeric()) or c in '+-.'
 
 REDIRECTS := [301, 302, 303, 307, 308]
 
