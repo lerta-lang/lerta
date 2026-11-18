@@ -257,11 +257,7 @@ export parse_case := (tokens: TokenStream, position: Position) ->
     arms.push parse_case_arm(tokens, has_subject)
   has_else := not has_subject or tokens.peek().kind == 'else'
   tokens.expect 'else', "'when' or 'else'" if has_else
-  otherwise :=
-    if has_else
-      parse_arm_body tokens, 'else'
-    else
-      nil
+  otherwise := has_else then parse_arm_body(tokens, 'else')
   tokens.expect DEDENT, 'end of block'
   Case(subject, arms, otherwise, position)
 
@@ -291,11 +287,7 @@ parse_case_arm := (tokens: TokenStream, has_subject: Bool): CaseArm ->
   if has_subject and at_block(tokens)
     patterns := parse_pattern_block(tokens, parse_pattern)
     return { patterns, body: parse_arm_body(tokens, 'else') }
-  patterns :=
-    if has_subject
-      tokens.parse_separated ',', parse_pattern
-    else
-      [parse_pattern()]
+  patterns := has_subject then tokens.parse_separated(',', parse_pattern) else [parse_pattern()]
   { patterns, body: parse_arm_body(tokens, 'then') }
 
 # Patterns in an indented block, as the items of a literal are, and `then` at the indentation of

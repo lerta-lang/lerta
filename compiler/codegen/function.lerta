@@ -132,11 +132,7 @@ export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = f
     slots.push capture_slot(capture)
     unless capture.is_var
       borrowed := -> read_borrowed(g, local, capture.type)
-      operand :=
-        if on_stack
-          borrowed()
-        else
-          captured_value g, local, capture
+      operand := on_stack then borrowed() else captured_value(g, local, capture)
       operands.push operand
       continue
     cell := local is SlotLocal then local.cell
@@ -425,11 +421,7 @@ argument_index := (arguments: FieldInfo[], field: FieldInfo) -> arguments.index_
 # The field takes over the value, owned; a weak field takes its box instead.
 store_field := (g: Generator, object: String, info: ObjectInfo, field: FieldInfo, value: String) ->
   pointer := emit_field_pointer(g.ir, object, info, field.name.name)
-  stored :=
-    if field.weak
-      weak_box_of g, value, field.type!
-    else
-      value
+  stored := field.weak then weak_box_of(g, value, field.type!) else value
   emit_release g.ir, value if field.weak
   g.ir.store ir_type(field.type!), stored, pointer
 
@@ -465,10 +457,7 @@ defers_to_read := (g: Generator, declaration: Declaration) ->
   # A top-level value is read by functions too, which the checker counts no reads of.
   return nil if g.top_level_code and g.locals.depth() == 1
 
-  if is_fused_source(g, declaration.value, false)
-    read
-  else
-    nil
+  is_fused_source(g, declaration.value, false) then read
 
 # Holds an owned reference in a scope of its own, which a jump out of it releases; the returned
 # function releases it where the code goes on.
@@ -527,11 +516,7 @@ export generate_block_value := (
 
   # nil that ends a branch of an if or a try that gives no value has no type to be converted to.
   is_discarded_nil := expression is NilLiteral and g.facts.conversions[expression] == nil
-  value :=
-    if expression and not is_discarded_nil
-      generate g, expression
-    else
-      ''
+  value := expression and not is_discarded_nil then generate(g, expression) else ''
 
   generate_statement g, last if expression == nil
   release_scope g, scope

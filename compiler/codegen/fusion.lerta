@@ -232,7 +232,8 @@ yield_count := (statements: Statement[]): Int? ->
 
 yields_of := (statement: Statement): Int? ->
   case statement
-    when Yield then not has_yield(statement.value) then 1
+    when Yield
+      not has_yield(statement.value) then 1
     when If
       return nil if condition_yields(statement.condition)
       count_in([statement.then_body, statement.else_body])
@@ -251,12 +252,10 @@ yields_of := (statement: Statement): Int? ->
       catches := [clause.body for clause in statement.catches]
       bodies := [statement.body, catches..., statement.finally_body else []]
       count_in(bodies)
-    when Declaration then not has_yield(statement.value) then 0
+    when Declaration
+      not has_yield(statement.value) then 0
     when Assignment
-      if not has_yield(statement.value) and not has_yield(statement.target)
-        0
-      else
-        nil
+      not has_yield(statement.value) and not has_yield(statement.target) then 0
     else
       expression := statement as Expression else return 0
       not has_yield(expression) then 0
@@ -302,10 +301,7 @@ export fused_comprehension := (g: Generator, iterable: Expression) ->
 
     captures := g.facts.captures[literal] else []
     not literal.weak and not captures.any(Capture.is_weak)
-  if takes_in_place(lazy.guard) and takes_in_place(lazy.element)
-    lazy
-  else
-    nil
+  takes_in_place(lazy.guard) and takes_in_place(lazy.element) then lazy
 
 lazy_source := (g: Generator, iterable: Expression): LazySource? ->
   return nil unless iterable is Comprehension | Call
@@ -413,7 +409,4 @@ export generate_in_place := (
   generate_body_returning_last inner, literal.body, type.result
   inner.locals.pop()
   ir.start_block exit_label
-  if has_value
-    ir.load(result_type, result_slot)
-  else
-    ''
+  has_value then ir.load(result_type, result_slot) else ''

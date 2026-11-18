@@ -210,11 +210,7 @@ export integer_range := (type: Type) ->
   signed_most := -(signed_least + 1)
   if is_signed(type)
     return { least: signed_least, most: signed_most }
-  most :=
-    if bits == 64
-      signed_most
-    else
-      signed_most * 2 + 1
+  most := bits == 64 then signed_most else signed_most * 2 + 1
   { least: 0, most }
 
 export is_one_of_kinds := (type: Type, kinds: TypeKind[]) -> kind_of(type) in kinds
@@ -288,7 +284,8 @@ export format_qualified := (type: Type, qualified: Bool): String ->
     when MapType then map_text(type, format)
     when ObjectType, InterfaceType
       format_named(type.name, type.module, type.args, format, qualified)
-    when EnumType then qualified then "#{type.name} (of #{type.module})" else type.name
+    when EnumType
+      qualified then "#{type.name} (of #{type.module})" else type.name
     when RecordType
       fields := ["#{field.name}: #{format(field.type)}" for field in type.fields]
       fields.is_empty() then '{}' else "{ #{fields.join(', ')} }"
@@ -315,10 +312,7 @@ map_text := (type: MapType, format: (Type) -> String) ->
 
 # A Promise of no value is written without a type argument.
 promise_text := (type: PromiseType, write: (Type) -> String) ->
-  if is_kind(type.value, 'void')
-    'Promise'
-  else
-    "Promise<#{write(type.value)}>"
+  is_kind(type.value, 'void') then 'Promise' else "Promise<#{write(type.value)}>"
 
 # A class, struct or interface, with its type arguments, and its module where `qualified` says so.
 format_named := (

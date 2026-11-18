@@ -94,10 +94,7 @@ export generate := (g: Generator, expression: Expression) ->
 # The type that a value of the type `source` is wrapped as, converted to the optional type `target`:
 # the target's inner type, which may be opaque where the source's is not (see emit_wrap).
 wrapped_type := (source: Type, target: Type) ->
-  if target is OptionalType and target.inner == source
-    target.inner
-  else
-    source
+  target is OptionalType and target.inner == source then target.inner else source
 
 # The type of the operand that `generate` returns: the type the expression is converted to, if
 # it is.
@@ -220,15 +217,8 @@ emit_narrowed_cast := (g: Generator, cast: Cast, object: String) ->
         object
 
   unless value_type is OptionalType
-    return
-      if cast.throws
-        object
-      else
-        emit_wrap(ir, object, member)
-  if cast.throws
-    emit_unwrap(ir, object, value_type)
-  else
-    object
+    return cast.throws then object else emit_wrap(ir, object, member)
+  cast.throws then emit_unwrap(ir, object, value_type) else object
 
 # The object if it holds the type, and otherwise nil, or a throw.
 generate_cast := (g: Generator, cast: Cast) ->
@@ -475,7 +465,8 @@ generate_identifier := (g: Generator, identifier: Identifier) ->
 # The value of the build that the intrinsic value gives (see VALUE_INTRINSICS).
 intrinsic_value := (g: Generator, identifier: Identifier, name: String) ->
   case name
-    when 'optimized' then g.code.optimized then 'true' else 'false'
+    when 'optimized'
+      g.code.optimized then 'true' else 'false'
     # The member of Platform that the target's system names, by its place; read where the code
     # runs, in a build for no target, as the seed's code is, which builds on every system.
     when 'platform'
@@ -507,11 +498,7 @@ export read_borrowed := (g: Generator, local: CodegenLocal, type: Type) ->
   held := held_value(g, local)
 
   # A weak local's object, which may be gone, is never narrowed.
-  value :=
-    if local.weak
-      emit_weak_object ir, held
-    else
-      held
+  value := local.weak then emit_weak_object(ir, held) else held
 
   check_where_read g, local, value
   emit_narrowed(ir, value, local.type, type)
@@ -556,11 +543,7 @@ export emit_narrowed := (ir: IrBuilder, value: String, declared: Type, type: Typ
     return emit_interface_data(ir, held)
   unless is_boxed_narrowing(declared, type)
     present := declared is OptionalType and type is not OptionalType
-    return
-      if present
-        emit_unwrap(ir, value, declared)
-      else
-        value
+    return present then emit_unwrap(ir, value, declared) else value
 
   # A union value is a pointer, null for nil, whether optional or not.
   unless type is OptionalType
@@ -601,10 +584,6 @@ generate_assertion_throw := (g: Generator, message: Expression) ->
 generate_throw := (g: Generator, throw_expression: Throw) ->
   message := throw_expression.message
   return generate_assertion_throw(g, message) if throw_expression.assertion
-  local :=
-    if message is Identifier
-      local_of g, message
-    else
-      nil
+  local := message is Identifier then local_of(g, message)
   rethrows := local is SlotLocal and local.caught
   emit_throw_error(g, generate(g, message), rethrows)

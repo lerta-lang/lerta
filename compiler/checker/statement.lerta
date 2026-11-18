@@ -288,11 +288,7 @@ check_declaration := (body: Body, declaration: Declaration) ->
     return if body.is_top_level()
     body.facts.local_function_names[value] = declaration.name unless declaration.mutable
   type_name := declaration.type
-  annotated :=
-    if type_name
-      resolve body.program, body.resolver, type_name
-    else
-      nil
+  annotated := type_name then resolve(body.program, body.resolver, type_name)
   reject_omitted_value body, declaration, annotated
   if annotated
     expect_type body, value, annotated
@@ -302,20 +298,12 @@ check_declaration := (body: Body, declaration: Declaration) ->
   # An exported value is for other modules to use.
   { name, mutable, exported, weak } := declaration
 
-  type :=
-    if weak
-      weak_local_type body, declaration, value_type
-    else
-      value_type
+  type := weak then weak_local_type(body, declaration, value_type) else value_type
   declared := not declaration.of_loop
   is_this := value is This and not mutable and not weak
   assigned_by_literal := mutable and name.name in body.names_literals_assign
   scope_depth := body.scopes.depth()
-  constant :=
-    if body.is_top_level() and not mutable
-      declared_constant body, value, type
-    else
-      nil
+  constant := body.is_top_level() and not mutable then declared_constant(body, value, type)
   if predeclared := predeclared_function(body, value)
     predeclared.pending = false
     body.facts.types[name] = type

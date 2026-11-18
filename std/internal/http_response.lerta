@@ -34,10 +34,7 @@ export response_bytes := (
     bytes = bytes_of(body)
     head += "content-length: #{bytes.length}\r\n" if has_length(status)
   head += "connection: #{keep_alive then 'keep-alive' else 'close'}\r\n\r\n"
-  if has_body(status, method)
-    head.binary + bytes
-  else
-    head.binary
+  has_body(status, method) then head.binary + bytes else head.binary
 
 # A handler need not give a 304 the body that a 200 would have, to give its length.
 has_length := (status: Int) -> status not in [204, 304]
@@ -53,11 +50,7 @@ export write_body := (socket: Socket, body: Reader, chunked: Bool) ->
   try
     while bytes := await reads.next()
       ends := chunked and reads.ended
-      written :=
-        if chunked
-          chunk_bytes bytes, ends
-        else
-          bytes
+      written := chunked then chunk_bytes(bytes, ends) else bytes
       await socket.write(written)
     await socket.write(LAST_CHUNK) if chunked and not reads.ended
   finally

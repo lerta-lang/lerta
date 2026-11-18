@@ -77,11 +77,7 @@ export run := (command: String, args: String..., options: RunOptions) ->
   throw IOError("cannot run: #{command}") if texts.any(holds_nul)
 
   changes_env := not env.is_empty() or not unset_env.is_empty()
-  program_env :=
-    if changes_env
-      env_with env, unset_env
-    else
-      nil
+  program_env := changes_env then env_with(env, unset_env)
   input := input_of(options.stdin, command)
   output := output_of(options.stdout, 'standard output', command)
   errors := output_of(options.stderr, 'standard error', command)
@@ -100,21 +96,9 @@ export run := (command: String, args: String..., options: RunOptions) ->
   give options.stdout, false
   give options.stderr, false
   copies := Copies(command)
-  feeding :=
-    if input.pipe
-      feed input.pipe, input.source!, program, copies
-    else
-      nil
-  outputting :=
-    if output.pipe
-      copy_output output.pipe, output.sink!, program, copies
-    else
-      nil
-  erroring :=
-    if errors.pipe
-      copy_output errors.pipe, errors.sink!, program, copies
-    else
-      nil
+  feeding := input.pipe then feed(input.pipe, input.source!, program, copies)
+  outputting := output.pipe then copy_output(output.pipe, output.sink!, program, copies)
+  erroring := errors.pipe then copy_output(errors.pipe, errors.sink!, program, copies)
   status :=
     try
       await lerta_program_wait(program.pointer)
@@ -188,11 +172,7 @@ input_of := (stdin: Binary | Reader | Pipe?, command: String) ->
       stdin is Pipe then stdin.reader else stdin
     else
       nil
-  pipe :=
-    if source != nil
-      pipe_of 'standard input', command
-    else
-      nil
+  pipe := source != nil then pipe_of('standard input', command)
   { file, source, pipe }
 
 # As input_of, for an output: the `file` of a system pipe's end, or else a `pipe` that this program
@@ -203,14 +183,11 @@ output_of := (output: Output | Writer | Pipe?, stream: String, command: String) 
   # Of the type written, so that a Pipe's writer counts as a Writer.
   sink: Writer? =
     case output
-      when Pipe then not file then output.writer
+      when Pipe
+        not file then output.writer
       when Output then nil
       else output
-  pipe :=
-    if sink != nil
-      pipe_of stream, command
-    else
-      nil
+  pipe := sink != nil then pipe_of(stream, command)
   { file, sink, pipe }
 
 # As lerta_program_run takes them: a file as -1 minus it, a pipe by its handle, DISCARDED or

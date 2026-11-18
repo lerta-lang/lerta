@@ -48,11 +48,7 @@ export class Client
     var request = Outgoing(method, body, target: parse_url(url), headers: options.headers)
     var response = await @exchange(request)
     var redirects = 0
-    next_request := ->
-      if options.follow_redirects
-        redirected(request, response)
-      else
-        nil
+    next_request := -> options.follow_redirects then redirected(request, response)
     while next := next_request()
       throw IOError("too many redirects: #{url}") if redirects == MAX_REDIRECTS
       redirects += 1
@@ -88,11 +84,7 @@ export class Client
   # a failure to read it fails the request.
   send := (socket: Socket, request: Outgoing) ->
     { body } := request
-    sent :=
-      if body is Reader
-        SentBody socket, request, body
-      else
-        nil
+    sent := body is Reader then SentBody(socket, request, body)
     sending := sent?.send()
     try
       head := await read_head(socket, request, sent == nil)
@@ -365,11 +357,7 @@ read_fields := (reader: Reader) ->
     # agent take it, joined by a space.
     is_folded := line.starts_with(' ') or line.starts_with("\t")
     throw malformed() if is_folded and headers.fields.is_empty()
-    field :=
-      if is_folded
-        folded headers.fields.pop(), line
-      else
-        line.split_once ':'
+    field := is_folded then folded(headers.fields.pop(), line) else line.split_once(':')
     (name, value) := field else throw malformed()
 
     # A value joined of lines may be as long as a line, so that each join copies a bounded value.
@@ -459,11 +447,7 @@ redirected := (request: Outgoing, response: Response): Outgoing? ->
   as_get := see_other or moved_post
   unless as_get
     # A body that is a Reader has been read as it was sent.
-    return
-      if request.body is Reader
-        nil
-      else
-        { request..., target, headers }
+    return request.body is Reader then nil else { request..., target, headers }
   headers.remove 'content-type'
   { target, headers, method: 'GET', body: b'' }
 

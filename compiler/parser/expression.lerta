@@ -110,11 +110,7 @@ parse_member_line := (tokens: TokenStream, object: Expression): Expression ->
 # `f`, `f x` or `f(x)`, followed by an indented block of the arguments after those on the line.
 export parse_block_arguments := (tokens: TokenStream, callee: Expression) ->
   no_arguments := Arguments(args: [], named_args: [])
-  call :=
-    if callee is Call
-      callee
-    else
-      call_of callee, no_arguments, []
+  call := callee is Call then callee else call_of(callee, no_arguments, [])
   items: Argument[]
   tokens.read_block_items -> items.push(parse_block_argument(tokens))
   { args, named_args } := to_arguments(tokens, items)
@@ -252,10 +248,7 @@ parse_cast := (tokens: TokenStream, value: Expression): Expression ->
 # `a else (b else c)`.
 parse_cast_fallback := (tokens: TokenStream) ->
   fallback := tokens.nested(-> parse_coalesce(tokens))
-  if tokens.continues_with_word('as')
-    parse_cast(tokens, fallback)
-  else
-    fallback
+  tokens.continues_with_word('as') then parse_cast(tokens, fallback) else fallback
 
 parse_binary_comparison := (tokens: TokenStream, left: Expression): Expression ->
   operator := tokens.next().kind.to_string()
@@ -287,11 +280,7 @@ parse_range := (tokens: TokenStream): Expression ->
   inclusive := operator == '..='
   end := parse_arithmetic(tokens, 0)
   reject_chained_range tokens
-  step :=
-    if tokens.accept_word('by')
-      parse_arithmetic tokens, 0
-    else
-      nil
+  step := tokens.accept_word('by') then parse_arithmetic(tokens, 0)
   reversed := tokens.accept_word('reversed')
   Range(start, end, inclusive, step, reversed, position: start.position)
 

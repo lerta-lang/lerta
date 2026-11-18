@@ -44,25 +44,21 @@ extend Walker
     return nil if @in_brackets or not in_block
     case node
       when Case, Try then BRANCH
-      when If then node.nil_safe then OTHER else BRANCH
+      when If
+        node.nil_safe then OTHER else BRANCH
       when ArrayLiteral, RecordLiteral, MapLiteral
         # One written in a block is one, as a spread may start a record there.
-        if is_block_literal(node) or is_written_in_block(node)
-          LITERAL_BLOCK
-        else
-          nil
+        is_block_literal(node) or is_written_in_block(node) then LITERAL_BLOCK
       when FunctionLiteral then nil
-      when Comprehension then node.prefix then nil else OTHER
+      when Comprehension
+        node.prefix then nil else OTHER
       when BinaryOperation then OPERATION
       when Conditional then TWO_WAY
       else
         if literal := literal_under_members(node)
           return LITERAL_BLOCK if is_block_literal(literal)
         return BLOCK_CALL if is_block_call(node) and @on_own_line
-        if node is Member | Call | Index
-          CHAIN
-        else
-          OTHER
+        node is Member | Call | Index then CHAIN else OTHER
 
   # A whole value, as an item or a value after `=`, whose operations may break.
   whole := (node: Expression, before: CodeGap) ->

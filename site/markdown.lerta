@@ -178,11 +178,7 @@ class Renderer
       item_lines.push (item, marker.width)
       next = end
       next += 1 while next < lines.length and is_blank(lines[next].text)
-      following :=
-        if next < lines.length
-          list_marker lines[next].text
-        else
-          nil
+      following := next < lines.length then list_marker(lines[next].text)
       loose = true if next > end and following?.ordered == first.ordered
 
     written := [
@@ -190,11 +186,7 @@ class Renderer
         @item(item, width, not loose)
     ]
     items := written.join()
-    start_attribute :=
-      if first.ordered and first.number != 1
-        " start=\"#{first.number}\""
-      else
-        ''
+    start_attribute := first.ordered and first.number != 1 then " start=\"#{first.number}\"" else ''
     html :=
       first.ordered then "<ol#{start_attribute}>\n#{items}</ol>\n" else "<ul>\n#{items}</ul>\n"
     (html, next)
@@ -269,11 +261,7 @@ class Renderer
     after := bytes.get(at + 3) else b' '
     opens := after not in [b' ', b"\n"]
     throw InlineError('emphasis by ***') if opens and bytes.occurs_at(at, b'***')
-    delimiter :=
-      if bytes.occurs_at(at, b'**')
-        b'**'
-      else
-        b'*'
+    delimiter := bytes.occurs_at(at, b'**') then b'**' else b'*'
     tag := delimiter.length == 2 then 'strong' else 'em'
     start := at + delimiter.length
     return nil if start >= bytes.length or bytes[start] == b' '
@@ -372,7 +360,8 @@ is_rule := (text: String) ->
 unsupported_inline := (bytes: Binary, at: Int, autolinks: Bool) ->
   next := bytes.get(at + 1) else return nil
   case bytes[at]
-    when b'!' then next == b'[' then 'an image'
+    when b'!'
+      next == b'[' then 'an image'
     when b'~'
       if next not in [b' ', b"\n"] and is_struck(bytes, at)
         'strikethrough'
@@ -386,20 +375,11 @@ unsupported_inline := (bytes: Binary, at: Int, autolinks: Bool) ->
       else
         nil
     when b'&'
-      if is_entity(bytes, at + 1)
-        'an HTML entity'
-      else
-        nil
+      is_entity(bytes, at + 1) then 'an HTML entity'
     when b'_'
-      if starts_word(bytes, at) and is_word_byte(next)
-        'emphasis by _'
-      else
-        nil
+      starts_word(bytes, at) and is_word_byte(next) then 'emphasis by _'
     when b'h', b'w'
-      if autolinks and is_bare_url(bytes, at)
-        'a bare URL, which GitHub links'
-      else
-        nil
+      autolinks and is_bare_url(bytes, at) then 'a bare URL, which GitHub links'
     else nil
 
 starts_word := (bytes: Binary, at: Int) -> at == 0 or not is_word_byte(bytes[at - 1])
@@ -438,11 +418,7 @@ is_entity := (bytes: Binary, start: Int) ->
 # Whether a `<` before `start` opens an HTML tag, as GitHub reads one: an optional `/`, a name,
 # then a space, `>` or `/`. So `Iter<T>` outside code is text, and `<name>` is a tag.
 is_tag := (bytes: Binary, start: Int) ->
-  name_start :=
-    if bytes.get(start) == b'/'
-      start + 1
-    else
-      start
+  name_start := bytes.get(start) == b'/' then start + 1 else start
   return false unless bytes.get(name_start)?.is_letter() == true
   var end = name_start
   end += 1 while end < bytes.length and (is_word_byte(bytes[end]) or bytes[end] == b'-')
@@ -497,11 +473,7 @@ code_span := (bytes: Binary, at: Int) ->
     if run == width
       code := bytes.text(at + width, next)!.replace("\n", ' ')
       padded := code.starts_with(' ') and code.ends_with(' ') and not is_blank(code)
-      text :=
-        if padded
-          code.without_prefix(' ')!.without_suffix(' ')!
-        else
-          code
+      text := padded then code.without_prefix(' ')!.without_suffix(' ')! else code
       return (text, next + run)
     next += run
   nil

@@ -40,11 +40,7 @@ export warn_if_kept := (
   holder := holder_of(body, member.object) else return
   kept := body.program.kept_arguments
   for arg at place in args
-    param :=
-      if holder == THIS
-        parameter_place body, arg
-      else
-        nil
+    param := holder == THIS then parameter_place(body, arg)
     if param
       kept.passed.push { from: body.context!.literal, param, to: callee, place }
     if literal := capturing_literal(body, arg, holder)
@@ -109,10 +105,7 @@ holder_of := (body: Body, target: Expression): String? ->
       return THIS if local.is_this
       not local.mutable and not local.weak then target.name
     when Member
-      if not is_weak_field(body, target)
-        holder_of(body, target.object)
-      else
-        nil
+      not is_weak_field(body, target) then holder_of(body, target.object)
     when Index then holder_of(body, target.object)
     when Unwrap then holder_of(body, target.operand)
     else nil
@@ -124,10 +117,7 @@ is_weak_field := (body: Body, member: Member) ->
 captures_holder := (body: Body, literal: FunctionLiteral, holder: String) ->
   captures := body.facts.captures[literal] else []
   is_holder := (capture: Capture) ->
-    if holder == THIS
-      capture.is_this
-    else
-      capture.name == holder and not capture.is_weak
+    holder == THIS then capture.is_this else capture.name == holder and not capture.is_weak
   captures.any(is_holder)
 
 capturing_literal := (body: Body, value: Expression, holder: String): FunctionLiteral? ->
@@ -139,10 +129,7 @@ capturing_literal := (body: Body, value: Expression, holder: String): FunctionLi
 
   case value
     when FunctionLiteral
-      if captures_holder(body, value, holder)
-        value
-      else
-        nil
+      captures_holder(body, value, holder) then value
     when ArrayLiteral then first(value.elements)
     when TupleLiteral then first(value.items)
     when MapLiteral then first([entry.value for entry in value.entries])

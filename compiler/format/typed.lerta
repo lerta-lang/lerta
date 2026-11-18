@@ -186,10 +186,7 @@ export typed_statement_edits := (tokens: Tokens, statement: Statement, typed: Ty
 # A case of one arm as a test of a union where it gives a Bool, and otherwise as an `if`.
 case_edit := (tokens: Tokens, statement: Statement, facts: NodeFacts) ->
   union := union_case(tokens, statement, facts)
-  if union
-    union
-  else
-    single_arm_case(tokens, statement, facts)
+  union then union else single_arm_case(tokens, statement, facts)
 
 kind_edits := (tokens: Tokens, statement: Statement, typed: Typed): Edit?[] ->
   case statement
@@ -211,11 +208,7 @@ kind_edits := (tokens: Tokens, statement: Statement, typed: Typed): Edit?[] ->
 unused_imports := (tokens: Tokens, statement: Import, unused: Set<Identifier>) ->
   return nil if statement.exported
   if alias := statement.alias
-    return
-      if alias in unused
-        tokens.report(UNUSED_IMPORTS, statement.position)
-      else
-        nil
+    return alias in unused then tokens.report(UNUSED_IMPORTS, statement.position)
   { names } := statement
   is_unused := (name: ImportName) -> name.alias else name.name in unused
   return nil unless names.any(is_unused)
@@ -375,10 +368,7 @@ holds_comment := (tokens: Tokens, run: CaseArm[]) ->
       (tokens.code[at].line == tokens.code[at - 1].line or tokens.code[at].column > column)
   next += 1 while continues(next)
   last :=
-    if next < tokens.code.length
-      tokens.code[next].line - 1
-    else
-      tokens.code.last()!.end_line
+    next < tokens.code.length then tokens.code[next].line - 1 else tokens.code.last()!.end_line
   tokens.comments.any((comment) -> comment.line in line..=last)
 
 # `x` for `x as T!` where x is a T already (see Redundant casts). The parentheses that held the cast

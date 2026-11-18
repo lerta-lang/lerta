@@ -17,11 +17,7 @@ extend Breaker
   rewrite := (rule: StyleRule, changes: Change[]) ->
     return if changes.is_empty()
     @keeps = true
-    edit :=
-      if not @rewritten
-        @tokens.edit rule, changes
-      else
-        nil
+    edit := not @rewritten then @tokens.edit(rule, changes)
     @rewritten = @rewritten or edit != nil
     if edit
       @edits.push edit
@@ -137,21 +133,13 @@ extend Breaker
     # Arguments in a block below the callee stay there, and they, or a function's body below its
     # `->`, end before a `)` on a line of its own.
     in_block := items[0] in @line_starts
-    opening_end :=
-      if in_block
-        @tokens.end open
-      else
-        @tokens.start items[0]
+    opening_end := in_block then @tokens.end(open) else @tokens.start(items[0])
     spans_lines := @code[last].end_line != @code[open].line
     closing := spans_lines then "\n#{' '.repeat(@source_indentation(open))})" else ')'
 
     # A `)` on a line of its own goes after the comment that ends the line before it.
     after_comment := spans_lines and last in @ending_comments
-    closed_at :=
-      if after_comment
-        @tokens.end_of_line @code[last].end_line
-      else
-        @tokens.end last
+    closed_at := after_comment then @tokens.end_of_line(@code[last].end_line) else @tokens.end(last)
     @rewrite CALLS_WITHOUT_PARENTHESES, [
       { from: @tokens.end(open), to: opening_end, text: '(' }
       @missing_commas(items)...
@@ -215,11 +203,7 @@ extend Breaker
     return false if open in @ending_comments
 
     return false if not on_lines and @spans_any(literal)
-    indentation :=
-      if on_lines
-        column - 1
-      else
-        @source_indentation(open) + 2
+    indentation := on_lines then column - 1 else @source_indentation(open) + 2
     opening :=
       if on_lines
         Change from: @tokens.end(open - 1), to: @tokens.end(open), text: ''
@@ -270,11 +254,7 @@ extend Breaker
   # on the line of `then` on the next, its lines after the first, as the blocks of a `try` there, as
   # much deeper.
   remove_then := (arm: ArmShape, then_at: Int, body: BodyShape) ->
-    patterns: Change[] =
-      if then_at in @line_starts
-        @on_one_line arm.patterns, ' '
-      else
-        []
+    patterns: Change[] = then_at in @line_starts then @on_one_line(arm.patterns, ' ') else []
     start := body.block.starts[0]
     if start in @line_starts
       removed := Change(from: @tokens.end(then_at - 1), to: @tokens.end(then_at), text: '')
@@ -324,11 +304,7 @@ extend Breaker
     rest := shape.guard != nil then ' if' else ''
 
     # The lines of the guard after its first, which follow the body.
-    guard_lines: Change[] =
-      if shape.guard != nil
-        @shifted_lines shape.guard, last, 2
-      else
-        []
+    guard_lines: Change[] = shape.guard != nil then @shifted_lines(shape.guard, last, 2) else []
 
     @rewrite POSTFIX_FORMS, [
       { from: @tokens.start(body.start), to: @tokens.start(body.start), text: head + line_start }
@@ -344,10 +320,6 @@ extend Breaker
       text += @tokens.spelling(at)
       continue if at == last
       gap := @gaps[at + 1] as Spaces!
-      comma :=
-        if at + 1 in @without_commas
-          ','
-        else
-          ''
+      comma := at + 1 in @without_commas then ',' else ''
       text += comma + ' '.repeat(gap.count)
     text
