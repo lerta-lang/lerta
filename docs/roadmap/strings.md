@@ -77,6 +77,36 @@ The tables are in `std:unicode` rather than in the builtins, as top-level arrays
 - Literals are **syntax-checked at compile time**.
 - Dynamic patterns are compiled at run time.
 - For literals, the engine's bytecode is embedded in the binary (no parsing at run time). No machine code generation.
+- The engine is written in Lerta: a pattern compiles to bytecode over the UTF-8 bytes, run by a Pike VM. The compiler checks literals and makes their bytecode with the same std code.
+
+### Literals
+
+A literal is written `/.../`, as in JavaScript.
+
+- **Where one starts.** A `/` starts a literal where the token before it is not a value (an identifier, a literal, `)`, `]` or `}`): `x := /a+/`, `f(/a/)`. After a value, it starts one only with whitespace before it and none after, as `f -1` is `f(-1)` (see [calls without parentheses](../reference/syntax.md#calls-without-parentheses)): `split /,\s*/` is `split(/,\s*/)`. Any other `/` divides, `a / b` as `a/b`.
+  - So a literal does not start with a space, written `\ ` or `[ ]` instead; and after a value, `/=` is always the operator.
+- **Where one ends.** As a string literal ends at its quote: read from the left, a `\` takes the character after it, whatever it is, and the first `/` not so taken ends the literal; a line break before it is an error. `/a\\\/b/` is `\\` and `\/`, and goes on to the last `/`.
+  - `[...]` is no exception, as it is in JavaScript: `/[/]/` ends at its second `/`, and the `[` left open is an error at compile time. It is written `/[\/]/`. So the lexer needs to know no syntax of patterns.
+  - The lexer only finds where a literal ends; the pattern compiler reads `\/` as `/`.
+
+### Matches
+
+As a `String` has no positions (see [the reference](../reference/types.md#string)), a match gives the text it holds rather than offsets:
+
+- `re.match(s): Match?`, nil where nothing matches; `m[1]: String?` gives a group, and `m.before` and `m.after` the text around the match.
+- `re.matches(s)` iterates over the matches; `s.split(re)` and `s.replace(re, (m) -> ...)` take a pattern too.
+- Byte offsets are given by functions over a `Binary`, for code such as a lexer.
+- `\d`, `\w` and `\s` are those of the `Char` methods: `\d` and `\w` ASCII, `\s` the White_Space of [Unicode](#unicode). `(?i)` folds ASCII alone at first.
+
+### Order
+
+1. Spaces in the builtins, step 1 of [Unicode](#unicode), so that `\s` is `c.is_space()` from the start rather than changing later.
+2. Regular expressions with ASCII classes. `\p{...}` is parsed, and is an error at compile time until step 4, so that no pattern accepted earlier changes its meaning then.
+   1. Dynamic patterns in `std:regex`, which change no syntax and need no seed refresh.
+   2. Literals, their check and their embedded bytecode, in one seed refresh.
+   3. Speed: a lazy DFA, and `memchr` for a literal prefix, measured in `bench/`.
+3. Steps 2 and 3 of [Unicode](#unicode).
+4. `\p{...}` and `(?i)` beyond ASCII, from the tables of `std:unicode`.
 
 ## What the compiler needs
 
@@ -89,4 +119,7 @@ In the compiler and std, the positions that text handling needs fall in three ki
 ## Open questions
 
 - Whether the lexer reads bytes, as Go's, Rust's and Zig's do, which suits a syntax of ASCII (an ASCII byte never occurs inside a multi-byte character), or code points, through a std:scanner `Scanner`. Either way, columns could be counted when a diagnostic needs one, rather than through a table per line (`count_code_points`).
-- Semantics of the regular expression engine (JS/PCRE-style backtracking vs RE2-style linear time).
+- Semantics of the regular expression engine. RE2-style linear time is favored over JS/PCRE-style backtracking: no pattern takes exponential time, and a DFA can be made. Lookaround and backreferences, which it lacks, would be errors at compile time.
+- Whether a dynamic pattern with an error gives nil, or throws an error with its message, which a pattern the user typed wants.
+- Whether `Regex` is a builtin type or one of `std:regex`; the compiler must know it for literals.
+- Whether `a/b`, without whitespace, divides, as `a-b` subtracts, or the rule narrows to "after a value, a `/` with whitespace after it divides".
