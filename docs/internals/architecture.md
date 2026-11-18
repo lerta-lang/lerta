@@ -105,7 +105,7 @@ Every build so checks that the seed builds the current source.
 
 ### Embedded files
 
-- The compiler carries `std/*.lerta`, `runtime/*.c`, `runtime/*.h`, libuv's sources and the license notices that `LICENSE_PATHS` (`compiler/license.lerta`) lists as string constants of the generated module `build/embedded.lerta`.
+- The compiler carries `std/*.lerta`, `runtime/*.c`, `runtime/*.h`, libuv's sources and the license notices that `LICENSE_PATHS` (`compiler/license.lerta`) lists, by [the imports that embed them](../reference/modules.md#embedded-files), in the generated module `build/embedded.lerta`.
 - `build/build` writes the module (`tools/build/embed.lerta`) from the files that it finds in those directories, so no list of them is written by hand.
 - The loader reads a standard module from it, `build` writes the runtime from it for clang to compile into [the cache](../reference/compiler.md#cache), and [`license`](../reference/compiler.md#license) prints the notices.
 

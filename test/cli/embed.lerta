@@ -4,27 +4,33 @@ import Check, posix_check from '../lib/report'
 import compare_output, compare_text, expect_status from '../lib/expect'
 import compiler, read_text_or_throw, root_dir, host_executable_suffix from '../lib/lerta'
 import expect_success, succeed, new_cli_dir, run_command from '../lib/cli'
-import write_file from 'std:io'
+import make_dir, write_file from 'std:io'
+import dir_name as dir_of from 'std:path'
 
 # Contents with what a literal escapes or interpolates, and control characters.
 CONTENTS := "\#{x} \"quoted\" back\\slash\ttab\r\x01\0end\n"
 
-PROGRAM := """
-  import embedded_source, EMBEDDED_PATHS from './embedded'
-  import read_file from 'std:io'
-
-  print EMBEDDED_PATHS
-  print embedded_source(EMBEDDED_PATHS[0]) == (await read_file(EMBEDDED_PATHS[0])).text()
+# The program that reads the module written in `module`, without its extension.
+program := (module: String) ->
   """
+    import embedded_source, EMBEDDED_PATHS from './#{module}'
+    import read_file from 'std:io'
 
-# Embeds CONTENTS under the path, whose literal EMBEDDED_PATHS prints as `printed`.
-embed_round_trip := (dir_name: String, path: String, printed: String) ->
+    print EMBEDDED_PATHS
+    print embedded_source(EMBEDDED_PATHS[0]) == (await read_file(EMBEDDED_PATHS[0])).text()
+    """
+
+# Embeds CONTENTS under the path, whose literal EMBEDDED_PATHS prints as `printed`, in a module
+# written in `module`, without its extension, whose directory is made.
+embed_round_trip := (dir_name: String, path: String, printed: String, module = 'embedded') ->
   dir := new_cli_dir(dir_name)
+  module_dir := dir_of(module)
+  make_dir "#{dir}/#{module_dir}" unless module_dir == '.'
   await write_file("#{dir}/#{path}", CONTENTS)
-  await write_file("#{dir}/main.lerta", PROGRAM)
+  await write_file("#{dir}/main.lerta", program(module))
   embedded := await run_command(
     "#{root_dir}/build/build#{host_executable_suffix}"
-    ['embed', 'embedded.lerta', path]
+    ['embed', "#{module}.lerta", path]
     dir
   )
   succeed 'embed', embedded
@@ -80,6 +86,9 @@ export checks: Check[] =
     await license_check()
   }
   { name: 'embed writes a module of no file', run: -> await embed_nothing() }
+  { name: 'embed writes a module below the files, which it imports by paths from there', run: ->
+    await embed_round_trip('embed-below', './data.txt', "'./data.txt'", 'build/out/embedded')
+  }
   { name: 'embed gives back a file whose path holds a quote', run: ->
     await embed_round_trip('embed-quote', "it's.txt", "\"it's.txt\"")
   }
