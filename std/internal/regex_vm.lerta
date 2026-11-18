@@ -45,6 +45,10 @@ export class Searcher
     # The program's words, read out of its Binary once, as reading one there is a call each time.
     words: Int[] = [@program.code.uint32_at(place).to_int() for place in 0..@length]
     slot_count := 2 * (@program.group_count + 1)
+
+    # The bytes that a match may start with, or nil for a program that matches with none, as `a*`:
+    # where no thread is alive, the search passes over the others without stepping.
+    first_bytes := first_bytes_of(@words)
     var current = Threads(length: @length, slot_count: @slot_count)
     var next = Threads(length: @length, slot_count: @slot_count)
 
@@ -68,6 +72,8 @@ export class Searcher
     var at = from
     while true
       if matched == nil
+        if current.count == 0
+          at = next_start(text, at, @first_bytes) else break
         @work[k] = -1 for k in 0..@slot_count
         @add text, current, 0, at
       break if matched != nil and current.count == 0
@@ -153,6 +159,46 @@ export class Searcher
     @pending_places[@depth] = place
     @pending_values[@depth] = value
     @depth += 1
+
+# The first place from `at` on whose byte a match may start, or nil if there is none; `at`
+# itself where every place may start one.
+next_start := (text: Binary, at: Int, first_bytes: Bool[]?) ->
+  bytes := first_bytes else return at
+  var start = at
+  start += 1 while start < text.length and not bytes[text[start].to_int()]
+  start < text.length then start
+
+# The bytes of the code points that the instructions read first, as the threads from place 0 reach
+# them without reading: of a CHAR, the first byte of its UTF-8; of a CLASS, its ASCII ones and, if
+# it holds any beyond ASCII, every lead byte. An assertion is passed through, as it may hold; nil if
+# a MATCH is reached, as a match then reads nothing.
+first_bytes_of := (words: Int[]) ->
+  bytes := Array(256, false)
+  seen := Array(words.length, false)
+  pending := [0]
+  until pending.is_empty()
+    place := pending.pop()
+    continue if seen[place]
+    seen[place] = true
+    case words[place]
+      when JUMP then pending.push(words[place + 1])
+      when SPLIT then pending.append([words[place + 1], words[place + 2]])
+      when SAVE, ASSERT then pending.push(place + 2)
+      when MATCH then return nil
+      when CHAR then add_first_bytes(bytes, words[place + 1], words[place + 1])
+      when CLASS
+        for range in 0..words[place + 1]
+          first := place + 2 + 2 * range
+          add_first_bytes bytes, words[first], words[first + 1]
+      else pass
+  bytes
+
+# The first bytes of the UTF-8 of the code points from `low` to `high`: those themselves below
+# 0x80, and every lead byte, from 0xC2 to 0xF4, for any above.
+add_first_bytes := (bytes: Bool[], low: Int, high: Int) ->
+  bytes[code] = true for code in low..=min(high, 0x7F)
+  if high >= 0x80
+    bytes[lead] = true for lead in 0xC2..=0xF4
 
 # Whether the assertion of the kind holds at the place in the text.
 holds := (text: Binary, kind: Int, at: Int) ->
