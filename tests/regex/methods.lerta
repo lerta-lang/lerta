@@ -1,8 +1,8 @@
-# The methods of a Regex and of a Match. find_all goes on after an empty match a code point on, and
-# after another at its end, where an empty match may follow it, as JavaScript does; split, as
-# JavaScript's, splits nothing off at an empty match at the end or where a piece starts; replace
-# takes its text as it is. A pattern that backtracking takes exponential time over is matched in
-# linear time.
+# The methods of a Regex and of a Match, and String's split and replace by a Regex. find_all goes
+# on after an empty match a code point on, and after another at its end, where an empty match may
+# follow it, as JavaScript does; split, as JavaScript's, splits nothing off at an empty match at
+# the end or where a piece starts; replace takes its text as it is. A pattern that backtracking
+# takes exponential time over is matched in linear time.
 
 all := (pattern: String, text: String) -> [m.text for m in Regex(pattern).find_all(text)]
 print all('\d+', 'a1b22c333')
@@ -12,7 +12,7 @@ print all('x*', '')
 print all('\b', 'ab cd')
 print all('(?m)^', "a\nb\n")
 
-split := (pattern: String, text: String) -> Regex(pattern).split(text)
+split := (pattern: String, text: String) -> text.split(Regex(pattern))
 print split(',', 'a,b,,c')
 print split(',', ',a,')
 print split(',', '')
@@ -25,11 +25,11 @@ print split('x*', '')
 print split('[\d-]', 'a1-b')
 
 re := Regex('(\w)(\d)?')
-print re.replace('a1 b c2', '[$1]')
-print re.replace('a1 b c2', (m) -> "<#{m.groups[2] else '-'}#{m.groups[1]!}>")
-print Regex('x*').replace('ab', '-')
-print Regex('a*').replace('baaac', (m) -> "<#{m.text}>")
-print Regex('\d').replace('none here', '#')
+print 'a1 b c2'.replace(re, '[$1]')
+print 'a1 b c2'.replace(re, (m) -> "<#{m.groups[2] else '-'}#{m.groups[1]!}>")
+print 'ab'.replace(Regex('x*'), '-')
+print 'baaac'.replace(Regex('a*'), (m) -> "<#{m.text}>")
+print 'none here'.replace(Regex('\d'), '#')
 
 found := Regex('(?<word>[a-z]+)(?<number>\d+)?').find('42 ab end')!
 print "#{found.text} [#{found.before()}] [#{found.after()}]"
@@ -68,5 +68,24 @@ catch e: ValueError
   print e.message
 try
   print Regex(pattern: '(', flags: 'x').pattern
+catch e: ValueError
+  print e.message
+
+# A function replaces a String's occurrences too, given each as a Match of it alone.
+print 'a-b-c'.replace('-', (m) -> "[#{m.text}#{m.groups.length}#{m.before().count()}]")
+print 'aXbX'.replace('X', '.')
+print 'x'.replace('-', (m) -> '?')
+print 'éaéaé'.replace('a', (m) -> "<#{m.before()}|#{m.after()}>")
+print 'aaa'.replace('aa', (m) -> '#')
+print 'a1b22c'.split(/\d+/)
+print 'éa'.split(/x*/)
+print 'abc'.replace(/(?<n>b)/, (m) -> m.named('n')!.to_upper())
+try
+  print 'abc'.replace('b', (m) -> m.named('x') else '-')
+catch e: ValueError
+  print e.message
+print 'a1'.replace(/\d/, '$0$')
+try
+  print 'x'.replace('', (m) -> '?')
 catch e: ValueError
   print e.message

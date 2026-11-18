@@ -295,7 +295,7 @@ So `not a number` may be reported at a line after the one that makes the NaN, an
 
 | Method | Gives |
 |---|---|
-| `s.split(separator)` | The pieces between the occurrences of `separator`, empty ones too, as a `String[]`: `'a,,b'.split(',')` is `['a', '', 'b']`, `''.split(',')` is `['']`. |
+| `s.split(separator)` | The pieces between the occurrences of `separator`, empty ones too, as a `String[]`: `'a,,b'.split(',')` is `['a', '', 'b']`, `''.split(',')` is `['']`. A [Regex](#regex) splits at its matches, where an empty match at the end of the text, or where a piece would start, at its start or right after a match, splits nothing off, as in JavaScript: `'abc'.split(/x*/)` is `['a', 'b', 'c']`. |
 | `s.split_once(separator)` | What comes before the first occurrence and after it, as a `(String, String)`, or nil: `'k = v = w'.split_once(' = ')` is `('k', 'v = w')`. |
 | `s.split_whitespace()` | The pieces between runs of the spaces of [`c.is_space()`](#methods-and-conversions), none empty: `' a  b '.split_whitespace()` is `['a', 'b']`. |
 | `s.lines()` | The lines of `s` without their `\n` or `\r\n`, and no empty line after a last `\n`: `"a\r\nb\n".lines()` is `['a', 'b']`, `''.lines()` is `[]`. |
@@ -309,7 +309,7 @@ So `not a number` may be reported at a line after the one that makes the NaN, an
 | `s.contains(part)` | Whether the bytes of `part` occur in `s`; every `String` contains the empty one. A `Char` is taken as its `String`: `'abc'.contains(c)`. |
 | `s.is_digits()` | Whether `s` is one or more ASCII digits: no sign, not empty. |
 | `s.is_ascii()` | Whether every character of `s` is ASCII, as those of `''` are. |
-| `s.replace(part, by)` | `s` with each occurrence of `part`, from the start and without overlapping, replaced by `by`. |
+| `s.replace(part, by)` | `s` with each occurrence of `part`, a `String` or the matches of a [Regex](#regex), from the start and without overlapping, replaced by `by`: a `String` as it is, `$1` being no group, or what a function gives for each, a `Match`, which of an occurrence of a `String` holds it alone: `'a1b2'.replace(/\d/, (m) -> '#')` is `'a#b#'`. |
 | `s.trim()`, `s.trim_start()`, `s.trim_end()` | `s` without the spaces of [`c.is_space()`](#methods-and-conversions) at both ends, the start or the end. |
 | `s.repeat(n)` | `n` copies of `s` one after another. |
 | `s.pad_start(width, fill = ' ')` | `s` after as many copies of `fill`, one code point, as make it `width` code points long, or `s` itself if it is no shorter: `'7'.pad_start(3, '0')` is `'007'`. |
@@ -382,7 +382,7 @@ These throw a `ValueError`:
 
 ## Regex
 
-- A `Regex` finds text by a pattern of [RE2's syntax](https://github.com/google/re2/wiki/Syntax). A search takes time linear in the text, whatever the pattern: no pattern takes exponential time, as one can by backtracking. `find_all`, `split` and `replace` search again from each match's end, so that one whose search runs on to the end of the text each time, as `\w*z|c` over `ccc...`, takes time quadratic in it, as in RE2.
+- A `Regex` finds text by a pattern of [RE2's syntax](https://github.com/google/re2/wiki/Syntax). A search takes time linear in the text, whatever the pattern: no pattern takes exponential time, as one can by backtracking. `find_all`, and `split` and `replace` of a `String` by a `Regex`, search again from each match's end, so that one whose search runs on to the end of the text each time, as `\w*z|c` over `ccc...`, takes time quadratic in it, as in RE2.
 - So it has no lookaround (`(?=...)`, `(?<=...)`) and no backreferences (`\1`), which a pattern cannot be matched by in linear time; they are errors.
 - A pattern is matched by code points, not bytes: `.` matches `é` whole.
 - A match is the leftmost, and of those at one place, the one that backtracking would find first, as in Perl and RE2: alternatives in order, a greedy repeat as long as it goes, a lazy one (`*?`) as short. Unlike JavaScript, a repeat may take a round that matches nothing: `(a*)*` gives its group `''` where JavaScript leaves it out.
@@ -393,7 +393,7 @@ These throw a `ValueError`:
 pair := Regex('(?<key>\w+)\s*=\s*(\d+)')
 found := pair.find('width = 42')!
 print "#{found.named('key')!}: #{found.groups[2]!}"
-print Regex('\s+').split(' a  b ')
+print ' a  b '.split(/\s+/)
 ```
 
 | Name | |
@@ -403,8 +403,6 @@ print Regex('\s+').split(' a  b ')
 | `r.test(text: String): Bool` | Whether the pattern matches anywhere in the text. |
 | `r.find(text: String): Match?` | The first match, or nil. |
 | `r.find_all(text: String): Iter<Match>` | The matches, from the start, that do not overlap. After an empty match, the next is looked for a code point on; after another, at its end, where an empty one may follow it, as in JavaScript: `a*` finds `''`, `'aaa'`, `''` and `''` in `'baaac'`. |
-| `r.split(text: String): String[]` | The pieces between the matches, as `s.split(separator)` gives them. As in JavaScript, an empty match at the end of the text, or where a piece would start, splits nothing off: `x*` splits `'abc'` into `['a', 'b', 'c']`. |
-| `r.replace(text: String, by: String \| ((Match) -> String)): String` | The text with each match of `find_all` replaced by `by`, a `String` as it is, `$1` being no group, or what the function gives for the match. |
 | `m.text: String` | The text matched. |
 | `m.groups: String?[]` | The text of each group, from 0, the whole match, then the groups in the order of their `(`; nil for a group that took no part. |
 | `m.named(name: String): String?` | The text of the group of the name, `(?<name>...)`, or nil if it took no part. Throws a `ValueError` for a name the pattern does not give. |
@@ -779,7 +777,7 @@ type Expr = Num | Add | Mul
 
 - A member is, so far, one of: classes and structs, arrays, maps, tuples, anonymous structs, interfaces, function types, the numbers, `Bool`, `String`, `Binary` and enums. Examples: `Int | String`, `Byte[] | String`, `Byte[] | Writer`, `(Int, String) | Int`, `String | ((Match) -> String)`.
 - A union holds one array type, one map type and one function type at most: `Int[] | String[]` is an error, `a union holds one array type, one map type and one function type at most`.
-  - Why one function type: a function literal where the union is expected takes its parameters' types from it, `re.replace(text, (m) -> ...)`, and the closures of two function types would not be told apart without a type of their own (see [unions](../internals/representation.md#unions)).
+  - Why one function type: a function literal where the union is expected takes its parameters' types from it, `text.replace(re, (m) -> ...)`, and the closures of two function types would not be told apart without a type of their own (see [unions](../internals/representation.md#unions)).
 - A function type after a `|` is written in parentheses, `A | ((B) -> C)`, as `A | (B) -> C | D` would read the members after it as its result's.
 - A function literal at the top level declares a function, so it is not the value of a union there: `f: Int | ((Int) -> Int) = (n) -> n` is an error, but not in a function.
 - An optional member, as `String?` in `Int | String?` (`?` binds tighter than `|`), makes nil a value of the union, which is then optional.

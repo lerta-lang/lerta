@@ -245,8 +245,8 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `byte_count(): Int`
 - `is_digits(): Bool`, `is_ascii(): Bool`
 - `parse_int(): Int?`, `parse_float(): Float?`
-- `split(separator: String): String[]`, `split_once(separator: String): (String, String)?`, `split_whitespace(): String[]`, `lines(): String[]`
-- `replace(part: String, by: String): String`
+- `split(separator: String | Regex): String[]`, `split_once(separator: String): (String, String)?`, `split_whitespace(): String[]`, `lines(): String[]`
+- `replace(part: String | Regex, by: String | ((Match) -> String)): String`
 - `trim(): String`, `trim_start(): String`, `trim_end(): String`
 - `repeat(count: Int): String`
 - `pad_start(width: Int, fill = ' '): String`, `pad_end(width: Int, fill = ' '): String`

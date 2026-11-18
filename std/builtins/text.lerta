@@ -5,6 +5,7 @@ import double_quoted from '../internal/escape'
 import
   char_at, is_continuation, lerta_binary_text, lerta_string_slice, sequence_length
 from '../internal/utf8'
+import Match, occurrences, Regex, replace_matches, split_by_regex from './regex'
 import INFINITY from './numbers'
 import normalized from '../internal/normal_forms'
 import '../internal/unicode' as unicode
@@ -132,8 +133,11 @@ extend String
     bits := lerta_float_literal_bits(@)
     bits != -1 then lerta_float_from_bits(bits)
 
-  # A valid separator starts and ends at code points, so the pieces are cut at them.
-  split := (separator: String) ->
+  # The pieces between the occurrences of the separator, or between the matches of a Regex (see
+  # split_by_regex). A valid separator starts and ends at code points, so the pieces are cut at
+  # them.
+  split := (separator: String | Regex) ->
+    return split_by_regex(@, separator) if separator is Regex
     throw ValueError('split by an empty separator') if separator.is_empty()
     bytes := @binary
     separator_bytes := separator.binary
@@ -213,10 +217,20 @@ extend String
   # Likewise, at the end only.
   trim_end := -> lerta_string_slice(@, 0, text_end(@binary, 0))
 
-  # Each occurrence of the part, from the start and without overlapping, replaced.
-  replace := (part: String, by: String) ->
-    throw ValueError('replace of an empty part') if part.is_empty()
-    @split(part).join(by)
+  # Each occurrence of the part, from the start and without overlapping, or each match of a Regex,
+  # replaced by `by`, as it is, or by what `by` gives for its Match (see replace_matches).
+  replace := (part: String | Regex, by: String | ((Match) -> String)) ->
+    if part is String
+      throw ValueError('replace of an empty part') if part.is_empty()
+
+      # A String by a String, the common case, makes no Match of each occurrence.
+      return @split(part).join(by) if by is String
+    matches :=
+      if part is Regex
+        part.find_all @
+      else
+        occurrences @, part
+    replace_matches(@, matches, by)
 
   # The full case mappings, which may give more than one character, as `ß` gives `SS`.
   to_upper := -> unicode.upper_text(@)

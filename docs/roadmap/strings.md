@@ -55,7 +55,6 @@ More of [Regex](../reference/types.md#regex), and faster.
 
 ### Matches
 
-- `s.split(re)` and `s.replace(re, by)` as methods of `String`.
 - Byte offsets, given by functions over a `Binary`, for code such as a lexer.
 
 ### Order

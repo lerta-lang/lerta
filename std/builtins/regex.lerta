@@ -33,32 +33,6 @@ export class Regex
         from += sequence_length(text.binary[end])
       from += 1 if start == end and end == text.binary.length
 
-  # The pieces between the matches. As in JavaScript, an empty match at the end of the text, or
-  # where the piece would start, at its start or right after a match, splits nothing off, so that
-  # a pattern that matches anywhere splits the code points apart.
-  split := (text: String) ->
-    length := text.binary.length
-    pieces: String[]
-    var piece_start = 0
-    for found in @find_all(text)
-      (start, end) := found.span
-      continue if start == end and (start == piece_start or start == length)
-      pieces.push lerta_string_slice(text, piece_start, start)
-      piece_start = end
-    pieces.push lerta_string_slice(text, piece_start, length)
-    pieces
-
-  # The text with each match replaced by `by`, taken as it is, or by what `by` gives for it.
-  replace := (text: String, by: String | ((Match) -> String)) ->
-    var replaced = ''
-    var piece_start = 0
-    for found in @find_all(text)
-      (start, end) := found.span
-      replaced += lerta_string_slice(text, piece_start, start)
-      replaced += by is String then by else by(found)
-      piece_start = end
-    replaced + lerta_string_slice(text, piece_start, text.binary.length)
-
   private
     searcher := (text: String) -> Searcher(program: @program, text: text.binary)
 
@@ -121,3 +95,38 @@ compiled := (pattern: String, flags: String) ->
     at := "at column #{program.column}"
     throw ValueError("invalid regular expression #{at}: #{program.message}: #{pattern}")
   program
+
+# The pieces of the text between the matches, for String's split. As in JavaScript, an empty match
+# at the end of the text, or where the piece would start, at its start or right after a match,
+# splits nothing off, so that a pattern that matches anywhere splits the code points apart.
+export split_by_regex := (text: String, re: Regex) ->
+  length := text.binary.length
+  pieces: String[]
+  var piece_start = 0
+  for found in re.find_all(text)
+    (start, end) := found.span
+    continue if start == end and (start == piece_start or start == length)
+    pieces.push lerta_string_slice(text, piece_start, start)
+    piece_start = end
+  pieces.push lerta_string_slice(text, piece_start, length)
+  pieces
+
+# The text with each match replaced by `by`, taken as it is, or by what `by` gives for it, for
+# String's replace: the matches of a Regex, or the occurrences of a String.
+export replace_matches := (text: String, matches: Iter<Match>, by: String | ((Match) -> String)) ->
+  var replaced = ''
+  var piece_start = 0
+  for found in matches
+    (start, end) := found.span
+    replaced += lerta_string_slice(text, piece_start, start)
+    replaced += by is String then by else by(found)
+    piece_start = end
+  replaced + lerta_string_slice(text, piece_start, text.binary.length)
+
+# The occurrences of a part that is not empty in the text, from the start and without overlapping,
+# each a Match of it alone.
+export occurrences := (text: String, part: String): Iter<Match> ->
+  var start = 0
+  while found := text.binary.index_of(part.binary, start)
+    start = found + part.binary.length
+    yield Match(slots: [found, start], source: text, names: [nil])
