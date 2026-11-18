@@ -126,6 +126,17 @@ make check             # the code in the style (lerta fmt)
 - `make test-targets TARGETS="windows-amd64 windows-i386"` runs those alone.
 - The targets run one after another, in the order of the file, but those of SSH hosts after the others, each host's after the tree is sent there once. It ends with how each went. An interruption, as Ctrl-C, removes the containers and the temporary directories.
 
+#### Scanning of new programs
+
+The tests build many programs and run each for the first time, which macOS and Windows scan, slowing the tests down significantly. To keep them from it:
+
+- **macOS** scans them with XProtect unless the app that runs them is a developer tool. Add the apps that run `make`, as Terminal, Visual Studio Code, or `/usr/libexec/sshd-keygen-wrapper` for SSH sessions, to System Settings › Privacy & Security › Developer Tools, and restart them, or log in again. If the list is missing, `sudo spctl developer-mode enable-terminal` shows it.
+- **Microsoft Defender** scans them in real time. Exclude the tree, the [cache](docs/reference/compiler.md#cache) and the temporary directory, where `ssh` targets run, in PowerShell as administrator:
+  ```powershell
+  Add-MpPreference -ExclusionPath C:\path\to\lerta, $env:LOCALAPPDATA\lerta, $env:TEMP
+  ```
+- **Smart App Control**, on Windows 11, asks the cloud about each program before it runs. Turn it off in Windows Security › App & browser control › Smart App Control settings. Once off, it stays off until Windows is reinstalled.
+
 #### The driver
 
 - `test/main.lerta`, the driver, is built by minilerta into `bin/test`, as `tools/build.lerta` is. Why: a change to `compiler/` cannot break the harness that tests it.
