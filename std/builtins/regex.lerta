@@ -14,18 +14,22 @@ export class Regex
     # regex_of_literal).
     private program: Program = compiled(@pattern, @flags)
 
-  test := (text: String) -> @searcher(text).find(0) != nil
+  # The searches share it, which reuses its threads from one to the next: each is done before
+  # another can start, as none awaits or yields while it searches; `find_all` yields only between
+  # its searches.
+  private searcher := Searcher(@program)
+
+  test := (text: String) -> @searcher.find(text.binary, 0) != nil
 
   # The leftmost match, or nil.
-  find := (text: String) -> @match_of(text, @searcher(text).find(0))
+  find := (text: String) -> @match_of(text, @searcher.find(text.binary, 0))
 
   # The matches that do not overlap, from the start. After an empty one, the next is looked for a
   # code point on, as JavaScript does; after another, at its end, where an empty one may follow.
   find_all := (text: String): Iter<Match> ->
-    searcher := @searcher(text)
     var from = 0
     while from <= text.binary.length
-      found := @match_of(text, searcher.find(from)) else return
+      found := @match_of(text, @searcher.find(text.binary, from)) else return
       yield found
       (start, end) := found.span
       from = end
@@ -33,12 +37,9 @@ export class Regex
         from += sequence_length(text.binary[end])
       from += 1 if start == end and end == text.binary.length
 
-  private
-    searcher := (text: String) -> Searcher(program: @program, text: text.binary)
-
-    match_of := (text: String, slots: Int[]?) ->
-      found := slots else return nil
-      Match(slots: found, source: text, names: @program.names)
+  private match_of := (text: String, slots: Int[]?) ->
+    found := slots else return nil
+    Match(slots: found, source: text, names: @program.names)
 
 export class Match
   args
