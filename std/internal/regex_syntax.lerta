@@ -1,0 +1,423 @@
+# The syntax of std:regex's patterns, RE2's (see docs/reference/std.md#stdregex): a pattern parsed
+# into a tree, with its flags applied, so that the tree has none: `(?i)` makes classes of letters,
+# `(?s)` and `(?m)` choose the class of `.` and the assertions of `^` and `$`.
+
+export struct Literal
+  char: Char
+
+# Code points, as ranges from the first to the last, sorted and apart.
+export struct CharClass
+  ranges: (Int, Int)[]
+
+export struct Assertion
+  kind: Int
+
+export struct Capture
+  index: Int
+  node: Node
+
+export struct Concat
+  nodes: Node[]
+
+export struct Alternate
+  nodes: Node[]
+
+# `max` nil for no limit.
+export struct Repeat
+  node: Node
+  min: Int
+  max: Int?
+  greedy: Bool
+
+export struct Empty
+  pass
+
+export type Node = Literal | CharClass | Assertion | Capture | Concat | Alternate | Repeat | Empty
+
+export TEXT_START := 0
+export TEXT_END := 1
+export LINE_START := 2
+export LINE_END := 3
+export WORD_BOUNDARY := 4
+export NOT_WORD_BOUNDARY := 5
+
+# The tree, the number of capturing groups, and the name of each, by its index from 1; that of
+# index 0, the whole match, is nil.
+export struct Syntax
+  node: Node
+  group_count: Int
+  names: String?[]
+
+# Why a pattern is invalid, and the column, in code points from 1, where it is seen.
+export struct PatternError
+  message: String
+  column: Int
+
+export MAX_REPEAT := 1000
+MAX_DEPTH := 1000
+MAX_CODE_POINT := 0x10FFFF
+
+export parse := (pattern: String): Syntax | PatternError ->
+  parser := Parser([c for c in pattern])
+  try
+    node := parser.parse_alternation()
+    parser.fail "unmatched ')'" unless parser.done()
+    Syntax(node, group_count: parser.names.length - 1, names: parser.names)
+  catch e: Invalid
+    PatternError(message: e.message, column: e.at + 1)
+
+struct Invalid: Error
+  message: String
+  at: Int
+
+struct Flags
+  case_insensitive := false
+  multi_line := false
+  dot_all := false
+
+class Parser
+  args
+    chars: Char[]
+  var at = 0
+  var flags = Flags()
+  var depth = 0
+  names: String?[] = [nil]
+
+  done := -> @at == @chars.length
+  peek := -> @chars.get(@at)
+
+  # The char after the one at `at`, which may be read, as `{` or `(?` does.
+  peek_next := -> @chars.get(@at + 1)
+
+  fail := (message: String, at: Int = @at) -> throw Invalid(message, at)
+
+  take := (c: Char) ->
+    return false if @peek() != c
+    @at += 1
+    true
+
+  parse_alternation := (): Node ->
+    branches := [@parse_concat()]
+    branches.push @parse_concat() while @take('|')
+    branches.length == 1 then branches[0] else Alternate(branches)
+
+  parse_concat := (): Node ->
+    nodes: Node[]
+    while c := @peek()
+      break if c in ['|', ')']
+      atom := @parse_atom() else continue
+      nodes.push @parse_repeat(atom)
+    case nodes.length
+      when 0 then Empty()
+      when 1 then nodes[0]
+      else Concat(nodes)
+
+  # An atom, or nil after flags such as `(?i)`, which apply to the rest of the group.
+  parse_atom := (): Node? ->
+    start := @at
+    c := @chars[@at]
+    @at += 1
+    case c
+      when '(' then @parse_group(start)
+      when '[' then @parse_class(start)
+      when '.' then CharClass(@flags.dot_all then [(0, MAX_CODE_POINT)] else NOT_NEWLINE)
+      when '^' then Assertion(@flags.multi_line then LINE_START else TEXT_START)
+      when '$' then Assertion(@flags.multi_line then LINE_END else TEXT_END)
+      when '\' then @parse_escape(start)
+      when '*', '+', '?' then @fail('missing argument to repetition operator', start)
+      when ')' then @fail("unmatched ')'", start)
+      else @literal(c, start)
+
+  # The repetition operators after an atom, if any: one, then `?` for the fewest repeats.
+  parse_repeat := (atom: Node) ->
+    (min, max) := @repeat_bounds() else return atom
+    greedy := not @take('?')
+    if c := @peek()
+      @fail 'invalid nested repetition operator' if c in ['*', '+', '?'] or @peek_repeat_count()
+    Repeat(min, max, greedy, node: atom)
+
+  # The bounds of `*`, `+`, `?` or `{n}`, `{n,}`, `{n,m}` at `at`, read, or nil if none is there. A
+  # `{` that starts no count is a literal, as in RE2.
+  repeat_bounds := (): (Int, Int?)? ->
+    start := @at
+    return (0, nil) if @take('*')
+    return (1, nil) if @take('+')
+    return (0, 1) if @take('?')
+    return nil unless @peek_repeat_count()
+    @at += 1
+    min := @read_count()!
+    var max: Int? = min
+    max = @read_count() if @take(',')
+    @take '}'
+    @fail 'invalid repeat count', start if min > MAX_REPEAT or (max != nil and max > MAX_REPEAT)
+    @fail 'invalid repeat count', start if max != nil and max < min
+    (min, max)
+
+  # Whether `{n}`, `{n,}` or `{n,m}` is at `at`.
+  peek_repeat_count := ->
+    return false if @peek() != '{'
+    var i = @at + 1
+    digits_from := (from: Int) ->
+      var end = from
+      end += 1 while end < @chars.length and @chars[end].is_digit()
+      end
+    end_of_min := digits_from(i)
+    return false if end_of_min == i
+    i = end_of_min
+    if @chars.get(i) == ','
+      i = digits_from(i + 1)
+    @chars.get(i) == '}'
+
+  # The digits at `at`, read, or nil if none is there; a count past MAX_REPEAT is kept above it.
+  read_count := ->
+    start := @at
+    var value = 0
+    while c := @peek()
+      break unless c.is_digit()
+      if value <= MAX_REPEAT
+        value = value * 10 + (c.to_int() - 0x30)
+      @at += 1
+    @at > start then value
+
+  # A group, nested at most MAX_DEPTH deep, so that the parser's recursion, and the compiler's
+  # over the tree, cannot run out of stack, as RE2 limits it.
+  parse_group := (start: Int): Node? ->
+    @fail 'expression nests too deeply', start if @depth == MAX_DEPTH
+    @depth += 1
+    group := @parse_group_body(start)
+    @depth -= 1
+    group
+
+  parse_group_body := (start: Int): Node? ->
+    saved := @flags
+    return @parse_special_group(start, saved) if @take('?')
+    index := @names.length
+    @names.push nil
+    @close_group(start, saved, Capture(index, node: @parse_alternation()))
+
+  # A group that starts with `(?`: named, without a capture, of flags, or lookaround.
+  parse_special_group := (start: Int, saved: Flags): Node? ->
+    if @take('P')
+      @fail 'invalid named capture', start unless @peek() == '<'
+    is_lookbehind := @peek() == '<' and is_lookaround_mark(@peek_next())
+    if @peek() == '<' and not is_lookbehind
+      @at += 1
+      name := @read_name(start)
+      index := @names.length
+      @names.push name
+      return @close_group(start, saved, Capture(index, node: @parse_alternation()))
+    @fail 'lookaround is not supported', start if is_lookaround_mark(@peek()) or is_lookbehind
+    if @take(':')
+      return @close_group(start, saved, @parse_alternation())
+    @read_flags start
+    return nil if @take(')')
+    @fail "missing ')'", start unless @take(':')
+    @close_group(start, saved, @parse_alternation())
+
+  # The node of a group, after its `)`, with the flags of before the group back.
+  close_group := (start: Int, saved: Flags, node: Node) ->
+    @fail "missing ')'", start unless @take(')')
+    @flags = saved
+    node
+
+  # A name of ASCII letters, digits and `_`, as in RE2, and its `>`, read.
+  read_name := (start: Int) ->
+    name_start := @at
+    var name = ''
+    while c := @peek()
+      break if not c.is_ascii() or (not c.is_alphanumeric() and c != '_')
+      name += c
+      @at += 1
+    @fail 'invalid named capture', start if name.is_empty() or not @take('>')
+    @fail 'duplicate capture group name', name_start if name in @names
+    name
+
+  # Flags such as `i`, `-s` or `im-s`, read up to the `)` or `:` after them.
+  read_flags := (start: Int) ->
+    var setting = true
+    var any = false
+    while c := @peek()
+      break if c in [')', ':']
+      @at += 1
+      case c
+        when 'i' then @flags = { @flags..., case_insensitive: setting }
+        when 'm' then @flags = { @flags..., multi_line: setting }
+        when 's' then @flags = { @flags..., dot_all: setting }
+        when '-'
+          @fail 'invalid flags', start unless setting
+          setting = false
+          continue
+        else @fail('invalid flags', start)
+      any = true
+    @fail "missing ')'", start if @done()
+    @fail 'invalid flags', start if not any or @chars[@at - 1] == '-'
+
+  # A class `[...]`, after its `[`.
+  parse_class := (start: Int): Node ->
+    negated := @take('^')
+    ranges: (Int, Int)[]
+    var first = true
+    while true
+      c := @peek() else @fail("missing ']'", start)
+      break if c == ']' and not first
+      first = false
+      @fail 'POSIX classes are not supported', @at if c == '[' and @peek_next() == ':'
+      item_start := @at
+      low := @class_item()
+      if low is Int and @peek() == '-' and @peek_next() != nil and @peek_next() != ']'
+        @at += 1
+        high := @class_item()
+        @fail 'invalid character class range', item_start if high is not Int or high < low
+        @add_range ranges, low, high, item_start
+      else if low is Int
+        @add_range ranges, low, low, item_start
+      else
+        is_range := @peek() == '-' and @peek_next() != nil and @peek_next() != ']'
+        @fail 'invalid character class range', item_start if is_range
+        ranges.append low
+    @at += 1
+    normal := normalized(ranges)
+    CharClass(negated then complement(normal) else normal)
+
+  # A char of a class as its code point, or the ranges of a class escape such as `\d`.
+  class_item := (): Int | (Int, Int)[] ->
+    start := @at
+    c := @chars[@at]
+    @at += 1
+    return c.to_int() unless c == '\'
+    escaped := @escape(start)
+    case escaped
+      when Char then escaped.to_int()
+      when CharClass then escaped.ranges
+      else @fail('invalid escape in character class', start)
+
+  # A range of a class, with the other case of its letters under `(?i)`.
+  add_range := (ranges: (Int, Int)[], low: Int, high: Int, at: Int) ->
+    ranges.push (low, high)
+    return unless @flags.case_insensitive
+    @fail 'case-insensitive match beyond ASCII is not supported', at if high >= 0x80
+    ranges.append folded_ranges(low, high)
+
+  # An escape outside a class, after its `\`: a char escaped is matched as a literal is.
+  parse_escape := (start: Int): Node ->
+    escaped := @escape(start)
+    if escaped is Char
+      @literal(escaped, start)
+    else
+      escaped
+
+  # An escape, after its `\`: a char as it is, which a class takes as the end of a range before
+  # the cases of the range are added, or a class or an assertion.
+  escape := (start: Int): Char | CharClass | Assertion ->
+    c := @peek() else @fail('trailing backslash', start)
+    @at += 1
+    return control if control := control_char(c)
+    case c
+      when 'd' then CharClass(DIGIT)
+      when 'D' then CharClass(complement(DIGIT))
+      when 'w' then CharClass(WORD)
+      when 'W' then CharClass(complement(WORD))
+      when 's' then CharClass(SPACE)
+      when 'S' then CharClass(complement(SPACE))
+      when 'b' then Assertion(WORD_BOUNDARY)
+      when 'B' then Assertion(NOT_WORD_BOUNDARY)
+      when 'A' then Assertion(TEXT_START)
+      when 'z' then Assertion(TEXT_END)
+      when 'x' then @read_hex(start)
+      when 'p', 'P' then @fail('Unicode classes are not supported yet', start)
+      when 'k' then @fail('backreferences are not supported', start)
+      else
+        @fail 'backreferences are not supported', start if c in '1'..='9'
+        @fail 'invalid escape sequence', start if c.is_alphanumeric() or not c.is_ascii()
+        c
+
+  # The code point of `\xHH` or `\x{H...}`, after its `x`.
+  read_hex := (start: Int) ->
+    braced := @take('{')
+    var value = 0
+    var digits = 0
+    while c := @peek()
+      break if not braced and digits == 2
+      digit := c.hex_value() else break
+      value = value * 16 + digit
+      digits += 1
+      @at += 1
+      @fail 'invalid escape sequence', start if value > MAX_CODE_POINT
+    @fail 'invalid escape sequence', start if digits == 0 or (not braced and digits != 2)
+    @fail 'invalid escape sequence', start if braced and not @take('}')
+    value.to_char() else @fail('invalid escape sequence', start)
+
+  # A char as itself, or as the class of its cases under `(?i)`.
+  literal := (c: Char, at: Int): Node ->
+    return Literal(c) unless @flags.case_insensitive
+    code := c.to_int()
+    @fail 'case-insensitive match beyond ASCII is not supported', at if code >= 0x80
+    folded := folded_ranges(code, code)
+    return Literal(c) if folded.is_empty()
+    CharClass(normalized([(code, code), folded...]))
+
+# The char of an escape such as `\n`, or nil for another.
+control_char := (letter: Char): Char? ->
+  case letter
+    when 'n' then "\n"
+    when 't' then "\t"
+    when 'r' then "\r"
+    when 'f' then "\x0C"
+    when 'v' then "\x0B"
+    when 'a' then "\x07"
+    else nil
+
+is_lookaround_mark := (c: Char?) -> c == '=' or c == '!'
+
+# The other cases of the letters from `low` to `high`, of ASCII, as ranges of one code point: the
+# other ASCII case, and the Kelvin sign of `k` and the long s of `s`, which Unicode folds with them,
+# so that a pattern keeps its meaning once `(?i)` folds beyond ASCII.
+folded_ranges := (low: Int, high: Int) ->
+  folded: (Int, Int)[]
+  for code in low..=high
+    c := code.to_char()!
+    other := c.is_lower() then c.to_upper() else c.to_lower()
+    folded.push (other.to_int(), other.to_int()) if other != c
+    folded.push (0x212A, 0x212A) if c in ['k', 'K']
+    folded.push (0x17F, 0x17F) if c in ['s', 'S']
+  folded
+
+# The ranges sorted, those that touch or overlap merged.
+export normalized := (ranges: (Int, Int)[]) ->
+  merged: (Int, Int)[]
+  for (low, high) in ranges.sorted()
+    unless merged.is_empty()
+      (last_low, last_high) := merged.last()!
+      if low <= last_high + 1
+        merged[merged.length - 1] = (last_low, max(last_high, high))
+        continue
+    merged.push (low, high)
+  merged
+
+# The code points that normal ranges leave out.
+export complement := (ranges: (Int, Int)[]) ->
+  gaps: (Int, Int)[]
+  var next = 0
+  for (low, high) in ranges
+    if low > next
+      gaps.push (next, low - 1)
+    next = high + 1
+  gaps.push (next, MAX_CODE_POINT) if next <= MAX_CODE_POINT
+  gaps
+
+NOT_NEWLINE := [(0, 0x09), (0x0B, MAX_CODE_POINT)]
+DIGIT := [(0x30, 0x39)]
+WORD := [(0x30, 0x39), (0x41, 0x5A), (0x5F, 0x5F), (0x61, 0x7A)]
+
+# Unicode's White_Space, as Char.is_space tells it.
+SPACE :=
+  (0x09, 0x0D)
+  (0x20, 0x20)
+  (0x85, 0x85)
+  (0xA0, 0xA0)
+  (0x1680, 0x1680)
+  (0x2000, 0x200A)
+  (0x2028, 0x2029)
+  (0x202F, 0x202F)
+  (0x205F, 0x205F)
+  (0x3000, 0x3000)

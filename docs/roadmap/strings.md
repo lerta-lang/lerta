@@ -61,10 +61,10 @@ The normal forms of Unicode, in the builtins, as its classes and case are (see [
 
 ## Regular expressions
 
-- Literals are **syntax-checked at compile time**.
-- Dynamic patterns are compiled at run time.
-- For literals, the engine's bytecode is embedded in the binary (no parsing at run time). No machine code generation.
-- The engine is written in Lerta: a pattern compiles to bytecode over the UTF-8 bytes, run by a Pike VM. The compiler checks literals and makes their bytecode with the same std code.
+The patterns of [std:regex](../reference/std.md#stdregex), as literals too, and faster.
+
+- Literals are **syntax-checked at compile time**, and their program is embedded in the binary, so that none is parsed at run time. No machine code is generated.
+- The compiler compiles a literal with std's own code, `std/internal/regex_compile.lerta`, which it imports by its path, as no program can import `std:internal/...`: its program, a `Binary`, and the error, with its column, which the compiler reports at the literal. A `Regex` is then made from the embedded program, without parsing.
 
 ### Literals
 
@@ -78,20 +78,14 @@ A literal is written `/.../`, as in JavaScript.
 
 ### Matches
 
-As a `String` has no positions (see [the reference](../reference/types.md#string)), a match gives the text it holds rather than offsets:
-
-- `re.match(s): Match?`, nil where nothing matches; `m[1]: String?` gives a group, and `m.before` and `m.after` the text around the match.
-- `re.matches(s)` iterates over the matches; `s.split(re)` and `s.replace(re, (m) -> ...)` take a pattern too.
-- Byte offsets are given by functions over a `Binary`, for code such as a lexer.
-- `\d` and `\w` are ASCII for good, `[0-9]` and `[0-9A-Za-z_]`, as in RE2, though the `Char` classes become Unicode's: a class beyond ASCII is written `\p{L}` or `\p{N}`. `\s` is `c.is_space()`, Unicode's White_Space, which RE2's is not.
-- No pattern accepted changes its meaning later: until step 1 of [Unicode](#unicode), `\p{...}` is parsed and is an error at compile time, and so is `(?i)` over a character beyond ASCII.
+- `s.split(re)` and `s.replace(re, by)` as methods of `String`, if `Regex` is a builtin type (see [open questions](#open-questions)).
+- Byte offsets, given by functions over a `Binary`, for code such as a lexer.
 
 ### Order
 
-1. Dynamic patterns in `std:regex`, which change no syntax and need no seed refresh.
-2. Literals, their check and their embedded bytecode, in one seed refresh.
-3. Speed: a lazy DFA, and `memchr` for a literal prefix, measured in `bench/`.
-4. After step 1 of [Unicode](#unicode), `\p{...}` and `(?i)` beyond ASCII, from its tables.
+1. Literals, their check and their embedded program, in one seed refresh.
+2. Speed, measured in `bench/`: slots shared until a SAVE writes one, where each SAVE copies them now; the groups of a `Match` sliced as they are read, where each is now as it is made, and `split` and `replace`, which read none, working from the slots; a lazy DFA; and `memchr` for a literal prefix.
+3. `\p{...}` and `(?i)` beyond ASCII, from the tables of the classes and case (see [representation](../internals/representation.md#unicode)).
 
 ## What the compiler needs
 
@@ -104,7 +98,5 @@ In the compiler and std, the positions that text handling needs fall in three ki
 ## Open questions
 
 - Whether the lexer reads bytes, as Go's, Rust's and Zig's do, which suits a syntax of ASCII (an ASCII byte never occurs inside a multi-byte character), or code points, through a std:scanner `Scanner`. Either way, columns could be counted when a diagnostic needs one, rather than through a table per line (`count_code_points`).
-- Semantics of the regular expression engine. RE2-style linear time is favored over JS/PCRE-style backtracking: no pattern takes exponential time, and a DFA can be made. Lookaround and backreferences, which it lacks, would be errors at compile time.
-- Whether a dynamic pattern with an error gives nil, or throws an error with its message, which a pattern the user typed wants.
 - Whether `Regex` is a builtin type or one of `std:regex`; the compiler must know it for literals.
 - Whether `a/b`, without whitespace, divides, as `a-b` subtracts, or the rule narrows to "after a value, a `/` with whitespace after it divides".

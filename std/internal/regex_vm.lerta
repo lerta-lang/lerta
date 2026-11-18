@@ -1,0 +1,139 @@
+# Runs a program of std/internal/regex_compile.lerta over a text as a Pike VM: every thread of the
+# program steps over each code point at once, so that a search takes time linear in the text. The
+# order of the threads is their priority, as backtracking would try them, so that the match found
+# is the one Perl's and RE2's would be, the leftmost first.
+import ASSERT, CHAR, CLASS, JUMP, MATCH, Program, SAVE, SPLIT from './regex_compile'
+import
+  LINE_END, LINE_START, NOT_WORD_BOUNDARY, TEXT_END, TEXT_START, WORD_BOUNDARY
+from './regex_syntax'
+import char_at, sequence_length from './utf8'
+
+# Threads in their order, each the place of its instruction and its slots, and the generation in
+# which each place was added, so that a place is added once each step without clearing them all.
+class Threads
+  args
+    length: Int
+  places: Int[] = []
+  slots: Int[][] = []
+  added: Int[] = [-1 for _ in 0..@length]
+  var generation = 0
+
+  clear := ->
+    @places.truncate 0
+    @slots.truncate 0
+    @generation += 1
+
+# Searches a text for the program's matches, one `find` after another, which share the threads.
+export class Searcher
+  args
+    program: Program
+    text: Binary
+  length := @program.code.length / 4
+  unset := [-1 for _ in 0..(2 * (@program.group_count + 1))]
+  private
+    var current = Threads(@length)
+    var next = Threads(@length)
+
+  word := (place: Int) -> @program.code.uint32_at(place).to_int()
+
+  # The slots of the first match at `from` or after it in the text's bytes, two for each group from
+  # the whole match, its start and its end, -1 for a group that took no part; or nil.
+  find := (from: Int) ->
+    var current = @current
+    var next = @next
+    current.clear()
+    var matched: Int[]?
+    var at = from
+    while true
+      if matched == nil
+        @add current, 0, @unset, at
+      break if matched != nil and current.places.is_empty()
+      ended := at == @text.length
+      code :=
+        if ended
+          -1
+        else
+          char_at(@text, at).to_int()
+      width :=
+        if ended
+          0
+        else
+          sequence_length @text[at]
+      next.clear()
+      for place at i in current.places
+        slots := current.slots[i]
+        case @word(place)
+          when MATCH
+            matched = slots
+            break
+          when CHAR
+            if code == @word(place + 1)
+              @add next, place + 2, slots, at + width
+          when CLASS
+            count := @word(place + 1)
+            if @in_class(place, code)
+              @add next, place + 2 + 2 * count, slots, at + width
+          else pass
+      break if ended
+      stepped := next
+      next = current
+      current = stepped
+      at += width
+    matched
+
+  # Whether the code point is in the ranges of the CLASS at `place`, found by a binary search.
+  in_class := (place: Int, code: Int) ->
+    var low = 0
+    var high = @word(place + 1)
+    while low < high
+      middle := (low + high) / 2
+      range := place + 2 + 2 * middle
+      if code < @word(range)
+        high = middle
+      else if code > @word(range + 1)
+        low = middle + 1
+      else
+        return true
+    false
+
+  # The thread at `place`, with the threads that it leads to without reading, in their order: those
+  # of a SPLIT's first place before its second's. A place already added this step is passed over,
+  # as the thread there first has the priority, which also ends loops that read nothing.
+  add := (threads: Threads, place: Int, slots: Int[], at: Int) ->
+    pending := [(place, slots)]
+    until pending.is_empty()
+      (current, current_slots) := pending.pop()
+      continue if threads.added[current] == threads.generation
+      threads.added[current] = threads.generation
+      case @word(current)
+        when JUMP then pending.push((@word(current + 1), current_slots))
+        when SPLIT
+          pending.push (@word(current + 2), current_slots)
+          pending.push (@word(current + 1), current_slots)
+        when SAVE
+          saved := current_slots[0..]
+          saved[@word(current + 1)] = at
+          pending.push (current + 2, saved)
+        when ASSERT
+          if @holds(@word(current + 1), at)
+            pending.push (current + 2, current_slots)
+        else
+          threads.places.push current
+          threads.slots.push current_slots
+
+  holds := (kind: Int, at: Int) ->
+    case kind
+      when TEXT_START then at == 0
+      when TEXT_END then at == @text.length
+      when LINE_START then at == 0 or @text[at - 1] == b"\n"
+      when LINE_END then at == @text.length or @text[at] == b"\n"
+      when WORD_BOUNDARY then @is_word_before(at) != @is_word_after(at)
+      when NOT_WORD_BOUNDARY then @is_word_before(at) == @is_word_after(at)
+      else false
+
+  # Whether the byte before or at the place is of `\w`, ASCII: the bytes of a code point beyond it
+  # are none.
+  is_word_before := (at: Int) -> at > 0 and is_word(@text[at - 1])
+  is_word_after := (at: Int) -> at < @text.length and is_word(@text[at])
+
+is_word := (byte: Byte) -> byte.is_alphanumeric() or byte == b'_'

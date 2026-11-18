@@ -1,0 +1,137 @@
+# A pattern of std:regex compiled into the program that std/internal/regex_vm.lerta runs: UInt32s,
+# little-endian in a Binary, so that the compiler can embed that of a literal as it is. Each
+# instruction is its opcode, then its operands; a jump's operand is the place of a UInt32.
+import
+  Alternate, Assertion, Capture, CharClass, Concat, Empty, Literal, Node, parse, PatternError,
+  Repeat
+from './regex_syntax'
+
+export CHAR := 0  # c: the code point c
+export CLASS := 1  # n, then n pairs of the first and last code point: one of the ranges
+export SPLIT := 2  # x, y: on at x, and at y, which comes second
+export JUMP := 3  # x: on at x
+export SAVE := 4  # k: the place in the text into slot k
+export ASSERT := 5  # kind: an assertion of std/internal/regex_syntax.lerta holds
+export MATCH := 6
+
+# The program of a pattern, the number of its capturing groups and their names (see Syntax).
+export struct Program
+  code: Binary
+  group_count: Int
+  names: String?[]
+
+# The UInt32s that a program may take: patterns such as `(a{1000}){1000}` would take more.
+MAX_LENGTH := 1 << 20
+
+export compile_pattern := (pattern: String): Program | PatternError ->
+  syntax := parse(pattern)
+  return syntax if syntax is PatternError
+  emitter := Emitter()
+  try
+    emitter.emit_all [SAVE, 0]
+    emitter.emit syntax.node
+    emitter.emit_all [SAVE, 1, MATCH]
+  catch e: TooLarge
+    return PatternError(message: 'pattern too large', column: 1)
+  Program(code: binary_of(emitter.code), group_count: syntax.group_count, names: syntax.names)
+
+struct TooLarge: Error
+  message := 'pattern too large'
+
+class Emitter
+  code: Int[] = []
+
+  emit_all := (words: Int[]) ->
+    throw TooLarge() if @code.length + words.length > MAX_LENGTH
+    @code.append words
+
+  # The place of a jump's operand, to be set by `patch` once its target is known.
+  emit_hole := ->
+    @emit_all [0]
+    @code.length - 1
+
+  patch := (hole: Int) -> @code[hole] = @code.length
+
+  emit := (node: Node): void ->
+    case node
+      when Literal then @emit_all([CHAR, node.char.to_int()])
+      when CharClass then @emit_class(node.ranges)
+      when Assertion then @emit_all([ASSERT, node.kind])
+      when Capture
+        @emit_all [SAVE, 2 * node.index]
+        @emit node.node
+        @emit_all [SAVE, 2 * node.index + 1]
+      when Concat then @emit(item) for item in node.nodes
+      when Alternate then @emit_alternate(node.nodes)
+      when Repeat then @emit_repeat(node)
+      when Empty then pass
+
+  emit_class := (ranges: (Int, Int)[]) ->
+    if ranges.length == 1
+      (low, high) := ranges[0]
+      return @emit_all([CHAR, low]) if low == high
+    @emit_all [CLASS, ranges.length]
+    @emit_all [low, high] for (low, high) in ranges
+
+  # Each branch but the last behind a SPLIT that tries it first, and a JUMP past the others.
+  emit_alternate := (branches: Node[]) ->
+    ends: Int[]
+    for branch at i in branches
+      if i == branches.length - 1
+        @emit branch
+        break
+      @emit_all [SPLIT, @code.length + 3]
+      next := @emit_hole()
+      @emit branch
+      @emit_all [JUMP]
+      ends.push @emit_hole()
+      @patch next
+    @patch hole for hole in ends
+
+  # The node `min` times, then as many more as it goes, or else `max - min` times more, each
+  # behind a SPLIT that skips the rest; a lazy repeat tries the skip first.
+  emit_repeat := (repeat: Repeat) ->
+    max := repeat.max else return @emit_unbounded(repeat)
+    @emit repeat.node for _ in 0..repeat.min
+    skips: Int[]
+    for _ in repeat.min..max
+      skips.push @emit_split(repeat.greedy)
+      @emit repeat.node
+    @patch hole for hole in skips
+
+  # `x{n,}` as `x{n-1}x+`, and `x*` as `(x+)?`: the loop's SPLIT comes after the node, so that a
+  # round that reads nothing, whose way back to the node is then taken, still leaves the loop.
+  emit_unbounded := (repeat: Repeat) ->
+    skip := repeat.min == 0 then @emit_split(repeat.greedy)
+    @emit repeat.node for _ in 1..repeat.min
+    start := @code.length
+    @emit repeat.node
+    after := @code.length + 3
+    @emit_all
+      if repeat.greedy
+        [SPLIT, start, after]
+      else
+        [SPLIT, after, start]
+    @patch hole if hole := skip
+
+  # A SPLIT between the code right after it and a place to set, whose hole it gives: the code
+  # after it first if `greedy`.
+  emit_split := (greedy: Bool) ->
+    after := @code.length + 3
+    @emit_all [SPLIT]
+    if greedy
+      @emit_all [after]
+      @emit_hole()
+    else
+      hole := @emit_hole()
+      @emit_all [after]
+      hole
+
+binary_of := (words: Int[]) ->
+  var bytes = b''
+  for word in words
+    bytes += (word & 0xFF).to_byte()!
+    bytes += (word >> 8 & 0xFF).to_byte()!
+    bytes += (word >> 16 & 0xFF).to_byte()!
+    bytes += (word >> 24 & 0xFF).to_byte()!
+  bytes

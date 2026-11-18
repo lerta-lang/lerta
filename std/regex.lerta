@@ -1,0 +1,108 @@
+# Regular expressions of RE2's syntax, matched in time linear in the text (see
+# docs/reference/std.md#stdregex).
+import compile_pattern, Program from './internal/regex_compile'
+import PatternError from './internal/regex_syntax'
+import Searcher from './internal/regex_vm'
+import lerta_string_slice, sequence_length from './internal/utf8'
+
+# The pattern compiled, or a ValueError that says why it is invalid and where.
+export compile := (pattern: String) ->
+  program := compile_pattern(pattern)
+  if program is PatternError
+    at := "at column #{program.column}"
+    throw ValueError("invalid regular expression #{at}: #{program.message}: #{pattern}")
+  Regex(pattern, program)
+
+export class Regex
+  args
+    pattern: String
+    private program: Program
+
+  test := (text: String) -> @searcher(text).find(0) != nil
+
+  # The leftmost match, or nil.
+  find := (text: String) -> @match_of(text, @searcher(text).find(0))
+
+  # The matches that do not overlap, from the start. After an empty one, the next is looked for a
+  # code point on, as JavaScript does; after another, at its end, where an empty one may follow.
+  find_all := (text: String): Iter<Match> ->
+    searcher := @searcher(text)
+    var from = 0
+    while from <= text.binary.length
+      found := @match_of(text, searcher.find(from)) else return
+      yield found
+      (start, end) := found.span
+      from = end
+      if start == end and end < text.binary.length
+        from += sequence_length(text.binary[end])
+      from += 1 if start == end and end == text.binary.length
+
+  # The pieces between the matches. As in JavaScript, an empty match at the end of the text, or
+  # where the piece would start, at its start or right after a match, splits nothing off, so that
+  # a pattern that matches anywhere splits the code points apart.
+  split := (text: String) ->
+    length := text.binary.length
+    pieces: String[]
+    var piece_start = 0
+    for found in @find_all(text)
+      (start, end) := found.span
+      continue if start == end and (start == piece_start or start == length)
+      pieces.push lerta_string_slice(text, piece_start, start)
+      piece_start = end
+    pieces.push lerta_string_slice(text, piece_start, length)
+    pieces
+
+  # The text with each match replaced by `by`, taken as it is.
+  replace := (text: String, by: String) -> @replace_with(text, (_) -> by)
+
+  # The text with each match replaced by what `by` gives for it.
+  replace_with := (text: String, by: (Match) -> String) ->
+    var replaced = ''
+    var piece_start = 0
+    for found in @find_all(text)
+      (start, end) := found.span
+      replaced += lerta_string_slice(text, piece_start, start)
+      replaced += by(found)
+      piece_start = end
+    replaced + lerta_string_slice(text, piece_start, text.binary.length)
+
+  private
+    searcher := (text: String) -> Searcher(program: @program, text: text.binary)
+
+    match_of := (text: String, slots: Int[]?) ->
+      found := slots else return nil
+      Match(slots: found, source: text, names: @program.names)
+
+export class Match
+  args
+    private
+      source: String
+      slots: Int[]
+      names: String?[]
+
+  # The text of each group, from the whole match, nil for a group that took no part.
+  groups: String?[] = [
+    for i in 0..@names.length
+      group_text(@source, @slots, i)
+  ]
+
+  text := @groups[0]!
+
+  # The places of the match's bytes, from its start up to its end.
+  private span := (@slots[0], @slots[1])
+
+  before := -> lerta_string_slice(@source, 0, @slots[0])
+  after := -> lerta_string_slice(@source, @slots[1], @source.binary.length)
+
+  # The text of the group of the name, or nil if it took no part; a name the pattern does not give
+  # throws a ValueError.
+  named := (name: String) ->
+    index := @names.find_index((n) -> n == name) else throw ValueError("no group named #{name}")
+    @groups[index]
+
+group_text := (source: String, slots: Int[], index: Int) ->
+  start := slots[2 * index]
+  if start >= 0
+    lerta_string_slice(source, start, slots[2 * index + 1])
+  else
+    nil

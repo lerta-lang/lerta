@@ -1,0 +1,67 @@
+# An invalid pattern throws a ValueError that says why and at which column, counted in code points:
+# what RE2 rejects, what it has and std:regex does not (lookaround, backreferences, POSIX classes),
+# and what waits for Unicode's tables (`\p`, `(?i)` beyond ASCII), so that no pattern accepted now
+# changes its meaning later. A message is cut to its first 100 code points, as the pattern of
+# one nested too deeply is long.
+import compile from 'std:regex'
+
+patterns :=
+  '('
+  'a(b'
+  ')'
+  'a)'
+  '[a'
+  '[]'
+  '*'
+  'a|*'
+  'a**'
+  'a*+'
+  'a{2}{3}'
+  'a{1001}'
+  'a{2,1001}'
+  'a{3,2}'
+  '(?=a)'
+  '(?!a)'
+  '(?<=a)'
+  '(?<!a)'
+  '\1'
+  '\k<x>'
+  '\p{L}'
+  '\PL'
+  '\q'
+  'a\'
+  '\x'
+  '\xZ1'
+  '\x{}'
+  '\x{110000}'
+  '\x{D800}'
+  '[z-a]'
+  '[a-\d]'
+  '[[:alpha:]]'
+  '(?<n>a)(?<n>b)'
+  '(?<>a)'
+  '(?<a-b>c)'
+  '(?<é>c)'
+  '(?P=n)'
+  '(?x)'
+  '(?)'
+  '(?i-)'
+  '(?--i)'
+  '(?'
+  '(?i'
+  '(?i)é'
+  '(?i)[à-é]'
+  '[\b]'
+  'é('
+  '(a{1000}){1000}'
+  '[\d-z]'
+  '[\d-'
+  '[a\w-z]'
+  '('.repeat(1001)
+  '(?:'.repeat(1001)
+for pattern in patterns
+  try
+    compile pattern
+    print "#{pattern}: accepted"
+  catch e: ValueError
+    print e.message.take(100).join()
