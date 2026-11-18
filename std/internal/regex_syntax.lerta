@@ -69,16 +69,17 @@ export parse := (pattern: String, flags = ''): Syntax | PatternError ->
   catch e: Invalid
     PatternError(message: e.message, column: e.at + 1)
 
-# The letters that Regex's `flags` may hold, each once, as a literal's are to (see
-# docs/roadmap/strings.md#literals).
+# The letters that Regex's `flags`, and a literal's flags, may hold, each once.
 export FLAGS := 'ims'
 
-# Why the flags are invalid, or nil.
-export flags_error := (flags: String) ->
+# Why the flags are invalid, at the column of the letter, from 1, or nil.
+export flags_error := (flags: String): PatternError? ->
   seen: Set<Char>
-  for c in flags
-    return "unknown flag '#{c}': flags are #{FLAGS}" unless c in FLAGS
-    return "flag '#{c}' given twice" unless seen.add(c)
+  for c at i in [c for c in flags]
+    unless c in FLAGS
+      return { message: "unknown flag '#{c}': flags are #{FLAGS}", column: i + 1 }
+    unless seen.add(c)
+      return { message: "flag '#{c}' given twice", column: i + 1 }
   nil
 
 struct Invalid: Error

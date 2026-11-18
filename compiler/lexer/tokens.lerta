@@ -3,6 +3,7 @@
 # that needs it is implemented.
 import parse from 'std:enums'
 import Position from '../position'
+import flags_error from '../../std/internal/regex_syntax'
 import SourceLine from './source_line'
 import
   MultilineLiteral, scan_double_quoted, scan_multiline, TemplatePart, TextPart
@@ -18,6 +19,9 @@ export enum TokenKind
   STRING
   INTERPOLATED
   BINARY
+
+  # `/pattern/flags`, whose text is `pattern/flags`, as written.
+  REGEX
   NEWLINE
   INDENT
   DEDENT
@@ -98,6 +102,12 @@ export enum TokenKind
   '&'
   '^'
   '~'
+
+# The tokens that may end a value, after which a `/` divides, unless it is spaced as a regular
+# expression's.
+VALUE_ENDS: TokenKind[] =
+  IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, BINARY, REGEX, 'true', 'false', 'nil', ')', ']',
+  '}', '?', '!', '@'
 
 export OPENING_BRACKETS: TokenKind[] = ['(', '[', '{']
 export CLOSING_BRACKETS: TokenKind[] = [')', ']', '}']
@@ -297,6 +307,7 @@ class LineScanner
             @multiline_start = @position
             break
           when @at_binary_literal() then @scan_binary()
+          when c == b'/' and @starts_regex() then @scan_regex()
           when is_identifier_start(c) then @scan_word()
           when c == b"'" then @scan_raw_string()
           when c == b'"' then @read_double_quoted()
@@ -315,6 +326,46 @@ class LineScanner
       @line.fail "';' must come between statements", @position unless between
       @line.fail "';' cannot be inside brackets", @position if @depth > 0
       @add NEWLINE, ';', @position + 1, nil
+
+    # Whether the `/` at the position starts a regular expression: where the token before it is no
+    # value, or, after one, with whitespace before it and none after, as `f -1` passes `-1` (see
+    # docs/reference/syntax.md#regular-expression-literals). After a value, `/=` is the operator.
+    starts_regex := ->
+      previous := @tokens.last() else return true
+      return true unless previous.kind in VALUE_ENDS
+      bytes := @line.bytes
+      spaced_before := @position == 0 or bytes[@position - 1] == b' '
+      after := bytes.get(@position + 1)
+      spaced_before and after != nil and after not in [b' ', b'=']
+
+    # A regular expression, which ends at the first `/` that no `\` before it takes, as a string
+    # ends at its quote, and its flags, the letters right after it. A `/` in a class, as in `[/]`,
+    # ends it too, which the class left open would make an error less clear than this one.
+    scan_regex := ->
+      bytes := @line.bytes
+      var end = @position + 1
+      var in_class = false
+      while end < bytes.length and bytes[end] != b'/'
+        in_class = true if bytes[end] == b'['
+        in_class = false if bytes[end] == b']'
+        end +=
+          if bytes[end] == b'\'
+            2
+          else
+            1
+      if end >= bytes.length
+        previous := @tokens.last()
+        after_value := previous != nil and previous.kind in VALUE_ENDS
+        hint := after_value then "; for a division, space both sides of '/'" else ''
+        @line.fail "unterminated regular expression#{hint}", @position
+      @line.fail "a '/' in a character class is written '\\/'", end if in_class
+      flags_end := @line.scan_while(end + 1, is_identifier_part)
+
+      # Checked here, so that a keyword read as flags, as in `/a/if`, is told as such. Each flag
+      # before the one at fault is ASCII, so its column is its byte's.
+      if error := flags_error(@line.text(end + 1, flags_end))
+        @line.fail error.message, end + error.column
+      @add REGEX, @line.text(@position + 1, flags_end), flags_end, nil
 
     at_multiline_quotes := ->
       bytes := @line.bytes
@@ -450,7 +501,7 @@ plain_text := (parts: TemplatePart[]) ->
 keyword_kind := (word: String) ->
   kind := parse<TokenKind>(word) else return nil
   if kind in [
-    IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, BINARY, NEWLINE, INDENT, DEDENT, EOF
+    IDENTIFIER, INTEGER, FLOAT, STRING, INTERPOLATED, BINARY, REGEX, NEWLINE, INDENT, DEDENT, EOF
   ]
     nil
   else

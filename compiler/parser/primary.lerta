@@ -2,7 +2,8 @@
 # reads.
 import
   BooleanLiteral, Call, Expression, FloatLiteral, Identifier, IntegerLiteral, Interpolation,
-  InterpolationPart, Jump, Member, NilLiteral, Position, Return, StringLiteral, This, Throw, Yield
+  InterpolationPart, Jump, Member, NilLiteral, Position, RegexLiteral, Return, StringLiteral, This,
+  Throw, Yield
 from '../ast'
 import at_block from './block_literal'
 import
@@ -32,6 +33,7 @@ export parse_primary := (tokens: TokenStream): Expression ->
     when IDENTIFIER then Identifier(position, name: token.text)
     when STRING then StringLiteral(position, value: token.text)
     when INTERPOLATED, BINARY then parse_interpolation(tokens, token)
+    when REGEX then regex_literal(token.text, position)
     when 'nil' then NilLiteral(position)
     when 'break' then Jump(position, kind: 'break')
     when 'continue' then Jump(position, kind: 'continue')
@@ -94,6 +96,14 @@ negated_value := (text: String) ->
     return nil if value < (INT_MIN + digit_value) / base
     value = value * base - digit_value
   value
+
+# The text of a REGEX token, `pattern/flags`, whose last `/` ends the pattern, as the flags are
+# letters.
+regex_literal := (text: String, position: Position) ->
+  bytes := text.binary
+  var flags_start = bytes.length
+  flags_start -= 1 while bytes[flags_start - 1] != b'/'
+  RegexLiteral(position, pattern: bytes.text(0, flags_start - 1)!, flags: bytes.text(flags_start)!)
 
 parse_interpolation := (tokens: TokenStream, token: Token) ->
   parts := [

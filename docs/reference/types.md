@@ -387,6 +387,7 @@ These throw a `ValueError`:
 - A pattern is matched by code points, not bytes: `.` matches `é` whole.
 - A match is the leftmost, and of those at one place, the one that backtracking would find first, as in Perl and RE2: alternatives in order, a greedy repeat as long as it goes, a lazy one (`*?`) as short. Unlike JavaScript, a repeat may take a round that matches nothing: `(a*)*` gives its group `''` where JavaScript leaves it out.
 - It gives text, not positions, as a `String` has none (see [String](#string)).
+- A [literal](syntax.md#regular-expression-literals), `/pattern/flags`, is checked and compiled with the program.
 
 ```lerta
 pair := Regex('(?<key>\w+)\s*=\s*(\d+)')

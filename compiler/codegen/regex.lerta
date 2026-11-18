@@ -1,0 +1,20 @@
+# Regular expression literals: a Regex made from the program that the checker compiled, embedded
+# as a constant, by regex_of_literal of std/builtins/regex.lerta, so that nothing is parsed at run
+# time.
+import RegexLiteral from '../ast'
+import Generator from './generator'
+import binary_constant, function_symbol, string_constant from './lerta_ir'
+
+REGEX_MODULE := 'std:builtins/regex'
+
+export generate_regex := (g: Generator, literal: RegexLiteral) ->
+  program := g.facts.regex_programs[literal]!
+  ir := g.ir
+  names := [name else '' for name in program.names].join(',')
+  operands :=
+    string_constant(ir, literal.pattern)
+    string_constant(ir, literal.flags)
+    binary_constant(ir, program.code)
+    string_constant(ir, names)
+  args := ["ptr #{operand}" for operand in operands].join(', ')
+  ir.assign("call ptr #{function_symbol(REGEX_MODULE, 'regex_of_literal')}(#{args})")

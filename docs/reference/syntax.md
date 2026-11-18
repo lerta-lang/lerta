@@ -72,6 +72,21 @@ This is `"Usage:\n  build \"app\"\n"`.
 - A CRLF line end is a line feed.
 - `'''` literals span lines and leave out the shared indentation as `"""` ones do, but have no escapes and no interpolation, as `'...'` has none. The first `'''` closes, and no text holds one.
 
+## Regular expression literals
+
+```lerta
+pair := /(\w+)\s*=\s*(\d+)/
+print /hello/i.test('HELLO')
+```
+
+- `/pattern/flags` is a [Regex](types.md#regex), as `Regex(pattern: 'pattern', flags: 'flags')` would make it, but compiled as the program is: an invalid pattern or flags is an error at compile time, at its column, and the program of the pattern is embedded, so that none is parsed at run time.
+- **Where one starts.** A `/` starts a literal where the token before it is no value (a name, a literal, `true`, `false`, `nil`, `@`, `)`, `]`, `}`, or a postfix `?` or `!`): `x := /a+/`, `f(/a/)`. After a value, it starts one only with whitespace before it and none after, as `f -1` is `f(-1)` (see [calls without parentheses](#calls-without-parentheses)): `show /a+/` is `show(/a+/)`. Any other `/` divides, `a / b` as `a/b`.
+  - So a literal does not start with a space, written `\ ` or `[ ]` instead; and after a value, `/=` is always the operator.
+- **Where one ends.** As a string literal ends at its quote: read from the left, a `\` takes the character after it, whatever it is, and the first `/` not so taken ends the literal, on its line. `/a\\\/b/` is `\\` and `\/`, and goes on to the last `/`.
+  - A `/` in a class is no exception: `/[/]/` is an error, `a '/' in a character class is written '\/'`, as `/[\/]/`.
+  - The pattern is as written, `\/` too, which the pattern takes as `/`: `/a\/b/.pattern` is `a\/b`, as in JavaScript.
+- **Flags** are the letters right after the closing `/`: `/abc/i`. They are those of `Regex`'s `flags`, `i`, `m` and `s`, each once; another letter is an error at compile time. `/a/ if x` takes none, as a space follows the `/`.
+
 ## Indentation
 
 - Indentation forms blocks. It is made of **spaces only**; a tab in indentation is a compile error.

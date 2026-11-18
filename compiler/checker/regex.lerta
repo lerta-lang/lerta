@@ -1,0 +1,23 @@
+# Regular expression literals, `/pattern/flags`, compiled as the program is checked, by the code
+# that compiles a Regex at run time, so that an invalid one is an error at compile time and its
+# program is embedded (see docs/reference/syntax.md#regular-expression-literals).
+import RegexLiteral from '../ast'
+import compile_pattern from '../../std/internal/regex_compile'
+import PatternError from '../../std/internal/regex_syntax'
+import fail from './diagnostics'
+import builtins_declarer from './imports'
+import Body from './shared'
+import Position from '../position'
+
+export type_of_regex := (body: Body, literal: RegexLiteral) ->
+  program := body.program
+  { pattern, flags, position } := literal
+
+  # The pattern starts after the `/`, each code point a column, as it is as written. The lexer has
+  # checked the flags.
+  at := (offset: Int) -> Position(position..., column: position.column + offset)
+  compiled := compile_pattern(pattern, flags)
+  if compiled is PatternError
+    fail program, at(compiled.column), "invalid regular expression: #{compiled.message}"
+  body.facts.regex_programs[literal] = compiled
+  builtins_declarer(program, 'Regex').objects['Regex']!.type

@@ -10,8 +10,8 @@ export class Regex
     pattern: String
     flags := ''
 
-    # The pattern compiled, which literals are to give as the compiler compiles them (see
-    # docs/roadmap/strings.md#literals).
+    # The pattern compiled, which a literal's construction gives as the compiler compiled it (see
+    # regex_of_literal).
     private program: Program = compiled(@pattern, @flags)
 
   test := (text: String) -> @searcher(text).find(0) != nil
@@ -100,10 +100,22 @@ group_text := (source: String, slots: Int[], index: Int) ->
   else
     nil
 
+# The Regex of a literal, of the program that the compiler compiled, which the code generated for it
+# calls (see compiler/codegen/regex.lerta). `names` holds the name of each group, `''` for none, as
+# the names are not empty, joined by `,`, which no name holds.
+export regex_of_literal := (pattern: String, flags: String, code: Binary, names: String) ->
+  group_names: String?[] = [
+    for name in names.split(',')
+      name.is_empty() then nil else name
+  ]
+  program := Program(code, group_count: group_names.length - 1, names: group_names)
+  Regex(pattern, flags, program)
+
 # The program of the pattern under the flags, or a ValueError that says why they are invalid and
 # where.
 compiled := (pattern: String, flags: String) ->
-  throw ValueError("invalid regular expression flags: #{message}") if message := flags_error(flags)
+  if error := flags_error(flags)
+    throw ValueError("invalid regular expression flags: #{error.message}")
   program := compile_pattern(pattern, flags)
   if program is PatternError
     at := "at column #{program.column}"

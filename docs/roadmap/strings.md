@@ -51,22 +51,7 @@ A rope keeps a concatenation as a tree, so that `+` is O(1).
 
 ## Regular expressions
 
-The patterns of [Regex](../reference/types.md#regex), as literals too, and faster.
-
-- Literals are **syntax-checked at compile time**, and their program is embedded in the binary, so that none is parsed at run time. No machine code is generated.
-- The compiler compiles a literal with std's own code, `std/internal/regex_compile.lerta`, which it imports by its path, as no program can import `std:internal/...`: its program, a `Binary`, and the error, with its column, which the compiler reports at the literal. A `Regex` is then made from the embedded program, without parsing.
-
-### Literals
-
-A literal is written `/.../`, as in JavaScript.
-
-- **Where one starts.** A `/` starts a literal where the token before it is not a value (an identifier, a literal, `)`, `]` or `}`): `x := /a+/`, `f(/a/)`. After a value, it starts one only with whitespace before it and none after, as `f -1` is `f(-1)` (see [calls without parentheses](../reference/syntax.md#calls-without-parentheses)): `split /,\s*/` is `split(/,\s*/)`. Any other `/` divides, `a / b` as `a/b`.
-  - So a literal does not start with a space, written `\ ` or `[ ]` instead; and after a value, `/=` is always the operator.
-- **Where one ends.** As a string literal ends at its quote: read from the left, a `\` takes the character after it, whatever it is, and the first `/` not so taken ends the literal; a line break before it is an error. `/a\\\/b/` is `\\` and `\/`, and goes on to the last `/`.
-  - `[...]` is no exception, as it is in JavaScript: `/[/]/` ends at its second `/`, and the `[` left open is an error at compile time. It is written `/[\/]/`. So the lexer needs to know no syntax of patterns.
-  - The lexer only finds where a literal ends; the pattern compiler reads `\/` as `/`.
-- **Flags** follow the closing `/`, the letters right after it: `/abc/i`. They are those of `Regex`'s `flags`, `i`, `m` and `s`, each once, as if `(?flags)` began the pattern; another letter is an error at compile time. `/a/ if x` takes none, as a space follows the `/`.
-- A literal's `Regex` is constructed from the program that the compiler embeds, which `Regex`'s private argument `program` takes, without parsing at run time.
+More of [Regex](../reference/types.md#regex), and faster.
 
 ### Matches
 
@@ -75,9 +60,8 @@ A literal is written `/.../`, as in JavaScript.
 
 ### Order
 
-1. Literals, their check and their embedded program, in one seed refresh.
-2. Speed, measured in `bench/`: slots shared until a SAVE writes one, where each SAVE copies them now; the groups of a `Match` sliced as they are read, where each is now as it is made, and `split` and `replace`, which read none, working from the slots; a lazy DFA; and `memchr` for a literal prefix.
-3. `\p{...}` and `(?i)` beyond ASCII, from the tables of the classes and case (see [representation](../internals/representation.md#unicode)).
+1. Speed, measured in `bench/`: a literal's `Regex` made once, where it is first evaluated, rather than each time, with its groups' names as a constant, where they are now joined by `,` in a `String` that `regex_of_literal` splits; slots shared until a SAVE writes one, where each SAVE copies them now; the groups of a `Match` sliced as they are read, where each is now as it is made, and `split` and `replace`, which read none, working from the slots; a lazy DFA; and `memchr` for a literal prefix.
+2. `\p{...}` and `(?i)` beyond ASCII, from the tables of the classes and case (see [representation](../internals/representation.md#unicode)).
 
 ## What the compiler needs
 
