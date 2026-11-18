@@ -339,7 +339,8 @@ class Parser
       when 'B' then Assertion(NOT_WORD_BOUNDARY)
       when 'A' then Assertion(TEXT_START)
       when 'z' then Assertion(TEXT_END)
-      when 'x' then @read_hex(start)
+      when 'x' then @read_ascii(start)
+      when 'u' then @read_code_point(start)
       when 'p', 'P' then @fail('Unicode classes are not supported yet', start)
       when 'k' then @fail('backreferences are not supported', start)
       else
@@ -347,20 +348,29 @@ class Parser
         @fail 'invalid escape sequence', start if c.is_alphanumeric() or not c.is_ascii()
         c
 
-  # The code point of `\xHH` or `\x{H...}`, after its `x`.
-  read_hex := (start: Int) ->
-    braced := @take('{')
+  # The ASCII character of `\xHH`, after its `x`. `\x` is a byte in a string literal, so a code
+  # point beyond ASCII is written `\u{H...}`, as there, rather than RE2's `\x{H...}`.
+  read_ascii := (start: Int) ->
+    beyond := "'\\x' is two hex digits up to 7F; write '\\u{H...}'"
+    @fail beyond, start if @peek() == '{'
+    high := @peek()?.hex_value() else @fail('invalid escape sequence', start)
+    low := @peek_next()?.hex_value() else @fail('invalid escape sequence', start)
+    @at += 2
+    value := high * 16 + low
+    @fail beyond, start if value >= 0x80
+    value.to_char()!
+
+  # The code point of `\u{H...}`, after its `u`, as in a string literal: not a surrogate.
+  read_code_point := (start: Int) ->
+    @fail 'invalid escape sequence', start unless @take('{')
     var value = 0
     var digits = 0
-    while c := @peek()
-      break if not braced and digits == 2
-      digit := c.hex_value() else break
+    while digit := @peek()?.hex_value()
       value = value * 16 + digit
       digits += 1
       @at += 1
       @fail 'invalid escape sequence', start if value > MAX_CODE_POINT
-    @fail 'invalid escape sequence', start if digits == 0 or (not braced and digits != 2)
-    @fail 'invalid escape sequence', start if braced and not @take('}')
+    @fail 'invalid escape sequence', start if digits == 0 or not @take('}')
     value.to_char() else @fail('invalid escape sequence', start)
 
   # A char as itself, or as the class of its cases under `(?i)`.

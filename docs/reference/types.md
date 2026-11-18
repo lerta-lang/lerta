@@ -414,7 +414,7 @@ print Regex('\s+').split(' a  b ')
 
 | | |
 |---|---|
-| Characters | A character matches itself; `\` before a character that is not a letter or a digit makes it one, as `\.`; `\n`, `\t`, `\r`, `\f`, `\v`, `\a`, `\xHH` and `\x{H...}` are those code points. |
+| Characters | A character matches itself; `\` before a character that is not a letter or a digit makes it one, as `\.`; `\n`, `\t`, `\r`, `\f`, `\v`, `\a`, `\xHH`, up to `\x7F`, and `\u{H...}` are those code points, as in a [string literal](syntax.md#escapes-and-interpolation). |
 | Classes | `.` any code point but `\n`; `[abc]`, `[a-z]`, `[^...]`; `\d` `0` to `9`, `\w` `[0-9A-Za-z_]`, `\s` the spaces of [`c.is_space()`](#methods-and-conversions), and `\D`, `\W`, `\S` the others. `\d` and `\w` stay ASCII. |
 | Assertions | `^` and `$` the start and the end of the text, `\A` and `\z` always so; `\b` and `\B` at and not at a boundary of `\w`. `$` does not match before a last `\n`, as in RE2. |
 | Groups | `(...)` captures, `(?<name>...)` or `(?P<name>...)` with a name, `(?:...)` does not. |
@@ -423,6 +423,7 @@ print Regex('\s+').split(' a  b ')
 
 - `(?i)` is for ASCII so far, with the Kelvin sign and the long s that Unicode folds with `k` and `s`: a character beyond ASCII under it is an error. So is `\p{...}`, a class of Unicode. Both are planned (see [the roadmap](../roadmap/strings.md#regular-expressions)), and are errors until then so that no pattern accepted changes its meaning.
 - POSIX classes, `[[:alpha:]]`, are errors.
+- A code point beyond ASCII is written `\u{H...}`, as in a string literal, where RE2 writes `\x{H...}`, and `\x` takes ASCII alone, as `\x` is a byte in a string literal: `\x{263A}` and `\xA0` are errors, which say to write `\u{...}`.
 
 ## Constant expressions
 
