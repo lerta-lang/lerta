@@ -14,18 +14,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `lerta fmt` reports nothing for `x := a then b then c else d else e`.
 - How to fix it: have the rewrite of Parentheses add them around the inner value, after which `parts_of` finds each value.
 
-## The formatter fails on a call whose named arguments are each on a line in parentheses
-
-- Where: the layout of a statement's call in `compiler/format/`, which takes away the parentheses and leaves the named arguments partly on the line. *Unverified* where.
-- How to see it: `lerta fmt` reports `its rewrites would not parse: ... named arguments are all on the line or all in the indented block, which is a fault of the formatter` for this call of a function whose last parameter is a struct:
-  ```lerta
-  plot(
-    x: 2
-    y: 3
-  )
-  ```
-- How to fix it: write the arguments all on the line, `plot x: 2, y: 3`, or all in the block.
-
 ## The formatter joins a member line to the last operand of an operation
 
 - Where: the layout of member lines in `compiler/format/`, which joins a line of members to the line before without the parentheses that the whole value then needs. *Unverified* where.

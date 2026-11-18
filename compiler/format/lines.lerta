@@ -587,7 +587,17 @@ export class Breaker
       else if @start in @line_starts and args.goes_on_line
         # One that the source has on the line of `->`, `then` or `else` takes them until the layout
         # puts it in a block, as what follows on that line would be its arguments without them.
-        @unparenthesize args, ' '
+        # Arguments in a block of their own stay there, as named ones go all on the line or all in
+        # a block; and those of which one goes on to a line below without a comma before it keep
+        # the parentheses that hold them, as that line would no longer continue the callee's.
+        { open, items } := args
+        column := @code[items[0]].column
+        in_block := items.all((item) -> item in @line_starts and @code[item].column == column)
+        breaks := items[1..].any((item) -> item in @line_starts and @code[item - 1].kind != ',')
+        if in_block
+          @unparenthesize args, @tokens.slice(@tokens.end(open), @tokens.start(items[0]))
+        else if not breaks
+          @unparenthesize args, ' '
       @decide call.shapes
 
     # Arguments without parentheses: on the line of the callee if they fit there, or if the last is
