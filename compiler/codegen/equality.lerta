@@ -16,7 +16,7 @@ import all_of, emit_branch, IrBuilder, IrModule from './ir_builder'
 import ir_type from './lerta_ir'
 import emit_is_present, emit_unwrap from './optional'
 import call_runtime from './runtime_calls'
-import scalar_of, widened_to_word from './scalar'
+import ORDERING, scalar_of, widened_to_word from './scalar'
 import emit_string_equals from './string'
 import
   ArrayType, is_float, is_identity_type, is_one_of_kinds, is_set, is_signed, MapType, ObjectType,
@@ -221,12 +221,12 @@ emit_value_hash := (ir: IrBuilder, value: String, type: Type) ->
 
   widened_to_word(ir, value, scalar_of(type)!)
 
-# The Ordering of two numbers of the type, as an i64.
+# The Ordering of two numbers of the type.
 export emit_number_compare := (ir: IrBuilder, left: String, right: String, type: Type) ->
   signed := is_float(type) or is_signed(type)
   less := is_float(type) then 'fcmp olt' else "icmp #{signed then 'slt' else 'ult'}"
   operands := "#{ir_type(type)} #{left}, #{right}"
   is_less := ir.assign("#{less} #{operands}")
   is_equal := emit_value_equals(ir, left, right, type)
-  not_less := ir.assign("select i1 #{is_equal}, i64 #{EQUAL}, i64 #{GREATER}")
-  ir.assign("select i1 #{is_less}, i64 #{LESS}, i64 #{not_less}")
+  not_less := ir.assign("select i1 #{is_equal}, #{ORDERING} #{EQUAL}, #{ORDERING} #{GREATER}")
+  ir.assign("select i1 #{is_less}, #{ORDERING} #{LESS}, #{ORDERING} #{not_less}")

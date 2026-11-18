@@ -5,7 +5,7 @@
 import info_of from './object_types'
 import ProgramWide from './shared'
 import
-  EnumType, is_kind, is_reference_type, kind_of, ObjectType, OptionalType, RecordType, TupleType,
+  ENUM_BITS, is_kind, is_reference_type, kind_of, ObjectType, OptionalType, RecordType, TupleType,
   Type, TypeKind
 from '../types'
 
@@ -102,8 +102,7 @@ room_of := (program: ProgramWide, type: Type): Room? ->
   if part_types(program, type) != nil
     layout := value_layout(program, type) else return REFERENCE_ROOM
     return { size: layout.size, alignment: layout.alignment }
-  return scalar_room(type) if kind_of(type) in ['Bool', 'Char', NUMBERS...]
-  return enum_room(type) if type is EnumType
+  return scalar_room(type) if kind_of(type) in ['Bool', 'Char', TypeKind.ENUM, NUMBERS...]
   case kind_of(type)
     when INTERFACE then { size: 16, alignment: 8 }
     when TYPE_PARAMETER, 'void', 'never', 'nil' then nil
@@ -115,21 +114,11 @@ NUMBERS: TypeKind[] =
 scalar_room := (type: Type) ->
   bytes :=
     case kind_of(type)
+      when ENUM then ENUM_BITS >> 3
       when 'Bool', 'Byte', 'Int8' then 1
       when 'Int16', 'UInt16' then 2
       when 'Int32', 'UInt32', 'Float32', 'Char' then 4
       else 8
-  Room(size: bytes, alignment: bytes)
-
-# An enum's place among its members takes in a value the fewest bytes that hold every place, rather
-# than the word that it takes elsewhere.
-enum_room := (type: EnumType) ->
-  count := type.members.length
-  bytes :=
-    case
-      when count <= 1 << 8 then 1
-      when count <= 1 << 16 then 2
-      else 4
   Room(size: bytes, alignment: bytes)
 
 # The nil_path of a value of the fields laid out so.

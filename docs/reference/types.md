@@ -852,7 +852,7 @@ print kind == '('
 
 ### Declaration
 
-- `enum Name` declares, at the top level, a type whose values are its members, listed one per line in the indented block below: at least one.
+- `enum Name` declares, at the top level, a type whose values are its members, listed one per line in the indented block below: at least one, and at most 256, so that a value takes a byte.
 - A member is a name, `INTEGER`, or a string literal without interpolation, `'('`.
 - Its text is the name, or the literal's value. No two members have the same text, so `IDENTIFIER` and `'IDENTIFIER'` cannot both be members.
 - The members carry no data.

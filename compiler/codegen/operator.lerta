@@ -13,6 +13,7 @@ import generate_in_test from './call'
 import holding from './exceptions'
 import apply_float_arithmetic, emit_float_comparison, emit_float_negation from './float'
 import generate, generate_condition, release_if_reference, type_at_use, type_of from './expression'
+import ORDERING, scalar_of from './scalar'
 import emit_own_compare, GREATER, LESS from './comparison_methods'
 import emit_equals_by_contents, emit_value_equals from './equality'
 import Generator, with_deferred_checks from './generator'
@@ -22,8 +23,7 @@ import emit_is_nil, emit_is_present, emit_unwrap from './optional'
 import emit_concat, emit_equals, emit_extend, emit_string_equals from './string'
 import throw_if, UNWRAPPED_NIL from './runtime_errors'
 import
-  inner_of, is_float, is_identity_type, is_integer, is_one_of_kinds, is_reference_type, is_signed,
-  OptionalType, Type
+  inner_of, is_float, is_identity_type, is_one_of_kinds, is_reference_type, OptionalType, Type
 from '../types'
 
 # The predicates of `icmp` for the comparisons of signed integers; unsigned ones, as Byte, are
@@ -202,7 +202,10 @@ apply_binary := (g: Generator, operator: String, left: String, right: String, op
     return apply_numeric(g, operator, left, right, operand_type)
   if is_float(operand_type)
     return emit_float_comparison(g.ir, operator, left, right, operand_type)
-  is_unsigned := is_integer(operand_type) and not is_signed(operand_type)
+
+  # An enum's place is never negative (see ENUM_BITS).
+  scalar := scalar_of(operand_type)
+  is_unsigned := scalar != nil and not scalar.signed
   predicate := (is_unsigned then UNSIGNED_PREDICATES else SIGNED_PREDICATES)[operator]!
   g.ir.assign("icmp #{predicate} #{ir_type(operand_type)} #{left}, #{right}")
 
@@ -212,14 +215,14 @@ export apply_numeric := (g: Generator, operator: String, left: String, right: St
     return apply_float_arithmetic(g, operator, left, right, type)
   apply_integer_operator(g, operator, left, right, type)
 
-# Whether the Ordering, an i64, is one that the operator, `<` or the like, holds for.
+# Whether the Ordering is one that the operator, `<` or the like, holds for.
 emit_order_test := (ir: IrBuilder, operator: String, ordering: String) ->
   test :=
     case operator
-      when '<' then "eq i64 #{ordering}, #{LESS}"
-      when '<=' then "ne i64 #{ordering}, #{GREATER}"
-      when '>' then "eq i64 #{ordering}, #{GREATER}"
-      else "ne i64 #{ordering}, #{LESS}"
+      when '<' then "eq #{ORDERING} #{ordering}, #{LESS}"
+      when '<=' then "ne #{ORDERING} #{ordering}, #{GREATER}"
+      when '>' then "eq #{ORDERING} #{ordering}, #{GREATER}"
+      else "ne #{ORDERING} #{ordering}, #{LESS}"
   ir.assign("icmp #{test}")
 
 # `!=` is the negation of the equality.

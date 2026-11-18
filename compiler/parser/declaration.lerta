@@ -11,6 +11,7 @@ import parse_identifier, parse_value from './expression'
 import at_destructuring, parse_destructuring_statement, parse_statement from './statement'
 import Token from '../lexer/tokens'
 import TokenStream from './token_stream'
+import ENUM_BITS from '../types'
 import
   parse_aliased_type, parse_named_type, parse_type_annotation, parse_type_name,
   parse_type_parameters
@@ -191,6 +192,8 @@ export parse_interface := (tokens: TokenStream) ->
     members: has_members then parse_members(tokens) else []
   )
 
+MAX_ENUM_MEMBERS := 1 << ENUM_BITS
+
 # `enum Name` followed by an indented block of its members, one per line.
 export parse_enum := (tokens: TokenStream) ->
   position := tokens.next().position()
@@ -198,6 +201,8 @@ export parse_enum := (tokens: TokenStream) ->
   has_members := tokens.peek().kind != NEWLINE or tokens.peek_at(1).kind == INDENT
   tokens.fail position, 'an enum needs at least one member' unless has_members
   members := tokens.parse_lines('indented members', -> parse_enum_member(tokens))
+  message := "an enum has at most #{MAX_ENUM_MEMBERS} members"
+  tokens.fail position, message if members.length > MAX_ENUM_MEMBERS
   EnumDeclaration(name, members, position)
 
 # A name, or a string literal, whose text must be known without running the program.

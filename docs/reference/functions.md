@@ -393,6 +393,7 @@ Its type gives its parameters and result:
 | `Float32` | `float`, which must not be NaN either |
 | `Byte` | `uint8_t` |
 | `Bool` | `bool` |
+| an enum | `uint8_t`, its member's place among the members |
 | a reference | a pointer; an optional one is NULL for nil |
 | any other optional value, such as `Int?` or `Bool?` | none: rejected |
 
