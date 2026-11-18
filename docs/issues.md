@@ -26,29 +26,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `lerta fmt` reports `its rewrites would change the program, which is a fault of the formatter` for `print -(1.abs())`, and leaves the file.
 - How to fix it: keep the parentheses after a prefix `-` around a value that starts with a number literal.
 
-## The formatter writes calls without parentheses where the syntax takes none
-
-- Where: the rewrite of [Calls without parentheses](reference/style.md#calls-without-parentheses) in `compiler/format/`, which writes a statement's call without parentheses, does so too where the call is not written from the start of a statement on its line. *Unverified* that the four cases below share this cause.
-- How to see it: `lerta fmt` reports `its rewrites would not parse ..., which is a fault of the formatter`, and leaves the file, for each of:
-  - `names. push('a')`, with a space after the `.`;
-  - a block of arguments in another, whose `g` and `1` it writes `g 1`:
-    ```lerta
-    f
-      g
-        1
-    ```
-  - a member line that calls, which it writes `.push 3`:
-    ```lerta
-    x
-      .push(3)
-    ```
-  - a block of arguments of a member of a call:
-    ```lerta
-    xs.map(f).to_array().push
-      1
-    ```
-- How to fix it: make the rewrite only where a [call without parentheses](reference/syntax.md#calls-without-parentheses) parses: a callee of names alone, at the start of a statement, on one line.
-
 ## The formatter fails on a call whose named arguments are each on a line in parentheses
 
 - Where: the layout of a statement's call in `compiler/format/`, which takes away the parentheses and leaves the named arguments partly on the line. *Unverified* where.

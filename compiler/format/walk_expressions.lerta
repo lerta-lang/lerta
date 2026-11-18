@@ -320,7 +320,9 @@ extend Walker
   # A call with parentheses, or without them, whose arguments follow a space on its line or are in a
   # block below it.
   call := (node: Call, before: CodeGap) ->
+    callee_start := @at
     @chain node.callee, before
+    goes_on_line := node in @statement_calls and is_block_call(node) and @compact(callee_start)
     @type_arguments node.type_args
     { args, named_args } := node
     values := args + [named.value for named in named_args]
@@ -344,7 +346,12 @@ extend Walker
       is_block_call(node) and
       starts_command(node) and
       @unbracketable(shape)
-    @shapes.push ListShape(shape..., unbracketable, takes_parentheses)
+    @shapes.push ListShape(shape..., unbracketable, goes_on_line, takes_parentheses)
+
+  # Whether the tokens from `start` up to the current are on one line without spaces between them.
+  compact := (start: Int) ->
+    line := @code[start].line
+    @code[(start + 1)..@at].all((token) -> not token.spaced and token.line == line)
 
   # Whether no comment is among the arguments in parentheses, none but the last spans lines, and
   # the first is not `- x`, which would be a subtraction from the callee without them.
