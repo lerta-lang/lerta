@@ -28,6 +28,7 @@ import argv, exit from 'std:process'
 | `import a as c from 'module'` | `a` as `c` |
 | `import 'module'` | no name, so it never warns: it only makes the module's [top-level code](#top-level-code-and-cycles) run, and brings its [extends](objects.md#extend), as any import of it does |
 | `import 'module' as mod` | its exports as `mod.<export>` |
+| `import './file' as NAME: Binary` | the file's contents as a `const` (see [embedded files](#embedded-files)) |
 
 ### Imports by name
 
@@ -53,6 +54,19 @@ import argv, exit from 'std:process'
 - An export the module does not have is an error where `mod.<export>` names it.
 - An unused `mod` warns as an unused name does.
 - This is not the `import *` that [philosophy](../philosophy.md#non-goals) leaves out, which would bring the names in unqualified.
+
+### Embedded files
+
+```lerta
+import './tables/letters.bin' as LETTERS: Binary
+import './notice.txt' as NOTICE: String
+```
+
+- An import with a type after its name embeds the file in the program: the name is a top-level `const` of its contents, read as the program is compiled, which the program holds as a literal.
+- The type is `Binary` or `String`. A `String`'s file must be valid UTF-8.
+- The path starts with `./` or `../`, relative to the importing file, as a module's, but it is the file's whole name: no `.lerta` is added.
+- `export './file' as NAME: Binary` embeds the file and exports the name, as `export` before the `const` would.
+- An unused name warns as an unused `const` does.
 
 ## Exports
 
@@ -85,7 +99,7 @@ export unit := 1
   - It is an error to name a name the module does not export, to export a name twice, or for modules to export a name from each other.
 - `export 'module'` exports no name.
 - Both bring the module's extends, as an import does, and pass them on: an extend is also in effect in the modules that import one that exports from its module, by any export, and so on through modules that export from those.
-- `export` of names or of a module is at the top level, and takes no `as name` of the module.
+- `export` of names or of a module is at the top level, and takes no `as name` of the module, except to [embed a file](#embedded-files).
 
 ## Top-level code and cycles
 

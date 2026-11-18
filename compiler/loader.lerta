@@ -1,8 +1,11 @@
 # Reads the entry module and the modules it imports, directly or not, including std:builtins, which
 # the others import (see builtins_import).
-import is_file, real_path from 'std:io'
-import Import, Statement from './ast'
+import is_file, read_file, real_path from 'std:io'
+import
+  Declaration, Import, Interpolation, NamedType, Statement, StringLiteral, TypeName
+from './ast'
 import compile_error, Located from './errors'
+import TextPart from './lexer/string_literal'
 import Token, tokenize from './lexer/tokens'
 import parse, parse_partially from './parser/statement'
 import base_name, dir_name, join, relative from 'std:path'
@@ -133,7 +136,8 @@ load := (
   parsed: Statement[]? = nil
 ): Promise<Int> ->
   location := module_location(loader.entry_path, display_path)
-  program := parsed else parsed_program(loader, tokenize(source, location), location)
+  written := parsed else parsed_program(loader, tokenize(source, location), location)
+  program := await with_embedded(written, key, location)
   with_builtins := key == BUILTINS_MODULE then program else [builtins_import(), program...]
   id := loader.loaded.length
   module := LoadingModule(key, display_path, source, program: with_builtins)
@@ -151,6 +155,55 @@ parsed_program := (loader: Loader, tokens: Token[], location: String) ->
   parsed := parse_partially(tokens, location)
   errors.append parsed.errors
   parsed.statements
+
+# The program with each import of a file, which has a type, made the declaration of its contents
+# (see embedded_declaration).
+with_embedded := (program: Statement[], key: String, location: String): Promise<Statement[]> ->
+  [
+    for statement in program
+      if statement is Import and statement.type != nil
+        await embedded_declaration(statement, key, location)
+      else
+        statement
+  ]
+
+# `import './file' as NAME: Binary` or `: String`: `NAME: Binary = <the contents>`, a literal, as
+# the import's own declaration, exported if it is.
+embedded_declaration := (statement: Import, key: String, location: String) ->
+  type := statement.type!
+  is_text := embeds_text(type, location)
+  bytes := await read_file(embedded_file(statement, key, location))
+  { position } := statement
+  value :=
+    if is_text
+      invalid := "'#{statement.module}' is not valid UTF-8"
+      text := bytes.text() else import_error(statement, location, invalid)
+      StringLiteral position, value: text
+    else
+      Interpolation position, parts: [TextPart(bytes)], binary: true
+  declaration := Declaration(type, value, position, name: statement.alias!, mutable: false)
+  declaration.exported = statement.exported
+  declaration
+
+# Whether a file embedded as the type is a String rather than a Binary; any other type is an error.
+embeds_text := (type: TypeName, location: String) ->
+  if type is NamedType and type.args.is_empty() and not type.optional
+    return type.name == 'String' if type.name in ['Binary', 'String']
+  { line, column } := type.position
+  compile_error(location, line, column, 'a file is embedded as a Binary or a String')
+
+# The file that an import embeds, relative to the importing one, by its whole name.
+embedded_file := (statement: Import, key: String, location: String) ->
+  path := statement.module
+  is_relative := path.starts_with('./') or path.starts_with('../')
+  unless is_relative
+    import_error statement, location, 'a file is embedded by a path that starts with ./ or ../'
+  if is_standard_name(key)
+    import_error statement, location, "cannot find '#{path}' in std"
+  file := join(dir_name(key), path)
+  unless is_file(file)
+    import_error statement, location, "cannot find '#{path}'"
+  file
 
 builtins_import := (): Statement ->
   Import(names: [], module: BUILTINS_MODULE, position: { line: 1, column: 1 })
@@ -250,17 +303,3 @@ export module_key := (path: String) ->
     path
   else
     real_path(path)
-
-# The keys of the files that the file at the path imports, read without loading them.
-export imported_files := (path: String) ->
-  location := module_location(path, nil)
-  program := parse(tokenize(await read_source(path), location), location)
-  from := dir_name(module_key(path))
-  imports := [
-    for s in program when s is Import and not is_standard_name(s.module)
-      s
-  ]
-  [
-    for s in imports
-      real_path(imported_file(s, from, location))
-  ]

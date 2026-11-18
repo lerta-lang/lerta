@@ -74,7 +74,8 @@ follows_exported_name := (token: Token) ->
 
 parse_reexport := (tokens: TokenStream, position: Position) ->
   statement := parse_import_after(tokens, position)
-  if alias := statement.alias
+  alias := statement.alias
+  if alias != nil and statement.type == nil
     tokens.fail alias.position, 'a module is exported by its names, or alone, not as a name'
   statement.exported = true
   statement
@@ -88,7 +89,9 @@ parse_import_after := (tokens: TokenStream, position: Position) ->
     unless tokens.accept_word('as')
       return Import(position, module, names: [])
     expect_name tokens, "a name after 'as'"
-    return Import(position, module, names: [], alias: parse_identifier(tokens))
+    alias := parse_identifier(tokens)
+    type := tokens.accept(':') then parse_type_name(tokens)
+    return Import(position, module, alias, type, names: [])
   ends_line := tokens.peek().kind == NEWLINE
   names := ends_line then parse_name_block(tokens) else parse_name_line(tokens)
   tokens.expect_word 'from'
