@@ -275,6 +275,7 @@ text :=
 - Types are written as names, with type arguments in `<>`, `[]` for an array and `?` for an optional type: `Int`, `Map<String, Int>`, `String[]`, `String?`.
 - `[]` and `?` apply in the order they are written: `Int[]?` is an optional array.
 - A function type or a union is in parentheses to be an array's items: `((Int) -> Int)[]`, `(A | B)[]`.
+- A function type is in parentheses to be a union's member after a `|`: `String | ((Int) -> String)`.
 - A union is optional where a member is, `A | B?`, or in parentheses with `?` after them, `(A | B)?`.
 
 ## Operators

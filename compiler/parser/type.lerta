@@ -25,14 +25,12 @@ parse_any_type := (tokens: TokenStream, is_result: Bool) ->
   first := parse_parenthesized_type(tokens, is_result)
   return first if tokens.peek().kind != '|'
   tokens.next()
-  member := first as UnionMember else fail_member(tokens, position, first)
+  member := first as UnionMember else fail_member(tokens, position)
   union_of([member, parse_union_members(tokens, is_result)...])
 
-# A function type, or a union in parentheses, `(A | B)?`, whose members are written in the union
-# that holds it: `A | B? | C`.
-fail_member := (tokens: TokenStream, at: Position, type: TypeName) ->
-  in_union := 'a union in another is written without parentheses: `A | B? | C`'
-  tokens.fail at, type is UnionTypeName then in_union else 'a union cannot hold a function type'
+# A union in parentheses, `(A | B)?`, whose members are written in the union that holds it.
+fail_member := (tokens: TokenStream, at: Position) ->
+  tokens.fail at, 'a union in another is written without parentheses: `A | B? | C`'
 
 # The type of `type Name =`: a type on the same line, or a union whose members are on the indented
 # lines below, one or more on each line.
@@ -56,13 +54,16 @@ union_of := (members: UnionMember[]): TypeName ->
 # `(A | B)?`, to make it optional. Any type in parentheses may be the items of an array:
 # `((A) -> R)[]`, `(A | B)[]`. As a function literal's return type, the `->` after it starts the
 # body, so a function type there is written in parentheses.
-parse_parenthesized_type := (tokens: TokenStream, is_result: Bool): TypeName ->
+parse_parenthesized_type := (tokens: TokenStream, is_result: Bool, as_member = false): TypeName ->
   position := tokens.next().position()
   types := tokens.parse_list(')', -> parse_type_name(tokens))
   is_tuple := types.length > 1 and (is_result or tokens.peek().kind != '->')
   if is_tuple
     tuple := TupleTypeName(position, items: types, optional: tokens.accept('?'))
     return parse_array_suffix(tokens, tuple, position)
+  if as_member and not is_result and tokens.peek().kind == '->'
+    forms := '`A | ((B) -> C)`, `x is ((B) -> C)`'
+    tokens.fail position, "a function type here is written in parentheses: #{forms}"
   if not is_result and tokens.accept('->')
     result := parse_type_name(tokens)
     return FunctionTypeName(result, position, params: types)
@@ -90,10 +91,12 @@ parse_union_member := (tokens: TokenStream, is_result = false): UnionMember ->
   return member if tokens.peek().kind != '['
   parse_array_type(tokens, member, member.position)
 
+# A function type after a `|` is in parentheses, `A | ((B) -> C)`, as one without them would take
+# the members after it as its result's.
 parse_parenthesized_member := (tokens: TokenStream, is_result: Bool): UnionMember ->
   position := tokens.peek().position()
-  type := parse_parenthesized_type(tokens, is_result)
-  type as UnionMember else fail_member(tokens, position, type)
+  type := parse_parenthesized_type(tokens, is_result, true)
+  type as UnionMember else fail_member(tokens, position)
 
 # The type, made the items of an array if `[]` follows.
 parse_array_suffix := (tokens: TokenStream, type: TypeName, position: Position): TypeName ->

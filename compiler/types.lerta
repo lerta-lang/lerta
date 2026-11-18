@@ -254,9 +254,9 @@ export union_of := (types: Type[]): Type? ->
 
 # A type whose values a union may hold: an object, as a class, a struct, an array, a map, a tuple or
 # an anonymous struct, or a String, as it is, or a value of the others, which a union holds boxed
-# (see is_boxed).
+# (see is_boxed), a function too.
 export is_union_member := (type: Type) ->
-  return true if type is EnumType | InterfaceType
+  return true if type is EnumType | InterfaceType | FunctionType
   is_object_member(type) or is_one_of_kinds(type, UNION_VALUE_KINDS)
 
 # The members that are objects of their own, whose type in their header tells them apart.
@@ -264,11 +264,13 @@ is_object_member := (type: Type) ->
   type is ObjectType | ArrayType | MapType | TupleType | RecordType
 
 # Every array has one type in its header, whatever its items, and so does every map, so a union
-# tells apart one array type and one map type at most.
+# tells apart one array type and one map type at most. It holds one function type at most too, so
+# that a function literal where it is expected takes its parameters' types from it.
 holds_one_of_each := (members: Type[]) ->
   arrays := (member for member in members when member is ArrayType).count()
   maps := (member for member in members when member is MapType).count()
-  arrays <= 1 and maps <= 1
+  functions := (member for member in members when member is FunctionType).count()
+  arrays <= 1 and maps <= 1 and functions <= 1
 
 UNION_VALUE_KINDS: TypeKind[] = [NUMBER_KINDS..., 'Char', 'Bool', 'String', 'Binary']
 
@@ -330,6 +332,7 @@ format_named := (
 export format_member := (member: Type, union: Type) -> format_member_qualified(member, union, false)
 
 format_member_qualified := (member: Type, union: Type, qualified: Bool) ->
+  return "(#{format_qualified(member, qualified)})" if member is FunctionType
   return format_qualified(member, qualified) unless member is ObjectType
   return format_qualified(member, qualified) unless union is UnionType
   shares_name := (other: Type) ->
@@ -358,7 +361,12 @@ export type_key := (type: Type): String ->
     when IterType then "Iter<#{type_key(type.item)}>"
     when PromiseType then promise_text(type, type_key)
     when MapType then "Map<#{type_key(type.key)}, #{type_key(type.value)}>"
-    when UnionType then [type_key(member) for member in type.members].join(' | ')
+    when UnionType
+      members := [
+        for member in type.members
+          operand_text(member, type_key)
+      ]
+      members.join(' | ')
     when OptionalType then "(#{type_key(type.inner)})?"
     when FunctionType
       "(#{[type_key(param) for param in type.params].join(', ')}) -> #{type_key(type.result)}"

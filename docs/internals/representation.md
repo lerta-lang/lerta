@@ -43,8 +43,9 @@
 - A union value is one pointer, null for nil, to one of:
   - the object of a class, a struct, an array, a map, a tuple or an anonymous struct, whose header's type tells its type;
   - a `String`, whose header's type is null, which no other member's object or box has;
-  - a **box** of a value of another member, such as an `Int`, an interface value or a `Binary`, which holds the value's two words (`compiler/codegen/boxes.lerta`). A `Binary` is boxed because its header's type is null too, as it shares a String's representation.
+  - a **box** of a value of another member, such as an `Int`, an interface value, a `Binary` or a closure, which holds the value's two words (`compiler/codegen/boxes.lerta`). A `Binary` is boxed because its header's type is null too, as it shares a String's representation; a closure because its header's type is that of its literal, which no other closure of the function type shares.
 - Every array has one type in its header, `lerta_array_type` of `runtime/array.c`, whatever its items, and every map `lerta_map_type`. So a union holds one array type and one map type at most.
+- A closure is boxed where it becomes a union's even where it is a local's value that is only called, which is otherwise on the stack (see [closures](#closures)): the box holds it, so it is on the heap.
 - A box is a heap object of the value, whose type is `linkonce_odr`, named by the value's type, and so the same in every module: a box made in one module is told by another. The types of tuples and anonymous structs are made the same way.
 - A `Bool`'s box is one of two immortal ones, `linkonce_odr` too, so that boxing one allocates nothing.
 - A value is boxed where it becomes a union's, and taken out where a test, a cast or a `case` narrows it to its member.

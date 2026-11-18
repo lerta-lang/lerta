@@ -10,7 +10,7 @@ import check_function_body from './statement'
 import resolve_result from './type_names'
 import is_pattern from './type_patterns'
 import
-  format_type, FunctionType, inner_of_expected, is_kind, ObjectType, PromiseType, Type
+  format_type, FunctionType, inner_of_expected, is_kind, ObjectType, PromiseType, Type, UnionType
 from '../types'
 
 export type_of_function_literal := (body: Body, literal: FunctionLiteral, expected: Type?) ->
@@ -19,9 +19,14 @@ export type_of_function_literal := (body: Body, literal: FunctionLiteral, expect
   result := expected_function?.result
   reject_nil_result(body.program, check_literal(body, literal, params, result, nil), literal)
 
-# The function type expected, or the one in the optional type expected, which the literal is then
-# checked as, so that it settles a Promise itself where one is expected (see undecided_promise).
-expected_function_type := (expected: Type?) -> inner_of_expected(expected) as FunctionType?
+# The function type expected, or the one in the optional type or the union expected, which the
+# literal is then checked as, so that it settles a Promise itself where one is expected (see
+# undecided_promise). A union holds one function type at most.
+expected_function_type := (expected: Type?) ->
+  inner := inner_of_expected(expected)
+  if inner is UnionType
+    return inner.members.find((member) -> member is FunctionType) as FunctionType?
+  inner as FunctionType?
 
 # A function literal of an item, as `map` takes, or as the guard and the element of an Iter
 # comprehension are, of the item and its index where it names one: its parameters' types may be

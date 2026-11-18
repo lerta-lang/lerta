@@ -1,2 +1,74 @@
-# fmt: off
-f: Int | ((Int) -> Int) = 1
+# A union holds a function type, in parentheses after a `|`, as a box of its closure: a function
+# literal where the union is expected takes its parameters' types from it, and the function is
+# called once a test or a `case` narrows the union to it. A named function, a closure that
+# captures, and nil of an optional union fit too.
+apply := (x: Int, by: String | ((Int) -> String)) -> by is String then by else by(x)
+
+print apply(1, 'fixed')
+print apply(2, (n) -> "got #{n}")
+named := (n: Int) -> "named #{n}"
+print apply(3, named)
+prefix := 'captured'
+print apply(4, (n) -> "#{prefix} #{n}")
+
+# The function first, and narrowed by `case`; a local of the union that holds a literal.
+first := ->
+  held: ((Int) -> Int) | Int | String = (n) -> n * 2
+  case held
+    when Int then print(held)
+    when String then print(held)
+    else print(held(21))
+first()
+
+# An optional union, and one in a field and an array.
+maybe: String | ((Int) -> Int)? = nil
+print maybe == nil
+struct Step
+  run: Int | ((Int) -> Int)
+steps: Step[] = [{ run: 1 }, { run: (n) -> n + 1 }]
+for step in steps
+  { run } := step
+  print run is Int then run else run(10)
+
+# Values of a function type and another give the union where it is written, as a result's type.
+joined := (flag: Bool): String | ((Int) -> Int) ->
+  if flag
+    (n) -> n * 3
+  else
+    'none'
+for flag in [true, false]
+  value := joined(flag)
+  print value is String then value else value(5).to_string()
+
+# A pattern of the function type narrows to it; a literal fits an optional union; a local function
+# that is called is held by the union too.
+more := ->
+  narrowed: Int | ((Int) -> Int) = (n) -> n - 1
+  print narrowed(10) if narrowed is ((Int) -> Int)
+  optional: (Int | ((Int) -> Int))? = (n) -> n * n
+  if held := optional
+    print held is Int then held else held(9)
+  double := (n: Int) -> n * 2
+  both: Int | ((Int) -> Int) = double
+  print double(3)
+  print both is Int then both else both(4)
+more()
+
+# A member through an alias; a union given by a function, of a local function only called there,
+# which the box then holds; a `var` of the union given a literal; a member of no value.
+type Scale = (Int) -> Int
+scaled := (k: Int): Int | Scale ->
+  times := (n: Int) -> n * k
+  print times(2)
+  times
+returned := scaled(5)
+print returned is Int then returned else returned(7)
+reassigned := ->
+  var value: Int | ((Int) -> Int) = 1
+  value = (n) -> n + 100
+  print value is Int then value else value(1)
+reassigned()
+no_value := ->
+  done: String | (() -> void) = -> print('called')
+  done() unless done is String
+no_value()

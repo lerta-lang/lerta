@@ -6,8 +6,8 @@ import expect_type, type_of from './expression'
 import Body from './shared'
 import type_of_block from './statement'
 import
-  format_type, inner_of, is_kind, is_number, is_union_member, members_of, Type, unify, union_of,
-  void_type
+  format_type, FunctionType, inner_of, is_kind, is_number, is_union_member, members_of, Type, unify,
+  union_of, void_type
 from '../types'
 
 # The body of a case arm, of then/else or of an if, and what entering it does: narrowing locals, or
@@ -55,7 +55,7 @@ export unify_unless_void := (body: Body, at: Expression, description: String) ->
 export unify_values := (body: Body, values: BranchValue[], at: Expression, description: String) ->
   var type = values[0].type
   for value in values
-    type = unify(type, value.type) else union_of([type, value.type]) else mismatch(
+    type = unify(type, value.type) else branch_union(type, value.type) else mismatch(
       body, type, value, description
     )
   reject_mixed_numbers body, type, values, description
@@ -73,13 +73,27 @@ mismatch := (body: Body, type: Type, value: BranchValue, description: String) ->
   types := "the ones before give #{format_type(type)}, this one #{format_type(value.type)}"
   message := "#{description} must have #{rule}: #{types}"
 
-  # Both types are a union's, so only more than one array or map type keeps them apart.
-  limit := ', and a union holds one array type and one map type at most'
-  holds_both := are_members(type) and are_members(value.type)
-  fail body.program, value.last.position, holds_both then message + limit else message
+  # A function, which branch_union leaves out, or else types that are both a union's, which only
+  # more than one array or map type keeps apart.
+  function_hint := ", and a union holds a function only where its type is written, as a result's"
+  limit := ', and a union holds one array type, one map type and one function type at most'
+  hint :=
+    case
+      when is_function(type) or is_function(value.type) then function_hint
+      when are_members(type) and are_members(value.type) then limit
+      else ''
+  fail body.program, value.last.position, message + hint
 
 are_members := (type: Type) ->
   not members_of(inner_of(type)).any((each) -> not is_union_member(each))
+
+# The union of the types of two values, but not of a function, which a value more likely meant to
+# call, as `then 1 else -> 1`: a union holds one where its type is written.
+branch_union := (a: Type, b: Type) ->
+  return nil if is_function(a) or is_function(b)
+  union_of([a, b])
+
+is_function := (type: Type) -> inner_of(type) is FunctionType
 
 # Rejects a type of the values that brings together number types of different values, whatever
 # other types it holds: it could not be used in arithmetic, and a literal among them was meant to

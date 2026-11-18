@@ -732,9 +732,11 @@ type Expr = Num | Add | Mul
 
 ### Members
 
-- A member is, so far, one of: classes and structs, arrays, maps, tuples, anonymous structs, interfaces, the numbers, `Bool`, `String`, `Binary` and enums. Examples: `Int | String`, `Byte[] | String`, `Byte[] | Writer`, `(Int, String) | Int`.
-- A union holds one array type and one map type at most: `Int[] | String[]` is an error, `a union holds one array type and one map type at most, which it tells apart so far`.
-- A function type cannot be a member: `a union cannot hold a function type`.
+- A member is, so far, one of: classes and structs, arrays, maps, tuples, anonymous structs, interfaces, function types, the numbers, `Bool`, `String`, `Binary` and enums. Examples: `Int | String`, `Byte[] | String`, `Byte[] | Writer`, `(Int, String) | Int`, `String | ((Match) -> String)`.
+- A union holds one array type, one map type and one function type at most: `Int[] | String[]` is an error, `a union holds one array type, one map type and one function type at most`.
+  - Why one function type: a function literal where the union is expected takes its parameters' types from it, `re.replace(text, (m) -> ...)`, and the closures of two function types would not be told apart without a type of their own (see [unions](../internals/representation.md#unions)).
+- A function type after a `|` is written in parentheses, `A | ((B) -> C)`, as `A | (B) -> C | D` would read the members after it as its result's.
+- A function literal at the top level declares a function, so it is not the value of a union there: `f: Int | ((Int) -> Int) = (n) -> n` is an error, but not in a function.
 - An optional member, as `String?` in `Int | String?` (`?` binds tighter than `|`), makes nil a value of the union, which is then optional.
 - A member that is itself a union is flattened, and a member written twice counts once: `Int | Int` is an `Int`.
 - The order of the members does not matter.

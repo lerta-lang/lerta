@@ -341,6 +341,7 @@ print case
 - It is an error:
   - for arms of types that cannot be members, as `Int` and `Int[]`;
   - for a union that would bring together number types of different arms, as `Int` and `Float`, or an `Int8` and a literal typed as an `Int` before it, whatever other types it holds. It could not be used in arithmetic, so write the type where it is meant.
+  - for an arm of a function type and one of another type, as `1` and `-> 1`, which more likely meant to call the function: write the union where it is meant, as a result's type.
 - An arm already of such a union, as a value of an `Int | Float`, may give it, wherever it is among the arms.
 - Where a type is expected (an annotation, an argument), the arms are checked against it.
 - If every arm is `void` (or `never`), the `case` has no value and can only stand as a statement. If every arm is `never`, the `case` never gives a value either.
