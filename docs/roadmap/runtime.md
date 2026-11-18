@@ -103,6 +103,13 @@ The closure of a function literal declared as a local that only its own function
 
 The size classes of the allocator ([internals](../internals/memory.md#allocation)), the limits of 256 bytes and 16 KiB, and the number of empty slabs kept are settled by measuring the benchmarks in `bench/` and the compiler's own build.
 
+### Arrays as stacks
+
+`xs.pop()` and `xs.truncate(n)` cost more than a stack's push should, which std/internal/regex_vm.lerta avoided by counting its threads and its stack itself, where they took 40% of `bench/regex`'s instructions:
+
+- `pop` calls `lerta_array_take_last`, which copies the item by a `memcpy` of the size that the item's kind gives, so a call of the C library's even for an `Int`: the copy by the size's own case, or `pop` generated in place, as an index is.
+- `truncate` pops one item at a time: dropping the items above the length at once, releasing those that are references, as `lerta_array_take_last` does each.
+
 ## Concurrency
 
 - **async/await and an event loop are core features** (Node-like); what is implemented is in [the reference](../reference/functions.md#functions-that-await).
