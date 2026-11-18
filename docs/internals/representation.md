@@ -4,8 +4,9 @@
 
 ### Classes and structs
 
-- A class or struct object is a heap object: the header, then its fields in declaration order, each in its IR type, and, for a class, the pointer to its [weak box](memory.md#weak-references).
-- An anonymous struct is a heap object like a struct, with its fields in name order; so is a tuple, with its items in order. Each structural type has its own LLVM type and type of objects, generated where it is first used.
+- A class or struct object is a heap object: the header, then its fields, each in its IR type, and, for a class, the pointer to its [weak box](memory.md#weak-references).
+- An anonymous struct is a heap object like a struct, with its fields; so is a tuple, with its items.
+- The fields are laid out by alignment, largest first, else as declared, so that no padding comes between them (`field_order` in `compiler/checker/value_layout.lerta`); what goes through them in order, as `to_literal`, `==` and std:json, goes as declared, an anonymous struct's in name order. Each structural type has its own LLVM type and type of objects, generated where it is first used.
 - Methods are functions that take the object first.
 
 ### Construction

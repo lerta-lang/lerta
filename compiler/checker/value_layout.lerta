@@ -51,7 +51,7 @@ find_layout := (program: ProgramWide, type: Type): ValueLayout? ->
   for part in parts
     room := room_of(program, part) else return nil
     rooms.push room
-  order := [i for i in 0..parts.length].sorted_by((i) -> (-rooms[i].alignment, i))
+  order := field_order(program, parts)
   size := rooms.map((room) -> room.size).sum()
   alignment := rooms.map((room) -> room.alignment).max() else 1
   rounded := aligned(size, alignment)
@@ -61,6 +61,24 @@ find_layout := (program: ProgramWide, type: Type): ValueLayout? ->
       LayoutField(index: i, type: parts[i])
   ]
   { alignment, fields: laid, size: rounded, nil_path: nil_path_in(program, laid) }
+
+# The places of parts of the types as they are laid out, a value's or a heap object's: those of
+# larger alignment first, so that no padding comes between them, else as declared. A part of no
+# known size, as a type parameter, goes as a reference does.
+export field_order := (program: ProgramWide, types: Type[]) ->
+  alignments := [
+    for type in types
+      (room_of(program, type) else REFERENCE_ROOM).alignment
+  ]
+  [i for i in 0..types.length].sorted_by((i) -> (-alignments[i], i))
+
+# The place, among the fields of the type as field_order lays them out, of the field at the index
+# among the types of its fields as declared.
+export field_place := (program: ProgramWide, type: Type, types: Type[], index: Int) ->
+  places_of := ->
+    order := field_order(program, types)
+    [order.index_of(i)! for i in 0..types.length]
+  program.field_places.get_or_add(type, places_of)[index]
 
 # The types of the parts that a value of the type would hold in itself: the fields of a struct, an
 # anonymous struct or a tuple; nil for another type.

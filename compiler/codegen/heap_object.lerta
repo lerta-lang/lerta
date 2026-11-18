@@ -2,6 +2,7 @@
 # (see docs/internals/representation.md#objects).
 import FieldInfo, info_of, ObjectInfo from '../checker/object_types'
 import ProgramWide from '../checker/shared'
+import field_order, field_place from '../checker/value_layout'
 import emit_box_test from './boxes'
 import any_of, emit_branch, IrBuilder, IrModule, phi_incoming from './ir_builder'
 import
@@ -142,7 +143,8 @@ export emit_heap_allocate := (ir: IrBuilder, layout: String, type: String) ->
 
 # The pointer to the field of the name.
 export emit_field_pointer := (ir: IrBuilder, object: String, info: ObjectInfo, name: String) ->
-  emit_heap_field_pointer(ir, object_ir_type(info.type), object, field_index(info, name))
+  place := field_place(ir.module.program, info.type, field_types(info), field_index(info, name))
+  emit_heap_field_pointer(ir, object_ir_type(info.type), object, place)
 
 # The value of the field of the class or struct, borrowed.
 export emit_borrowed_field := (ir: IrBuilder, object: String, info: ObjectInfo, field: FieldInfo) ->
@@ -150,6 +152,8 @@ export emit_borrowed_field := (ir: IrBuilder, object: String, info: ObjectInfo, 
 
 # The field of the name, which the class or struct has.
 export field_named := (info: ObjectInfo, name: String) -> info.fields[field_index(info, name)]
+
+field_types := (info: ObjectInfo) -> [field.type! for field in info.fields]
 
 field_index := (info: ObjectInfo, name: String) ->
   info.fields.find_index((field) -> field.name.name == name)!
@@ -169,7 +173,11 @@ export emit_allocate := (ir: IrBuilder, info: ObjectInfo) ->
 export define_object := (
   module: IrModule, program: ProgramWide, info: ObjectInfo, linkage: String
 ) ->
-  fields := [value_field(field.type!) for field in info.fields]
+  types := field_types(info)
+  fields := [
+    for i in field_order(program, types)
+      value_field(types[i])
+  ]
   weak_slot := is_class(info) then fields.length
   fields.push plain_field('ptr') if is_class(info)
   deinit := info.has_deinit then special_method_symbol(program, info, 'deinit')
@@ -269,7 +277,7 @@ export emit_member_dispatch := (
   return '' if result_type == 'void'
   ir.assign("phi #{result_type} #{incoming.join(', ')}")
 
-# The types of the values, in the order they are laid out.
+# The types of the values, as declared, a record's fields in name order.
 export value_types := (type: Type) ->
   case type
     when RecordType then [field.type for field in type.fields]
@@ -278,7 +286,11 @@ export value_types := (type: Type) ->
 
 # The LLVM struct type of the type, defined with the type of its objects at the first use.
 values_layout := (ir: IrBuilder, type: Type) ->
-  fields := [value_field(each) for each in value_types(type)]
+  types := value_types(type)
+  fields := [
+    for i in field_order(ir.module.program, types)
+      value_field(types[i])
+  ]
   define := (layout: String, module: IrModule) ->
     name := format_type(type)
     define_heap_object module, layout, values_type_symbol(type), 'linkonce_odr ', fields, name
@@ -302,8 +314,7 @@ export emit_values := (ir: IrBuilder, type: Type, values: String[]) ->
   layout := values_layout(ir, type)
   object := emit_heap_allocate(ir, layout, values_type_symbol(type))
   for value_type at i in value_types(type)
-    pointer := emit_heap_field_pointer(ir, layout, object, i)
-    ir.store ir_type(value_type), values[i], pointer
+    ir.store ir_type(value_type), values[i], emit_value_pointer(ir, object, type, i)
   object
 
 # A new anonymous struct, which takes over the values, owned, given by field name.
@@ -312,7 +323,8 @@ export emit_record := (ir: IrBuilder, type: Type, values: Map<String, String>) -
 
 # The pointer to the value at the index.
 emit_value_pointer := (ir: IrBuilder, object: String, type: Type, index: Int) ->
-  emit_heap_field_pointer(ir, values_layout(ir, type), object, index)
+  place := field_place(ir.module.program, type, value_types(type), index)
+  emit_heap_field_pointer(ir, values_layout(ir, type), object, place)
 
 # The value at the index, retained if a reference; the object is borrowed.
 export emit_value_at := (ir: IrBuilder, object: String, type: Type, index: Int) ->
