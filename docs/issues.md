@@ -24,12 +24,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
   ```
 - How to fix it: lay the tuple out with an item on each line, as it does the parameters of a function with such a comment.
 
-## `lerta fmt --fix` leaves the CRLF line ends inside a multiline string
-
-- Where: the layout in `compiler/format/` writes a string literal's token as it is, with the line ends inside it.
-- How to see it: of a file with CRLF line ends that holds a `"""` literal of several lines, `lerta fmt --fix` writes LF after each line but those inside the literal, and then reports nothing.
-- How to fix it: write the line ends inside a multiline literal as LF, which changes nothing of its value, as a CRLF there is a line feed.
-
 ## The site renders some Markdown otherwise than GitHub, without an error
 
 - Where: `site/markdown.lerta`, which is to fail on what it does not render: `closing_emphasis` and `closing_bracket` do not pass over a `\` escape, `emphasis` takes no run of three `*`, and `unsupported_inline` and `unsupported_block` do not name what follows.
