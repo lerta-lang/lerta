@@ -257,6 +257,7 @@ The signatures of the methods of the builtin types, by type. What each does is i
 - `index_of(part: Binary | Byte, from: Int = 0): Int?`
 - `iter(): Iter<Byte>`
 - `text(start = 0, end: Int = length): String?`
+- `uint32_at(index: Int): UInt32`
 
 ### Arrays
 
