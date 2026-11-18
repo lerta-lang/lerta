@@ -193,7 +193,7 @@ An operation that would check its result, a tree's root or one of no tree, check
 
 ## Unicode
 
-- The classes and the case mappings of the characters beyond ASCII are tables of std, `std/internal/unicode/*.bin`, which `std/internal/unicode.lerta` [embeds](../reference/modules.md#embedded-files) and `std/builtins/text.lerta` reads only for a character beyond ASCII, whose classes it tests by comparisons alone.
+- `std/internal/unicode.lerta` tells the classes of characters and maps their case, which the methods of `Char` and `String` in `std/builtins/text.lerta` give. An ASCII character it tells and maps by comparisons alone; one beyond it, by tables of std, `std/internal/unicode/*.bin`, which it [embeds](../reference/modules.md#embedded-files).
 - `tools/unicode.lerta` writes them from the files of the Unicode Character Database in `third_party/ucd/`, of one version, and is run by hand when those change.
 - Each is UInt32 values, little-endian, in rows of a fixed width, sorted by their first value, which a binary search finds: a range of a class, its first and last code points; a simple case mapping, a code point and its mapping; a full one, a code point and the up to three it maps to, with zeros after them.
 - `is_letter` and `is_numeric` read the general categories L and N, `is_lower` and `is_upper` the properties Lowercase and Uppercase, and a String's `to_lower` the properties Cased and Case_Ignorable, for a capital sigma that ends a word (Final_Sigma). The full mappings are those of SpecialCasing.txt that hold in any context and language.

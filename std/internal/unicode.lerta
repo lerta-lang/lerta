@@ -1,7 +1,8 @@
-# Unicode's classes and case mappings of the characters beyond ASCII, which ASCII ones are tested
-# before (see std/builtins/text.lerta). Each table is written by tools/unicode.lerta from the
-# Unicode Character Database: UInt32 values, little-endian, in rows of a fixed width, sorted by
-# their first value, which a binary search finds.
+# Unicode's classes and case mappings of characters, which std/builtins/text.lerta gives as the
+# methods of Char and String. Each table is written by tools/unicode.lerta from the Unicode
+# Character Database: UInt32 values, little-endian, in rows of a fixed width, sorted by their first
+# value, which a binary search finds.
+import char_at, is_continuation, sequence_length from './utf8'
 import './unicode/case_ignorable.bin' as CASE_IGNORABLE: Binary
 import './unicode/cased.bin' as CASED: Binary
 import './unicode/letters.bin' as LETTERS: Binary
@@ -13,29 +14,112 @@ import './unicode/special_upper.bin' as SPECIAL_UPPER: Binary
 import './unicode/upper.bin' as UPPER: Binary
 import './unicode/uppercase.bin' as UPPERCASE: Binary
 
+# The classes of a character: Unicode's general categories L and N, and its properties Lowercase,
+# Uppercase and White_Space. An ASCII character is tested alone, so that ASCII text reads no table,
+# and an optimized program that tests `c.is_ascii()` first holds no table, as it reads none.
+export is_letter := (c: Char) -> c in 'a'..='z' or c in 'A'..='Z' or is_wide(c, LETTERS)
+export is_numeric := (c: Char) -> c in '0'..='9' or is_wide(c, NUMBERS)
+export is_lower := (c: Char) -> c in 'a'..='z' or is_wide(c, LOWERCASE)
+export is_upper := (c: Char) -> c in 'A'..='Z' or is_wide(c, UPPERCASE)
+
+# White_Space, which takes no table: ASCII text pays a comparison more at most, as the others are
+# apart.
+export is_space := (c: Char) ->
+  code := c.to_int()
+  return is_ascii_space(code) if code < 0x80
+  is_wide_space(code)
+
+# The simple case mappings, of one character to one: the character itself where it has none.
+export upper := (c: Char) -> mapped_char(c, upper_of, UPPER)
+export lower := (c: Char) -> mapped_char(c, lower_of, LOWER)
+
+# The full case mappings, which may give more than one character, as `ß` gives `SS`: those of
+# SpecialCasing.txt that hold in any context and language, and the simple ones for the others,
+# with a capital sigma that ends a word lowered to `ς`.
+export upper_text := (text: String) -> mapped_text(text, upper_of, wide_upper)
+export lower_text := (text: String) -> mapped_text(text, lower_of, wide_lower)
+
+# Whether the character is beyond ASCII and in the ranges of the table.
+is_wide := (c: Char, ranges: Binary) -> not c.is_ascii() and in_ranges(ranges, c.to_int())
+
+# The ASCII characters of White_Space: a space, and `\t`, `\n`, `\v`, `\f` and `\r`.
+is_ascii_space := (code: Int) -> code == 0x20 or code in 0x09..=0x0D
+
+# The characters of White_Space beyond ASCII.
+is_wide_space := (code: Int) ->
+  code in [0x85, 0xA0, 0x1680, 0x2028, 0x2029, 0x202F, 0x205F, 0x3000] or code in 0x2000..=0x200A
+
+upper_of := (b: Byte) ->
+  if b in b'a'..=b'z'
+    b - b'a' + b'A'
+  else
+    b
+lower_of := (b: Byte) ->
+  if b in b'A'..=b'Z'
+    b - b'A' + b'a'
+  else
+    b
+
+# The Char mapped: by `ascii` if it is ASCII, without a table, and else by the simple mappings.
+mapped_char := (c: Char, ascii: (Byte) -> Byte, mappings: Binary) ->
+  code := c.to_int()
+  if code < 0x80
+    ascii(code.to_byte()!).to_char()
+  else
+    simple_mapping(mappings, code).to_char()!
+
+# The String with each character mapped: an ASCII one by `ascii`, as a byte below 0x80 of valid
+# UTF-8 is a whole character, and any other by `wide`, given the bytes and its place, as the
+# characters around it may change its mapping.
+mapped_text := (text: String, ascii: (Byte) -> Byte, wide: (Binary, Int) -> String) ->
+  bytes := text.binary
+  var mapped = ''
+  var i = 0
+  while i < bytes.length
+    byte := bytes[i]
+    if byte < 0x80
+      mapped += ascii(byte).to_char()
+      i += 1
+    else
+      mapped += wide(bytes, i)
+      i += sequence_length(byte)
+  mapped
+
+wide_upper := (bytes: Binary, i: Int) -> full_mapping(SPECIAL_UPPER, UPPER, char_at(bytes, i))
+
+# A capital sigma that ends a word is `ς`, and any other `σ`.
+wide_lower := (bytes: Binary, i: Int) ->
+  c := char_at(bytes, i)
+  return 'ς' if c == 'Σ' and is_final_sigma(bytes, i)
+  full_mapping(SPECIAL_LOWER, LOWER, c)
+
+# Whether the capital sigma at `i` ends a word, as SpecialCasing.txt's Final_Sigma says: a cased
+# character comes before it, and none after it, past the case-ignorable ones, as an apostrophe.
+is_final_sigma := (bytes: Binary, i: Int) ->
+  var before = i
+  while before > 0
+    before -= 1
+    before -= 1 while is_continuation(bytes[before])
+    code := char_at(bytes, before).to_int()
+    continue if in_ranges(CASE_IGNORABLE, code)
+    return in_ranges(CASED, code) and not cased_after(bytes, i + 'Σ'.byte_count())
+  false
+
+# Whether a cased character comes at `i` or after it, past the case-ignorable ones.
+cased_after := (bytes: Binary, i: Int) ->
+  var at = i
+  while at < bytes.length
+    code := char_at(bytes, at).to_int()
+    at += sequence_length(bytes[at])
+    continue if in_ranges(CASE_IGNORABLE, code)
+    return in_ranges(CASED, code)
+  false
+
 # The rows of a range, its first and last code points; of a simple mapping, a code point and the
 # one it maps to; and of a full mapping, a code point and those it maps to, with zeros after them.
 RANGE_WIDTH := 2
 MAPPING_WIDTH := 2
 FULL_WIDTH := 4
-
-# The general categories L and N, and the properties Lowercase, Uppercase, Cased and
-# Case_Ignorable.
-export is_letter := (code: Int) -> in_ranges(LETTERS, code)
-export is_number := (code: Int) -> in_ranges(NUMBERS, code)
-export is_lowercase := (code: Int) -> in_ranges(LOWERCASE, code)
-export is_uppercase := (code: Int) -> in_ranges(UPPERCASE, code)
-export is_cased := (code: Int) -> in_ranges(CASED, code)
-export is_case_ignorable := (code: Int) -> in_ranges(CASE_IGNORABLE, code)
-
-# The simple case mappings, of one code point to one: the code point itself where it has none.
-export simple_upper := (code: Int) -> simple_mapping(UPPER, code)
-export simple_lower := (code: Int) -> simple_mapping(LOWER, code)
-
-# The full case mappings, which may give more than one character, as `ß` gives `SS`: those of
-# SpecialCasing.txt that hold in any context and language, and the simple ones for the others.
-export full_upper := (c: Char) -> full_mapping(SPECIAL_UPPER, UPPER, c)
-export full_lower := (c: Char) -> full_mapping(SPECIAL_LOWER, LOWER, c)
 
 in_ranges := (table: Binary, code: Int) ->
   row := row_at_or_before(table, RANGE_WIDTH, code) else return false
