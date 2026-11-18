@@ -14,12 +14,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `lerta fmt` reports nothing for `x := a then b then c else d else e`.
 - How to fix it: have the rewrite of Parentheses add them around the inner value, after which `parts_of` finds each value.
 
-## The formatter drops the parentheses of a negated call on a number literal
-
-- Where: the rewrite of Parentheses in `compiler/format/parentheses.lerta` takes the parentheses of `-(1.abs())` to change nothing, though `-1.abs()` is a call on the literal `-1`.
-- How to see it: `lerta fmt` reports `its rewrites would change the program, which is a fault of the formatter` for `print -(1.abs())`, and leaves the file.
-- How to fix it: keep the parentheses after a prefix `-` around a value that starts with a number literal.
-
 ## The formatter fails on a call whose named arguments are each on a line in parentheses
 
 - Where: the layout of a statement's call in `compiler/format/`, which takes away the parentheses and leaves the named arguments partly on the line. *Unverified* where.

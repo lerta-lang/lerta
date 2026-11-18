@@ -9,7 +9,7 @@ import
 from '../ast'
 import CLOSING_BRACKETS from '../lexer/tokens'
 import Place, places_of from './places'
-import runs_to_end, starts_with_parenthesis from './forms'
+import leftmost, runs_to_end, starts_with_parenthesis from './forms'
 import
   ADDITIVE, binary_precedence, cast_of, COALESCE, COMPARISON, CONDITIONAL, is_cast, is_negated_test,
   NOT, OR, POSTFIX, precedence, PREFIX, RANGE
@@ -226,13 +226,13 @@ patterns_of := (case_value: Case): Operand[] ->
 
 is_number := (expression: Expression) -> expression is IntegerLiteral | FloatLiteral
 
-# `not (x is not T)` and `-(1)` keep theirs, which `not x is not T` and `-1` would read otherwise,
-# and so does `-(x ** 2)` (see prefix_operand).
+# `not (x is not T)` and `-(1.abs())` keep theirs, which `not x is not T` and `-1.abs()`, of the
+# literal `-1`, would read otherwise, and so does `-(x ** 2)` (see prefix_operand).
 unary_operand := (unary: UnaryOperation): Operand ->
   { operand } := unary
   if unary.operator == 'not'
     return { expression: operand, level: NOT, last: true, clarified: is_negated_test(operand) }
-  negates_number := unary.operator == '-' and is_number(operand)
+  negates_number := unary.operator == '-' and is_number(leftmost(operand))
   { expression: operand, level: PREFIX, last: true, clarified: negates_number or is_power(operand) }
 
 # The operand of a prefix operator, which a `**` keeps its parentheses in, as `-x ** 2` is an error
