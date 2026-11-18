@@ -24,18 +24,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
   ```
 - How to fix it: lay the tuple out with an item on each line, as it does the parameters of a function with such a comment.
 
-## One `lerta fmt --fix` leaves a type that the next one leaves out
-
-- Where: the check of the types left out, in `compiler/format/`, which keeps every type of the file when the functions of the program rewritten are not those of the file, as they are not once `(a, b) -> a.compare(b)` is left out of a `sorted`. *Unverified* that this is the cause.
-- How to see it: of this file, `lerta fmt --fix` writes `xs.sorted()`, reports `leave out the type that can be inferred` and keeps `x: Int`; run again, it writes `x := 1 + 2`:
-  ```lerta
-  x: Int = 1 + 2
-  print x
-  xs := [3, 1, 2]
-  print xs.sorted((a, b) -> a.compare(b))
-  ```
-- How to fix it: compare the types of the declarations and functions that both programs have.
-
 ## `lerta fmt --fix` leaves the CRLF line ends inside a multiline string
 
 - Where: the layout in `compiler/format/` writes a string literal's token as it is, with the line ends inside it.
