@@ -1,9 +1,9 @@
 # The walk of statements and blocks (see walk.lerta).
 import
-  Assignment, Binding, Call, Case, CaseArm, Condition, Declaration, EnumDeclaration, Extend, Extern,
-  For, FunctionTypeName, If, Import, ImportName, InterfaceDeclaration, Intrinsic, MemberDeclaration,
-  Pass, Position, Statement, StringLiteral, Try, TypeAlias, TypeDeclaration, TypeParameter,
-  UnaryOperation, UnionMember, UnionTypeName, While
+  Assignment, Binding, Call, Case, CaseArm, Condition, Conditional, Declaration, EnumDeclaration,
+  Extend, Extern, For, FunctionTypeName, If, Import, ImportName, InterfaceDeclaration, Intrinsic,
+  MemberDeclaration, Pass, Position, Statement, StringLiteral, Try, TypeAlias, TypeDeclaration,
+  TypeParameter, UnaryOperation, UnionMember, UnionTypeName, While
 from '../ast'
 import TokenKind from '../lexer/tokens'
 import BRANCHES, StyleRule from './rules'
@@ -261,11 +261,7 @@ extend Walker
         @take ':=', ONE
         @operand condition.value, ONE
       when UnaryOperation
-        written :=
-          if keyword in ['unless', 'until']
-            condition.operand
-          else
-            condition
+        written := keyword in ['unless', 'until'] then condition.operand else condition
         @operand written, ONE
       else @operand(condition, ONE)
 
@@ -323,11 +319,7 @@ extend Walker
     args_at := node.args_position else return @members(members, head)
     args := [member for member in members when member.in_args]
     others := groups_of([member for member in members when not member.in_args])
-    position := (i: Int) ->
-      if i == 0
-        args_at
-      else
-        others[i - 1].position()
+    position := (i: Int) -> i == 0 then args_at else others[i - 1].position()
     @in_block head, others.length + 1, position, (i, gap) ->
       if i > 0
         return @member_group(others[i - 1], gap)
@@ -345,11 +337,7 @@ extend Walker
     @take IDENTIFIER, ONE
     { members } := node
     @in_block head, members.length, (i) -> members[i].position, (i, gap) ->
-      kind: TokenKind =
-        if members[i] is StringLiteral
-          STRING
-        else
-          IDENTIFIER
+      kind: TokenKind = members[i] is StringLiteral then STRING else IDENTIFIER
       @take kind, gap
 
   extend_declaration := (node: Extend, before: CodeGap) ->
@@ -396,11 +384,7 @@ extend Walker
       starts := @at in @line_starts
       @take '|', ONE if i > 0 and not starts
       members.push @at
-      gap: CodeGap =
-        if starts
-          LineStart @depth + 1
-        else
-          ONE
+      gap: CodeGap = starts then LineStart(@depth + 1) else ONE
       @type member, gap
     @shapes.push UnionShape(members, last: @at - 1)
 
@@ -477,16 +461,8 @@ extend Walker
   in_block := (head: Int, count: Int, position: (Int) -> Position, walk: (Int, CodeGap) -> void) ->
     line := (i: Int) ->
       start := @starts[position(i)]
-      first :=
-        if start != nil and start in @line_starts
-          start
-        else
-          nil
-      next :=
-        if i + 1 < count
-          position i + 1
-        else
-          nil
+      first := start != nil and start in @line_starts then start
+      next := i + 1 < count then position(i + 1)
       @on_line first, next, -> walk(i, LineStart(@depth))
     @shapes.push @lines_block(@depth + 1, head, count, line)
     @close head, true
@@ -589,6 +565,7 @@ extend Walker
       keeps_lines := block.statements.any((each) -> each.shapes.any(is_kept_chain))
       joinable := one and
         is_inline(first) and
+        not is_two_way_arm(first, rule) and
         not (postfix and @in_brackets) and
         not @has_comments(head, @at) and
         not keeps_lines
@@ -596,7 +573,7 @@ extend Walker
       @close head, true
       return { head, block, joinable, rule }
     unhandled() if written.length != 1
-    joinable := is_inline(written[0])
+    joinable := is_inline(written[0]) and not is_two_way_arm(written[0], rule)
     outer_shapes := @shapes
     outer_line := @on_own_line
     @shapes = []
@@ -666,11 +643,7 @@ extend Walker
     @breaks_operations = breaks
     shapes := @shapes
     @shapes = outer
-    then_at :=
-      if @at_kind('then')
-        @take 'then', ONE
-      else
-        nil
+    then_at := @at_kind('then') then @take('then', ONE)
     body := @body(then_at else start, arm.body, BRANCHES)
     ArmShape(
       start
@@ -709,3 +682,7 @@ groups_of := (members: MemberDeclaration[]) ->
     else
       groups.push { members: [member], private_block: block }
   groups
+
+# An arm whose body is a two-way value goes in a block, as on the line of the arm its `then` would
+# read as a chain's (see Branches).
+is_two_way_arm := (body: Statement, rule: StyleRule) -> rule == BRANCHES and body is Conditional

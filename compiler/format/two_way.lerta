@@ -1,8 +1,7 @@
-# Two-way values too long for one line by their leaves (see Branches): `c then a else b` whose
-# condition or a value has more leaves than TWO_WAY_LEAVES is written as an `if`, and a chain of
-# them, `a then x else b then y else z`, as a `case`. Where the value is the whole value of a
-# statement on one line, which a block can hold, the formatter writes it so; elsewhere it reports
-# it.
+# Two-way values too long for one line by their leaves (see Branches): `c then a else b` of more
+# leaves than TWO_WAY_LEAVES, or that holds another, is written as an `if`, and a chain of them,
+# `a then x else b then y else z`, as a `case`. Where the value is the whole value of a statement on
+# one line, which a block can hold, the formatter writes it so; elsewhere it reports it.
 import
   Assignment, Conditional, Declaration, Expression, Interpolation, operands_of, Position, Return,
   Statement
@@ -11,7 +10,7 @@ import CodePart from '../lexer/string_literal'
 import CLOSING_BRACKETS, depth_change, Token, tokenize_fragment, TokenKind from '../lexer/tokens'
 import COMPARISON_WORDS from '../parser/expression'
 import Change, Edit from './edits'
-import leaves, Span, TWO_WAY_LEAVES from './leaves'
+import Span, two_way_leaves, TWO_WAY_LEAVES from './leaves'
 import CHAINED_VALUES, LONG_TWO_WAY_VALUES, StyleRule from './rules'
 import is_layout from './text'
 import Tokens from './tokens'
@@ -25,9 +24,9 @@ chain_of := (conditional: Conditional) ->
 is_chained := (conditional: Conditional) ->
   not conditional.without_else and conditional.else_value is Conditional
 
-# A chain, or a value with a part of more leaves than TWO_WAY_LEAVES, reported at its start, unless
-# a statement's rewrite or the chain around it takes it, which `taken` holds; it takes the
-# conditionals of the chain after it.
+# A chain, or a value of more leaves than TWO_WAY_LEAVES or that holds another, reported at its
+# start, unless a statement's rewrite or the chain around it takes it, which `taken` holds; it takes
+# the conditionals of the chain after it.
 export long_two_way_report := (tokens: Tokens, conditional: Conditional, taken: Set<Expression>) ->
   taken.add link for link in chain_of(conditional)[1..]
   return nil if conditional in taken
@@ -80,10 +79,7 @@ holds := (token: Token, position: Position) ->
 # The rule that the value breaks, if it breaks one.
 export rule_of := (code: Token[], parts: Parts): StyleRule? ->
   return CHAINED_VALUES if parts.conditions.length > 1
-  if is_long_two_way(code, parts.first, parts.last)
-    LONG_TWO_WAY_VALUES
-  else
-    nil
+  is_long_two_way(code, parts.first, parts.last) then LONG_TWO_WAY_VALUES
 
 # The value of a statement that a block in its place can hold.
 export whole_value := (statement: Statement): Expression? ->
@@ -133,11 +129,7 @@ export long_two_way_edit := (tokens: Tokens, statement: Statement): Edit? ->
   written := lead + two_way_block(tokens, parts, rule, columns)
 
   # The brackets after it go back to the line's depth below the block.
-  closing :=
-    if last > parts.last
-      "\n" + ' '.repeat(line_columns)
-    else
-      ''
+  closing := last > parts.last then "\n" + ' '.repeat(line_columns) else ''
   change := Change(from, to: tokens.end(parts.last), text: written + closing)
   tokens.edit_at(rule, at, [change])
 
@@ -244,16 +236,34 @@ export is_wrapped := (tokens: Tokens, first: Int) ->
   callee_end := first > 1 and tokens.code[first - 2].kind in [IDENTIFIER, ')', ']']
   not callee_end or opening.spaced
 
-# Whether the two-way value of the code tokens from `first` up to `last` is a chain or has a part
-# of more leaves than TWO_WAY_LEAVES, which the rewrite of the value writes as an `if` or a `case`
-# where a block can take it, and reports elsewhere.
+# Whether the two-way value of the code tokens from `first` up to `last` is a chain, has more
+# leaves than TWO_WAY_LEAVES or holds another, which the rewrite of the value writes as an `if` or a
+# `case` where a block can take it, and reports elsewhere.
 export is_long_two_way := (code: Token[], first: Int, last: Int) ->
   words := words_of(code, first, last)
   return true if words.filter((word) -> code[word].kind == 'then').count() > 1
   var start = first
+  parts: Span[]
   for end in [words..., last + 1]
-    return true if leaves(code, { first: start, last: end - 1 }) > TWO_WAY_LEAVES
+    parts.push { first: start, last: end - 1 }
     start = end + 1
+  two_way_leaves(code, parts) > TWO_WAY_LEAVES or parts.any((part) -> holds_two_way(code, part))
+
+# Whether the code of a part of a two-way value holds another two-way value, but in the body of a
+# function, which is a scope of its own (see Branches).
+export holds_two_way := (code: Token[], part: Span) ->
+  var depth = 0
+  var function_depth = -1
+  for at in part.first..=part.last
+    { kind } := code[at]
+    depth += depth_change(kind)
+
+    # A function's body ends with the brackets around it or at the comma after it.
+    ends_function := depth < function_depth or (depth == function_depth and kind == ',')
+    function_depth = -1 if ends_function
+    continue if function_depth >= 0
+    function_depth = depth if kind == '->'
+    return true if kind == 'then'
   false
 
 # The `then`s and `else`s outside brackets from `first` up to `last`, or up to where the value ends

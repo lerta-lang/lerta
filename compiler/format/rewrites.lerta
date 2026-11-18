@@ -34,9 +34,11 @@ import typed_edits, typed_statement_edits, Typed from './typed'
 import union_test_edits from './union_tests'
 import comprehension_edit, spread_comprehension from './comprehensions'
 import argument_values, long_argument_edits, whole_call from './argument_block'
-import interpolated_values, long_two_way_edit, long_two_way_report, whole_value from './two_way'
+import
+  holds_two_way, interpolated_values, long_two_way_edit, long_two_way_report, whole_value
+from './two_way'
 import returned_branches from './returned_branches'
-import leaves, Span, TWO_WAY_LEAVES from './leaves'
+import Span, two_way_leaves, TWO_WAY_LEAVES from './leaves'
 import written_return, written_type_edits from './written_types'
 
 export rewrites_of := (
@@ -164,7 +166,8 @@ class Rewriting
             long_two_way_report(tokens, conditional, @taken)
         ]
       when FunctionLiteral then [without_parameters(tokens, value)]
-      when UnaryOperation then value in @claimed then [] else [@negation_edit(value)]
+      when UnaryOperation
+        value in @claimed then [] else [@negation_edit(value)]
       when RecordLiteral
         [
           for field in value.fields
@@ -318,7 +321,8 @@ two_way_value := (tokens: Tokens, value: Expression?) ->
     { first: if_at + 1, last: condition_end }
     { first: then_at, last: then_end }
     { first: else_at, last: else_end }
-  return nil if spans.any((span) -> leaves(tokens.code, span) > TWO_WAY_LEAVES)
+  long := two_way_leaves(tokens.code, spans) > TWO_WAY_LEAVES
+  return nil if long or spans.any((span) -> holds_two_way(tokens.code, span))
 
   start := tokens.start(if_at)
   change := Change(from: start, to: tokens.end(else_end), text: written)
@@ -342,10 +346,7 @@ bare_argument := (tokens: Tokens, part: Statement) ->
   call := part as Call else return nil
   first := call.args.first()?.position else call.named_args.first()?.name.position else return nil
   at := tokens.at(first) else return nil
-  if tokens.is_kind(at - 1, '(')
-    nil
-  else
-    at
+  tokens.is_kind(at - 1, '(') then nil else at
 
 # A statement that is one expression, which a two-way value can hold, but not one that leaves the
 # function, which gives no value.
@@ -372,7 +373,8 @@ literal_edit := (tokens: Tokens, index: Int) ->
 single_quoted_text := (token: Token, written: String) ->
   return nil if token.end_line > token.line
   case token.kind
-    when STRING then written.starts_with('"') then token.text
+    when STRING
+      written.starts_with('"') then token.text
     when BINARY
       return nil unless written.starts_with('b"')
       parts := token.parts else return nil

@@ -2,6 +2,12 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
+## fmt rewrites a two-way value in a function literal that a `then` value ends with
+
+- Where: the rewrite of a long two-way value in `compiler/format/two_way.lerta`, where the value is the body of a function literal that is the `then` value of another two-way value: its tokens run on to the `else` of the outer value.
+- How to see it: `y := x > 0 then (z: Int) -> z > 1 then 1 else 2 else (q: Int) -> 3` in a function: `lerta fmt` says its rewrites would make the program fail to check.
+- How to fix it: end the inner value before the `else` of the outer one, or leave a value inside a function literal of a part to the rewrite of the outer value.
+
 ## A heading's anchor drops the combining marks
 
 - Where: `slug` in `site/markdown.lerta` keeps the letters and numbers of a heading, and `_`, but not its combining marks (general category M) nor its connector punctuation (Pc) but `_`, which GitHub keeps too, as std tells no class of them.
