@@ -52,25 +52,24 @@ A rope keeps a concatenation as a tree, so that `+` is O(1).
 
 ## Unicode
 
-The classes, the case and the normal forms of the characters beyond ASCII, which the methods of `Char` and `String` tell and change for ASCII alone so far (see [the reference](../reference/types.md#char)). In three steps:
+The classes, the case and the normal forms of the characters beyond ASCII, which the methods of `Char` and `String` tell and change for ASCII alone so far (see [the reference](../reference/types.md#char)). They become Unicode's under the same names, in the builtins; no method is kept for ASCII alone. In three steps:
 
-1. **Spaces in the builtins.** `c.is_space()` tells every character of Unicode's White_Space, as U+3000, which takes no table: a test of the 25 characters by ranges. Below 0x80 it tests as now, and the characters above take a second branch, so that ASCII text pays a comparison at most.
+1. **Spaces.** `c.is_space()` tells every character of Unicode's White_Space, as U+3000, which takes no table: a test of the 25 characters by ranges. Below 0x80 it tests as now, and the characters above take a second branch, so that ASCII text pays a comparison at most.
+   - `c.is_ascii()` and `s.is_ascii()` are added, for the code that takes ASCII alone, as a format or a protocol does: `c.is_ascii() and c.is_alphanumeric()`.
    - A `Byte`'s methods stay those of ASCII, by tests of their own rather than those of the `Char` of the same number: a byte above 0x7F is part of a UTF-8 sequence, not a character, and `0xA0.is_space()` or `0xC3.is_letter()` would break the code that reads text byte by byte.
-2. **Classes and case in `std:unicode`.** Whether a character is a letter (general category L), a number (N), lower or upper case, and its case mapped: simple, one character to one, for a `Char`, and full, as `ß` to `SS`, for a `String`.
+   - JSON's spaces are its four alone, so its reader stops taking them by `is_space`.
+2. **Classes and case.** Whether a character is a letter (general category L), a number (N), lower or upper case, and its case mapped: simple, one character to one, for a `Char`, and full, as `ß` to `SS`, for a `String`.
    - `c.is_digit()` stays `0` to `9`, as code tests it before it takes the value as `c.to_int() - '0'.to_int()`, which `'٣'` would break.
+   - What takes ASCII alone tests it first: the tokens of HTTP and the schemes of URLs, whose names a case mapped beyond ASCII would match otherwise, as the Kelvin sign `K` lowered is `k`; and Lerta's names, in the editor's completion and in the formatter, as the lexer reads them.
    - The headings' anchors of the site then take GitHub's (see [docs/issues.md](../issues.md)).
-3. **Normal forms in `std:unicode`.** NFC, NFD, NFKC and NFKD, by UAX #15: the decompositions, canonical and compatibility, ordered by the combining classes, then composed, the compositions excluded left out, and Hangul by its arithmetic. A quick check by the NFC_QC and NFKC_QC properties returns a String already normal as it is, as an ASCII one is.
+3. **Normal forms.** `s.normalize(form)`, of NFC, NFD, NFKC and NFKD, by UAX #15: the decompositions, canonical and compatibility, ordered by the combining classes, then composed, the compositions excluded left out, and Hangul by its arithmetic. A quick check by the NFC_QC and NFKC_QC properties returns a String already normal as it is, as an ASCII one is.
 
-The tables are in `std:unicode` rather than in the builtins, as top-level arrays are made as a program starts (see [top-level values](../reference/functions.md#top-level-values)): only a program that imports it makes them, and making them on their first use would spare one that imports it and does not use them. A script generates them from the files of the Unicode Character Database of one version, and the normal forms are tested against its NormalizationTest.txt.
+### Tables
 
-### Open questions
-
-- **How the classes and case beyond ASCII are named,** next to the methods of the builtins, which stay ASCII:
-  - Functions of `std:unicode`, as Python's `unicodedata`: `is_letter(c)`. Explicit, but two of each name, `c.is_letter()` and `is_letter(c)`, are easy to confuse.
-  - Methods that `std:unicode` adds by `extend Char`, which its import brings: they take other names than the builtins'.
-  - The builtins renamed, `c.is_ascii_letter()`, so that `is_letter` is `std:unicode`'s alone: clear names, but every caller rewritten.
-- Whether the tables are made on their first use, measured against making them as the program starts.
-- Where the generator and the files of the Unicode Character Database are kept, and NormalizationTest.txt.
+- Each table is a file of std, a `Binary` that std:builtins [embeds](../reference/modules.md#embedded-files), so that it is a constant, which no program makes as it starts. Its entries are of a fixed size, sorted, and found by a binary search: a range, its first and last code points, of a class; a code point and its mapping, of a case.
+- An optimized program, linked with LTO, keeps only those of the methods it calls; this is to be measured.
+- The compiler carries std's Binary files as it carries its sources (see [embedded files](../internals/architecture.md#embedded-files)), and gives them by a function of their own, as a `Binary`.
+- A script of `tools/` generates the tables from the files of the Unicode Character Database of one version, kept in `third_party/ucd/`, NormalizationTest.txt among them, against which the normal forms are tested.
 
 ## Regular expressions
 
