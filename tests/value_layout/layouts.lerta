@@ -1,0 +1,227 @@
+import check_program from '../../compiler/compile'
+import value_layout from '../../compiler/checker/value_layout'
+import ProgramWide from '../../compiler/checker/shared'
+import format_type, Type from '../../compiler/types'
+import write_file from 'std:io'
+
+# The layout of each struct of the program, and of the anonymous structs and tuples of its fields:
+# its size and alignment, its fields by their places as declared and their types in the order laid
+# out, and the field whose null is nil of its optional type.
+# The members of an enum of `count` of them, around the most that a byte tells apart.
+members := (count: Int) -> ["  M#{i}" for i in 0..count].join("\n")
+
+SOURCE := """
+  enum Kind
+    NAME
+    NUMBER
+
+  interface Shape
+    area: () -> Float
+
+  class Node
+    args
+      value: Int
+
+  struct Empty
+    pass
+
+  struct Position
+    line: Int32
+    column: Int32
+
+  struct Token
+    kind: Kind
+    start: Int32
+    pos: Position
+
+  struct Flags
+    a: Bool
+    b: Int
+    c: Bool
+
+  struct Names
+    first: String
+    last: String
+
+  struct Triple
+    a: Int
+    b: Int
+    c: Int
+
+  struct List
+    head: Int
+    tail: List?
+
+  struct Even
+    next: Odd?
+
+  struct Odd
+    next: Even?
+
+  struct Wrapper
+    list: List
+    node: Node
+
+  struct Optionals
+    count: Int?
+    pos: Position?
+
+  struct OptionalNames
+    names: Names?
+
+  struct OptionalPair
+    pair: (Int, Int)?
+
+  struct Holder
+    shape: Shape
+
+  struct Anonymous
+    pair: (Int, String)
+    record: { done: Bool, count: Int }
+    triple: (Int, Int, Int)
+
+  struct Box<T>
+    value: T
+
+  struct Padded
+    count: Int32
+    done: Bool
+
+  struct Maybe
+    count: Int?
+
+  struct MaybeKind
+    kind: Kind?
+
+  struct OptionalShape
+    shape: Shape?
+
+  struct NamesInside
+    names: Names
+
+  struct OptionalHolder
+    holder: Holder?
+
+  struct Wide
+    kind: Big
+    done: Bool
+
+  struct Outer
+    inner: Inner
+
+  struct Inner
+    next: Loop?
+
+  struct Loop
+    next: Inner?
+
+  struct Scalars
+    letter: Char
+    ratio: Float32
+    small: Int16
+    tiny: UInt16
+    byte: Byte
+    signed: Int8
+
+  struct Real
+    value: Float
+
+  struct MaybeEmpty
+    empty: Empty?
+
+  struct MaybePosition
+    pos: Position?
+
+  struct Mixed
+    done: Bool
+    kind: Kind?
+    count: Int32?
+
+  struct NestedTwice
+    holder: Holder
+
+
+  struct MaybeList
+    list: List?
+
+  struct TwoMaybes
+    a: Int32?
+    b: Int32?
+
+  struct ByteKind
+    kind: Byte256
+
+  enum Byte256
+  #{members(256)}
+
+  enum Big
+  #{members(257)}
+
+  boxed: Box<Int> = { value: 1 }
+  names: Box<Names> = { value: { first: 'a', last: 'b' } }
+  print names.value.first
+  print boxed.value
+  """
+
+NAMES :=
+  'Empty'
+  'Position'
+  'Token'
+  'Flags'
+  'Names'
+  'Triple'
+  'List'
+  'Even'
+  'Odd'
+  'Wrapper'
+  'Optionals'
+  'OptionalNames'
+  'OptionalPair'
+  'Holder'
+  'Anonymous'
+  'Box<Int>'
+  'Node'
+  'Box<T>'
+  'Padded'
+  'Maybe'
+  'MaybeKind'
+  'OptionalShape'
+  'NamesInside'
+  'OptionalHolder'
+  'Wide'
+  'Outer'
+  'Inner'
+  'Scalars'
+  'Real'
+  'MaybeEmpty'
+  'MaybePosition'
+  'Mixed'
+  'NestedTwice'
+  'MaybeList'
+  'TwoMaybes'
+  'ByteKind'
+  'Box<Names>'
+show := (program: ProgramWide, type: Type) ->
+  name := format_type(type)
+  layout := value_layout(program, type) else return print("#{name}: not a value")
+  fields := ["#{field.index} #{format_type(field.type)}" for field in layout.fields].join(', ')
+  path := layout.nil_path
+  nil_by := path == nil then '' else ", nil by #{[place.to_string() for place in path].join('.')}"
+  print "#{name}: #{layout.size} bytes, by #{layout.alignment}: [#{fields}]#{nil_by}"
+
+await write_file('layouts_source.lerta', SOURCE)
+program := await check_program('layouts_source.lerta', false)
+
+# The entry module comes last.
+entry := program.modules.length - 1
+declared := [info for (_, info) in program.infos when info.module_index == entry]
+infos := declared + [instance for info in declared for instance in info.instances]
+for name in NAMES
+  info := infos.find((info) -> format_type(info.type) == name)!
+  show program, info.type
+
+  # A second time from what value_layout keeps.
+  show program, info.type if name == 'Token'
+  for field in info.fields
+    type := field.type!
+    show program, type if format_type(type).starts_with('(') or format_type(type).starts_with('{')

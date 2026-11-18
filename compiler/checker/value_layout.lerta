@@ -1,0 +1,153 @@
+# Which structs, anonymous structs and tuples are values rather than heap objects, and how their
+# fields are laid out in them (see docs/roadmap/language.md#types).
+# Sizes are counted as on a 64-bit target, a reference as 8 bytes, so that the IR does not depend on
+# the target, as the seed's must not; a 32-bit target's are no larger.
+import info_of from './object_types'
+import ProgramWide from './shared'
+import
+  EnumType, is_kind, is_reference_type, kind_of, ObjectType, OptionalType, RecordType, TupleType,
+  Type, TypeKind
+from '../types'
+
+export MAX_VALUE_BYTES := 16
+
+# A field of a value, as `index` among the fields as declared, a record's in name order, or among a
+# tuple's items.
+export struct LayoutField
+  index: Int
+  type: Type
+
+export struct ValueLayout
+  # Those of larger alignment first, so that no padding comes between them; else as declared.
+  fields: LayoutField[]
+  size: Int
+  alignment: Int
+
+  # The places, in `fields` and then in those of the values inside, of a reference that is never
+  # null, or of an interface value, whose data is never null: its null is then nil of the optional
+  # type of the value, which so needs no flag.
+  nil_path: Int[]?
+
+struct Room
+  size: Int
+  alignment: Int
+
+REFERENCE_ROOM := Room(size: 8, alignment: 8)
+
+# The layout of the type's values, or nil for a type that is not a value: neither a struct, an
+# anonymous struct nor a tuple, one that holds itself through its fields, or one of more bytes than
+# MAX_VALUE_BYTES.
+export value_layout := (program: ProgramWide, type: Type): ValueLayout? ->
+  layouts := program.value_layouts
+  return layouts[type] if type in layouts
+  layout := find_layout(program, type)
+  layouts[type] = layout
+  layout
+
+find_layout := (program: ProgramWide, type: Type): ValueLayout? ->
+  parts := part_types(program, type) else return nil
+  return nil if reaches(program, type, type, Set())
+  rooms: Room[]
+  for part in parts
+    room := room_of(program, part) else return nil
+    rooms.push room
+  order := [i for i in 0..parts.length].sorted_by((i) -> (-rooms[i].alignment, i))
+  size := rooms.map((room) -> room.size).sum()
+  alignment := rooms.map((room) -> room.alignment).max() else 1
+  rounded := aligned(size, alignment)
+  return nil if rounded > MAX_VALUE_BYTES
+  laid := [
+    for i in order
+      LayoutField(index: i, type: parts[i])
+  ]
+  { alignment, fields: laid, size: rounded, nil_path: nil_path_in(program, laid) }
+
+# The types of the parts that a value of the type would hold in itself: the fields of a struct, an
+# anonymous struct or a tuple; nil for another type.
+part_types := (program: ProgramWide, type: Type): Type[]? ->
+  case type
+    when ObjectType
+      return nil unless type.is_struct
+      [field.type! for field in info_of(program, type).fields]
+    when RecordType then [field.type for field in type.fields]
+    when TupleType then type.items
+    else nil
+
+# Whether `type`, or a value inside it through its parts, optional or not, holds a value of
+# `target`; `seen` keeps it from going round another cycle.
+reaches := (program: ProgramWide, type: Type, target: Type, seen: Set<Type>): Bool ->
+  parts := part_types(program, type) else return false
+  for part in parts
+    held := without_nil(part)
+    return true if held == target
+    continue if held in seen
+    seen.add held
+    return true if reaches(program, held, target, seen)
+  false
+
+without_nil := (type: Type): Type -> type is OptionalType then without_nil(type.inner) else type
+
+# The room that a part of the type takes in a value, or nil for a type of no known size, as a type
+# parameter.
+room_of := (program: ProgramWide, type: Type): Room? ->
+  if type is OptionalType
+    inner := room_of(program, type.inner) else return nil
+    return inner if null_path(program, type.inner) != nil
+    flagged := Room(inner..., size: aligned(inner.alignment + inner.size, inner.alignment))
+
+    # An optional value that is not a struct keeps its flags, whatever its size, as the `Int??` of a
+    # tuple of a generic function's `T?` of an `Int?`.
+    return flagged if value_layout(program, type.inner) == nil
+    return flagged.size <= MAX_VALUE_BYTES then flagged else REFERENCE_ROOM
+  if part_types(program, type) != nil
+    layout := value_layout(program, type) else return REFERENCE_ROOM
+    return { size: layout.size, alignment: layout.alignment }
+  return scalar_room(type) if kind_of(type) in ['Bool', 'Char', NUMBERS...]
+  return enum_room(type) if type is EnumType
+  case kind_of(type)
+    when INTERFACE then { size: 16, alignment: 8 }
+    when TYPE_PARAMETER, 'void', 'never', 'nil' then nil
+    else REFERENCE_ROOM
+
+NUMBERS: TypeKind[] =
+  'Int', 'Float', 'Float32', 'Byte', 'Int8', 'Int16', 'Int32', 'UInt16', 'UInt32', 'UInt64'
+
+scalar_room := (type: Type) ->
+  bytes :=
+    case kind_of(type)
+      when 'Bool', 'Byte', 'Int8' then 1
+      when 'Int16', 'UInt16' then 2
+      when 'Int32', 'UInt32', 'Float32', 'Char' then 4
+      else 8
+  Room(size: bytes, alignment: bytes)
+
+# An enum's place among its members takes in a value the fewest bytes that hold every place, rather
+# than the word that it takes elsewhere.
+enum_room := (type: EnumType) ->
+  count := type.members.length
+  bytes :=
+    case
+      when count <= 1 << 8 then 1
+      when count <= 1 << 16 then 2
+      else 4
+  Room(size: bytes, alignment: bytes)
+
+# The nil_path of a value of the fields laid out so.
+nil_path_in := (program: ProgramWide, fields: LayoutField[]): Int[]? ->
+  for field at place in fields
+    path := null_path(program, field.type) else continue
+    return [place, path...]
+  nil
+
+# The places of a null that no value of the type has, which so can be nil of its optional type: a
+# reference's own, the data of an interface value, or that of a value's nil_path; nil for a type
+# without one, as an optional type.
+null_path := (program: ProgramWide, type: Type): Int[]? ->
+  return nil if type is OptionalType
+  return [] if is_kind(type, INTERFACE)
+  if part_types(program, type) != nil
+    layout := value_layout(program, type) else return []
+    return layout.nil_path
+  is_reference_type(type) then []
+
+aligned := (size: Int, alignment: Int) -> (size + alignment - 1) / alignment * alignment
