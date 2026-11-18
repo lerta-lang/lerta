@@ -91,17 +91,15 @@ As a `String` has no positions (see [the reference](../reference/types.md#string
 - `re.match(s): Match?`, nil where nothing matches; `m[1]: String?` gives a group, and `m.before` and `m.after` the text around the match.
 - `re.matches(s)` iterates over the matches; `s.split(re)` and `s.replace(re, (m) -> ...)` take a pattern too.
 - Byte offsets are given by functions over a `Binary`, for code such as a lexer.
-- `\d`, `\w` and `\s` are those of the `Char` methods: `\d` and `\w` ASCII, `\s` the White_Space of [Unicode](#unicode). `(?i)` folds ASCII alone at first.
+- `\d` and `\w` are ASCII for good, `[0-9]` and `[0-9A-Za-z_]`, as in RE2, though the `Char` classes become Unicode's: a class beyond ASCII is written `\p{L}` or `\p{N}`. `\s` is `c.is_space()`, Unicode's White_Space, which RE2's is not.
+- No pattern accepted changes its meaning later: until step 1 of [Unicode](#unicode), `\p{...}` is parsed and is an error at compile time, and so is `(?i)` over a character beyond ASCII.
 
 ### Order
 
-1. Spaces in the builtins, step 1 of [Unicode](#unicode), so that `\s` is `c.is_space()` from the start rather than changing later.
-2. Regular expressions with ASCII classes. `\p{...}` is parsed, and is an error at compile time until step 4, so that no pattern accepted earlier changes its meaning then.
-   1. Dynamic patterns in `std:regex`, which change no syntax and need no seed refresh.
-   2. Literals, their check and their embedded bytecode, in one seed refresh.
-   3. Speed: a lazy DFA, and `memchr` for a literal prefix, measured in `bench/`.
-3. Steps 2 and 3 of [Unicode](#unicode).
-4. `\p{...}` and `(?i)` beyond ASCII, from the tables of `std:unicode`.
+1. Dynamic patterns in `std:regex`, which change no syntax and need no seed refresh.
+2. Literals, their check and their embedded bytecode, in one seed refresh.
+3. Speed: a lazy DFA, and `memchr` for a literal prefix, measured in `bench/`.
+4. After step 1 of [Unicode](#unicode), `\p{...}` and `(?i)` beyond ASCII, from its tables.
 
 ## What the compiler needs
 
