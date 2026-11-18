@@ -9,22 +9,31 @@ import
 from '../ast'
 import CLOSING_BRACKETS from '../lexer/tokens'
 import Place, places_of from './places'
+import enclosed_last from './expression_tokens'
 import leftmost, runs_to_end, starts_with_parenthesis from './forms'
 import
   ADDITIVE, binary_precedence, cast_of, COALESCE, COMPARISON, CONDITIONAL, is_cast, is_negated_test,
   NOT, OR, POSTFIX, precedence, PREFIX, RANGE
 from './precedence'
 import PARENTHESES from './rules'
-import Edit from './edits'
+import Change, Edit from './edits'
 import Tokens from './tokens'
 
-# An expression in its place: how tightly it must bind there, whether it ends what holds it, so
-# that it may run to the end of the line, and whether the style asks for parentheses around it.
+# An expression in its place.
 struct Operand
   expression: Expression
+
+  # How tightly it must bind there.
   level: Int
+
+  # Whether it ends what holds it, so that it may run to the end of the line.
   last: Bool
+
+  # Whether the parentheses around it stay, as they clarify it.
   clarified := false
+
+  # Whether the style asks for parentheses around it, which stay, and are added where it has none.
+  asked := false
 
 # A place that takes any expression, such as an argument or a value.
 WHOLE_LEVEL := 0
@@ -92,8 +101,12 @@ class ParenthesesWalk
         @operands_checked part if part.expression in unvisited
 
     check := (operand: Operand) ->
-      clarified := operand.clarified or operand.expression in @in_then_values
-      @found.push edit if edit := dropped(@tokens, { operand..., clarified })
+      clarified := operand.clarified or operand.asked or operand.expression in @in_then_values
+      own := Operand(operand..., clarified)
+      if edit := dropped(@tokens, own)
+        @found.push edit
+      else if operand.asked
+        @found.push edit if edit := added(@tokens, own)
 
 # The fallbacks of the expression outside brackets, through the operations that hold them.
 bare_fallbacks := (expression: Expression): Expression[] ->
@@ -217,6 +230,18 @@ comprehension_operands := (comprehension: Comprehension) ->
 map_key := (key: Expression) ->
   Operand(expression: key, level: WHOLE_LEVEL, last: true, clarified: key is Identifier)
 
+# The parentheses that clarify the operand, where the source has none; reported alone where its last
+# token is not found.
+added := (tokens: Tokens, operand: Operand) ->
+  { expression } := operand
+  open := tokens.at(expression.position) else return nil
+  return nil if is_parenthesized(tokens, open, expression, operands_of(operand))
+  first := tokens.start(open)
+  last := enclosed_last(tokens, expression) else return tokens.report(PARENTHESES, first)
+  after := tokens.end(last)
+  changes: Change[] = [{ from: first, to: first, text: '(' }, { from: after, to: after, text: ')' }]
+  tokens.edit_at(PARENTHESES, first, changes)
+
 patterns_of := (case_value: Case): Operand[] ->
   [
     { expression: pattern, level: OR, last: false }
@@ -243,7 +268,7 @@ prefix_operand := (operand: Expression) ->
 is_power := (expression: Expression) ->
   expression is BinaryOperation and expression.operator == '**'
 
-# `and` mixed with `or` is clarified.
+# The style asks for parentheses around `and` mixed with `or`.
 binary_operands := (binary: BinaryOperation, last: Bool) ->
   return power_operands(binary, last) if binary.operator == '**'
   level := binary_precedence(binary.operator)
@@ -254,12 +279,12 @@ binary_operands := (binary: BinaryOperation, last: Bool) ->
     expression: binary.left
     level: compares then COALESCE else level
     last: false
-    clarified: mixes(binary.left)
+    asked: mixes(binary.left)
   right := Operand
     last
     expression: binary.right
     level: compares then COALESCE else level + 1
-    clarified: mixes(binary.right)
+    asked: mixes(binary.right)
   [left, right]
 
 # `**` groups to the right, and its base takes no prefix operator (see parse_power), so `(-x) ** 2`
@@ -278,18 +303,21 @@ is_negative_number := (expression: Expression) ->
   else
     false
 
-# An end that is an operation is clarified (see Ranges).
+# The style asks for parentheses around an end that is an operation (see Ranges); a step keeps
+# those that it has.
 range_ends := (range: Range, last: Bool) ->
-  end_of := (value: Expression, flags: { last: Bool }) ->
+  end_of := (value: Expression, flags: { last: Bool, step: Bool }) ->
     is_operation := value is BinaryOperation | UnaryOperation
-    Operand(expression: value, level: ADDITIVE, last: flags.last, clarified: is_operation)
+    clarified := flags.step and is_operation
+    asked := not flags.step and is_operation
+    Operand(clarified, asked, expression: value, level: ADDITIVE, last: flags.last)
   ends: Operand[]
   if start := range.start
-    ends.push end_of(start, last: false)
+    ends.push end_of(start, last: false, step: false)
   if end := range.end
-    ends.push end_of(end, last: last and range.step == nil)
+    ends.push end_of(end, last: last and range.step == nil, step: false)
   if step := range.step
-    ends.push end_of(step, last: last)
+    ends.push end_of(step, last: last, step: true)
   ends
 
 # The parentheses of `(x as T?) else y` are those of Cast fallbacks, which leaves them out.
@@ -303,17 +331,12 @@ coalesce_operands := (coalesce: Coalesce, last: Bool) ->
       COALESCE
   [value, Operand(last, expression: coalesce.fallback, level: fallback_level)]
 
-# A `then`/`else` inside the `then` value of another is clarified.
+# The style asks for parentheses around a `then`/`else` inside the `then` value of another.
 conditional_operands := (conditional: Conditional, last: Bool) ->
   { then_value } := conditional
   operands: Operand[] =
     { expression: conditional.condition, level: OR, last: false }
-    {
-      expression: then_value
-      level: CONDITIONAL
-      last: false
-      clarified: then_value is Conditional
-    }
+    { expression: then_value, level: CONDITIONAL, last: false, asked: then_value is Conditional }
   unless conditional.without_else
     operands.push { last, expression: conditional.else_value, level: CONDITIONAL }
   operands

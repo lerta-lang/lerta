@@ -1,7 +1,11 @@
 # The tokens that the rewrites replace: where an expression starts and ends and its text, where a
 # statement ends, and the arguments of a call.
-import BinaryOperation, Expression, Member, Position, UnaryOperation from '../ast'
-import depth_change from '../lexer/tokens'
+import
+  BinaryOperation, BooleanLiteral, Call, Coalesce, Conditional, Expression, FloatLiteral,
+  Identifier, Index, IntegerLiteral, Member, NilLiteral, Position, Range, StringLiteral, This,
+  UnaryOperation
+from '../ast'
+import depth_change, TokenKind from '../lexer/tokens'
 import Change from './edits'
 import Tokens from './tokens'
 
@@ -61,6 +65,52 @@ export last_token := (tokens: Tokens, value: Expression) ->
     at + 1
   else
     at
+
+# The last token of the value, after the parentheses around it: its last name, literal, operand or
+# closing bracket; nil for one of another form, as a function or a string with interpolations.
+export enclosed_last := (tokens: Tokens, value: Expression): Int? ->
+  var last = unparenthesized_last(tokens, value) else return nil
+
+  # The value in parentheses has the position of the outer `(`, and so does an operation whose
+  # first operand is in parentheses of its own: those that close after its last token are its.
+  start := tokens.at(value.position) else return nil
+  var open = start
+  open += 1 while tokens.is_kind(open, '(')
+  while open > start
+    open -= 1
+    last += 1 if tokens.matching(open) == last + 1
+  last
+
+unparenthesized_last := (tokens: Tokens, value: Expression): Int? ->
+  case value
+    when Member then tokens.at(value.name.position)
+    when UnaryOperation then enclosed_last(tokens, value.operand)
+    when BinaryOperation then enclosed_last(tokens, value.right)
+    when Conditional
+      enclosed_last(tokens, value.without_else then value.then_value else value.else_value)
+    when Coalesce then enclosed_last(tokens, value.fallback)
+    when Range
+      last_part := value.step else value.end else return nil
+      enclosed_last(tokens, last_part)
+    when Call then bracket_after(tokens, value.callee, '(')
+    when Index then bracket_after(tokens, value.object, '[')
+    when Identifier, IntegerLiteral, FloatLiteral, BooleanLiteral, NilLiteral, StringLiteral, This
+      var at = tokens.at(value.position) else return nil
+      at += 1 while tokens.is_kind(at, '(')
+
+      # `-1` is one literal of two tokens, found by the first.
+      if tokens.is_kind(at, '-')
+        at + 1
+      else
+        at
+    else nil
+
+# The bracket that closes the one after the value, which opens the arguments of a call on it or an
+# index into it.
+bracket_after := (tokens: Tokens, value: Expression, open: TokenKind): Int? ->
+  before := enclosed_last(tokens, value) else return nil
+  return nil unless tokens.is_kind(before + 1, open)
+  tokens.matching(before + 1)
 
 # Where the value starts: its first operand, or the object of a path of fields.
 export first_position := (value: Expression): Position ->
