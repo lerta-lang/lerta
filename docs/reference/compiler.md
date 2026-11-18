@@ -725,7 +725,7 @@ lerta license
 
 ### Names
 
-- Each compiled runtime is a directory of its object files, `function_attributes.txt` and `coro_end_type.txt`, and of the objects of standard modules, `module-<hash>.o`, the hash being of the module's LLVM IR, in 16 hex digits as the runtime's.
+- Each compiled runtime is a directory of its object files, `function_attributes.txt` and `coro_end_signature.txt`, and of the objects of standard modules, `module-<hash>.o`, the hash being of the module's LLVM IR, in 16 hex digits as the runtime's.
 - It is named so that a person can tell them apart, such as `runtime-debug-arm64-apple-darwin25.6.0-clang17-3F9A2C1D8E4B7065`:
   - the kind: `debug`, or `release` with `-O`, or `release-checked` with `-O --memory-checks`;
   - the target, or without one the host's, as `clang --version` gives it;

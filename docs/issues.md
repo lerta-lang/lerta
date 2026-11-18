@@ -2,12 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## clang 15 fails to build a coroutine with `--source-lines -O`
-
-- Where: the debug information that `--source-lines` gives the code of a function that awaits, under clang 15 (Ubuntu 22.04's) with `-O`. clang 21 on macOS and llvm-mingw on Windows build it.
-- How to see it: `import sleep from 'std:time'`, then `await sleep(0.01)`, built with `lerta build -O --source-lines` on Ubuntu 22.04: clang stops with `Intrinsic has incorrect argument type!` for `@llvm.coro.end` and `Broken module found`.
-- How to fix it: find what the debug information changes in the coroutine's IR that clang 15's verifier rejects, as the type that `llvm.coro.end` is declared with.
-
 ## A heading's anchor drops the combining marks
 
 - Where: `slug` in `site/markdown.lerta` keeps the letters and numbers of a heading, and `_`, but not its combining marks (general category M) nor its connector punctuation (Pc) but `_`, which GitHub keeps too, as std tells no class of them.

@@ -16,18 +16,18 @@ RUNTIME_PATHS := [path for path in EMBEDDED_PATHS when path.starts_with('runtime
 
 # Where the cache keeps what it reads from the IR that clang writes (see CachedRuntime).
 ATTRIBUTES_FILE := 'function_attributes.txt'
-CORO_END_FILE := 'coro_end_type.txt'
+CORO_END_FILE := 'coro_end_signature.txt'
 
 # The runtime's object files, and the attributes that clang gives its functions, as the target's
 # CPU, which the program's functions must have too for LLVM to inline the runtime's into them; and
-# the libraries that libuv is linked with; and the type that clang's LLVM gives llvm.coro.end. Its
-# directory keeps the objects of standard modules too (see cached_module_object).
+# the libraries that libuv is linked with; and the signature that clang's LLVM gives llvm.coro.end.
+# Its directory keeps the objects of standard modules too (see cached_module_object).
 export struct CachedRuntime
   dir: String
   objects: String[]
   function_attributes: String
   libraries: String[]
-  coro_end_type: String
+  coro_end_signature: String
 
 # The runtime for a kind of build, compiled into the cache first if it does not have it; nil if
 # clang fails, after printing its messages. `temp_dir` is the build's own temporary directory.
@@ -48,8 +48,8 @@ export cached_runtime := (kind: BuildKind, temp_dir: String) ->
   ]
   runtime := ->
     function_attributes := await read_text_or_throw(join(dir, ATTRIBUTES_FILE))
-    coro_end_type := await read_text_or_throw(join(dir, CORO_END_FILE))
-    CachedRuntime(dir, objects, function_attributes, coro_end_type, libraries: build.libraries)
+    coro_end_signature := await read_text_or_throw(join(dir, CORO_END_FILE))
+    CachedRuntime(dir, objects, function_attributes, coro_end_signature, libraries: build.libraries)
   return await runtime() if is_complete(files)
   if files.any(is_file)
     # Another build may have renamed its runtime into place meanwhile, which puts all the files
@@ -288,7 +288,7 @@ compile_runtime := (kind: BuildKind, build: PlatformBuild, staging_dir: String, 
   return false unless await run_clang_jobs(jobs)
   ir := await clang_probe_ir(flags, temp_dir) else return false
   await write_file(join(staging_dir, ATTRIBUTES_FILE), function_attributes(ir))
-  await write_file(join(staging_dir, CORO_END_FILE), coro_end_type(ir))
+  await write_file(join(staging_dir, CORO_END_FILE), coro_end_signature(ir))
   true
 
 # The IR that clang writes, with `flags`, for a function that ends a coroutine; nil if clang fails.
@@ -320,13 +320,16 @@ attribute_group_of_function := (ir: String) ->
 
 TARGET_ATTRIBUTES := ['target-cpu', 'target-features', 'tune-cpu']
 
-# The type that clang's LLVM gives llvm.coro.end, which LLVM 23 changed from i1 to void, as in
-# `declare i1 @llvm.coro.end(ptr, i1, token)`.
-coro_end_type := (ir: String) ->
+# The signature that clang's LLVM gives llvm.coro.end, as `i1 @llvm.coro.end(ptr, i1)` from
+# `declare i1 @llvm.coro.end(ptr, i1) #1`. LLVM 16 added a token parameter and LLVM 23 changed the
+# result from i1 to void.
+coro_end_signature := (ir: String) ->
   missing := CompileError('clang IR has no declaration of llvm.coro.end')
   is_declaration := (line: String) -> line.starts_with('declare ') and ' @llvm.coro.end(' in line
   declaration := ir.lines().find(is_declaration) else throw missing
-  declaration.split(' ')[1]
+  (_, signature) := declaration.split_once(' ')!
+  (parameters, _) := signature.split_once(')')!
+  "#{parameters})"
 
 is_complete := (files: String[]) -> files.all(is_file)
 

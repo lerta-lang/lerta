@@ -48,7 +48,7 @@ runtime_file_names := ->
     for source in build.libuv_sources
     when source.ends_with('.c')
   ]
-  [runtime..., libuv..., 'function_attributes.txt', 'coro_end_type.txt'].sorted()
+  [runtime..., libuv..., 'function_attributes.txt', 'coro_end_signature.txt'].sorted()
 
 thinlto_entries := (cache: String): String[] ->
   directory := "#{cache}/#{LTO_CACHE}"
@@ -63,6 +63,12 @@ thinlto_entries := (cache: String): String[] ->
   entries.sorted()
 
 MODULE_PREFIX := 'module-'
+
+# The signatures of llvm.coro.end before LLVM 16, before LLVM 23 and from it on.
+CORO_END_SIGNATURES :=
+  'i1 @llvm.coro.end(ptr, i1)'
+  'i1 @llvm.coro.end(ptr, i1, token)'
+  'void @llvm.coro.end(ptr, i1, token)'
 
 # The objects of standard modules that the runtime `name` keeps, each with when it was written.
 module_objects := (cache: String, name: String): String[] ->
@@ -85,15 +91,15 @@ complete_runtime := (cache: String, name: String) ->
   file_reasons := expect_left("the files of #{name}", expected_files, files)
   return file_reasons unless file_reasons.is_empty()
   attributes := await read_text_or_throw("#{dir}/function_attributes.txt")
-  coro_end_type := await read_text_or_throw("#{dir}/coro_end_type.txt")
+  coro_end_signature := await read_text_or_throw("#{dir}/coro_end_signature.txt")
   [
     reason_unless(
       '"target-cpu"=' in attributes
       "no target-cpu in function_attributes.txt: #{attributes}"
     )...
     reason_unless(
-      ['i1', 'void'].contains(coro_end_type)
-      "not a type in coro_end_type.txt: #{coro_end_type}"
+      coro_end_signature in CORO_END_SIGNATURES
+      "not a signature in coro_end_signature.txt: #{coro_end_signature}"
     )...
   ]
 

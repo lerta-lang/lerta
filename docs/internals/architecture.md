@@ -144,6 +144,8 @@ The steps for a new feature:
 
 - The seed's IR, and so minilerta's, is for LLVM before 23, whose `llvm.coro.end` returns an `i1`, which the IR drops.
   - For a clang whose LLVM declares it `void`, which the Makefile finds by compiling a call of it, the Makefile rewrites the declaration and the calls in that IR before clang builds it (`build/host_llvm.sed`).
+- The IR that `dump-llvm` prints, the seed's among it, passes `llvm.coro.end` the `token` that LLVM 16 added. LLVM 15 declares it `(ptr, i1)` and checks the call only in a module with debug information, which the seed's IR has not.
+- A build gives `llvm.coro.end` the signature that clang declares it with, which it reads from a call that clang compiles (`coro_end_signature` in `compiler/runtime_cache.lerta`).
 - The IR, the seed's and the compiler's own, uses:
   - opaque pointers (`ptr`), which LLVM 15 made its default and LLVM 14 reads only with `-opaque-pointers`;
   - the `presplitcoroutine` attribute, which LLVM 15 took in place of LLVM 14's `"coroutine.presplit"`, and which no flag makes LLVM 14 read.
