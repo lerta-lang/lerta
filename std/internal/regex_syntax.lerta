@@ -1,4 +1,4 @@
-# The syntax of std:regex's patterns, RE2's (see docs/reference/std.md#stdregex): a pattern parsed
+# The syntax of Regex's patterns, RE2's (see docs/reference/types.md#regex): a pattern parsed
 # into a tree, with its flags applied, so that the tree has none: `(?i)` makes classes of letters,
 # `(?s)` and `(?m)` choose the class of `.` and the assertions of `^` and `$`.
 
@@ -57,14 +57,29 @@ export MAX_REPEAT := 1000
 MAX_DEPTH := 1000
 MAX_CODE_POINT := 0x10FFFF
 
-export parse := (pattern: String): Syntax | PatternError ->
+# The pattern parsed under the flags, letters of FLAGS that flags_error accepts, as if `(?flags)`
+# began it.
+export parse := (pattern: String, flags = ''): Syntax | PatternError ->
   parser := Parser([c for c in pattern])
+  parser.flags = { case_insensitive: 'i' in flags, multi_line: 'm' in flags, dot_all: 's' in flags }
   try
     node := parser.parse_alternation()
     parser.fail "unmatched ')'" unless parser.done()
     Syntax(node, group_count: parser.names.length - 1, names: parser.names)
   catch e: Invalid
     PatternError(message: e.message, column: e.at + 1)
+
+# The letters that Regex's `flags` may hold, each once, as a literal's are to (see
+# docs/roadmap/strings.md#literals).
+export FLAGS := 'ims'
+
+# Why the flags are invalid, or nil.
+export flags_error := (flags: String) ->
+  seen: Set<Char>
+  for c in flags
+    return "unknown flag '#{c}': flags are #{FLAGS}" unless c in FLAGS
+    return "flag '#{c}' given twice" unless seen.add(c)
+  nil
 
 struct Invalid: Error
   message: String

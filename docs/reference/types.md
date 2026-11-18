@@ -3,7 +3,7 @@
 | Kind | Types |
 |---|---|
 | Numbers | `Int`, `Byte`, the [sized integers](#sized-integers) such as `Int32`, `Float`, `Float32` |
-| Text and bytes | `Char`, `String`, `Binary` |
+| Text and bytes | `Char`, `String`, `Binary`, `Regex` |
 | Other builtin types | `Bool`, `T[]`, `Map<K, V>`, `Set<T>`, `Iter<T>`, `Promise<T>` and `Promise` |
 | Composed | `T?`, unions `A \| B`, function types, anonymous structs such as `{ x: Int }`, tuples such as `(Int, String)` |
 | Named | classes, structs, enums, interfaces and `type` aliases |
@@ -379,6 +379,49 @@ These throw a `ValueError`:
 
 - `index_of` gives nil whenever `from` is past the end. An empty `part` occurs at `from` when `from` is at most the length. A negative `from` throws an `IndexError`.
 - `for b in bytes` and comprehensions go through the bytes (see [for](control-flow.md#for-and-ranges)).
+
+## Regex
+
+- A `Regex` finds text by a pattern of [RE2's syntax](https://github.com/google/re2/wiki/Syntax). A search takes time linear in the text, whatever the pattern: no pattern takes exponential time, as one can by backtracking. `find_all`, `split` and `replace` search again from each match's end, so that one whose search runs on to the end of the text each time, as `\w*z|c` over `ccc...`, takes time quadratic in it, as in RE2.
+- So it has no lookaround (`(?=...)`, `(?<=...)`) and no backreferences (`\1`), which a pattern cannot be matched by in linear time; they are errors.
+- A pattern is matched by code points, not bytes: `.` matches `é` whole.
+- A match is the leftmost, and of those at one place, the one that backtracking would find first, as in Perl and RE2: alternatives in order, a greedy repeat as long as it goes, a lazy one (`*?`) as short. Unlike JavaScript, a repeat may take a round that matches nothing: `(a*)*` gives its group `''` where JavaScript leaves it out.
+- It gives text, not positions, as a `String` has none (see [String](#string)).
+
+```lerta
+pair := Regex('(?<key>\w+)\s*=\s*(\d+)')
+found := pair.find('width = 42')!
+print "#{found.named('key')!}: #{found.groups[2]!}"
+print Regex('\s+').split(' a  b ')
+```
+
+| Name | |
+|---|---|
+| `Regex(pattern)`, `Regex(pattern: String, flags: String)` | The pattern compiled, with the flags, letters of `i`, `m` and `s` each once, as if `(?flags)` began it. Throws a `ValueError` for an invalid pattern, which says why and at which column, in code points: `invalid regular expression at column 3: missing ')': ab(c`; and for invalid flags: `invalid regular expression flags: unknown flag 'x': flags are ims`. |
+| `r.pattern: String`, `r.flags: String` | The pattern and the flags as given. |
+| `r.test(text: String): Bool` | Whether the pattern matches anywhere in the text. |
+| `r.find(text: String): Match?` | The first match, or nil. |
+| `r.find_all(text: String): Iter<Match>` | The matches, from the start, that do not overlap. After an empty match, the next is looked for a code point on; after another, at its end, where an empty one may follow it, as in JavaScript: `a*` finds `''`, `'aaa'`, `''` and `''` in `'baaac'`. |
+| `r.split(text: String): String[]` | The pieces between the matches, as `s.split(separator)` gives them. As in JavaScript, an empty match at the end of the text, or where a piece would start, splits nothing off: `x*` splits `'abc'` into `['a', 'b', 'c']`. |
+| `r.replace(text: String, by: String \| ((Match) -> String)): String` | The text with each match of `find_all` replaced by `by`, a `String` as it is, `$1` being no group, or what the function gives for the match. |
+| `m.text: String` | The text matched. |
+| `m.groups: String?[]` | The text of each group, from 0, the whole match, then the groups in the order of their `(`; nil for a group that took no part. |
+| `m.named(name: String): String?` | The text of the group of the name, `(?<name>...)`, or nil if it took no part. Throws a `ValueError` for a name the pattern does not give. |
+| `m.before(): String`, `m.after(): String` | The text before and after the match. |
+
+### Syntax
+
+| | |
+|---|---|
+| Characters | A character matches itself; `\` before a character that is not a letter or a digit makes it one, as `\.`; `\n`, `\t`, `\r`, `\f`, `\v`, `\a`, `\xHH` and `\x{H...}` are those code points. |
+| Classes | `.` any code point but `\n`; `[abc]`, `[a-z]`, `[^...]`; `\d` `0` to `9`, `\w` `[0-9A-Za-z_]`, `\s` the spaces of [`c.is_space()`](#methods-and-conversions), and `\D`, `\W`, `\S` the others. `\d` and `\w` stay ASCII. |
+| Assertions | `^` and `$` the start and the end of the text, `\A` and `\z` always so; `\b` and `\B` at and not at a boundary of `\w`. `$` does not match before a last `\n`, as in RE2. |
+| Groups | `(...)` captures, `(?<name>...)` or `(?P<name>...)` with a name, `(?:...)` does not. |
+| Repeats | `*`, `+`, `?`, `{n}`, `{n,}`, `{n,m}`, each lazy with `?` after it. A count is at most 1000; a `{` that starts no count is itself. |
+| Flags | `(?i)` case-insensitive, `(?m)` `^` and `$` at lines too, `(?s)` `.` matches `\n`, to the end of the group; `(?i-s)` sets and clears; `(?i:...)` within the group. |
+
+- `(?i)` is for ASCII so far, with the Kelvin sign and the long s that Unicode folds with `k` and `s`: a character beyond ASCII under it is an error. So is `\p{...}`, a class of Unicode. Both are planned (see [the roadmap](../roadmap/strings.md#regular-expressions)), and are errors until then so that no pattern accepted changes its meaning.
+- POSIX classes, `[[:alpha:]]`, are errors.
 
 ## Constant expressions
 

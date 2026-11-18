@@ -64,6 +64,10 @@ The least and the greatest [Int](types.md#int): `-9223372036854775808` and `9223
 
 The normal forms of Unicode, an enum that [`s.normalize(form)`](types.md#string) takes: `NFC`, `NFD`, `NFKC` and `NFKD`.
 
+## Regex and Match
+
+The classes of regular expressions and their matches (see [Regex](types.md#regex)).
+
 ## Stringable
 
 - An [interface](objects.md#interfaces) with one member, `to_string: () -> String`. [String interpolation](syntax.md) goes through it.

@@ -51,7 +51,7 @@ A rope keeps a concatenation as a tree, so that `+` is O(1).
 
 ## Regular expressions
 
-The patterns of [std:regex](../reference/std.md#stdregex), as literals too, and faster.
+The patterns of [Regex](../reference/types.md#regex), as literals too, and faster.
 
 - Literals are **syntax-checked at compile time**, and their program is embedded in the binary, so that none is parsed at run time. No machine code is generated.
 - The compiler compiles a literal with std's own code, `std/internal/regex_compile.lerta`, which it imports by its path, as no program can import `std:internal/...`: its program, a `Binary`, and the error, with its column, which the compiler reports at the literal. A `Regex` is then made from the embedded program, without parsing.
@@ -65,10 +65,12 @@ A literal is written `/.../`, as in JavaScript.
 - **Where one ends.** As a string literal ends at its quote: read from the left, a `\` takes the character after it, whatever it is, and the first `/` not so taken ends the literal; a line break before it is an error. `/a\\\/b/` is `\\` and `\/`, and goes on to the last `/`.
   - `[...]` is no exception, as it is in JavaScript: `/[/]/` ends at its second `/`, and the `[` left open is an error at compile time. It is written `/[\/]/`. So the lexer needs to know no syntax of patterns.
   - The lexer only finds where a literal ends; the pattern compiler reads `\/` as `/`.
+- **Flags** follow the closing `/`, the letters right after it: `/abc/i`. They are those of `Regex`'s `flags`, `i`, `m` and `s`, each once, as if `(?flags)` began the pattern; another letter is an error at compile time. `/a/ if x` takes none, as a space follows the `/`.
+- A literal's `Regex` is constructed from the program that the compiler embeds, which `Regex`'s private argument `program` takes, without parsing at run time.
 
 ### Matches
 
-- `s.split(re)` and `s.replace(re, by)` as methods of `String`, if `Regex` is a builtin type (see [open questions](#open-questions)).
+- `s.split(re)` and `s.replace(re, by)` as methods of `String`.
 - Byte offsets, given by functions over a `Binary`, for code such as a lexer.
 
 ### Order
@@ -88,5 +90,3 @@ In the compiler and std, the positions that text handling needs fall in three ki
 ## Open questions
 
 - Whether the lexer reads bytes, as Go's, Rust's and Zig's do, which suits a syntax of ASCII (an ASCII byte never occurs inside a multi-byte character), or code points, through a std:scanner `Scanner`. Either way, columns could be counted when a diagnostic needs one, rather than through a table per line (`count_code_points`).
-- Whether `Regex` is a builtin type or one of `std:regex`; the compiler must know it for literals.
-- Whether `a/b`, without whitespace, divides, as `a-b` subtracts, or the rule narrows to "after a value, a `/` with whitespace after it divides".

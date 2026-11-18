@@ -1,22 +1,18 @@
 # Regular expressions of RE2's syntax, matched in time linear in the text (see
-# docs/reference/std.md#stdregex).
-import compile_pattern, Program from './internal/regex_compile'
-import PatternError from './internal/regex_syntax'
-import Searcher from './internal/regex_vm'
-import lerta_string_slice, sequence_length from './internal/utf8'
-
-# The pattern compiled, or a ValueError that says why it is invalid and where.
-export compile := (pattern: String) ->
-  program := compile_pattern(pattern)
-  if program is PatternError
-    at := "at column #{program.column}"
-    throw ValueError("invalid regular expression #{at}: #{program.message}: #{pattern}")
-  Regex(pattern, program)
+# docs/reference/types.md#regex).
+import compile_pattern, Program from '../internal/regex_compile'
+import flags_error, PatternError from '../internal/regex_syntax'
+import Searcher from '../internal/regex_vm'
+import lerta_string_slice, sequence_length from '../internal/utf8'
 
 export class Regex
   args
     pattern: String
-    private program: Program
+    flags := ''
+
+    # The pattern compiled, which literals are to give as the compiler compiles them (see
+    # docs/roadmap/strings.md#literals).
+    private program: Program = compiled(@pattern, @flags)
 
   test := (text: String) -> @searcher(text).find(0) != nil
 
@@ -103,3 +99,13 @@ group_text := (source: String, slots: Int[], index: Int) ->
     lerta_string_slice(source, start, slots[2 * index + 1])
   else
     nil
+
+# The program of the pattern under the flags, or a ValueError that says why they are invalid and
+# where.
+compiled := (pattern: String, flags: String) ->
+  throw ValueError("invalid regular expression flags: #{message}") if message := flags_error(flags)
+  program := compile_pattern(pattern, flags)
+  if program is PatternError
+    at := "at column #{program.column}"
+    throw ValueError("invalid regular expression #{at}: #{program.message}: #{pattern}")
+  program
