@@ -249,7 +249,12 @@ export generate_function := (
   else
     g.result_type = type.result
     generate_body type.result
-    finish g, "#{linkage}#{ir_return_type(type.result)} #{symbol}(#{params.join(', ')})"
+
+    # A function that never returns throws or ends the program: a cold path, kept out of its
+    # callers, so that those stay short enough to be inlined themselves.
+    attributes := is_kind(type.result, 'never') then ' cold noinline' else ''
+    signature := "#{ir_return_type(type.result)} #{symbol}(#{params.join(', ')})#{attributes}"
+    finish g, "#{linkage}#{signature}"
   fewest := with_defaults then required_params(literal) else literal.params.length
   for given in fewest..literal.params.length
     entry_generator := function_generator(g.code, g.extensions, g.facts, g.function_name)
