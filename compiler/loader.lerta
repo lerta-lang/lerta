@@ -10,8 +10,8 @@ import Token, tokenize from './lexer/tokens'
 import parse, parse_partially from './parser/statement'
 import base_name, dir_name, join, relative from 'std:path'
 import
-  given_sources, is_standard_name, module_location, read_entry_source, read_source, standard_import,
-  standard_names, standard_source
+  given_sources, is_standard_name, module_location, read_entry_source, read_source, standard_file,
+  standard_import, standard_names, standard_source
 from './source'
 
 export class Module
@@ -172,7 +172,7 @@ with_embedded := (program: Statement[], key: String, location: String): Promise<
 embedded_declaration := (statement: Import, key: String, location: String) ->
   type := statement.type!
   is_text := embeds_text(type, location)
-  bytes := await read_file(embedded_file(statement, key, location))
+  bytes := await embedded_contents(statement, key, location)
   { position } := statement
   value :=
     if is_text
@@ -192,18 +192,20 @@ embeds_text := (type: TypeName, location: String) ->
   { line, column } := type.position
   compile_error(location, line, column, 'a file is embedded as a Binary or a String')
 
-# The file that an import embeds, relative to the importing one, by its whole name.
-embedded_file := (statement: Import, key: String, location: String) ->
+# The contents of the file that an import embeds, relative to the importing module, by its whole
+# name: of a file of std, which the compiler carries, for a module of std.
+embedded_contents := (statement: Import, key: String, location: String) ->
   path := statement.module
   is_relative := path.starts_with('./') or path.starts_with('../')
   unless is_relative
     import_error statement, location, 'a file is embedded by a path that starts with ./ or ../'
   if is_standard_name(key)
-    import_error statement, location, "cannot find '#{path}' in std"
+    missing := "cannot find '#{path}' in std"
+    return standard_file(key, path) else import_error(statement, location, missing)
   file := join(dir_name(key), path)
   unless is_file(file)
     import_error statement, location, "cannot find '#{path}'"
-  file
+  await read_file(file)
 
 builtins_import := (): Statement ->
   Import(names: [], module: BUILTINS_MODULE, position: { line: 1, column: 1 })

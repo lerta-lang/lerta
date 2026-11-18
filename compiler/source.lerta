@@ -2,7 +2,7 @@
 # compiler carries (see build/embedded.lerta); and reading their source text, which must be
 # valid UTF-8.
 import is_file, read_text, real_path from 'std:io'
-import EMBEDDED_PATHS, embedded_source from '../build/embedded'
+import embedded_bytes, EMBEDDED_PATHS, embedded_source from '../build/embedded'
 import CompileError from './errors'
 import base_name, dir_name, join, stem from 'std:path'
 
@@ -50,6 +50,14 @@ export standard_import := (from: String, relative: String) ->
   source := embedded_source(file_of(module)) else return nil
   { module, source }
 
+# The contents of the file of std that a module of std embeds by the relative path, its whole name,
+# or nil if std holds no such file (see docs/reference/modules.md#embedded-files).
+export standard_file := (from: String, relative: String) ->
+  path := join(dir_name(file_of(from)), relative)
+  return nil unless path.starts_with(STD_DIR)
+  return bytes if bytes := embedded_bytes(path)
+  embedded_source(path)?.binary
+
 # The standard module that the file at the path is, as `std:internal/utf8` of
 # std/internal/utf8.lerta, or nil: a file of a module that the compiler carries, in a directory std/
 # that holds builtins.lerta, as the repository's. `lerta fmt` checks such a file as that module, as
@@ -69,11 +77,12 @@ export standard_module_of := (path: String) ->
   else
     nil
 
-# The names of the standard modules, from their embedded paths.
+# The names of the standard modules, from the embedded paths of their sources, not of std's tables.
 export standard_names := ->
   name_of := (path: String) ->
     "#{STD_PREFIX}#{path.without_prefix(STD_DIR)!.without_suffix(SOURCE_EXTENSION)!}"
-  names := [name_of(path) for path in EMBEDDED_PATHS when path.starts_with(STD_DIR)]
+  is_source := (path: String) -> path.starts_with(STD_DIR) and path.ends_with(SOURCE_EXTENSION)
+  names := [name_of(path) for path in EMBEDDED_PATHS when is_source(path)]
   [name for name in names when not is_nested_name(name)]
 
 # The entry sources that the command line gives in place of files, standard input for `-`, by the

@@ -65,6 +65,35 @@ embed_nothing := ->
   ran := await run_command(executable, [], dir)
   [expect_status(0, ran.status)..., compare_output('stdout', b"[]\ntrue\n", ran.stdout)...]
 
+BINARY_PROGRAM := """
+  import embedded_bytes, embedded_source, EMBEDDED_PATHS from './embedded'
+  import read_file from 'std:io'
+
+  print EMBEDDED_PATHS
+  print embedded_bytes('table.bin') == await read_file('table.bin')
+  print [embedded_source('table.bin') == nil, embedded_bytes('text.txt') == nil]
+  print embedded_source('text.txt')!
+  """
+
+# Embeds a .bin file, which is no UTF-8, as a Binary, and a text file beside it as a String: each
+# is given only by the function of its kind.
+embed_binary := ->
+  dir := new_cli_dir('embed-binary')
+  await write_file("#{dir}/table.bin", b"\0\xFF\xC3")
+  await write_file("#{dir}/text.txt", 'text')
+  await write_file("#{dir}/main.lerta", BINARY_PROGRAM)
+  embedded := await run_command(
+    "#{root_dir}/build/build#{host_executable_suffix}"
+    ['embed', 'embedded.lerta', 'table.bin', 'text.txt']
+    dir
+  )
+  succeed 'embed', embedded
+  executable := "#{dir}/main#{host_executable_suffix}"
+  succeed 'build', await run_command(compiler, ['build', 'main.lerta', '-o', executable], dir)
+  ran := await run_command(executable, [], dir)
+  printed := b"['table.bin', 'text.txt']\ntrue\n[true, true]\ntext\n"
+  [expect_status(0, ran.status)..., compare_output('stdout', printed, ran.stdout)...]
+
 # `lerta license` prints the notices that the compiler carries, each under its path, without the
 # repository's files, which a directory of its own does not hold.
 license_check := ->
@@ -86,6 +115,9 @@ export checks: Check[] =
     await license_check()
   }
   { name: 'embed writes a module of no file', run: -> await embed_nothing() }
+  { name: 'embed gives a .bin file as a Binary, apart from the text files', run: ->
+    await embed_binary()
+  }
   { name: 'embed writes a module below the files, which it imports by paths from there', run: ->
     await embed_round_trip('embed-below', './data.txt', "'./data.txt'", 'build/out/embedded')
   }

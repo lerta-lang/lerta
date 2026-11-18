@@ -67,6 +67,7 @@ import './notice.txt' as NOTICE: String
 - The path starts with `./` or `../`, relative to the importing file, as a module's, but it is the file's whole name: no `.lerta` is added.
 - `export './file' as NAME: Binary` embeds the file and exports the name, as `export` before the `const` would.
 - An unused name warns as an unused `const` does.
+- A standard module embeds a file of those that the compiler carries (see [embedded files](../internals/architecture.md#embedded-files)): std's sources and its tables, `.bin` files.
 
 ## Exports
 
