@@ -14,16 +14,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `lerta fmt` reports nothing for `x := a then b then c else d else e`.
 - How to fix it: have the rewrite of Parentheses add them around the inner value, after which `parts_of` finds each value.
 
-## The formatter fails on a tuple with a comment after an item's comma
-
-- Where: the layout of a tuple in `compiler/format/`, which writes the items after such a comment so that the tuple does not close. *Unverified* where.
-- How to see it: `lerta fmt` reports `its rewrites would not parse: ... expected ')', found end of line, which is a fault of the formatter` for this; an array written so is laid out, `1  # c` and `2` in a block:
-  ```lerta
-  x := (1, # c
-    2)
-  ```
-- How to fix it: lay the tuple out with an item on each line, as it does the parameters of a function with such a comment.
-
 ## The site renders some Markdown otherwise than GitHub, without an error
 
 - Where: `site/markdown.lerta`, which is to fail on what it does not render: `closing_emphasis` and `closing_bracket` do not pass over a `\` escape, `emphasis` takes no run of three `*`, and `unsupported_inline` and `unsupported_block` do not name what follows.

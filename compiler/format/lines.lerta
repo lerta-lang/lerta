@@ -327,14 +327,21 @@ export class Breaker
     # The list's items on lines of their own inside its brackets.
     open := (list: ListShape, base: Int) ->
       item_last := (i: Int) -> @item_last(list, i)
-      @lay_out_items list.items, item_last, base + 1, list.simple, list.commas, list.close
+      { items, simple, commas, close, lines } := list
+      @lay_out_items items, item_last, base + 1, simple, commas, close, lines
       @gaps[list.close] = LineStart(depth: base, rule: LONG_LISTS)
 
     # Items on lines of their own at `depth`, before `close` if it closes them: as many on a line as
     # fit if all are simple, with a comma ending each line but the last, and otherwise one on each
-    # line, without commas.
+    # line, without commas where `lines` lets line ends separate them.
     lay_out_items := (
-      items: Int[], item_last: (Int) -> Int, depth: Int, simple: Bool, commas: Bool?, close: Int?
+      items: Int[]
+      item_last: (Int) -> Int
+      depth: Int
+      simple: Bool
+      commas: Bool?
+      close: Int?
+      lines = true
     ) ->
       count := items.length
       after_comment := items.any((item) -> @follows_comment(item))
@@ -343,7 +350,7 @@ export class Breaker
           i
       ]
       shares := simple and not after_comment and spanning.is_empty()
-      if count > 1 and commas != shares
+      if count > 1 and commas != shares and (shares or lines)
         if shares
           @with_commas items
         else
