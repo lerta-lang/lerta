@@ -2,7 +2,10 @@
 # is_nil_by_null for interface values).
 import ProgramWide from '../checker/shared'
 import emit_branch, IrBuilder from './ir_builder'
-import emit_interface_data, ir_type, is_nil_by_null, is_reference, LERTA_IMMORTAL from './lerta_ir'
+import
+  emit_interface_data, ir_type, is_nil_by_null, is_reference, LERTA_IMMORTAL, value_layout_of,
+  without_nil
+from './lerta_ir'
 import optional_type, OptionalType, Type from '../types'
 
 # The IR constant for nil of the optional type.
@@ -85,18 +88,34 @@ emit_mapped := (ir: IrBuilder, pointer: String, from: String[], to: String[]) ->
     mapped = ir.assign("select i1 #{is_replaced}, ptr #{to[i]}, ptr #{mapped}")
   mapped
 
-# The pointer of a reference, or the data of an interface value, which is null for nil.
-pointer_of := (ir: IrBuilder, operand: String, type: Type) ->
+# The pointer of a reference, the data of an interface value, or the pointer at the nil_path of a
+# value, which is null for nil.
+pointer_of := (ir: IrBuilder, operand: String, type: Type): String ->
+  if (place, part_type) := nil_part(ir, type)
+    value := ir.assign("extractvalue #{ir_type(ir.program, type)} #{operand}, #{place}")
+    return pointer_of(ir, value, part_type)
   if is_reference(ir.program, type)
     operand
   else
     emit_interface_data(ir, operand)
 
 # The value with its pointer (see pointer_of) replaced by `shift` of it.
-with_pointer := (ir: IrBuilder, operand: String, type: Type, shift: (String) -> String) ->
+with_pointer := (ir: IrBuilder, operand: String, type: Type, shift: (String) -> String): String ->
+  value_type := ir_type(ir.program, type)
+  if (place, part_type) := nil_part(ir, type)
+    value := ir.assign("extractvalue #{value_type} #{operand}, #{place}")
+    shifted := "#{ir_type(ir.program, part_type)} #{with_pointer(ir, value, part_type, shift)}"
+    return ir.assign("insertvalue #{value_type} #{operand}, #{shifted}, #{place}")
   shifted := shift(pointer_of(ir, operand, type))
   return shifted if is_reference(ir.program, type)
-  ir.assign("insertvalue #{ir_type(ir.program, type)} #{operand}, ptr #{shifted}, 0")
+  ir.assign("insertvalue #{value_type} #{operand}, ptr #{shifted}, 0")
+
+# The field of a value, optional or not, on its nil_path: its place and its type, whose pointer is
+# that of the value (see pointer_of); nil for a type that is no value.
+nil_part := (ir: IrBuilder, type: Type): (Int, Type)? ->
+  layout := value_layout_of(ir.program, without_nil(type)) else return nil
+  place := layout.nil_path![0]
+  (place, layout.fields[place].type)
 
 # An i1: whether the optional value is not nil and `test` holds for it without nil; it is tested
 # only then.

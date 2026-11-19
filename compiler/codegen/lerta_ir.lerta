@@ -16,10 +16,13 @@ export LERTA_IMMORTAL := '-9223372036854775808'
 
 export INTERFACE_IR_TYPE := '{ ptr, ptr }'
 
-# Whether nil of the optional type is a null pointer: that of a reference, or the data of an
-# interface value.
+# Whether nil of the optional type is a null pointer: that of a reference, the data of an interface
+# value, or that at the nil_path of a value (see value_layout).
 export is_nil_by_null := (program: ProgramWide, type: Type) ->
-  is_reference(program, type) or is_kind(without_nil(type), INTERFACE)
+  inner := without_nil(type)
+  is_reference(program, type) or
+    is_kind(inner, INTERFACE) or
+    value_layout_of(program, inner)?.nil_path != nil
 
 # Whether a value of the type, optional or not, is a reference to an object: not of a type whose
 # values are values (see value_layout_of).
@@ -32,13 +35,14 @@ export value_layout_of := (program: ProgramWide, type: Type): ValueLayout? ->
   is_value_type(program, type) then value_layout(program, type)
 
 # The type without nil, however many times it is optional (see OptionalType).
-without_nil := (type: Type): Type -> type is OptionalType then without_nil(type.inner) else type
+export without_nil := (type: Type): Type ->
+  type is OptionalType then without_nil(type.inner) else type
 
 # The program decides how some types are laid out, as which small types are values (see
 # checker value_layout).
 export ir_type := (program: ProgramWide, type: Type): String ->
-  # A reference is nil when null, and so is an interface value when its data is; a value carries a
-  # flag that tells whether it is there.
+  # A reference is nil when null, and so is an interface value when its data is, and a value whose
+  # nil_path is; another carries a flag that tells whether it is there.
   if type is OptionalType
     return ir_type(program, type.inner) if is_nil_by_null(program, type)
     return "{ i1, #{ir_type(program, type.inner)} }"
@@ -250,7 +254,11 @@ export emit_each_reference := (
   value_type := ir_type(program, type)
   part := (place: Int) -> ir.assign("extractvalue #{value_type} #{operand}, #{place}")
   if type is OptionalType
-    emit_when ir, part(0), -> emit_each_reference(ir, part(1), type.inner, each)
+    # Nil by null holds null references, which need no release, as an optional reference does.
+    if is_nil_by_null(program, type)
+      emit_each_reference ir, operand, type.inner, each
+    else
+      emit_when ir, part(0), -> emit_each_reference(ir, part(1), type.inner, each)
     return
   for part_type at place in value_parts(type, value_layout_of(program, type))!
     continue if ownership(program, part_type) == NONE
