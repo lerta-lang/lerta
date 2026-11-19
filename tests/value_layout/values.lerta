@@ -1,0 +1,98 @@
+# Tuples and anonymous structs of at most 16 bytes are values: they pass through locals, fields,
+# captures, cells, items, keys, unions and interface values, and hold their references, released
+# once each.
+pair := (n: Int) -> (n, "x#{n}")
+
+class Holder
+  args
+    var pair: (Int, String)
+    var maybe: (Int, String)?
+    var flagged: (String?, Int)?
+    var record: { label: String?, count: Int }
+
+holder := Holder(pair: pair(1), maybe: nil, flagged: ('f', 1), record: { label: 'r', count: 1 })
+holder.flagged = (nil, 2)
+holder.record = { label: nil, count: 2 }
+print "#{holder.flagged!} #{holder.record}"
+holder.pair = pair(2)
+holder.maybe = pair(3)
+(_, text) := holder.maybe!
+print "#{holder.pair} #{holder.maybe!} #{text}"
+holder.maybe = nil
+print holder.maybe == nil
+
+var cell = pair(4)
+bump := ->
+  (n, _) := cell
+  cell = (n + 1, "y#{n}")
+bump()
+captured := pair(6)
+show := -> "#{captured} #{cell}"
+print show()
+
+# An optional value without a niche carries a flag, and releases what it holds only where present.
+var flagged: (String?, Int)? = ('a', 1)
+(letter, _) := flagged!
+print letter!
+flagged = nil
+print flagged == nil
+flagged = (nil, 2)
+(_, count) := flagged!
+print count
+
+filled := Array(3, pair(7))
+print filled
+items := [pair(8)]
+items.push pair(9)
+items[0] = pair(10)
+print "#{items.pop()} #{items}"
+
+by_pair := Map<(Int, String), { name: String, count: Int }>()
+by_pair[pair(1)] = { name: 'one', count: 1 }
+by_pair[pair(1)] = { name: 'uno', count: 2 }
+by_pair[pair(2)] = { name: 'two', count: 2 }
+print by_pair[pair(1)]!.name
+print by_pair.remove(pair(2))
+print "#{key} #{value}" for (key, value) in by_pair
+for (key, value) in by_pair
+  print "first #{key} #{value}"
+  break
+seen := Set([pair(1), pair(1), pair(2)])
+print seen.length
+
+either: (Int, String) | String = pair(11)
+if either is String
+  print 'a String'
+else
+  (_, name) := either
+  print name
+texts: Stringable[] = [pair(12), { name: 'n', count: 3 }]
+print texts.map((text) -> text.to_string()).join(' ')
+print [pair(3), pair(1), pair(2)].sorted()
+print [pair(n) for n in 0..2]
+
+pairs := (count: Int) -> yield pair(n) for n in 0..count
+print pairs(2).to_array()
+first_of := <T>(items: T[]): T? -> items.first()
+print "#{first_of([pair(1)])!} #{first_of<(Int, String)>([]) == nil}"
+
+maybes: Map<String, (String?, Int)?> = { 'some': ('s', 1), 'none': nil }
+print "#{maybes['some']! == ('s', 1)} #{maybes['none'] == nil} #{'none' in maybes}"
+print maybes['gone'] == nil
+print [key for key in by_pair.keys()]
+print [value for value in by_pair.values()]
+optionals: (String?, Int)?[] = [('a', 1), nil]
+print optionals.pop() == nil
+
+items.insert 0, pair(13)
+print "#{items.remove_at(0)} #{items}"
+
+class Wrapper<T>
+  args
+    item: T
+print Wrapper(pair(14)).item
+
+interface Named
+  name: String
+named: Named = { name: 'record', count: 1 }
+print named.name

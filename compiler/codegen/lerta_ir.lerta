@@ -4,7 +4,8 @@ import ExtensionMethod from '../checker/extensions'
 import generic_of, Instance from '../checker/generics'
 import ObjectInfo from '../checker/object_types'
 import module_symbol_name, ProgramWide from '../checker/shared'
-import IrBuilder, IrModule from './ir_builder'
+import is_value_type, value_layout, ValueLayout from '../checker/value_layout'
+import emit_when, IrBuilder, IrModule from './ir_builder'
 import call_void_runtime from './runtime_calls'
 import scalar_of from './scalar'
 import
@@ -18,7 +19,17 @@ export INTERFACE_IR_TYPE := '{ ptr, ptr }'
 # Whether nil of the optional type is a null pointer: that of a reference, or the data of an
 # interface value.
 export is_nil_by_null := (program: ProgramWide, type: Type) ->
-  is_reference_type(type) or is_kind(without_nil(type), INTERFACE)
+  is_reference(program, type) or is_kind(without_nil(type), INTERFACE)
+
+# Whether a value of the type, optional or not, is a reference to an object: not of a type whose
+# values are values (see value_layout_of).
+export is_reference := (program: ProgramWide, type: Type) ->
+  is_reference_type(type) and value_layout_of(program, without_nil(type)) == nil
+
+# The layout of the values of an anonymous struct or a tuple that is a value rather than a heap
+# object (see checker value_layout); nil for another type.
+export value_layout_of := (program: ProgramWide, type: Type): ValueLayout? ->
+  is_value_type(program, type) then value_layout(program, type)
 
 # The type without nil, however many times it is optional (see OptionalType).
 without_nil := (type: Type): Type -> type is OptionalType then without_nil(type.inner) else type
@@ -31,6 +42,8 @@ export ir_type := (program: ProgramWide, type: Type): String ->
   if type is OptionalType
     return ir_type(program, type.inner) if is_nil_by_null(program, type)
     return "{ i1, #{ir_type(program, type.inner)} }"
+  if layout := value_layout_of(program, type)
+    return "{ #{[ir_type(program, field.type) for field in layout.fields].join(', ')} }"
   return scalar.ir_type if scalar := scalar_of(type)
   case kind_of(type)
     when 'String', 'Binary', ARRAY, ITER, PROMISE, MAP, OBJECT, UNION, RECORD, TUPLE, FUNCTION
@@ -192,33 +205,68 @@ export enum Ownership
   NONE
   REFERENCE
   INTERFACE
+  VALUE
   COROUTINE
   TRACE
 
 export ownership := (program: ProgramWide, type: Type): Ownership ->
-  case
-    when is_reference_type(type) then REFERENCE
-    when is_kind(without_nil(type), INTERFACE) then INTERFACE
-    else NONE
+  inner := without_nil(type)
+  return INTERFACE if is_kind(inner, INTERFACE)
+  layout := value_layout_of(program, inner)
+  return REFERENCE if layout == nil and is_reference_type(type)
+  parts := value_parts(type, layout) else return NONE
+  if parts.any((part) -> ownership(program, part) != NONE)
+    VALUE
+  else
+    NONE
+
+# The parts of a value that is neither a reference nor an interface value, of the layout of the type
+# without nil: the value that an optional one, which so has a flag, holds, or the fields of an
+# anonymous struct or a tuple that is a value, as laid out; nil for another type.
+value_parts := (type: Type, layout: ValueLayout?): Type[]? ->
+  return [type.inner] if type is OptionalType
+  fields := layout?.fields else return nil
+  [field.type for field in fields]
 
 # Reference counting of a value of the type: of the references it holds, if any.
 export emit_retain_value := (ir: IrBuilder, operand: String, type: Type) ->
-  emit_retain_as ir, operand, ownership(ir.program, type)
+  emit_each_reference ir, operand, type, (reference) -> emit_retain(ir, reference)
 
 export emit_release_value := (ir: IrBuilder, operand: String, type: Type) ->
-  emit_release_as ir, operand, ownership(ir.program, type)
+  emit_each_reference ir, operand, type, (reference) -> emit_release(ir, reference)
 
-emit_retain_as := (ir: IrBuilder, operand: String, owned: Ownership) ->
-  emit_retain ir, reference if reference := reference_of(ir, operand, owned)
+# Calls `each` with each counted reference that the value of the type holds, which may be null; one
+# that an optional value with a flag holds only where it is present, as its value is unspecified
+# where it is nil.
+export emit_each_reference := (
+  ir: IrBuilder, operand: String, type: Type, each: (String) -> void
+): void ->
+  program := ir.program
+  owned := ownership(program, type)
+  return if owned == NONE
+  unless owned == VALUE
+    each reference_of(ir, operand, owned)!
+    return
+  value_type := ir_type(program, type)
+  part := (place: Int) -> ir.assign("extractvalue #{value_type} #{operand}, #{place}")
+  if type is OptionalType
+    emit_when ir, part(0), -> emit_each_reference(ir, part(1), type.inner, each)
+    return
+  for part_type at place in value_parts(type, value_layout_of(program, type))!
+    continue if ownership(program, part_type) == NONE
+    emit_each_reference ir, part(place), part_type, each
 
+# Releases what the value holds, but a value's, which emit_release_value releases, as it needs its
+# type.
 export emit_release_as := (ir: IrBuilder, operand: String, owned: Ownership) ->
   case owned
     when COROUTINE then call_void_runtime(ir, 'void @llvm.coro.destroy(ptr)', "ptr #{operand}")
     when TRACE then call_void_runtime(ir, 'void @lerta_trace_free(ptr)', "ptr #{operand}")
+    when VALUE then panic('a value is released by its type')
     else emit_release(ir, reference) if reference := reference_of(ir, operand, owned)
 
-# Whether the value holds a reference that is counted, as a COROUTINE or a TRACE is not.
-export is_counted := (owned: Ownership) -> owned in [REFERENCE, INTERFACE]
+# Whether the value holds references that are counted, as a COROUTINE or a TRACE does not.
+export is_counted := (owned: Ownership) -> owned in [REFERENCE, INTERFACE, VALUE]
 
 # The reference that the value of the IR type at the pointer holds, which may be null; the value is
 # counted.
@@ -231,6 +279,7 @@ reference_of := (ir: IrBuilder, operand: String, owned: Ownership) ->
     when NONE then nil
     when REFERENCE then operand
     when INTERFACE then emit_interface_data(ir, operand)
+    when VALUE then panic('a value holds its references in its parts')
     when COROUTINE then panic('a coroutine is not reference counted')
     when TRACE then panic('a trace is not reference counted')
 
@@ -238,12 +287,10 @@ reference_of := (ir: IrBuilder, operand: String, owned: Ownership) ->
 export emit_interface_data := (ir: IrBuilder, value: String) ->
   ir.assign("extractvalue #{INTERFACE_IR_TYPE} #{value}, 0")
 
-# Releases what the value of the IR type at the pointer holds.
-export emit_release_stored := (
-  ir: IrBuilder, pointer: String, value_type: String, owned: Ownership
-) ->
-  return if owned == NONE
-  emit_release_as ir, ir.load(value_type, pointer), owned
+# Releases what the value of the type at the pointer holds.
+export emit_release_stored := (ir: IrBuilder, pointer: String, type: Type) ->
+  return if ownership(ir.program, type) == NONE
+  emit_release_value ir, ir.load(ir_type(ir.program, type), pointer), type
 
 # Reference counting of an object operand (see runtime/memory.c).
 export emit_retain := (ir: IrBuilder, operand: String) ->

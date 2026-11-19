@@ -5,12 +5,16 @@
 # docs/internals/representation.md#builtins states; map keys, and the items that the runtime hashes
 # and compares, are words: 8 bytes, a narrower value extended by its sign (see to_item).
 import ProgramWide from '../checker/shared'
+import is_value_type from '../checker/value_layout'
 import item_tag from './alias_tags'
 import emit_assume, emit_branch, emit_when, IrBuilder from './ir_builder'
-import emit_release_value, emit_retain_value, ir_type, ownership from './lerta_ir'
+import emit_box, emit_stack_box, emit_unbox from './boxes'
+import
+  emit_release, emit_release_value, emit_retain_value, ir_type, is_reference, ownership
+from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import narrowed_from_word, scalar_of, widened_to_word from './scalar'
-import is_kind, is_reference_type, OptionalType, Type from '../types'
+import inner_of, is_kind, OptionalType, Type from '../types'
 
 # The value as a word.
 export to_item := (ir: IrBuilder, operand: String, type: Type) ->
@@ -53,17 +57,23 @@ export item_kind := (program: ProgramWide, type: Type) ->
   # elsewhere, as an array's items.
   return NO_ITEMS if is_kind(type, 'void')
 
+  return REFERENCE_ITEMS if is_boxed_item(program, type)
   return OPTIONAL_ITEMS if is_optional_value(program, type)
   case ownership(program, type)
     when NONE then PLAIN_ITEMS
     when REFERENCE then REFERENCE_ITEMS
     when INTERFACE then INTERFACE_ITEMS
+    when VALUE then panic('a value is held in a box')
     when COROUTINE then panic('no item holds a coroutine')
     when TRACE then panic('no item holds a trace')
 
 # An optional value that is not a reference, held as its `{ i1, T }`, in the room of an item.
 is_optional_value := (program: ProgramWide, type: Type) ->
-  type is OptionalType and ownership(program, type) == NONE
+  type is OptionalType and ownership(program, type) == NONE and not is_boxed_item(program, type)
+
+# Whether an item of the type is held in a box (see emit_box), as a reference is: a value of an
+# anonymous struct or a tuple, optional or not, which neither a word nor a LertaItem may hold.
+is_boxed_item := (program: ProgramWide, type: Type) -> is_value_type(program, inner_of(type))
 
 # The IR type of an item of the type.
 item_ir_type := (program: ProgramWide, type: Type) ->
@@ -82,16 +92,19 @@ item_room_type := (program: ProgramWide, type: Type) ->
   else
     item_ir_type(program, type)
 
+# The item that holds the value, owned, which it takes over.
 to_held_item := (ir: IrBuilder, operand: String, type: Type) ->
   case
+    when is_boxed_item(ir.program, type) then to_item(ir, emit_box(ir, operand, type), type)
     when is_optional_value(ir.program, type) then operand
     when is_kind(type, 'Bool') then ir.assign("zext i1 #{operand} to i8")
     when item_ir_type(ir.program, type) == 'i64' then to_item(ir, operand, type)
     else operand
 
-# The value of an item as it is held.
+# The value of an item as it is held, borrowed as the item is.
 from_held_item := (ir: IrBuilder, item: String, type: Type) ->
   case
+    when is_boxed_item(ir.program, type) then from_key(ir, item, type)
     when is_optional_value(ir.program, type) then item
     when is_kind(type, 'Bool') then ir.assign("trunc i8 #{item} to i1")
     when item_ir_type(ir.program, type) == 'i64' then from_item(ir, item, type)
@@ -100,16 +113,58 @@ from_held_item := (ir: IrBuilder, item: String, type: Type) ->
 # Room for an item of the type, which the runtime writes.
 export emit_item_slot := (ir: IrBuilder, type: Type) -> ir.alloca(item_room_type(ir.program, type))
 
-# The value of the item at the pointer.
+# The value of the item at the pointer, borrowed as the item is.
 export emit_load_item := (ir: IrBuilder, pointer: String, type: Type) ->
-  from_held_item(ir, ir.load(item_ir_type(ir.program, type), pointer, item_tag(ir)), type)
+  from_held_item(ir, load_held(ir, pointer, type), type)
+
+load_held := (ir: IrBuilder, pointer: String, type: Type) ->
+  ir.load(item_ir_type(ir.program, type), pointer, item_tag(ir))
+
+# The value of the item at the pointer, which the caller owns, owned: taken out of its box, if it
+# has one, which is released.
+export emit_take_item := (ir: IrBuilder, pointer: String, type: Type) ->
+  if is_boxed_item(ir.program, type)
+    emit_taken(ir, load_held(ir, pointer, type), type)
+  else
+    emit_load_item(ir, pointer, type)
+
+# The value of a word, a key, owned, of which the caller owns the box of a value.
+export emit_taken := (ir: IrBuilder, word: String, type: Type) ->
+  value := from_key(ir, word, type)
+  if is_boxed_item(ir.program, type)
+    emit_retain_value ir, value, type
+    emit_release ir, from_item(ir, word, type)
+  value
+
+# The value of a word, a key, borrowed as it is: that in the box of a value.
+export from_key := (ir: IrBuilder, word: String, type: Type) ->
+  value := from_item(ir, word, type)
+  if is_boxed_item(ir.program, type)
+    emit_unbox(ir, value, type)
+  else
+    value
+
+# The word of a key, borrowed, given to `use`: that of a box of a value, made for it, on the heap
+# if the runtime may keep it, and otherwise on the stack (see emit_stack_box).
+export with_key_word := (
+  ir: IrBuilder, key: String, type: Type, may_keep: Bool, word_of: (String) -> String,
+  use: (String) -> String
+) ->
+  return use(word_of(key)) unless is_boxed_item(ir.program, type)
+  unless may_keep
+    return use(to_item(ir, emit_stack_box(ir, key, type), type))
+  emit_retain_value ir, key, type
+  box := emit_box(ir, key, type)
+  result := use(to_item(ir, box, type))
+  emit_release ir, box
+  result
 
 # The item at the address of an index in range. Neither the runtime nor the generated code writes
 # null into the items below an array's length, so an item of a reference type without nil is not
 # null; LLVM is told so, so that a retain or release of it inlined checks none.
 load_indexed_item := (ir: IrBuilder, address: String, type: Type) ->
   item := emit_load_item(ir, address, type)
-  if is_reference_type(type) and type is not OptionalType
+  if is_reference(ir.program, type) and type is not OptionalType
     emit_assume ir, ir.is_not_null(item)
   item
 
@@ -120,9 +175,15 @@ export emit_array_new := (ir: IrBuilder, element: Type) ->
 # a negative length throws.
 export emit_array_filled := (ir: IrBuilder, length: String, value: String, element: Type) ->
   item := emit_item_slot(ir, element)
+  boxed := is_boxed_item(ir.program, element)
+  if boxed
+    emit_retain_value ir, value, element
   emit_store_item ir, item, value, element
   args := "i32 #{item_kind(ir.program, element)}, i64 #{length}, ptr #{item}"
-  call_runtime(ir, 'ptr @lerta_array_filled(i32, i64, ptr)', args)
+  array := call_runtime(ir, 'ptr @lerta_array_filled(i32, i64, ptr)', args)
+  if boxed
+    emit_release ir, from_item(ir, load_held(ir, item, element), element)
+  array
 
 # Tells LLVM that the array that Array(n, v) made has the length n, so that a loop whose bound is n
 # needs no comparison with the length of its own to check an index.
@@ -170,13 +231,18 @@ export emit_borrowed_item := (ir: IrBuilder, array: String, index: String, eleme
 # item, which stays owned by the caller; the new item is retained before the old one is released,
 # in case they are the same object.
 export emit_set_in := (ir: IrBuilder, items: String, index: String, value: String, element: Type) ->
-  write := ->
-    address := emit_item_address(ir, items, index, element)
-    emit_retain_value ir, value, element
-    old := load_indexed_item(ir, address, element)
-    emit_store_item ir, address, value, element
-    emit_release_value ir, old, element
+  write := -> emit_replace_item(ir, emit_item_address(ir, items, index, element), value, element)
   emit_when ir, emit_is_in_range(ir, items), write
+
+# Writes the value, retained, as the item at the address, releasing the one there.
+export emit_replace_item := (ir: IrBuilder, address: String, value: String, type: Type) ->
+  emit_retain_value ir, value, type
+  old := load_held(ir, address, type)
+  emit_store_item ir, address, value, type
+  if is_boxed_item(ir.program, type)
+    emit_release ir, from_item(ir, old, type)
+  else
+    emit_release_value ir, from_held_item(ir, old, type), type
 
 # The items of the array, which are read and written in place, or null, after the runtime has
 # thrown, when the index is out of range.
@@ -206,4 +272,4 @@ export emit_push := (ir: IrBuilder, array: String, value: String, element: Type)
 export emit_pop := (ir: IrBuilder, array: String, element: Type) ->
   pointer := emit_item_slot(ir, element)
   call_void_runtime ir, 'void @lerta_array_take_last(ptr, ptr)', "ptr #{array}, ptr #{pointer}"
-  emit_load_item(ir, pointer, element)
+  emit_take_item(ir, pointer, element)

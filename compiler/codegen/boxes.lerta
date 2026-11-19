@@ -6,7 +6,8 @@ import
 from './heap_object'
 import IrBuilder, IrModule from './ir_builder'
 import ir_type, LERTA_IMMORTAL, quoted_name from './lerta_ir'
-import format_type, is_boxed, is_kind, type_key, Type from '../types'
+import is_boxed_member from '../checker/value_layout'
+import format_type, is_kind, type_key, Type from '../types'
 
 # The type of the boxes of the type, the same in every module, since a box may be made in one and
 # tested in another: each defines it, and the linker keeps one.
@@ -26,13 +27,26 @@ box_layout := (ir: IrBuilder, type: Type) ->
       name
   ir.module.named("box #{type_key(type)}", '%lerta.box', define)
 
-# A box that takes over the value, owned. A Bool's is one of two immortal boxes, which every module
-# shares, so that boxing one allocates nothing.
+# A box that takes over the value, owned: of a member of a union, or of a value (see
+# value_layout_of), optional or not, as the data of an interface value or an item, which a word
+# cannot hold. A Bool's is one of two immortal boxes, which every module shares, so that boxing one
+# allocates nothing.
 export emit_box := (ir: IrBuilder, value: String, type: Type) ->
   layout := box_layout(ir, type)
   if is_kind(type, 'Bool')
     return emit_bool_box(ir, value, layout, box_type(type))
   box := emit_heap_allocate(ir, layout, box_type(type))
+  ir.store ir_type(ir.program, type), value, emit_heap_field_pointer(ir, layout, box, 0)
+  box
+
+# A box of the value, borrowed, in the function's stack frame, immortal, as a key that the runtime
+# hashes and compares but does not keep takes it, so that looking it up allocates nothing.
+export emit_stack_box := (ir: IrBuilder, value: String, type: Type) ->
+  layout := box_layout(ir, type)
+  box := ir.alloca(layout)
+  header := (index: Int) -> ir.assign("getelementptr #{layout}, ptr #{box}, i32 0, i32 #{index}")
+  ir.store 'i64', LERTA_IMMORTAL, header(0)
+  ir.store 'ptr', box_type(type), header(1)
   ir.store ir_type(ir.program, type), value, emit_heap_field_pointer(ir, layout, box, 0)
   box
 
@@ -57,7 +71,7 @@ export emit_box_test := (ir: IrBuilder, object_type: String, type: Type) ->
 # The value of the member that the union's object is, borrowed: the object itself, or the value of
 # its box.
 export emit_member_value := (ir: IrBuilder, object: String, member: Type) ->
-  if is_boxed(member)
+  if is_boxed_member(ir.program, member)
     emit_unbox(ir, object, member)
   else
     object

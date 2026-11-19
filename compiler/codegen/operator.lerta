@@ -18,13 +18,13 @@ import emit_own_compare, GREATER, LESS from './comparison_methods'
 import emit_equals_by_contents, emit_value_equals from './equality'
 import Generator, with_deferred_checks from './generator'
 import emit_branch, IrBuilder from './ir_builder'
-import emit_release, emit_release_value, emit_retain, emit_retain_value, ir_type from './lerta_ir'
+import
+  emit_release, emit_release_value, emit_retain, emit_retain_value, ir_type, is_reference
+from './lerta_ir'
 import emit_is_nil, emit_is_present, emit_unwrap from './optional'
 import emit_concat, emit_equals, emit_extend, emit_string_equals from './string'
 import throw_if, UNWRAPPED_NIL from './runtime_errors'
-import
-  inner_of, is_float, is_identity_type, is_one_of_kinds, is_reference_type, OptionalType, Type
-from '../types'
+import inner_of, is_float, is_identity_type, is_one_of_kinds, OptionalType, Type from '../types'
 
 # The predicates of `icmp` for the comparisons of signed integers; unsigned ones, as Byte, are
 # ordered as unsigned.
@@ -185,8 +185,8 @@ apply_binary := (g: Generator, operator: String, left: String, right: String, op
     return negate_if_unequal(g, operator, generate_same_object(g, left, right))
 
   released := (result: String) ->
-    emit_release g.ir, left
-    emit_release g.ir, right
+    emit_release_value g.ir, left, operand_type
+    emit_release_value g.ir, right, operand_type
     result
   if own_equality(program, operand_type) == 'compare' and is_order_operator(operator)
     ordering := emit_own_compare(g.ir, program, left, right, operand_type)
@@ -237,7 +237,7 @@ generate_optional_equals := (g: Generator, left: String, right: String, type: Op
   left_present := emit_is_present(ir, left, type)
   right_present := emit_is_present(ir, right, type)
   same_presence := ir.assign("icmp eq i1 #{left_present}, #{right_present}")
-  unless is_reference_type(inner)
+  unless is_reference(ir.program, inner)
     # A nil's value is unspecified (see docs/internals/memory.md), so the values count
     # only where present.
     left_value := emit_unwrap(ir, left, type)

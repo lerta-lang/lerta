@@ -5,9 +5,16 @@
 ### Classes and structs
 
 - A class or struct object is a heap object: the header, then its fields, each in its IR type, and, for a class, the pointer to its [weak box](memory.md#weak-references).
-- An anonymous struct is a heap object like a struct, with its fields; so is a tuple, with its items.
+- An anonymous struct is a heap object like a struct, with its fields, and so is a tuple, with its items, but one that is a value (see [values](#values)).
 - The fields are laid out by alignment, largest first, else as declared, so that no padding comes between them (`field_order` in `compiler/checker/value_layout.lerta`); what goes through them in order, as `to_literal`, `==` and std:json, goes as declared, an anonymous struct's in name order. Each structural type has its own LLVM type and type of objects, generated where it is first used.
 - Methods are functions that take the object first.
+
+### Values
+
+- An anonymous struct or a tuple of at most 16 bytes, which does not hold itself, is a value rather than a heap object (`value_layout` and `is_value_type` in `compiler/checker/value_layout.lerta`): an LLVM struct of its fields as laid out above, made by `insertvalue` and read by `extractvalue`, in locals, arguments, results, fields, captures and cells.
+- It holds its references in its fields: a retain or a release of it is one of each reference it holds (`emit_each_reference` in `compiler/codegen/lerta_ir.lerta`), of the ownership `VALUE`. A heap object's field of it is visited and dropped so.
+- Its optional type is `{ i1, T }`, of whatever size, which holds its references only where the flag is set.
+- It is held in a box, as a union's member is (see [unions](#unions)), where a word must hold it: as a union's member, an interface value's data, or an array's or a map's item or key. A key that the runtime only looks up is boxed on the stack, immortal, so that looking it up allocates nothing (`emit_stack_box`).
 
 ### Construction
 
@@ -42,9 +49,9 @@
 ### Unions
 
 - A union value is one pointer, null for nil, to one of:
-  - the object of a class, a struct, an array, a map, a tuple or an anonymous struct, whose header's type tells its type;
+  - the object of a class, a struct, an array, a map, or a tuple or an anonymous struct that is no value, whose header's type tells its type;
   - a `String`, whose header's type is null, which no other member's object or box has;
-  - a **box** of a value of another member, such as an `Int`, an interface value, a `Binary` or a closure, which holds the value's two words (`compiler/codegen/boxes.lerta`). A `Binary` is boxed because its header's type is null too, as it shares a String's representation; a closure because its header's type is that of its literal, which no other closure of the function type shares.
+  - a **box** of a value of another member, such as an `Int`, a tuple that is a value, an interface value, a `Binary` or a closure, which holds the value's two words (`compiler/codegen/boxes.lerta`). A `Binary` is boxed because its header's type is null too, as it shares a String's representation; a closure because its header's type is that of its literal, which no other closure of the function type shares.
 - Every array has one type in its header, `lerta_array_type` of `runtime/array.c`, whatever its items, and every map `lerta_map_type`. So a union holds one array type and one map type at most.
 - A closure is boxed where it becomes a union's even where it is a local's value that is only called, which is otherwise on the stack (see [closures](#closures)): the box holds it, so it is on the heap.
 - A box is a heap object of the value, whose type is `linkonce_odr`, named by the value's type, and so the same in every module: a box made in one module is told by another. The types of tuples and anonymous structs are made the same way.

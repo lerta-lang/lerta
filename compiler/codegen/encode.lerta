@@ -2,7 +2,7 @@
 # the value. A writer that throws is let go of as it is, so a function releases only what it took.
 import info_of from '../checker/object_types'
 import ProgramWide from '../checker/shared'
-import emit_borrowed_item, emit_length, emit_load_item, emit_item_slot, from_item from './array'
+import emit_borrowed_item, emit_item_slot, emit_length, emit_take_item, emit_taken from './array'
 import emit_member_name from './enum'
 import emit_check_with, emit_return_thrown from './exceptions'
 import emit_member_value from './boxes'
@@ -98,12 +98,12 @@ emit_write_map := (ir: IrBuilder, writer: Coder, map: String, type: MapType): vo
     value_slot := shape == SET then 'null' else emit_item_slot(ir, type.value)
     args := "ptr #{cursor}, ptr #{key_slot}, ptr #{value_slot}"
     call_void_runtime ir, 'void @lerta_map_cursor_next(ptr, ptr, ptr)', args
-    key := from_item(ir, ir.load('i64', key_slot), type.key)
+    key := emit_taken(ir, ir.load('i64', key_slot), type.key)
     value :=
       if shape == SET
         ''
       else
-        emit_load_item ir, value_slot, type.value
+        emit_take_item ir, value_slot, type.value
     release_entry := ->
       emit_release_value ir, key, type.key
       unless shape == SET

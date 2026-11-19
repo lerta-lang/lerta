@@ -1,8 +1,10 @@
 # Interface values in the generated code (see docs/internals/representation.md#interfaces).
 import Itab, ItabEntry from '../checker/interface_values'
 import BuiltinMethod from '../checker/builtins'
+import is_value_type from '../checker/value_layout'
 import EnumValue, InterfaceProperty, Method, Property from '../checker/member_targets'
 import ExtensionSource, OwnMethod, UnionMethod from '../checker/methods'
+import emit_box, emit_unbox from './boxes'
 import call_builtin_method, takes_object from './builtins'
 import call_user_function, emit_by_parts, emit_method_call, MethodCall from './call'
 import emit_closure_call, function_type_of from './closure'
@@ -14,7 +16,7 @@ import finish from './function'
 import function_generator, Generator from './generator'
 import IrBuilder, IrModule from './ir_builder'
 import
-  emit_interface_data, emit_release, emit_release_value, emit_retain, extension_symbol,
+  emit_interface_data, emit_release, emit_release_value, emit_retain_value, extension_symbol,
   instance_symbol, INTERFACE_IR_TYPE, ir_return_type, ir_type, method_symbol, typed_params
 from './lerta_ir'
 import FunctionType, InterfaceType, Type, type_key from '../types'
@@ -23,7 +25,12 @@ import FunctionType, InterfaceType, Type, type_key from '../types'
 # it.
 export emit_interface_value := (g: Generator, value: String, itab: Itab) ->
   ir := g.ir
-  with_data := ir.assign("insertvalue #{INTERFACE_IR_TYPE} undef, ptr #{value}, 0")
+  data :=
+    if is_value_type(g.code.program, itab.type)
+      emit_box ir, value, itab.type
+    else
+      value
+  with_data := ir.assign("insertvalue #{INTERFACE_IR_TYPE} undef, ptr #{data}, 0")
   ir.assign("insertvalue #{INTERFACE_IR_TYPE} #{with_data}, ptr #{define_itab(g, itab)}, 1")
 
 # Calls the member at the index through the interface value's itab, with the arguments, typed IR
@@ -60,7 +67,8 @@ define_itab := (g: Generator, itab: Itab) ->
   g.ir.module.named(key, '@lerta.itab', define)
 
 # The function of the entry: the method that gives the member, if it is written in Lerta, which
-# takes its object first; otherwise a function that reads the member, defined once.
+# takes its object first; otherwise a function that reads the member, defined once. A value has no
+# method written in Lerta, as a tuple or an anonymous struct cannot be extended.
 entry_function := (g: Generator, itab: Itab, entry: ItabEntry) ->
   return instance_symbol(g.code.program, instance) if instance := entry.instance
   source := entry.target is Method then entry.target.source
@@ -99,7 +107,8 @@ generate_reading := (reader: Generator, type: Type, entry: ItabEntry, operands: 
   case target
     when Property
       call := -> call_field(reader, type, name, member_type, operands)
-      read := -> read_property(reader, take_data(reader.ir), type, target.kind, name, member_type)
+      read := ->
+        read_property(reader, take_data(reader.ir, type), type, target.kind, name, member_type)
       member_type is FunctionType then call() else read()
     when Method
       source := target.source
@@ -121,16 +130,24 @@ call_union_method := (
   call := MethodCall(name, operands, args, check, type: method.type, instance: nil)
   emit_method_call(reader, method, '%data', type, call)
 
-# `%data`, retained: the reader borrows its data, while reading a field or a property, or an Iter's
-# method, takes the object over.
-take_data := (ir: IrBuilder) ->
-  emit_retain ir, '%data'
-  '%data'
+# The value of the type that `%data` gives, retained: the reader borrows its data, while reading a
+# field or a property, or an Iter's method, takes the object over.
+take_data := (ir: IrBuilder, type: Type) ->
+  value := data_value(ir, type)
+  emit_retain_value ir, value, type
+  value
+
+# The value of the type that `%data` gives, borrowed: the data itself, or the value in its box.
+data_value := (ir: IrBuilder, type: Type) ->
+  if is_value_type(ir.program, type)
+    emit_unbox(ir, '%data', type)
+  else
+    '%data'
 
 # Calls the field that holds a function with the operands, returning what it throws.
 call_field := (reader: Generator, type: Type, name: String, field_type: Type, operands: String[]) ->
   ir := reader.ir
-  closure := read_any_field(reader, take_data(ir), type, name, field_type)
+  closure := read_any_field(reader, take_data(ir, type), type, name, field_type)
   value := emit_closure_call(ir, closure, field_type, operands)
   emit_release ir, closure
   emit_check_or_return_thrown ir, reader.result_type
@@ -149,8 +166,12 @@ call_builtin := (reader: Generator, type: Type, builtin: BuiltinMethod, operands
   check := -> emit_check_with(ir, release_and_return)
 
   if id := builtin.parts
-    value := emit_by_parts(reader, builtin, id, '%data', operands)
+    value := emit_by_parts(reader, builtin, id, data_value(ir, type), operands)
     emit_check_or_return_thrown ir, reader.result_type
     return value
-  object := takes_object(builtin.member) then take_data(ir) else '%data'
+  object :=
+    if takes_object(builtin.member)
+      take_data ir, type
+    else
+      data_value ir, type
   call_builtin_method(ir, program, builtin.member, object, type, operands, check)

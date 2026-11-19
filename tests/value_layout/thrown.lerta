@@ -1,0 +1,30 @@
+# Values that hold references are released once each where an exception unwinds past them, as
+# temporaries or as parts that a decode has read, and std:json writes and reads them as heap
+# objects were written and read.
+import decode_json, encode_json from 'std:json'
+
+struct Failure: Error
+
+fails := (): String -> throw Failure('failed')
+
+try
+  print ("held #{1}", fails())
+catch e: Failure
+  print e.message
+try
+  print { a: ('p', 1), b: fails() }
+catch e: Failure
+  print e.message
+
+text := encode_json([(1, 'one'), (2, 'two')])
+print text
+print decode_json<(Int, String)[]>(text)
+print decode_json<{ name: String, count: Int }>('{"name": "n", "count": 3}')
+try
+  print decode_json<(String, Int)[]>('[["a", 1], ["b", "c"]]')
+catch e: Error
+  print 'decode failed'
+try
+  print decode_json<{ name: String, count: Int }>('{"name": "n", "count": "x"}')
+catch e: Error
+  print 'decode failed'

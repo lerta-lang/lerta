@@ -2,33 +2,35 @@
 # (see docs/internals/representation.md#objects).
 import FieldInfo, info_of, ObjectInfo from '../checker/object_types'
 import ProgramWide from '../checker/shared'
-import field_order, field_place from '../checker/value_layout'
+import field_order, field_place, is_boxed_member, is_value_type from '../checker/value_layout'
 import emit_box_test from './boxes'
 import any_of, emit_branch, IrBuilder, IrModule, phi_incoming from './ir_builder'
 import
-  emit_load_reference, emit_release_stored, emit_retain_value, ir_type, is_counted, object_ir_type,
-  Ownership, ownership, quoted_name, shared_string_constant, special_method_symbol, suffixed_symbol,
-  type_symbol
+  emit_each_reference, emit_load_reference, emit_release_as, emit_retain_value, ir_type, is_counted,
+  object_ir_type, Ownership, ownership, quoted_name, shared_string_constant, special_method_symbol,
+  suffixed_symbol, type_symbol, value_layout_of
 from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import
-  ArrayType, format_type, inner_of, is_boxed, is_kind, MapType, members_of, ObjectType,
-  OptionalType, RecordType, TupleType, Type, type_key
+  ArrayType, format_type, inner_of, is_kind, MapType, members_of, ObjectType, OptionalType,
+  RecordType, TupleType, Type, type_key
 from '../types'
 
 # The two header fields come before the object's own.
 HEADER_FIELDS := 2
 
-# A field, by its IR type and how it holds references, which the drop function releases. A fixed
-# one is written only as its object is made (see invariant).
+# A field, by its IR type and how it holds references, which the drop function releases, and the
+# type of its values, which a field that holds a value needs for that. A fixed one is written only
+# as its object is made (see invariant).
 export struct HeapField
   ir_type: String
   owned: Ownership
+  type: Type?
   fixed := false
 
 # A field that holds a value of the type.
 export value_field := (program: ProgramWide, type: Type) ->
-  HeapField(ir_type: ir_type(program, type), owned: ownership(program, type))
+  HeapField(type, ir_type: ir_type(program, type), owned: ownership(program, type))
 
 # The field, written only as its object is made.
 export fixed := (field: HeapField) -> HeapField(field..., fixed: true)
@@ -104,8 +106,11 @@ define_visit := (
   for field at i in fields
     continue unless is_counted(field.owned)
     pointer := emit_heap_field_pointer(ir, layout, '%object', i)
-    reference := emit_load_reference(ir, pointer, field.ir_type, field.owned)
-    ir.emit "call void %visitor(ptr #{reference})"
+    visit := (reference: String) -> ir.emit("call void %visitor(ptr #{reference})")
+    if field.owned == VALUE
+      emit_each_reference ir, ir.load(field.ir_type, pointer), field.type!, visit
+    else
+      visit emit_load_reference(ir, pointer, field.ir_type, field.owned)
   ir.emit 'ret void'
   ir.finish "#{linkage}void #{visit}(ptr %object, ptr %visitor) alwaysinline"
 
@@ -124,7 +129,7 @@ define_drop := (
   for field at i in fields
     continue if field.owned == NONE or is_counted(field.owned)
     pointer := emit_heap_field_pointer(ir, layout, '%object', i)
-    emit_release_stored ir, pointer, field.ir_type, field.owned
+    emit_release_as ir, ir.load(field.ir_type, pointer), field.owned
   ir.module.declare 'lerta_release', 'declare void @lerta_release(ptr)'
   ir.emit "call void #{visit}(ptr %object, ptr @lerta_release)"
   ir.emit 'ret void'
@@ -228,7 +233,7 @@ export emit_type_test := (ir: IrBuilder, object: String, type: Type) ->
 
 emit_object_test := (ir: IrBuilder, object: String, type: Type) ->
   object_type := emit_object_type(ir, object)
-  if is_boxed(type)
+  if is_boxed_member(ir.program, type)
     return emit_box_test(ir, object_type, type)
   ir.assign("icmp eq ptr #{object_type}, #{object_type_symbol(ir, type)}")
 
@@ -312,6 +317,13 @@ layout_type := (layout: String) -> suffixed_symbol(layout, 'type')
 
 # A new anonymous struct or tuple, which takes over the values, owned, in their order.
 export emit_values := (ir: IrBuilder, type: Type, values: String[]) ->
+  if layout := value_layout_of(ir.program, type)
+    value_type := ir_type(ir.program, type)
+    var value = 'undef'
+    for field at place in layout.fields
+      part := "#{ir_type(ir.program, field.type)} #{values[field.index]}"
+      value = ir.assign("insertvalue #{value_type} #{value}, #{part}, #{place}")
+    return value
   layout := values_layout(ir, type)
   object := emit_heap_allocate(ir, layout, values_type_symbol(type))
   for value_type at i in value_types(type)
@@ -335,6 +347,9 @@ export emit_value_at := (ir: IrBuilder, object: String, type: Type, index: Int) 
 
 # The value of an anonymous struct or a tuple at the index, borrowed.
 export emit_borrowed_value := (ir: IrBuilder, values: String, type: Type, index: Int) ->
+  if is_value_type(ir.program, type)
+    place := field_place(ir.program, type, value_types(type), index)
+    return ir.assign("extractvalue #{ir_type(ir.program, type)} #{values}, #{place}")
   value_type := value_types(type)[index]
   ir.load(ir_type(ir.program, value_type), emit_value_pointer(ir, values, type, index))
 
@@ -345,10 +360,13 @@ export emit_record_field := (ir: IrBuilder, record: String, type: Type, name: St
 # The LLVM struct type of a cell of the type, defined with the type of its cells at the first use.
 cell_layout := (ir: IrBuilder, type: Type) ->
   define := (layout: String, module: IrModule) ->
-    # Cells of all types of the same IR type and ownership share it.
+    # Cells of all types of the same IR type and ownership share it, but a value's, whose type tells
+    # what of it to release.
     fields := [value_field(module.program, type)]
     define_heap_object module, layout, layout_type(layout), 'private ', fields, 'var'
-  key := "cell #{ir_type(ir.program, type)} #{ownership(ir.program, type)}"
+  owned := ownership(ir.program, type)
+  of_type := owned == VALUE then " #{type_key(type)}" else ''
+  key := "cell #{ir_type(ir.program, type)} #{owned}#{of_type}"
   ir.module.named(key, '%lerta.cell', define)
 
 # A new cell, which takes over the value, owned.

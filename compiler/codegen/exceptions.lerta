@@ -10,8 +10,8 @@ import CodegenLocal, Finally, Generator, Handler, located, SlotLocal from './gen
 import emit_assume, emit_seldom_branch, IrBuilder, phi_incoming from './ir_builder'
 import emit_type_test from './heap_object'
 import
-  emit_interface_data, emit_release_as, INTERFACE_IR_TYPE, ir_type, ownership, returns_nothing,
-  shared_string_constant
+  emit_interface_data, emit_release_as, emit_release_value, INTERFACE_IR_TYPE, ir_type, ownership,
+  returns_nothing, shared_string_constant
 from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import module_location from '../source'
@@ -31,7 +31,8 @@ export emit_return_thrown := (ir: IrBuilder, type: Type) ->
 # Holds an owned value while the expression evaluates others, until pop_temporaries.
 export push_temporary := (g: Generator, operand: String, type: Type) ->
   owned := ownership(g.code.program, type)
-  g.temporaries.push { operand, owned } if owned != NONE
+  if owned != NONE
+    g.temporaries.push { operand, owned, type }
 
 # Lets go of the temporaries held since there were `depth` of them, which their consumer releases.
 export pop_temporaries := (g: Generator, depth: Int) -> g.temporaries.truncate(depth)
@@ -142,7 +143,10 @@ emit_unwind := (g: Generator) ->
 export release_held := (g: Generator, scope_depth: Int, temporary_depth: Int) ->
   for i in temporary_depth..g.temporaries.length reversed
     temporary := g.temporaries[i]
-    emit_release_as g.ir, temporary.operand, temporary.owned
+    if type := temporary.type
+      emit_release_value g.ir, temporary.operand, type
+    else
+      emit_release_as g.ir, temporary.operand, temporary.owned
   release_scope g, scope for scope in g.locals.inner_scopes(scope_depth)
 
 # The value, an Error, becomes the exception, owned. One that a catch has taken, thrown again from

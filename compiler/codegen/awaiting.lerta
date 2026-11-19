@@ -1,13 +1,13 @@
 # Functions that await (see docs/internals/iteration.md#functions-that-await).
 import Await from '../ast'
-import item_kind from './array'
+import emit_load_item, emit_store_item, item_kind from './array'
 import emit_ramp, emit_wait, generate_coroutine from './coroutine'
 import emit_exception_check, holding from './exceptions'
 import generate, type_of from './expression'
 import Generator from './generator'
 import emit_when, IrBuilder, IrModule from './ir_builder'
 import
-  emit_release, emit_retain, emit_retain_value, ir_type, returns_nothing, suffixed_symbol
+  emit_release, emit_retain, emit_retain_value, returns_nothing, suffixed_symbol
 from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import PromiseType, Type from '../types'
@@ -41,7 +41,7 @@ export generate_awaiting_function := (
 emit_resolve := (ir: IrBuilder, type: Type, result: String) ->
   unless returns_nothing(type)
     slot := call_runtime(ir, 'ptr @lerta_promise_slot(ptr)', 'ptr %promise')
-    ir.store ir_type(ir.program, type), result, slot
+    emit_store_item ir, slot, result, type
   call_void_runtime ir, 'void @lerta_promise_resolve(ptr)', 'ptr %promise'
 
 # The value of the promise, which the body waits for if it is pending; its exception is thrown.
@@ -71,7 +71,7 @@ emit_await := (g: Generator, promise: String, value: Type) ->
     if returns_nothing(value)
       ''
     else
-      ir.load ir_type(ir.program, value), slot
+      emit_load_item ir, slot, value
   unless result.is_empty()
     emit_retain_value ir, result, value
   emit_release ir, promise

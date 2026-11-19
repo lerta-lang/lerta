@@ -41,8 +41,7 @@ from './heap_object'
 import emit_when, IrBuilder, IrModule from './ir_builder'
 import
   constructor_symbol, default_entry_symbol, emit_release, emit_release_stored, emit_retain,
-  emit_retain_value, ir_return_type, ir_type, ownership, returns_nothing, special_method_symbol,
-  typed_params
+  emit_retain_value, ir_return_type, ir_type, returns_nothing, special_method_symbol, typed_params
 from './lerta_ir'
 import referred_local, top_level_slot from './references'
 import call_runtime, call_void_runtime from './runtime_calls'
@@ -398,11 +397,7 @@ export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo)
     mark := call_runtime(ir, 'i64 @lerta_drop_mark()', '')
     for field in info.fields
       type := field.type!
-      emit_release_stored
-        ir
-        field_pointer(field)
-        ir_type(ir.program, type)
-        ownership(ir.program, type)
+      emit_release_stored ir, field_pointer(field), type
     weak_slot := emit_weak_slot_or_null(ir, object, info)
     args := "ptr #{object}, ptr #{weak_slot}, i64 #{mark}"
     call_void_runtime ir, 'void @lerta_free_unfinished(ptr, ptr, i64)', args
@@ -586,11 +581,7 @@ export release_scope := (g: Generator, scope: Map<String, CodegenLocal>) ->
     if { cell, is_owned } := local.cell
       emit_release ir, cell if is_owned
     else
-      emit_release_stored
-        ir
-        local.pointer
-        ir_type(ir.program, local.type)
-        ownership(ir.program, local.type)
+      emit_release_stored ir, local.pointer, local.type
 
 export generate_statement := (g: Generator, statement: Statement) ->
   located g, statement.position, -> generate_statement_node(g, statement)

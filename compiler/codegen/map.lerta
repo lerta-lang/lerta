@@ -2,7 +2,8 @@
 import compares_by_contents from '../checker/equality'
 import ProgramWide from '../checker/shared'
 import
-  emit_item_slot, emit_load_item, emit_store_item, from_item, item_kind, narrow_item_kind, to_item
+  emit_item_slot, emit_load_item, emit_replace_item, emit_take_item, emit_taken, item_kind,
+  narrow_item_kind, to_item, with_key_word
 from './array'
 import item_functions from './equality'
 import emit_float_word from './float'
@@ -12,7 +13,7 @@ import emit_wrap, nil_constant from './optional'
 import
   define_kind, emit_end_unless, emit_give, emit_iter, IterKind, load_state
 from './iter_protocol'
-import emit_release_value, emit_retain_value, ir_type from './lerta_ir'
+import emit_retain_value, ir_type from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import
   is_float, is_identity_type, is_number, is_one_of_kinds, MapType, optional_type, TupleType, Type,
@@ -60,14 +61,20 @@ export emit_map_length := (ir: IrBuilder, map: String) ->
 # The place of the key's value in the map, which is read and written there as the value's type, as
 # an array's items are, or null for a key that the map does not hold.
 export emit_find := (ir: IrBuilder, map: String, key: String, type: MapType) ->
-  args := "ptr #{map}, i64 #{key_word(ir, key, type.key)}"
-  call_runtime(ir, 'ptr @lerta_map_find(ptr, i64)', args)
+  with_key(ir, key, type, false, (word) ->
+    call_runtime(ir, 'ptr @lerta_map_find(ptr, i64)', "ptr #{map}, i64 #{word}")
+  )
+
+# The result of `use` of the word of the key, which the map keeps if `may_keep`.
+with_key := (ir: IrBuilder, key: String, type: MapType, may_keep: Bool, use: (String) -> String) ->
+  with_key_word(ir, key, type.key, may_keep, (each) -> key_word(ir, each, type.key), use)
 
 # The place of the key's value, with zeros for a key that the map then holds, retained; the caller
 # writes the value there, retained.
 export emit_place := (ir: IrBuilder, map: String, key: String, type: MapType) ->
-  args := "ptr #{map}, i64 #{key_word(ir, key, type.key)}"
-  call_runtime(ir, 'ptr @lerta_map_place(ptr, i64)', args)
+  with_key(ir, key, type, true, (word) ->
+    call_runtime(ir, 'ptr @lerta_map_place(ptr, i64)', "ptr #{map}, i64 #{word}")
+  )
 
 # The value as a V?, owned. A missing key reads as zeros, which are nil of an optional V, so that
 # it reads as a nil value does, but for an opaque V (see OptionalType), whose own nil is apart.
@@ -101,16 +108,14 @@ export emit_map_set := (ir: IrBuilder, map: String, key: String, value: String, 
 
 # Writes the value, retained, at the place of a key's value, releasing the one there.
 export emit_set_at := (ir: IrBuilder, place: String, value: String, type: MapType) ->
-  emit_retain_value ir, value, type.value
-  old := emit_load_item(ir, place, type.value)
-  emit_store_item ir, place, value, type.value
-  emit_release_value ir, old, type.value
+  emit_replace_item ir, place, value, type.value
 
 # The builtin methods of maps and sets (see codegen builtins), of borrowed arguments.
 # Whether the key was there.
 export emit_map_remove := (ir: IrBuilder, map: String, key: String, type: MapType) ->
-  args := "ptr #{map}, i64 #{key_word(ir, key, type.key)}"
-  call_runtime(ir, 'i1 @lerta_map_remove(ptr, i64)', args)
+  with_key(ir, key, type, false, (word) ->
+    call_runtime(ir, 'i1 @lerta_map_remove(ptr, i64)', "ptr #{map}, i64 #{word}")
+  )
 
 export emit_map_keys := (ir: IrBuilder, map: String, type: MapType) ->
   emit_cursor_iter(ir, map, type, true)
@@ -147,10 +152,10 @@ emit_cursor_iter := (ir: IrBuilder, map: String, type: MapType, keys_only: Bool)
 
     args := "ptr #{cursor}, ptr #{key_slot}, ptr #{value_slot}"
     call_void_runtime body, 'void @lerta_map_cursor_next(ptr, ptr, ptr)', args
-    key := from_item(body, body.load('i64', key_slot), type.key)
+    key := emit_taken(body, body.load('i64', key_slot), type.key)
     if keys_only
       return emit_give(body, kind, key)
-    entry := emit_values(body, item, [key, emit_load_item(body, value_slot, type.value)])
+    entry := emit_values(body, item, [key, emit_take_item(body, value_slot, type.value)])
     emit_give body, kind, entry
   state := [fixed({ ir_type: 'ptr', owned: REFERENCE })]
   traversed := keys_only then 'keys' else 'entries'

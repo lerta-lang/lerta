@@ -5,8 +5,8 @@
 import info_of from './object_types'
 import ProgramWide from './shared'
 import
-  ENUM_BITS, is_kind, is_reference_type, kind_of, ObjectType, OptionalType, RecordType, TupleType,
-  Type, TypeKind
+  ENUM_BITS, inner_of, is_boxed, is_kind, is_reference_type, kind_of, ObjectType, OptionalType,
+  RecordType, TupleType, Type, TypeKind, UnionType
 from '../types'
 
 export MAX_VALUE_BYTES := 16
@@ -38,10 +38,13 @@ REFERENCE_ROOM := Room(size: 8, alignment: 8)
 # anonymous struct nor a tuple, one that holds itself through its fields, or one of more bytes than
 # MAX_VALUE_BYTES.
 export value_layout := (program: ProgramWide, type: Type): ValueLayout? ->
-  layouts := program.value_layouts
-  return layouts[type] if type in layouts
+  return layout if layout := program.value_layouts[type]
+  return nil if type in program.not_values
   layout := find_layout(program, type)
-  layouts[type] = layout
+  if layout
+    program.value_layouts[type] = layout
+  else
+    program.not_values.add type
   layout
 
 find_layout := (program: ProgramWide, type: Type): ValueLayout? ->
@@ -61,6 +64,23 @@ find_layout := (program: ProgramWide, type: Type): ValueLayout? ->
       LayoutField(index: i, type: parts[i])
   ]
   { alignment, fields: laid, size: rounded, nil_path: nil_path_in(program, laid) }
+
+# Whether the values of the type are values rather than heap objects: an anonymous struct's or a
+# tuple's that value_layout lays out. A struct's are not yet (see docs/roadmap/language.md#types).
+export is_value_type := (program: ProgramWide, type: Type) ->
+  kind := kind_of(type)
+  kind in [RECORD, TUPLE] and value_layout(program, type) != nil
+
+# Whether a union holds a value of the type, one of its members, in a box: as is_boxed tells, or a
+# value, which is no object of its own.
+export is_boxed_member := (program: ProgramWide, member: Type) ->
+  is_boxed(member) or is_value_type(program, member)
+
+# Whether a value of the type, a T or a T?, fits where the union, or an optional one, is expected
+# only in a box: as an Int where an `Int | String` is.
+export boxes_into := (program: ProgramWide, type: Type, target: Type) ->
+  value := inner_of(type)
+  inner_of(target) is UnionType and value is not UnionType and is_boxed_member(program, value)
 
 # The places of parts of the types as they are laid out, a value's or a heap object's: those of
 # larger alignment first, so that no padding comes between them, else as declared. A part of no
@@ -111,12 +131,11 @@ room_of := (program: ProgramWide, type: Type): Room? ->
   if type is OptionalType
     inner := room_of(program, type.inner) else return nil
     return inner if null_path(program, type.inner) != nil
-    flagged := Room(inner..., size: aligned(inner.alignment + inner.size, inner.alignment))
 
-    # An optional value that is not a struct keeps its flags, whatever its size, as the `Int??` of a
-    # tuple of a generic function's `T?` of an `Int?`.
-    return flagged if value_layout(program, type.inner) == nil
-    return flagged.size <= MAX_VALUE_BYTES then flagged else REFERENCE_ROOM
+    # Else it carries a flag, whatever its size.
+    return
+      alignment: inner.alignment
+      size: aligned(inner.alignment + inner.size, inner.alignment)
   if part_types(program, type) != nil
     layout := value_layout(program, type) else return REFERENCE_ROOM
     return { size: layout.size, alignment: layout.alignment }
