@@ -69,7 +69,7 @@ static uint8_t *item_at(const LertaArray *array, int64_t index) {
 
 // The targets are all little-endian, so that an item narrower than a word is the word's first
 // bytes. An optional item or a value, which may be wider than a word, is given by its address, which
-// the generated code reads it through (see compiler/codegen/array.lerta).
+// the generated code reads it through (see compiler/codegen/items.lerta).
 int64_t lerta_word_item(const LertaArray *array, int64_t index) {
   return lerta_item_word(array->item_kind, item_at(array, index));
 }

@@ -63,7 +63,7 @@ struct LertaString {
 // each place of a pointer whose bit is set in LERTA_REFERENCE_PLACES, the first place the lowest:
 // two places on a 64-bit target, four on a 32-bit one.
 // C moves items only by memcpy, never as a C type: the generated code reads and writes them as a
-// type of their own in type-based alias analysis (see compiler/codegen/array.lerta).
+// type of their own in type-based alias analysis (see compiler/codegen/items.lerta).
 typedef enum {
   LERTA_PLAIN_ITEMS,
   LERTA_REFERENCE_ITEMS,

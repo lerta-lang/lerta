@@ -1,0 +1,258 @@
+# How arrays, maps and Promises hold their items, and map their keys, in the generated code, as
+# docs/internals/representation.md#builtins states: an item's form (see ItemForm) decides its kind
+# for the runtime (runtime/lerta.h), the IR type it is read and written as, and the room it takes.
+# Map keys, and the items that the runtime hashes and compares, are words: 8 bytes, a narrower
+# value extended by its sign (see to_item).
+import ProgramWide from '../checker/shared'
+import is_value_type from '../checker/value_layout'
+import item_tag from './alias_tags'
+import IrBuilder from './ir_builder'
+import emit_box, emit_stack_box, emit_unbox from './boxes'
+import
+  emit_release, emit_release_value, emit_retain_value, ir_type, is_nil_by_null, ownership,
+  reference_paths, value_layout_of
+from './lerta_ir'
+import narrowed_from_word, scalar_of, widened_to_word from './scalar'
+import inner_of, is_kind, OptionalType, Type from '../types'
+
+# How an item of a type is held.
+enum ItemForm
+  # A set's value, which takes no bytes.
+  NONE
+
+  # An integer narrower than a word, a Bool or a Float32's bits, at its own size.
+  NARROW
+
+  # A word that holds no reference: an Int, a Float, a Char or an enum.
+  PLAIN
+  REFERENCE
+
+  # Its data, a reference, then its itab.
+  INTERFACE
+
+  # An optional value that is not a reference, its `{ i1, T }` in the 16 bytes of a LertaItem.
+  OPTIONAL
+
+  # A struct's, an anonymous struct's or a tuple's value, or an optional one nil by null, in place,
+  # its references at the places of pointers that its kind tells (see emit_item_kind).
+  VALUE
+
+  # An optional value that carries a flag, in a box, as it may be larger than a LertaItem and holds
+  # its references only where the flag is set.
+  BOXED
+
+item_form := (program: ProgramWide, type: Type): ItemForm ->
+  return NARROW if narrow_item_kind(type) != nil
+
+  # A map's value type is void only for a set; the checker rejects void elsewhere, as an array's
+  # items.
+  return NONE if is_kind(type, 'void')
+
+  if is_value_type(program, inner_of(type))
+    return
+      if is_nil_by_null(program, type) or type is not OptionalType
+        VALUE
+      else
+        BOXED
+  return OPTIONAL if type is OptionalType and ownership(program, type) == NONE
+  case ownership(program, type)
+    when NONE then PLAIN
+    when REFERENCE then REFERENCE
+    when INTERFACE then INTERFACE
+    when VALUE then panic('a value is held in a box')
+    when COROUTINE then panic('no item holds a coroutine')
+    when TRACE then panic('no item holds a trace')
+
+# The kinds and the flags of LertaItemKind in runtime/lerta.h.
+PLAIN_ITEMS := 0
+REFERENCE_ITEMS := 1
+INTERFACE_ITEMS := 2
+NO_ITEMS := 4
+OPTIONAL_ITEMS := 5
+INTEGER_ITEMS := 0x10
+SIGNED_ITEMS := 0x20
+VALUE_ITEMS := 0x40
+WIDE_ITEMS := 0x80
+FIRST_REFERENCE_PLACE := 0x100
+
+# A value narrower than a word, an integer, a Bool or a Float32's bits, is held at its own size: the
+# value of LertaItemKind of its bytes, LERTA_INTEGER_ITEMS, and LERTA_SIGNED_ITEMS if it is signed.
+# Nil for a value of a word, which is held as one.
+export narrow_item_kind := (type: Type) ->
+  scalar := scalar_of(type) else return nil
+  return nil if scalar.bits == 64
+  bytes := scalar.bits <= 8 then 1 else scalar.bits >> 3
+  signed := scalar.signed then SIGNED_ITEMS else 0
+  bytes | INTEGER_ITEMS | signed
+
+# The value of LertaItemKind that holds values of the type. A value's places of references depend on
+# the size of a pointer, which the IR does not, so they are computed by instructions, which LLVM
+# folds for the target.
+export emit_item_kind := (ir: IrBuilder, type: Type) ->
+  program := ir.program
+  case item_form(program, type)
+    when NONE then "#{NO_ITEMS}"
+    when NARROW then "#{narrow_item_kind(type)!}"
+    when PLAIN then "#{PLAIN_ITEMS}"
+    when REFERENCE, BOXED then "#{REFERENCE_ITEMS}"
+    when INTERFACE then "#{INTERFACE_ITEMS}"
+    when OPTIONAL then "#{OPTIONAL_ITEMS}"
+    when VALUE then emit_value_item_kind(ir, type)
+
+emit_value_item_kind := (ir: IrBuilder, type: Type) ->
+  program := ir.program
+  kind := VALUE_ITEMS | (is_wide_value(program, type) then WIDE_ITEMS else 0)
+  value_type := ir_type(program, type)
+  pointer_size := 'ptrtoint (ptr getelementptr (ptr, ptr null, i64 1) to i64)'
+  place_bit := (path: Int[]) ->
+    indexes := [", i32 #{index}" for index in path].join()
+    offset := "ptrtoint (ptr getelementptr (#{value_type}, ptr null, i64 0#{indexes}) to i64)"
+    place := ir.assign("udiv i64 #{offset}, #{pointer_size}")
+    ir.assign("shl i64 #{FIRST_REFERENCE_PLACE}, #{place}")
+  var places = "#{kind}"
+  for path in reference_paths(program, type)
+    places = ir.assign("or i64 #{places}, #{place_bit(path)}")
+  ir.assign("trunc i64 #{places} to i32")
+
+# Whether a value held in place takes 16 bytes rather than 8, as counted on a 64-bit target, which a
+# 32-bit one's is no larger than.
+is_wide_value := (program: ProgramWide, type: Type) ->
+  value_layout_of(program, inner_of(type))!.size > 8
+
+# The IR type that an item of the type is read and written as.
+item_ir_type := (program: ProgramWide, type: Type) ->
+  case item_form(program, type)
+    when OPTIONAL, VALUE, INTERFACE then ir_type(program, type)
+    when NARROW
+      if is_kind(type, 'Bool')
+        'i8'
+      else
+        ir_type(program, type)
+    else 'i64'
+
+# The room that an item of the type takes, as the runtime's lerta_item_size gives it: an optional
+# value takes a whole LertaItem, whatever its `{ i1, T }` takes.
+export item_room_type := (program: ProgramWide, type: Type) ->
+  case item_form(program, type)
+    when OPTIONAL then '{ i64, i64 }'
+    when VALUE
+      is_wide_value(program, type) then '{ i64, i64 }' else 'i64'
+    else item_ir_type(program, type)
+
+# The value as a word.
+export to_item := (ir: IrBuilder, operand: String, type: Type) ->
+  scalar := scalar_of(type) else return ir.assign("ptrtoint ptr #{operand} to i64")
+  widened_to_word(ir, operand, scalar)
+
+# The value of a word, or of the address of an item that the runtime gives as its word, as it may be
+# wider than one; the box itself of a boxed item.
+from_item := (ir: IrBuilder, item: String, type: Type) ->
+  form := item_form(ir.program, type)
+  if form in [OPTIONAL, VALUE]
+    pointer := ir.assign("inttoptr i64 #{item} to ptr")
+    return ir.load(ir_type(ir.program, type), pointer, item_tag(ir))
+  scalar := scalar_of(type) else return ir.assign("inttoptr i64 #{item} to ptr")
+  narrowed_from_word(ir, item, scalar)
+
+# The value of an item's word as the runtime gives it, borrowed as the item is: that in the box of
+# a boxed item.
+export from_item_word := (ir: IrBuilder, word: String, type: Type) ->
+  if item_form(ir.program, type) == BOXED
+    emit_unbox(ir, ir.assign("inttoptr i64 #{word} to ptr"), type)
+  else
+    from_item(ir, word, type)
+
+# The item that holds the value, owned, which it takes over.
+to_held_item := (ir: IrBuilder, operand: String, type: Type) ->
+  case item_form(ir.program, type)
+    when BOXED then to_item(ir, emit_box(ir, operand, type), type)
+    when NARROW
+      is_kind(type, 'Bool') then ir.assign("zext i1 #{operand} to i8") else operand
+    when OPTIONAL, VALUE, INTERFACE then operand
+    else to_item(ir, operand, type)
+
+# The value of an item as it is held, borrowed as the item is.
+from_held_item := (ir: IrBuilder, item: String, type: Type) ->
+  case item_form(ir.program, type)
+    when BOXED then from_item_word(ir, item, type)
+    when NARROW
+      is_kind(type, 'Bool') then ir.assign("trunc i8 #{item} to i1") else item
+    when OPTIONAL, VALUE, INTERFACE then item
+    else from_item(ir, item, type)
+
+# Room for an item of the type, which the runtime writes.
+export emit_item_slot := (ir: IrBuilder, type: Type) -> ir.alloca(item_room_type(ir.program, type))
+
+load_held := (ir: IrBuilder, pointer: String, type: Type) ->
+  ir.load(item_ir_type(ir.program, type), pointer, item_tag(ir))
+
+# The value of the item at the pointer, borrowed as the item is.
+export emit_load_item := (ir: IrBuilder, pointer: String, type: Type) ->
+  from_held_item(ir, load_held(ir, pointer, type), type)
+
+# The value of the item at the pointer, which the caller owns, owned: taken out of its box, if it
+# has one, which is released.
+export emit_take_item := (ir: IrBuilder, pointer: String, type: Type) ->
+  if item_form(ir.program, type) == BOXED
+    emit_taken(ir, load_held(ir, pointer, type), type)
+  else
+    emit_load_item(ir, pointer, type)
+
+export emit_store_item := (ir: IrBuilder, address: String, value: String, type: Type) ->
+  held := to_held_item(ir, value, type)
+  ir.store item_ir_type(ir.program, type), held, address, item_tag(ir)
+
+# Writes the value, retained, as the item at the address, releasing the one there.
+export emit_replace_item := (ir: IrBuilder, address: String, value: String, type: Type) ->
+  emit_retain_value ir, value, type
+  old := load_held(ir, address, type)
+  emit_store_item ir, address, value, type
+  if item_form(ir.program, type) == BOXED
+    emit_release ir, from_item(ir, old, type)
+  else
+    emit_release_value ir, from_held_item(ir, old, type), type
+
+# Gives `use` room that holds the value as an item, which the runtime copies, retaining what each
+# copy holds; the caller still owns the value. A box made for it is released after.
+export with_item_slot := (ir: IrBuilder, value: String, type: Type, use: (String) -> String) ->
+  slot := emit_item_slot(ir, type)
+  boxed := item_form(ir.program, type) == BOXED
+  if boxed
+    emit_retain_value ir, value, type
+  emit_store_item ir, slot, value, type
+  result := use(slot)
+  if boxed
+    emit_release ir, from_item(ir, load_held(ir, slot, type), type)
+  result
+
+# Whether a key of the type is held in a box, as the runtime keeps a key in a word.
+is_boxed_key := (program: ProgramWide, type: Type) -> is_value_type(program, inner_of(type))
+
+# The value of a word, a key, borrowed as it is: that in the box of a value.
+export from_key := (ir: IrBuilder, word: String, type: Type) ->
+  unless is_boxed_key(ir.program, type)
+    return from_item(ir, word, type)
+  emit_unbox(ir, ir.assign("inttoptr i64 #{word} to ptr"), type)
+
+# The value of a word, a key, owned, of which the caller owns the box of a value.
+export emit_taken := (ir: IrBuilder, word: String, type: Type) ->
+  value := from_key(ir, word, type)
+  if is_boxed_key(ir.program, type)
+    emit_retain_value ir, value, type
+    emit_release ir, ir.assign("inttoptr i64 #{word} to ptr")
+  value
+
+# The word of a key, borrowed, given to `use`: that of a box of a value, made for it, on the heap
+# if the runtime may keep it, and otherwise on the stack (see emit_stack_box).
+export with_key_word := (
+  ir: IrBuilder, key: String, type: Type, may_keep: Bool, word_of: (String) -> String,
+  use: (String) -> String
+) ->
+  return use(word_of(key)) unless is_boxed_key(ir.program, type)
+  unless may_keep
+    return use(to_item(ir, emit_stack_box(ir, key, type), type))
+  emit_retain_value ir, key, type
+  box := emit_box(ir, key, type)
+  result := use(to_item(ir, box, type))
+  emit_release ir, box
+  result
