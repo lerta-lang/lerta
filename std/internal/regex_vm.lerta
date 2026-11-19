@@ -53,6 +53,13 @@ export class Searcher
     # The ASCII code points of each CLASS, as bits in the two words from twice its place, so that an
     # ASCII byte is tested without decoding it or searching the ranges.
     ascii_classes := ascii_classes_of(@words)
+
+    # For each place, its row in the bits of the search by backtracking, or -1 for none. Rows are
+    # for the joins: the start, and where a JUMP or a SPLIT goes. Any other place is reached only by
+    # falling through from the one before it, and jobs resume only at a SPLIT's second place, so
+    # that marking the joins alone still follows each pair of places once.
+    rows := rows_of(@words)
+    row_count := [row for row in @rows when row >= 0].length
     var current = Threads(length: @length, slot_count: @slot_count)
     var next = Threads(length: @length, slot_count: @slot_count)
 
@@ -85,7 +92,7 @@ export class Searcher
   # steps all of them at each code point; each pair of places it visits once, so that it takes time
   # linear in the text too, which it needs memory for in proportion to the pairs.
   find := (text: Binary, from: Int) ->
-    pairs := @length * (text.length - from + 1)
+    pairs := @row_count * (text.length - from + 1)
     if pairs <= MAX_BACKTRACKED_PAIRS
       @backtrack(text, from)
     else
@@ -97,7 +104,7 @@ export class Searcher
   # it failed.
   backtrack := (text: Binary, from: Int) ->
     columns := text.length - from + 1
-    words := (@length * columns + 63) / 64
+    words := (@row_count * columns + 63) / 64
     @visited.push 0 while @visited.length < words
     for i in 0..@touched_count
       @visited[@touched[i]] = 0
@@ -124,12 +131,14 @@ export class Searcher
         @work[-1 - place] = at
         continue
       while true
-        visit := place * columns + at - from
-        word := visit / 64
-        bit: UInt64 = 1 << (visit % 64).to_uint64()!
-        break if @visited[word] & bit != 0
-        @touch word if @visited[word] == 0
-        @visited[word] |= bit
+        row := @rows[place]
+        if row >= 0
+          visit := row * columns + at - from
+          word := visit / 64
+          bit: UInt64 = 1 << (visit % 64).to_uint64()!
+          break if @visited[word] & bit != 0
+          @touch word if @visited[word] == 0
+          @visited[word] |= bit
         case @word(place)
           when MATCH then return @work[0..]
           # An ASCII byte is read and passed over here, rather than by code_at, class_has and
@@ -295,7 +304,7 @@ export class Searcher
     @pending_values[@depth] = value
     @depth += 1
 
-# The most pairs of a place in the program and one in the text that a search follows by
+# The most pairs of a join of the program and a place in the text that a search follows by
 # backtracking, which keeps a bit for each: 32 KiB.
 MAX_BACKTRACKED_PAIRS := 1 << 18
 
@@ -341,21 +350,44 @@ code_at := (text: Binary, at: Int) ->
 # The bits of ascii_classes in Searcher.
 ascii_classes_of := (words: Int[]) ->
   bits: UInt64[] = Array(2 * words.length, 0)
+  for place in places_of(words)
+    continue if words[place] != CLASS
+    for range in 0..words[place + 1]
+      first := place + 2 + 2 * range
+      for code in words[first]..=min(words[first + 1], 0x7F)
+        bit: UInt64 = 1 << (code % 64).to_uint64()!
+        bits[2 * place + code / 64] |= bit
+  bits
+
+# The rows of Searcher, numbered in the order of their places.
+rows_of := (words: Int[]) ->
+  rows := Array(words.length, -1)
+  rows[0] = 0
+  for place in places_of(words)
+    case words[place]
+      when JUMP then rows[words[place + 1]] = 0
+      when SPLIT
+        rows[words[place + 1]] = 0
+        rows[words[place + 2]] = 0
+      else pass
+  var count = 0
+  for place in 0..rows.length
+    continue if rows[place] < 0
+    rows[place] = count
+    count += 1
+  rows
+
+# The places where the program's instructions start, in order.
+places_of := (words: Int[]) ->
   var place = 0
   while place < words.length
-    case words[place]
-      when CLASS
-        count := words[place + 1]
-        for range in 0..count
-          first := place + 2 + 2 * range
-          for code in words[first]..=min(words[first + 1], 0x7F)
-            bit: UInt64 = 1 << (code % 64).to_uint64()!
-            bits[2 * place + code / 64] |= bit
-        place += 2 + 2 * count
-      when MATCH then place += 1
-      when SPLIT then place += 3
-      else place += 2
-  bits
+    yield place
+    place +=
+      case words[place]
+        when CLASS then 2 + 2 * words[place + 1]
+        when MATCH then 1
+        when SPLIT then 3
+        else 2
 
 # The first bytes of the UTF-8 of the code points from `low` to `high`: those themselves below
 # 0x80, and every lead byte, from 0xC2 to 0xF4, for any above.
