@@ -59,7 +59,7 @@ More of [Regex](../reference/types.md#regex), and faster.
 
 ### Order
 
-1. Speed, measured in `bench/`: a literal's `Regex` made once, where it is first evaluated, rather than each time, with its groups' names as a constant, where they are now joined by `,` in a `String` that `regex_of_literal` splits; slots shared until a SAVE writes one, where each SAVE copies them now; the groups of a `Match` sliced as they are read, where each is now as it is made, and `split` and `replace`, which read none, working from the slots; a lazy DFA; and `memchr` for a literal prefix.
+1. Speed, measured in `bench/`: a literal's groups' names as a constant, where they are now joined by `,` in a `String` that `regex_of_literal` splits; the groups of a `Match` sliced as they are read, where each is now as it is made, and `split` and `replace`, which read none, working from the slots; a lazy DFA; and `memchr` for a literal prefix.
 2. Scripts, as `\p{Greek}`, from Scripts.txt.
 
 ## What the compiler needs

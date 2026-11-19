@@ -1,0 +1,36 @@
+# A long text, past what backtracking searches, is searched by the Pike VM, and a short one by
+# backtracking: both find the same matches and groups.
+patterns :=
+  /(\w+)=(\d+)?/
+  /\b(?:GET|POST) \/(\w+)/
+  /(a|ab)(c|bcd)(d*)/
+  /x*/
+  /é+/
+  /zz/
+  /(a*)*/
+  /(|a)+/
+  /(a|)+b/
+  /(a|ab)*?(b*)/
+  /(a*?)(a*)/
+  /((a)|b)*c/
+short := 'k= GET /items abcd x=42 éé aab abbc'
+padding := 300000
+long := '.'.repeat(padding) + short
+shown := (re: Regex, text: String) ->
+  if found := re.find(text)
+    groups := [g else 'nil' for g in found.groups]
+    "#{groups} after #{found.before().count() % padding}"
+  else
+    '-'
+for re in patterns
+  print "#{re.pattern}: #{shown(re, short)} #{shown(re, long)}"
+  short_texts := [m.text for m in re.find_all(short)]
+  long_texts := [m.text for m in re.find_all(long)]
+  print short_texts == long_texts[(long_texts.length - short_texts.length)..]
+
+# Texts right at the most pairs that backtracking follows and just past it: the program of
+# `(a|b)+c` is of 23 words, so a text of 11396 bytes is the longest that backtracking searches.
+edge := /(a|b)+c/
+for length in [11395, 11396, 11397]
+  text := 'b'.repeat(length - 3) + 'abc'
+  print [m.text.count() for m in edge.find_all(text)]

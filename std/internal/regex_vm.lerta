@@ -60,11 +60,115 @@ export class Searcher
     pending_values := Array(2 * @length + 1, 0)
     var depth = 0
 
+    # Of the search by backtracking: a bit for each pair of a place in the program and one in the
+    # text, set once it is visited, 64 to a word; the first `touched_count` places of the words it
+    # set bits in, which the next search clears, so that clearing costs as much as visiting did,
+    # rather than as the text left; and what it has yet to follow, the first `job_depth` of them,
+    # places with the place in the text, or slots to give back their values, as `-1 - slot`. They
+    # grow to what the longest text so searched needs, the bits to 32 KiB.
+    visited: UInt64[] = []
+    touched: Int[] = []
+    var touched_count = 0
+    job_places: Int[] = []
+    job_values: Int[] = []
+    var job_depth = 0
+
   word := (place: Int) -> @words[place]
 
   # The slots of the first match at `from` or after it in the text's bytes, two for each group from
-  # the whole match, its start and its end, -1 for a group that took no part; or nil.
+  # the whole match, its start and its end, -1 for a group that took no part; or nil. A short text,
+  # as a line is, is searched by backtracking, which follows one thread at a time where the Pike VM
+  # steps all of them at each code point; each pair of places it visits once, so that it takes time
+  # linear in the text too, which it needs memory for in proportion to the pairs.
   find := (text: Binary, from: Int) ->
+    pairs := @length * (text.length - from + 1)
+    if pairs <= MAX_BACKTRACKED_PAIRS
+      @backtrack(text, from)
+    else
+      @step(text, from)
+
+  # The search by backtracking, as RE2's BitState: from each place where a match may start, in
+  # order, the threads in their order of priority, depth first, the first to match winning, as the
+  # Pike VM's does. A pair visited once is not followed again, by a later start too: from there,
+  # it failed.
+  backtrack := (text: Binary, from: Int) ->
+    columns := text.length - from + 1
+    words := (@length * columns + 63) / 64
+    @visited.push 0 while @visited.length < words
+    for i in 0..@touched_count
+      @visited[@touched[i]] = 0
+    @touched_count = 0
+    var start = from
+    while true
+      start = next_start(text, start, @first_bytes) else return nil
+      @work[k] = -1 for k in 0..@slot_count
+      return found if found := @backtrack_from(text, from, columns, start)
+      break if start == text.length
+      start += sequence_length(text[start])
+    nil
+
+  # The match of the threads from `start`, or nil. Each job is a place to go on at, with the place
+  # in the text, or a slot to give back its value, which a SAVE pushes before it goes on.
+  backtrack_from := (text: Binary, from: Int, columns: Int, start: Int) ->
+    @job_depth = 0
+    @push_job 0, start
+    until @job_depth == 0
+      @job_depth -= 1
+      var place = @job_places[@job_depth]
+      var at = @job_values[@job_depth]
+      if place < 0
+        @work[-1 - place] = at
+        continue
+      while true
+        visit := place * columns + at - from
+        word := visit / 64
+        bit: UInt64 = 1 << (visit % 64).to_uint64()!
+        break if @visited[word] & bit != 0
+        @touch word if @visited[word] == 0
+        @visited[word] |= bit
+        case @word(place)
+          when MATCH then return @work[0..]
+          when CHAR
+            break if at == text.length or char_at(text, at).to_int() != @word(place + 1)
+            at += sequence_length(text[at])
+            place += 2
+          when CLASS
+            break if at == text.length or not @in_class(place, char_at(text, at).to_int())
+            at += sequence_length(text[at])
+            place += 2 + 2 * @word(place + 1)
+          when JUMP then place = @word(place + 1)
+          when SPLIT
+            @push_job @word(place + 2), at
+            place = @word(place + 1)
+          when SAVE
+            slot := @word(place + 1)
+            @push_job -1 - slot, @work[slot]
+            @work[slot] = at
+            place += 2
+          when ASSERT
+            break unless holds(text, @word(place + 1), at)
+            place += 2
+          else break
+    nil
+
+  touch := (word: Int) ->
+    if @touched_count == @touched.length
+      @touched.push word
+    else
+      @touched[@touched_count] = word
+    @touched_count += 1
+
+  push_job := (place: Int, value: Int) ->
+    if @job_depth == @job_places.length
+      @job_places.push place
+      @job_values.push value
+    else
+      @job_places[@job_depth] = place
+      @job_values[@job_depth] = value
+    @job_depth += 1
+
+  # The search by the Pike VM, which steps every thread over each code point at once.
+  step := (text: Binary, from: Int) ->
     var current = @current
     var next = @next
     current.clear()
@@ -159,6 +263,10 @@ export class Searcher
     @pending_places[@depth] = place
     @pending_values[@depth] = value
     @depth += 1
+
+# The most pairs of a place in the program and one in the text that a search follows by
+# backtracking, which keeps a bit for each: 32 KiB.
+MAX_BACKTRACKED_PAIRS := 1 << 18
 
 # The first place from `at` on whose byte a match may start, or nil if there is none; `at`
 # itself where every place may start one.
