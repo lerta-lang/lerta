@@ -3,6 +3,7 @@
 import Position from '../ast'
 import quoted_name from './lerta_ir'
 import Metadata from './metadata'
+import is_standard_name, standard_short_name, STD_PREFIX from '../source'
 
 # A function of the program, by its name in traces, in the source file of the path.
 export struct SourceScope
@@ -24,8 +25,14 @@ export class SourceLines
     # The places where each subprogram starts, by subprogram.
     starts := Map<String, String>()
 
+    # A standard module, which has no file, is named in the directory `std:`, as Apple's ld
+    # records the object of a unit that has no directory, and a name that is no absolute path, as a
+    # Swift module, which dsymutil fails to read and leaves out.
     file := (path: String) ->
-      @metadata.node("!DIFile(filename: #{quoted_name(path)}, directory: \"\")")
+      standard := is_standard_name(path)
+      name := standard then standard_short_name(path) else path
+      directory := quoted_name(standard then STD_PREFIX else '')
+      @metadata.node("!DIFile(filename: #{quoted_name(name)}, directory: #{directory})")
 
     unit := (path: String) ->
       file := @file(path)

@@ -806,24 +806,37 @@ tool_on_path := (name: String) ->
     return candidate if not directory.is_empty() and is_file(candidate)
   nil
 
-run_dwarfdump := (command: String, path: String) ->
+run_dwarfdump := (command: String, option: String, path: String) ->
   try
-    await run_command(command, ['--debug-line', path], cli_work_dir)
+    await run_command(command, [option, path], cli_work_dir)
   catch error
     return nil
 
-line_table_rows := (path: String) ->
+# What dwarfdump or llvm-dwarfdump writes of the section that the option names; nil if neither runs.
+dwarfdump_text := (option: String, path: String) ->
   for tool in ['dwarfdump', 'llvm-dwarfdump']
     command := tool_on_path(tool) else continue
-    result := await run_dwarfdump(command, path) else continue
+    result := await run_dwarfdump(command, option, path) else continue
     continue if result.status != 0
-    rows: Int[]
-    for line in result.stdout_text().lines()
-      fields := line.split_whitespace()
-      if fields.length >= 2 and fields[0].starts_with('0x')
-        rows.push number if number := source_line_number(fields[1])
-    return rows
+    return result.stdout_text()
   nil
+
+line_table_rows := (path: String) ->
+  text := await dwarfdump_text('--debug-line', path) else return nil
+  rows: Int[]
+  for line in text.lines()
+    fields := line.split_whitespace()
+    if fields.length >= 2 and fields[0].starts_with('0x')
+      rows.push number if number := source_line_number(fields[1])
+  rows
+
+# Whether the compile units of the standard modules are in the directory `std:`, which a linker
+# needs to keep their information: Apple's ld-27106, unlike ld-1267, records an object whose units
+# have no directory, and a name that is no absolute path, as a Swift module, and dsymutil drops it.
+# True if no dwarfdump runs.
+has_std_units := (path: String) ->
+  text := await dwarfdump_text('--debug-info', path) else return true
+  text.lines().any((line) -> 'DW_AT_comp_dir' in line and '("std:")' in line)
 
 source_lines_build_check := (flags: String[]) ->
   Check(
@@ -841,6 +854,8 @@ source_lines_build_check := (flags: String[]) ->
       rows := await line_table_rows(debug_file_of(output))
       expected_lines: Int[] = flags.is_empty() then [12, 5, 16] else []
       has_debug := await has_debug_info(output)
+      has_std := await has_std_units(debug_file_of(output))
+      std_reasons := has_std then no_reasons else ['no compile unit of a standard module in std:']
       row_reasons :=
         if rows
           missing := [
@@ -855,6 +870,7 @@ source_lines_build_check := (flags: String[]) ->
         compare_output('stdout', b"2\n7\n", ran.stdout)...
         (has_debug then no_reasons else ['no debug information'])...
         row_reasons...
+        std_reasons...
       ]
   )
 

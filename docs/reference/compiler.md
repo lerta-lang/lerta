@@ -151,7 +151,7 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 - Gives the program debug information of where its code comes from in the source: the file, the line and the column of each statement and expression.
   - It is for a debugger and for the backtrace of a panic or a crash, as `f at main.lerta:3:3`.
   - It holds no names of locals nor their values.
-- A file is named by its absolute path, which a debugger may show as a directory and a name, and a standard module as `std:<name>`.
+- A file is named by its absolute path, which a debugger may show as a directory and a name, and a standard module `std:<name>` as `<name>` in the directory `std:`, which a debugger may show as `<name>` or `std:/<name>`.
 
 | System | Where the information goes |
 |---|---|
