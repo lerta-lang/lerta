@@ -386,13 +386,13 @@ These throw a `ValueError`:
 - So it has no lookaround (`(?=...)`, `(?<=...)`) and no backreferences (`\1`), which a pattern cannot be matched by in linear time; they are errors.
 - A pattern is matched by code points, not bytes: `.` matches `é` whole.
 - A match is the leftmost, and of those at one place, the one that backtracking would find first, as in Perl and RE2: alternatives in order, a greedy repeat as long as it goes, a lazy one (`*?`) as short. Unlike JavaScript, a repeat may take a round that matches nothing: `(a*)*` gives its group `''` where JavaScript leaves it out.
-- It gives text, not positions, as a `String` has none (see [String](#string)).
+- It gives text, not positions, as a `String` has none (see [String](#string)), made as a match's methods ask for it.
 - A [literal](syntax.md#regular-expression-literals), `/pattern/flags`, is checked and compiled with the program.
 
 ```lerta
 pair := Regex('(?<key>\w+)\s*=\s*(\d+)')
 found := pair.find('width = 42')!
-print "#{found.named('key')!}: #{found.groups[2]!}"
+print "#{found.named('key')!}: #{found.group(2)!}"
 print ' a  b '.split(/\s+/)
 ```
 
@@ -403,8 +403,9 @@ print ' a  b '.split(/\s+/)
 | `r.test(text: String): Bool` | Whether the pattern matches anywhere in the text. |
 | `r.find(text: String): Match?` | The first match, or nil. |
 | `r.find_all(text: String): Iter<Match>` | The matches, from the start, that do not overlap. After an empty match, the next is looked for a code point on; after another, at its end, where an empty one may follow it, as in JavaScript: `a*` finds `''`, `'aaa'`, `''` and `''` in `'baaac'`. |
-| `m.text: String` | The text matched. |
-| `m.groups: String?[]` | The text of each group, from 0, the whole match, then the groups in the order of their `(`; nil for a group that took no part. |
+| `m.text(): String` | The text matched. |
+| `m.group(index: Int): String?` | The text of the group at the index, from 0, the whole match, then the groups in the order of their `(`; nil if it took no part. Throws an `IndexError` for an index the pattern has no group at. |
+| `m.groups(): String?[]` | The text of each group, as `group` gives it, from 0. |
 | `m.named(name: String): String?` | The text of the group of the name, `(?<name>...)`, or nil if it took no part. Throws a `ValueError` for a name the pattern does not give. |
 | `m.before(): String`, `m.after(): String` | The text before and after the match. |
 

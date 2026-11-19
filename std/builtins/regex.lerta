@@ -47,6 +47,8 @@ export class Regex
 
     match_of := (text: String, slots: Int[]) -> Match(slots, source: text, names: @program.names)
 
+# A match keeps its places, and its texts are sliced as they are read, so that one that is only
+# counted slices nothing.
 export class Match
   args
     private
@@ -54,13 +56,17 @@ export class Match
       slots: Int[]
       names: String?[]
 
-  # The text of each group, from the whole match, nil for a group that took no part.
-  groups: String?[] = [
-    for i in 0..@names.length
-      group_text(@source, @slots, i)
-  ]
+  text := -> @group(0)!
 
-  text := @groups[0]!
+  # The text of each group, from the whole match, nil for a group that took no part.
+  groups := -> [@group(i) for i in 0..@names.length]
+
+  # The text of the group at the index, from 0, the whole match, or nil if it took no part; an index
+  # the pattern has no group at throws an IndexError.
+  group := (index: Int) ->
+    start := @slots[2 * index]
+    return nil if start < 0
+    lerta_string_slice(@source, start, @slots[2 * index + 1])
 
   # The places of the match's bytes, from its start up to its end.
   private span := (@slots[0], @slots[1])
@@ -72,14 +78,7 @@ export class Match
   # throws a ValueError.
   named := (name: String) ->
     index := @names.find_index((n) -> n == name) else throw ValueError("no group named #{name}")
-    @groups[index]
-
-group_text := (source: String, slots: Int[], index: Int) ->
-  start := slots[2 * index]
-  if start >= 0
-    lerta_string_slice(source, start, slots[2 * index + 1])
-  else
-    nil
+    @group(index)
 
 # The Regex of a literal, of the program that the compiler compiled, which the code generated for it
 # calls (see compiler/codegen/regex.lerta). `names` holds the name of each group, `''` for none, as
