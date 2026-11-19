@@ -9,8 +9,6 @@ void lerta_start_traversal(bool *started) {
   *started = true;
 }
 
-void lerta_iter_start(LertaIter *iter) { lerta_start_traversal(&iter->started); }
-
 void lerta_raise_iter_ended(void) { lerta_raise(LERTA_ITER_ERROR, LERTA_STR(ended)); }
 
 void lerta_raise_iter_running(void) {

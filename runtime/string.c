@@ -466,9 +466,6 @@ LertaString *lerta_float_to_string(double value) { return shortest_text(value, f
 
 LertaString *lerta_float32_to_string(float value) { return shortest_text(value, true); }
 
-// The seed's to_literal of a Float32 calls it, until the seed is refreshed again.
-double lerta_float32_to_float(float value) { return value; }
-
 bool lerta_float_fits_int(double value) {
   // -2^63 is a double, the lowest Int; 2^63 is the first double past the highest.
   return value >= -9223372036854775808.0 && value < 9223372036854775808.0;

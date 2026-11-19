@@ -137,18 +137,6 @@ typedef struct {
   LertaEquals equals;
 } LertaMap;
 
-// An Iter as the seed's code lays it out, which calls lerta_iter_start, until the seed is refreshed.
-// The header's fields are spelled out: the generated code lays them out flat, while a nested
-// LertaHeader would be padded to the alignment of its int64_t, which is 8 on 32-bit Windows.
-typedef struct LertaIter {
-  int64_t ref_count;
-  const LertaType *type;
-  bool (*has_next)(struct LertaIter *iter);
-  void *next;
-  // Whether a traversal has started; a second one throws.
-  bool started;
-} LertaIter;
-
 // Memory (memory.c). lerta_new makes an object of the type, which is NULL for one that holds
 // nothing. Release frees an object when its count reaches zero. Retain and release accept NULL,
 // which is how nil is represented.
@@ -185,9 +173,6 @@ double lerta_float_from_bits(int64_t bits);
 // A Float32's likewise, of the digits that read back as it as a float.
 LertaString *lerta_float_to_string(double value);
 LertaString *lerta_float32_to_string(float value);
-
-// The seed's to_literal of a Float32 calls it, until the seed is refreshed again.
-double lerta_float32_to_float(float value);
 
 // Whether the value truncated toward zero fits in an Int, which only then is it converted to.
 bool lerta_float_fits_int(double value);
@@ -268,7 +253,6 @@ void lerta_map_cursor_next(LertaMapCursor *cursor, int64_t *key, void *value);
 // Iters (iter.c). Starting a traversal of an Iter that has started one, as its flag `started`
 // tells, throws, and so does next past the end.
 void lerta_start_traversal(bool *started);
-void lerta_iter_start(LertaIter *iter);
 void lerta_raise_iter_ended(void);
 // Asking an Iter for an item while its function, which yields, runs.
 void lerta_raise_iter_running(void);
