@@ -5,7 +5,7 @@ import double_quoted from '../internal/escape'
 import
   char_at, is_continuation, lerta_binary_text, lerta_string_slice, sequence_length
 from '../internal/utf8'
-import Match, occurrences, Regex, replace_matches, split_by_regex from './regex'
+import Match, occurrences, Regex, replace_by_regex, replace_matches, split_by_regex from './regex'
 import INFINITY from './numbers'
 import normalized from '../internal/normal_forms'
 import '../internal/unicode' as unicode
@@ -218,13 +218,14 @@ extend String
   trim_end := -> lerta_string_slice(@, 0, text_end(@binary, 0))
 
   # Each occurrence of the part, from the start and without overlapping, or each match of a Regex,
-  # replaced by `by`, as it is, or by what `by` gives for its Match (see replace_matches).
+  # replaced by `by`, as it is, or by what `by` gives for its Match (see replace_matches). By a
+  # String, the common case, no Match is made.
   replace := (part: String | Regex, by: String | ((Match) -> String)) ->
-    if part is String
-      throw ValueError('replace of an empty part') if part.is_empty()
-
-      # A String by a String, the common case, makes no Match of each occurrence.
-      return @split(part).join(by) if by is String
+    throw ValueError('replace of an empty part') if part is String and part.is_empty()
+    if by is String
+      if part is Regex
+        return replace_by_regex(@, part, by)
+      return @split(part).join(by)
     matches :=
       if part is Regex
         part.find_all @

@@ -22,24 +22,30 @@ export class Regex
   test := (text: String) -> @searcher.find(text.binary, 0) != nil
 
   # The leftmost match, or nil.
-  find := (text: String) -> @match_of(text, @searcher.find(text.binary, 0))
+  find := (text: String) ->
+    slots := @searcher.find(text.binary, 0) else return nil
+    @match_of(text, slots)
 
-  # The matches that do not overlap, from the start. After an empty one, the next is looked for a
-  # code point on, as JavaScript does; after another, at its end, where an empty one may follow.
+  # The matches that do not overlap, from the start (see all_slots).
   find_all := (text: String): Iter<Match> ->
-    var from = 0
-    while from <= text.binary.length
-      found := @match_of(text, @searcher.find(text.binary, from)) else return
-      yield found
-      (start, end) := found.span
-      from = end
-      if start == end and end < text.binary.length
-        from += sequence_length(text.binary[end])
-      from += 1 if start == end and end == text.binary.length
+    yield @match_of(text, slots) for slots in @all_slots(text)
 
-  private match_of := (text: String, slots: Int[]?) ->
-    found := slots else return nil
-    Match(slots: found, source: text, names: @program.names)
+  private
+    # The slots of each match that does not overlap, from the start, which split and replace read
+    # without making a Match. After an empty one, the next is looked for a code point on, as
+    # JavaScript does; after another, at its end, where an empty one may follow.
+    all_slots := (text: String): Iter<Int[]> ->
+      bytes := text.binary
+      var from = 0
+      while from <= bytes.length
+        slots := @searcher.find(bytes, from) else return
+        yield slots
+        (start, end) := (slots[0], slots[1])
+        from = end
+        if start == end
+          from += end < bytes.length then sequence_length(bytes[end]) else 1
+
+    match_of := (text: String, slots: Int[]) -> Match(slots, source: text, names: @program.names)
 
 export class Match
   args
@@ -104,25 +110,36 @@ export split_by_regex := (text: String, re: Regex) ->
   length := text.binary.length
   pieces: String[]
   var piece_start = 0
-  for found in re.find_all(text)
-    (start, end) := found.span
+  for slots in re.all_slots(text)
+    (start, end) := (slots[0], slots[1])
     continue if start == end and (start == piece_start or start == length)
     pieces.push lerta_string_slice(text, piece_start, start)
     piece_start = end
   pieces.push lerta_string_slice(text, piece_start, length)
   pieces
 
-# The text with each match replaced by `by`, taken as it is, or by what `by` gives for it, for
-# String's replace: the matches of a Regex, or the occurrences of a String.
-export replace_matches := (text: String, matches: Iter<Match>, by: String | ((Match) -> String)) ->
-  var replaced = ''
+# The text with each match of the Regex replaced by `by`, for String's replace: no Match is made.
+export replace_by_regex := (text: String, re: Regex, by: String) ->
+  pieces: String[]
+  var piece_start = 0
+  for slots in re.all_slots(text)
+    pieces.push lerta_string_slice(text, piece_start, slots[0])
+    piece_start = slots[1]
+  pieces.push lerta_string_slice(text, piece_start, text.binary.length)
+  pieces.join(by)
+
+# The text with each match replaced by what `by` gives for it, for String's replace: the matches of
+# a Regex, or the occurrences of a String.
+export replace_matches := (text: String, matches: Iter<Match>, by: (Match) -> String) ->
+  pieces: String[]
   var piece_start = 0
   for found in matches
     (start, end) := found.span
-    replaced += lerta_string_slice(text, piece_start, start)
-    replaced += by is String then by else by(found)
+    pieces.push lerta_string_slice(text, piece_start, start)
+    pieces.push by(found)
     piece_start = end
-  replaced + lerta_string_slice(text, piece_start, text.binary.length)
+  pieces.push lerta_string_slice(text, piece_start, text.binary.length)
+  pieces.join()
 
 # The occurrences of a part that is not empty in the text, from the start and without overlapping,
 # each a Match of it alone.
