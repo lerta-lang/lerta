@@ -7,10 +7,14 @@ import FunctionType, is_kind, Type from '../types'
 # Calls a runtime function; the value of one that never returns is poison (see
 # emit_valueless_call).
 export emit_runtime_call := (ir: IrBuilder, symbol: String, type: FunctionType, args: String[]) ->
-  params := [ir_param_type(param) for param in type.params].join(', ')
-  result := ir_c_return_type(type.result)
+  param_types := [
+    for param in type.params
+      ir_param_type(ir.program, param)
+  ]
+  params := param_types.join(', ')
+  result := ir_c_return_type(ir.program, type.result)
   ir.module.declare symbol, "declare #{result} @#{symbol}(#{params})"
-  arg_list := ["#{ir_param_type(type.params[i])} #{arg}" for arg at i in args]
+  arg_list := ["#{ir_param_type(ir.program, type.params[i])} #{arg}" for arg at i in args]
   call := "call #{result} @#{symbol}(#{arg_list.join(', ')})"
   return ir.assign(call) if result != 'void'
   emit_valueless_call(ir, call, type.result)

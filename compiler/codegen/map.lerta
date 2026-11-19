@@ -51,7 +51,7 @@ export emit_map_new := (ir: IrBuilder, program: ProgramWide, type: MapType) ->
   functions := kind == VALUE_KEYS then item_functions(ir.module, program, type.key)
   hash := functions?.hash else 'null'
   equals := functions?.equals else 'null'
-  args := "i32 #{kind}, i32 #{item_kind(type.value)}, ptr #{hash}, ptr #{equals}"
+  args := "i32 #{kind}, i32 #{item_kind(program, type.value)}, ptr #{hash}, ptr #{equals}"
   call_runtime(ir, 'ptr @lerta_map_create(i32, i32, ptr, ptr)', args)
 
 export emit_map_length := (ir: IrBuilder, map: String) ->
@@ -79,10 +79,10 @@ export emit_map_get := (ir: IrBuilder, map: String, key: String, type: MapType) 
   return value if optional == type.value
   emit_branch(
     ir
-    ir_type(optional)
+    ir_type(ir.program, optional)
     found
     -> emit_wrap(ir, value, type.value)
-    nil_constant(optional)
+    nil_constant(ir.program, optional)
   )
 
 # The value at the place that emit_find gave, owned, where `found` tells that it gave one; zeros
@@ -92,7 +92,7 @@ export emit_held_at := (ir: IrBuilder, place: String, found: String, type: MapTy
     held := emit_load_item(ir, place, type.value)
     emit_retain_value ir, held, type.value
     held
-  emit_branch(ir, ir_type(type.value), found, read, 'zeroinitializer')
+  emit_branch(ir, ir_type(ir.program, type.value), found, read, 'zeroinitializer')
 
 # The map retains the key and the value, which stay owned by the caller. The new value is retained
 # before the old one is released, in case they are the same object.

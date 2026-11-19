@@ -1,4 +1,5 @@
 # Functions that yield (see docs/internals/iteration.md#functions-that-yield).
+import ProgramWide from '../checker/shared'
 import Yield from '../ast'
 import emit_final_suspension, emit_ramp, emit_suspend, generate_coroutine from './coroutine'
 import generate from './expression'
@@ -17,8 +18,11 @@ HANDLE := 0
 RUNNING := 1
 ITEM := 2
 
-generator_state := (item: Type) ->
-  return [HeapField(ir_type: 'ptr', owned: COROUTINE), plain_field('i1'), value_field(item)]
+generator_state := (program: ProgramWide, item: Type) ->
+  return
+    HeapField(ir_type: 'ptr', owned: COROUTINE)
+    plain_field('i1')
+    value_field(program, item)
 
 # The function `symbol`, of the linkage and the parameters, as in `i64 %p0`: it makes the Iter and
 # runs the body, which `generate_body` generates, up to its first suspension. The body gets the
@@ -71,11 +75,11 @@ generator_kind := (ir: IrBuilder, item: Type) ->
     # The held item passes to the caller; a reference is cleared, so that the drop does not
     # release it.
     value := load_state(body, kind, ITEM)
-    if ownership(item) != NONE
+    if ownership(ir.program, item) != NONE
       store_state body, kind, ITEM, 'zeroinitializer'
     emit_give body, kind, value
 
-  define_kind(ir, "generator #{type_key(item)}", generator_state(item), item, next)
+  define_kind(ir, "generator #{type_key(item)}", generator_state(ir.program, item), item, next)
 
 is_done := (ir: IrBuilder, handle: String) ->
   call_runtime(ir, 'i1 @llvm.coro.done(ptr)', "ptr #{handle}")

@@ -131,7 +131,7 @@ export generate_closure := (g: Generator, literal: FunctionLiteral, is_local = f
   operands: String[]
   for capture in captures
     local := local_of(capture)
-    slots.push capture_slot(capture)
+    slots.push capture_slot(g.code.program, capture)
     unless capture.is_var
       borrowed := -> read_borrowed(g, local, capture.type)
       operand := on_stack then borrowed() else captured_value(g, local, capture)
@@ -177,7 +177,7 @@ export emit_settling_closure := (g: Generator, closure: String, source: Type, ta
   body_generator := function_generator(g.code, g.extensions, g.facts, name)
   { params } := function_type_of(source)
   value := (function_type_of(target).result as PromiseType!).value
-  slots := [fixed(value_field(source))]
+  slots := [fixed(value_field(g.code.program, source))]
   args := ["%p#{i}" for _ at i in params]
   generate_body := ->
     ir := body_generator.ir
@@ -186,7 +186,7 @@ export emit_settling_closure := (g: Generator, closure: String, source: Type, ta
     result := emit_closure_call(ir, callee, source, args)
     emit_exception_check body_generator
     emit_return body_generator, result, value
-  all_params := ['ptr %closure', typed_params(params)...]
+  all_params := ['ptr %closure', typed_params(g.code.program, params)...]
   generate_awaiting_function body_generator, 'private ', symbol, all_params, value, generate_body
   emit_closure(g.ir, symbol, name, slots, [closure])
 
@@ -239,8 +239,8 @@ export generate_function := (
   g.ir.declared_at = literal.position
   params: String[]
   params.push 'ptr %closure' if captures != nil
-  params.push "#{ir_type(this_type)} %this" if this_type
-  params.append typed_params(type.params)
+  params.push "#{ir_type(g.code.program, this_type)} %this" if this_type
+  params.append typed_params(g.code.program, type.params)
   generate_body := (result: Type) -> generate_function_body(g, literal, this_type, captures, result)
   if literal.yields
     item := iterable_item(type.result)!
@@ -255,7 +255,8 @@ export generate_function := (
     # A function that never returns throws or ends the program: a cold path, kept out of its
     # callers, so that those stay short enough to be inlined themselves.
     attributes := is_kind(type.result, 'never') then ' cold noinline' else ''
-    signature := "#{ir_return_type(type.result)} #{symbol}(#{params.join(', ')})#{attributes}"
+    result_type := ir_return_type(g.code.program, type.result)
+    signature := "#{result_type} #{symbol}(#{params.join(', ')})#{attributes}"
     finish g, "#{linkage}#{signature}"
   fewest := with_defaults then required_params(literal) else literal.params.length
   for given in fewest..literal.params.length
@@ -303,7 +304,10 @@ generate_function_body := (
 
   # A captured var is its cell, which the closure holds; the literal reads and writes through it.
   captured := captures else []
-  slots := [capture_slot(capture) for capture in captured]
+  slots := [
+    for capture in captured
+      capture_slot(ir.program, capture)
+  ]
   for capture at i in captured
     { name, type, is_var } := capture
     pointer := emit_capture_pointer(ir, '%closure', slots, i)
@@ -346,17 +350,20 @@ generate_default_entry := (
         value
   ]
   args: String[]
-  args.push "#{ir_type(this_type)} %this" if this_type
-  args.push "#{ir_type(param)} #{operand}" for (param, operand) in type.params.zip(operands)
+  args.push "#{ir_type(g.code.program, this_type)} %this" if this_type
+  for (param, operand) in type.params.zip(operands)
+    args.push "#{ir_type(g.code.program, param)} #{operand}"
   result := call_user_function(g.ir, symbol, type, args.join(', '))
   emit_exception_check g
   emit_return g, result, type.result
   g.locals.pop()
   params: String[]
-  params.push "#{ir_type(this_type)} %this" if this_type
-  params.append typed_params(type.params[..given])
+  params.push "#{ir_type(g.code.program, this_type)} %this" if this_type
+  params.append typed_params(g.code.program, type.params[..given])
   entry := default_entry_symbol(symbol, given)
-  finish g, "#{linkage}#{ir_return_type(type.result)} #{entry}(#{params.join(', ')})"
+  finish
+    g
+    "#{linkage}#{ir_return_type(g.code.program, type.result)} #{entry}(#{params.join(', ')})"
 
 # The statements of a function's body, the last returning its value, if it is an expression and the
 # function has a result.
@@ -386,12 +393,16 @@ export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo)
   object := emit_allocate(ir, info)
   field_pointer := (field: FieldInfo) -> emit_field_pointer(ir, object, info, field.name.name)
   for field in info.fields
-    ir.store ir_type(field.type!), 'zeroinitializer', field_pointer(field)
+    ir.store ir_type(ir.program, field.type!), 'zeroinitializer', field_pointer(field)
   g.unwind_cleanup = ->
     mark := call_runtime(ir, 'i64 @lerta_drop_mark()', '')
     for field in info.fields
       type := field.type!
-      emit_release_stored ir, field_pointer(field), ir_type(type), ownership(type)
+      emit_release_stored
+        ir
+        field_pointer(field)
+        ir_type(ir.program, type)
+        ownership(ir.program, type)
     weak_slot := emit_weak_slot_or_null(ir, object, info)
     args := "ptr #{object}, ptr #{weak_slot}, i64 #{mark}"
     call_void_runtime ir, 'void @lerta_free_unfinished(ptr, ptr, i64)', args
@@ -413,14 +424,14 @@ export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo)
     else
       compute()
   g.locals.pop()
-  init := special_method_symbol(g.code.program, info, 'init')
+  init := special_method_symbol(ir.program, info, 'init')
   if info.has_init
     ir.emit "call void #{init}(ptr #{object})"
     emit_exception_check g
   ir.emit "ret ptr #{object}"
   params: String[]
   for argument at i in arguments
-    params.push "#{ir_type(argument.type!)} %p#{i}"
+    params.push "#{ir_type(ir.program, argument.type!)} %p#{i}"
     params.push "i1 %given#{i}" if argument.has_default
   finish g, "#{linkage}ptr #{constructor_symbol(info.type)}(#{params.join(', ')})"
 
@@ -431,7 +442,7 @@ store_field := (g: Generator, object: String, info: ObjectInfo, field: FieldInfo
   pointer := emit_field_pointer(g.ir, object, info, field.name.name)
   stored := field.weak then weak_box_of(g, value, field.type!) else value
   emit_release g.ir, value if field.weak
-  g.ir.store ir_type(field.type!), stored, pointer
+  g.ir.store ir_type(g.code.program, field.type!), stored, pointer
 
 # A weak local or field holds the box of its object, which stays borrowed.
 export weak_box_of := (g: Generator, object: String, type: Type) ->
@@ -453,7 +464,8 @@ emit_return := (g: Generator, value: String, type: Type): void ->
     g.ir.branch coroutine.end_label
     return
   result := g.result_type
-  g.ir.emit returns_nothing(result) then 'ret void' else "ret #{ir_type(result)} #{value}"
+  g.ir.emit
+    returns_nothing(result) then 'ret void' else "ret #{ir_type(g.code.program, result)} #{value}"
 
 # The only read of the local, if its value is generated there rather than where it is declared: one
 # that a loop goes through in place, whose parts that are evaluated before its loop cannot change
@@ -574,7 +586,11 @@ export release_scope := (g: Generator, scope: Map<String, CodegenLocal>) ->
     if { cell, is_owned } := local.cell
       emit_release ir, cell if is_owned
     else
-      emit_release_stored ir, local.pointer, ir_type(local.type), ownership(local.type)
+      emit_release_stored
+        ir
+        local.pointer
+        ir_type(ir.program, local.type)
+        ownership(ir.program, local.type)
 
 export generate_statement := (g: Generator, statement: Statement) ->
   located g, statement.position, -> generate_statement_node(g, statement)
@@ -616,7 +632,7 @@ generate_top_level_declaration := (
     else
       generate_declared_value g, declaration, false
   value := held_value_of(g, declaration, generated, type)
-  ir.store ir_type(type), value, global.pointer, top_level_tag(ir)
+  ir.store ir_type(ir.program, type), value, global.pointer, top_level_tag(ir)
   emit_mark_initialized ir, global
   g.locals.define declaration.name.name, top_level_slot(global, false)
 
@@ -683,6 +699,6 @@ generate_declared_value := (g: Generator, declaration: Declaration, is_held_as_i
   generate(g, value)
 
 export store_in_slot := (g: Generator, value: String, type: Type) ->
-  pointer := g.ir.alloca(ir_type(type))
-  g.ir.store ir_type(type), value, pointer
+  pointer := g.ir.alloca(ir_type(g.code.program, type))
+  g.ir.store ir_type(g.code.program, type), value, pointer
   SlotLocal(pointer, type)

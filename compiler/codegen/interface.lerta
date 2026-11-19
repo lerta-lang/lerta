@@ -85,9 +85,9 @@ define_reader := (g: Generator, type: Type, entry: ItabEntry) ->
     reader.result_type = result_type
 
     result := generate_reading(reader, type, entry, operands)
-    return_type := ir_return_type(result_type)
+    return_type := ir_return_type(g.code.program, result_type)
     reader.ir.emit return_type == 'void' then 'ret void' else "ret #{return_type} #{result}"
-    params_list := ['ptr %data', typed_params(params)...]
+    params_list := ['ptr %data', typed_params(g.code.program, params)...]
     finish reader, "private #{return_type} #{symbol}(#{params_list.join(', ')})"
   g.ir.module.named(key, '@lerta.reader', define)
 
@@ -116,7 +116,7 @@ call_union_method := (
   reader: Generator, type: Type, name: String, method: UnionMethod, operands: String[]
 ) ->
   params := function_type_of(method.type).params
-  args := ["#{ir_type(param)} #{operands[i]}" for param at i in params]
+  args := ["#{ir_type(reader.code.program, param)} #{operands[i]}" for param at i in params]
   check := -> emit_exception_check(reader)
   call := MethodCall(name, operands, args, check, type: method.type, instance: nil)
   emit_method_call(reader, method, '%data', type, call)

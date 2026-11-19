@@ -17,7 +17,13 @@ box_type := (type: Type) -> "@#{quoted_name("lerta.box.#{type_key(type)}")}"
 box_layout := (ir: IrBuilder, type: Type) ->
   define := (layout: String, module: IrModule) ->
     name := "box of #{format_type(type)}"
-    define_heap_object module, layout, box_type(type), 'linkonce_odr ', [value_field(type)], name
+    define_heap_object
+      module
+      layout
+      box_type(type)
+      'linkonce_odr '
+      [value_field(module.program, type)]
+      name
   ir.module.named("box #{type_key(type)}", '%lerta.box', define)
 
 # A box that takes over the value, owned. A Bool's is one of two immortal boxes, which every module
@@ -27,7 +33,7 @@ export emit_box := (ir: IrBuilder, value: String, type: Type) ->
   if is_kind(type, 'Bool')
     return emit_bool_box(ir, value, layout, box_type(type))
   box := emit_heap_allocate(ir, layout, box_type(type))
-  ir.store ir_type(type), value, emit_heap_field_pointer(ir, layout, box, 0)
+  ir.store ir_type(ir.program, type), value, emit_heap_field_pointer(ir, layout, box, 0)
   box
 
 emit_bool_box := (ir: IrBuilder, value: String, layout: String, type: String) ->
@@ -41,7 +47,7 @@ emit_bool_box := (ir: IrBuilder, value: String, layout: String, type: String) ->
 # The value of the box, borrowed as the box is.
 export emit_unbox := (ir: IrBuilder, box: String, type: Type) ->
   pointer := emit_heap_field_pointer(ir, box_layout(ir, type), box, 0)
-  ir.load(ir_type(type), pointer)
+  ir.load(ir_type(ir.program, type), pointer)
 
 # An i1: whether the object of the type `object_type` is a box of the type.
 export emit_box_test := (ir: IrBuilder, object_type: String, type: Type) ->

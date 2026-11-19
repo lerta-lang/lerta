@@ -180,7 +180,7 @@ update_with_default := (
   missing := ir.negate(found)
   held := emit_held_at(ir, place, found, type)
   old := holding(g, value, value_type, ->
-    emit_branch(ir, ir_type(type.value), missing, -> generate(g, default_value), held)
+    emit_branch(ir, ir_type(ir.program, type.value), missing, -> generate(g, default_value), held)
   )
   result :=
     if by_method
@@ -206,7 +206,8 @@ combine_by_method := (
 ) ->
   member := call.callee as Member!
   method := g.facts.members[member] as Method!
-  method_call := method_call_of(g, call, member, [value], ["#{ir_type(value_type)} #{value}"])
+  method_call :=
+    method_call_of(g, call, member, [value], ["#{ir_type(g.code.program, value_type)} #{value}"])
   call_method := -> emit_method_call(g, method.source, old, type, method_call)
   result := holding(g, old, type, -> holding(g, value, value_type, call_method))
   emit_release_value g.ir, old, type
@@ -222,7 +223,7 @@ assign_through := (
   g: Generator, assignment: Assignment, pointer: String, type: Type, tag: String
 ) ->
   ir := g.ir
-  load := -> ir.load(ir_type(type), pointer, tag)
+  load := -> ir.load(ir_type(ir.program, type), pointer, tag)
   operand := assignment.value
   is_plain := assignment.operator == '='
 
@@ -237,8 +238,12 @@ assign_through := (
 
   old := is_plain then '' else load()
   result := combine(g, assignment.operator, old, value, type, type_at_use(g, operand))
-  replaced := is_plain and ownership(type) != NONE then load() else ''
-  ir.store ir_type(type), result, pointer, tag
+  replaced :=
+    if is_plain and ownership(ir.program, type) != NONE
+      load()
+    else
+      ''
+  ir.store ir_type(ir.program, type), result, pointer, tag
   unless replaced.is_empty()
     emit_release_value ir, replaced, type
 

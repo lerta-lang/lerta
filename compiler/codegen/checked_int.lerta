@@ -27,7 +27,7 @@ ARITHMETIC_INSTRUCTIONS := { '+': 'add', '-': 'sub', '*': 'mul' }
 checked := (g: Generator, operator: String, left: String, right: String, type: Type) ->
   sign := is_signed(type) then 's' else 'u'
   operation := ARITHMETIC_INSTRUCTIONS[operator]!
-  width := ir_type(type)
+  width := ir_type(g.code.program, type)
   overflow_intrinsic := "llvm.#{sign}#{operation}.with.overflow.#{width}"
   result_type := "{ #{width}, i1 }"
   ir := g.ir
@@ -43,7 +43,9 @@ checked := (g: Generator, operator: String, left: String, right: String, type: T
 BITWISE_INSTRUCTIONS := { '&': 'and', '|': 'or', '^': 'xor' }
 
 bitwise := (g: Generator, operator: String, left: String, right: String, type: Type) ->
-  g.ir.assign("#{BITWISE_INSTRUCTIONS[operator]!} #{ir_type(type)} #{left}, #{right}")
+  g
+    .ir
+    .assign("#{BITWISE_INSTRUCTIONS[operator]!} #{ir_type(g.code.program, type)} #{left}, #{right}")
 
 # A shift by a negative amount, or by the type's bits or more, throws: compared as unsigned, a
 # negative amount is above the bits. `<<` of a signed type throws unless shifting the result back
@@ -51,7 +53,7 @@ bitwise := (g: Generator, operator: String, left: String, right: String, type: T
 shift := (g: Generator, operator: String, left: String, right: String, type: Type) ->
   ir := g.ir
   signed := is_signed(type)
-  width := ir_type(type)
+  width := ir_type(ir.program, type)
   out_of_range := ir.assign("icmp uge #{width} #{right}, #{integer_bits(type)}")
   throw_if g, out_of_range, SHIFT_OUT_OF_RANGE
   if operator == '>>'
@@ -66,7 +68,7 @@ shift := (g: Generator, operator: String, left: String, right: String, type: Typ
 # undefined.
 division := (g: Generator, operator: String, left: String, right: String, type: Type) ->
   ir := g.ir
-  width := ir_type(type)
+  width := ir_type(ir.program, type)
   throw_if g, ir.assign("icmp eq #{width} #{right}, 0"), DIVISION_BY_ZERO
   is_quotient := operator == '/'
   unless is_signed(type)
@@ -79,10 +81,12 @@ division := (g: Generator, operator: String, left: String, right: String, type: 
 # `x.wrapping_add(y)` and the like: the operation without the check, modulo 2 to the type's bits.
 export emit_wrapping := (
   ir: IrBuilder, instruction: String, left: String, right: String, type: Type
-) -> ir.assign("#{instruction} #{ir_type(type)} #{left}, #{right}")
+) -> ir.assign("#{instruction} #{ir_type(ir.program, type)} #{left}, #{right}")
 
 export emit_integer_to_float := (ir: IrBuilder, value: String, type: Type) ->
-  ir.assign("#{is_signed(type) then 'sitofp' else 'uitofp'} #{ir_type(type)} #{value} to double")
+  ir.assign(
+    "#{is_signed(type) then 'sitofp' else 'uitofp'} #{ir_type(ir.program, type)} #{value} to double"
+  )
 
 # `x.to_int8()` and the like, to `result`: the type, where it holds every value of the type
 # converted, or else its optional type, nil where the value does not fit.
@@ -94,8 +98,11 @@ export emit_conversion := (ir: IrBuilder, value: String, from: Type, result: Typ
     else
       integer_conversion ir, value, from, to
   return conversion.value unless result is OptionalType
-  flagged := ir.assign("insertvalue #{ir_type(result)} undef, i1 #{conversion.fits}, 0")
-  ir.assign("insertvalue #{ir_type(result)} #{flagged}, #{ir_type(to)} #{conversion.value}, 1")
+  result_type := ir_type(ir.program, result)
+  flagged := ir.assign("insertvalue #{result_type} undef, i1 #{conversion.fits}, 0")
+  ir.assign(
+    "insertvalue #{result_type} #{flagged}, #{ir_type(ir.program, to)} #{conversion.value}, 1"
+  )
 
 # The value converted, and an i1 of whether it fits there.
 struct Conversion
@@ -107,9 +114,11 @@ struct Conversion
 integer_conversion := (ir: IrBuilder, value: String, from: Type, to: Type) ->
   converted := resized(ir, value, from, to, is_signed(from))
   back := resized(ir, converted, to, from, is_signed(to))
-  same := ir.assign("icmp eq #{ir_type(from)} #{back}, #{value}")
+  same := ir.assign("icmp eq #{ir_type(ir.program, from)} #{back}, #{value}")
   is_negative := (operand: String, type: Type) ->
-    is_signed(type) then ir.assign("icmp slt #{ir_type(type)} #{operand}, 0") else 'false'
+    is_signed(type) then ir.assign(
+      "icmp slt #{ir_type(ir.program, type)} #{operand}, 0"
+    ) else 'false'
   negative :=
     if is_signed(from)
       is_negative value, from
@@ -148,4 +157,4 @@ resized := (ir: IrBuilder, value: String, from: Type, to: Type, signed: Bool) ->
       when to_bits < from_bits then 'trunc'
       when signed then 'sext'
       else 'zext'
-  ir.assign("#{instruction} #{ir_type(from)} #{value} to #{ir_type(to)}")
+  ir.assign("#{instruction} #{ir_type(ir.program, from)} #{value} to #{ir_type(ir.program, to)}")

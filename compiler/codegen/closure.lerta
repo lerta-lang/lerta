@@ -8,7 +8,7 @@ import
   ir_return_type, ir_type, LERTA_IMMORTAL, prefixed_symbol, suffixed_symbol, typed_params
 from './lerta_ir'
 import emit_valueless_call from './runtime_calls'
-import Capture from '../checker/shared'
+import Capture, ProgramWide from '../checker/shared'
 import FunctionType, Type from '../types'
 
 # The code pointer comes after the header; it is fixed (see invariant).
@@ -21,8 +21,8 @@ export emit_function_closure := (ir: IrBuilder, symbol: String, type: Type) ->
   { params, result } := function_type_of(type)
   thunk := prefixed_symbol('lerta.thunk', symbol)
   define := (module: IrModule) ->
-    params_list := typed_params(params)
-    return_type := ir_return_type(result)
+    params_list := typed_params(module.program, params)
+    return_type := ir_return_type(module.program, result)
     call := "call #{return_type} #{symbol}(#{params_list.join(', ')})"
     body :=
       if return_type == 'void'
@@ -52,8 +52,8 @@ export emit_closure_call := (ir: IrBuilder, closure: String, type: Type, args: S
   { params, result } := function_type_of(type)
   code := ir.load('ptr', emit_code_pointer(ir, closure), access_tag(ir, CODE))
   all_args := ["ptr #{closure}"]
-  all_args.push "#{ir_type(param)} #{arg}" for (param, arg) in params.zip(args)
-  return_type := ir_return_type(result)
+  all_args.push "#{ir_type(ir.program, param)} #{arg}" for (param, arg) in params.zip(args)
+  return_type := ir_return_type(ir.program, result)
   call := "call #{return_type} #{code}(#{all_args.join(', ')})"
   return ir.assign(call) if return_type != 'void'
   emit_valueless_call(ir, call, result)
@@ -62,8 +62,8 @@ export emit_closure_call := (ir: IrBuilder, closure: String, type: Type, args: S
 # captured var (see heap_object), which is an owned reference.
 CELL_SLOT := fixed({ ir_type: 'ptr', owned: REFERENCE })
 
-export capture_slot := (capture: Capture) ->
-  capture.is_var then CELL_SLOT else fixed(value_field(capture.type))
+export capture_slot := (program: ProgramWide, capture: Capture) ->
+  capture.is_var then CELL_SLOT else fixed(value_field(program, capture.type))
 
 # The IR type of a closure that holds these captures.
 closure_ir_type := (slots: HeapField[]) -> heap_object_type([CODE, slots...])

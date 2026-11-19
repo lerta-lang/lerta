@@ -31,12 +31,16 @@ export emit_equals_by_contents := (
   if is_whole(program, type)
     return emit_equals(ir, program, left, right, type)
   symbol := equals_function(ir.module, program, type)
-  ir.assign("call i1 #{symbol}(#{ir_type(type)} #{left}, #{ir_type(type)} #{right})")
+  ir.assign(
+    "call i1 #{symbol}(#{ir_type(program, type)} #{left}, #{ir_type(program, type)} #{right})"
+  )
 
 export emit_hash_by_contents := (ir: IrBuilder, program: ProgramWide, value: String, type: Type) ->
   if is_whole(program, type)
     return emit_hash(ir, program, value, type)
-  ir.assign("call i64 #{hash_function(ir.module, program, type)}(#{ir_type(type)} #{value})")
+  ir.assign(
+    "call i64 #{hash_function(ir.module, program, type)}(#{ir_type(program, type)} #{value})"
+  )
 
 # A type whose values have no parts that compare on their own: a value, an object that compares as
 # itself, or one that compares by its own method.
@@ -61,20 +65,20 @@ equals_function := (module: IrModule, program: ProgramWide, type: Type) ->
     ir := IrBuilder(defined)
     compare := -> emit_equals(ir, program, '%a', '%b', type)
     result :=
-      if ir_type(type) == 'ptr'
+      if ir_type(program, type) == 'ptr'
         differ := ir.assign('icmp ne ptr %a, %b')
         emit_branch ir, 'i1', differ, compare, 'true'
       else
         compare()
     ir.emit "ret i1 #{result}"
-    ir.finish "private i1 #{name}(#{ir_type(type)} %a, #{ir_type(type)} %b)"
+    ir.finish "private i1 #{name}(#{ir_type(program, type)} %a, #{ir_type(program, type)} %b)"
   module.named("equals #{type_key(type)}", '@lerta.equals', define)
 
 hash_function := (module: IrModule, program: ProgramWide, type: Type) ->
   define := (name: String, defined: IrModule) ->
     ir := IrBuilder(defined)
     ir.emit "ret i64 #{emit_hash(ir, program, '%a', type)}"
-    ir.finish "private i64 #{name}(#{ir_type(type)} %a)"
+    ir.finish "private i64 #{name}(#{ir_type(program, type)} %a)"
   module.named("hash #{type_key(type)}", '@lerta.hash', define)
 
 item_equals_function := (module: IrModule, program: ProgramWide, type: Type) ->
@@ -205,7 +209,7 @@ combine := (ir: IrBuilder, hashes: String[]) ->
 # float's -0.0 equals 0.0.
 export emit_value_equals := (ir: IrBuilder, left: String, right: String, type: Type) ->
   comparison := is_float(type) then 'fcmp oeq' else 'icmp eq'
-  ir.assign("#{comparison} #{ir_type(type)} #{left}, #{right}")
+  ir.assign("#{comparison} #{ir_type(ir.program, type)} #{left}, #{right}")
 
 # A value of a number, a Char, a Bool, a String, a Binary or an enum (see checker builtins).
 is_value_type := (type: Type) ->
@@ -225,7 +229,7 @@ emit_value_hash := (ir: IrBuilder, value: String, type: Type) ->
 export emit_number_compare := (ir: IrBuilder, left: String, right: String, type: Type) ->
   signed := is_float(type) or is_signed(type)
   less := is_float(type) then 'fcmp olt' else "icmp #{signed then 'slt' else 'ult'}"
-  operands := "#{ir_type(type)} #{left}, #{right}"
+  operands := "#{ir_type(ir.program, type)} #{left}, #{right}"
   is_less := ir.assign("#{less} #{operands}")
   is_equal := emit_value_equals(ir, left, right, type)
   not_less := ir.assign("select i1 #{is_equal}, #{ORDERING} #{EQUAL}, #{ORDERING} #{GREATER}")

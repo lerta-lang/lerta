@@ -27,7 +27,8 @@ export struct HeapField
   fixed := false
 
 # A field that holds a value of the type.
-export value_field := (type: Type) -> HeapField(ir_type: ir_type(type), owned: ownership(type))
+export value_field := (program: ProgramWide, type: Type) ->
+  HeapField(ir_type: ir_type(program, type), owned: ownership(program, type))
 
 # The field, written only as its object is made.
 export fixed := (field: HeapField) -> HeapField(field..., fixed: true)
@@ -148,7 +149,7 @@ export emit_field_pointer := (ir: IrBuilder, object: String, info: ObjectInfo, n
 
 # The value of the field of the class or struct, borrowed.
 export emit_borrowed_field := (ir: IrBuilder, object: String, info: ObjectInfo, field: FieldInfo) ->
-  ir.load(ir_type(field.type!), emit_field_pointer(ir, object, info, field.name.name))
+  ir.load(ir_type(ir.program, field.type!), emit_field_pointer(ir, object, info, field.name.name))
 
 # The field of the name, which the class or struct has.
 export field_named := (info: ObjectInfo, name: String) -> info.fields[field_index(info, name)]
@@ -176,7 +177,7 @@ export define_object := (
   types := field_types(info)
   fields := [
     for i in field_order(program, types)
-      value_field(types[i])
+      value_field(program, types[i])
   ]
   weak_slot := is_class(info) then fields.length
   fields.push plain_field('ptr') if is_class(info)
@@ -289,7 +290,7 @@ values_layout := (ir: IrBuilder, type: Type) ->
   types := value_types(type)
   fields := [
     for i in field_order(ir.module.program, types)
-      value_field(types[i])
+      value_field(ir.program, types[i])
   ]
   define := (layout: String, module: IrModule) ->
     name := format_type(type)
@@ -314,7 +315,7 @@ export emit_values := (ir: IrBuilder, type: Type, values: String[]) ->
   layout := values_layout(ir, type)
   object := emit_heap_allocate(ir, layout, values_type_symbol(type))
   for value_type at i in value_types(type)
-    ir.store ir_type(value_type), values[i], emit_value_pointer(ir, object, type, i)
+    ir.store ir_type(ir.program, value_type), values[i], emit_value_pointer(ir, object, type, i)
   object
 
 # A new anonymous struct, which takes over the values, owned, given by field name.
@@ -335,7 +336,7 @@ export emit_value_at := (ir: IrBuilder, object: String, type: Type, index: Int) 
 # The value of an anonymous struct or a tuple at the index, borrowed.
 export emit_borrowed_value := (ir: IrBuilder, values: String, type: Type, index: Int) ->
   value_type := value_types(type)[index]
-  ir.load(ir_type(value_type), emit_value_pointer(ir, values, type, index))
+  ir.load(ir_type(ir.program, value_type), emit_value_pointer(ir, values, type, index))
 
 # The value of a field of an anonymous struct, as emit_value_at gives it.
 export emit_record_field := (ir: IrBuilder, record: String, type: Type, name: String) ->
@@ -345,16 +346,16 @@ export emit_record_field := (ir: IrBuilder, record: String, type: Type, name: St
 cell_layout := (ir: IrBuilder, type: Type) ->
   define := (layout: String, module: IrModule) ->
     # Cells of all types of the same IR type and ownership share it.
-    fields := [value_field(type)]
+    fields := [value_field(module.program, type)]
     define_heap_object module, layout, layout_type(layout), 'private ', fields, 'var'
-  key := "cell #{ir_type(type)} #{ownership(type)}"
+  key := "cell #{ir_type(ir.program, type)} #{ownership(ir.program, type)}"
   ir.module.named(key, '%lerta.cell', define)
 
 # A new cell, which takes over the value, owned.
 export emit_cell := (ir: IrBuilder, type: Type, value: String) ->
   layout := cell_layout(ir, type)
   cell := emit_heap_allocate(ir, layout, layout_type(layout))
-  ir.store ir_type(type), value, emit_cell_pointer(ir, type, cell)
+  ir.store ir_type(ir.program, type), value, emit_cell_pointer(ir, type, cell)
   cell
 
 # The pointer to the cell's value, which a var's reads and writes go through.

@@ -100,7 +100,7 @@ generate_new_collection := (g: Generator, call: Call, type: MapType | ArrayType)
 # (key, value) tuples, the last of each key winning, as in a map literal.
 generate_new_map := (g: Generator, call: Call, map_type: MapType) ->
   ir := g.ir
-  map := emit_map_new(ir, g.code.program, map_type)
+  map := emit_map_new(ir, ir.program, map_type)
   add := (item: String) ->
     if is_set(map_type)
       emit_set_add ir, map, item, map_type
@@ -285,7 +285,7 @@ export emit_method_call := (
         found := source.members.find((each) -> each.member == member_type)!
         value := emit_member_value(g.ir, object, member_type)
         emit_method_call(g, found.source, value, member_type, call)
-      result_type := ir_return_type(function_type_of(source.type).result)
+      result_type := ir_return_type(g.code.program, function_type_of(source.type).result)
       members := [each.member for each in source.members]
       emit_member_dispatch(g.ir, object, members, result_type, of_member)
 
@@ -301,7 +301,7 @@ export emit_by_parts := (
 call_written_method := (
   g: Generator, symbol: String, object: String, object_type: Type, call: MethodCall
 ) ->
-  receiver := "#{ir_type(object_type)} #{object}"
+  receiver := "#{ir_type(g.code.program, object_type)} #{object}"
   own := call.instance?.entry.type else call.type
   result := emit_function_call(g, symbol, own, call.args, receiver)
   emit_as_caller(g.ir, result, function_type_of(own).result, function_type_of(call.type).result)
@@ -342,11 +342,11 @@ emit_function_call := (
 
 # The arguments' operands with their IR types.
 typed_arguments := (g: Generator, args: Expression[], operands: String[]) ->
-  ["#{ir_type(type_at_use(g, arg))} #{operands[i]}" for arg at i in args]
+  ["#{ir_type(g.code.program, type_at_use(g, arg))} #{operands[i]}" for arg at i in args]
 
 export call_user_function := (ir: IrBuilder, symbol: String, type: Type, args: String) ->
   result := function_type_of(type).result
-  call := "call #{ir_return_type(result)} #{symbol}(#{args})"
+  call := "call #{ir_return_type(ir.program, result)} #{symbol}(#{args})"
   return ir.assign(call) unless returns_nothing(result)
   emit_valueless_call(ir, call, result)
 
@@ -411,8 +411,10 @@ generate_construction := (g: Generator, call: Call, type: ObjectType) ->
       continue unless is_argument(field)
       field_type := field.type!
       value := given[field.name.name]
-      passed := value else (field.has_default then 'zeroinitializer' else nil_constant(field_type))
-      args.push "#{ir_type(field_type)} #{passed}"
+      program := g.code.program
+      passed :=
+        value else (field.has_default then 'zeroinitializer' else nil_constant(program, field_type))
+      args.push "#{ir_type(program, field_type)} #{passed}"
       args.push "i1 #{value != nil}" if field.has_default
     g.ir.assign("call ptr #{constructor_symbol(info.type)}(#{args.join(', ')})")
 

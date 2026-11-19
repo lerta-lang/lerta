@@ -30,7 +30,8 @@ export generate_case := (g: Generator, case_expression: Case) ->
     else
       generate g, subject
   subject_type := subject then type_of(g, subject)
-  holds_subject := subject_type != nil and not is_borrowed and ownership(subject_type) != NONE
+  holds_subject :=
+    subject_type != nil and not is_borrowed and ownership(ir.program, subject_type) != NONE
   release_nothing := -> return
   held := holds_subject then hold(g, subject_operand, subject_type!)
   release_subject := held else release_nothing
@@ -106,7 +107,7 @@ export merge := (g: Generator, type: Type, incoming: String[]) ->
   case
     when is_kind(type, 'void') then ''
     when is_kind(type, 'never') then 'poison'
-    else g.ir.assign("phi #{ir_type(type)} #{incoming.join(', ')}")
+    else g.ir.assign("phi #{ir_type(g.code.program, type)} #{incoming.join(', ')}")
 
 # An i1 that holds when any of the arm's patterns matches.
 generate_test := (g: Generator, arm: CaseArm, subject_type: Type?, operand: String) ->
@@ -130,7 +131,8 @@ pattern_test := (g: Generator, subject: String, type: Type, pattern: Expression)
 # The subject is borrowed by the comparison, as it is tested again by the next patterns.
 value_test := (g: Generator, subject: String, type: Type, pattern: Expression) ->
   value := generate(g, pattern)
-  return g.ir.assign("icmp eq #{ir_type(type)} #{subject}, #{value}") unless is_kind(type, 'String')
+  unless is_kind(type, 'String')
+    return g.ir.assign("icmp eq #{ir_type(g.code.program, type)} #{subject}, #{value}")
   equal := emit_string_equals(g.ir, subject, value)
   emit_release g.ir, value
   equal

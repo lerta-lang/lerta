@@ -1,42 +1,44 @@
 # Optional values in the generated code (see docs/internals/memory.md, and
 # is_nil_by_null for interface values).
+import ProgramWide from '../checker/shared'
 import emit_branch, IrBuilder from './ir_builder'
 import emit_interface_data, ir_type, is_nil_by_null, LERTA_IMMORTAL from './lerta_ir'
 import is_reference_type, optional_type, OptionalType, Type from '../types'
 
 # The IR constant for nil of the optional type.
-export nil_constant := (type: Type) ->
-  return 'zeroinitializer' if is_nil_by_null(type)
+export nil_constant := (program: ProgramWide, type: Type) ->
+  return 'zeroinitializer' if is_nil_by_null(program, type)
   inner := type is OptionalType then type.inner else panic('expected an optional type')
-  "{ i1 false, #{ir_type(inner)} zeroinitializer }"
+  "{ i1 false, #{ir_type(program, inner)} zeroinitializer }"
 
 # A value of the inner type, made optional. An inner value that is nil when null, made optional
 # again, is null only for the outer nil (see nil_object).
 export emit_wrap := (ir: IrBuilder, operand: String, inner: Type) ->
-  if is_nil_by_null(optional_type(inner))
+  if is_nil_by_null(ir.program, optional_type(inner))
     return operand if inner is not OptionalType or inner.opaque == nil
     depth := optional_depth(inner)
     shift := (pointer: String) ->
       from := ['null', nil_objects(ir, depth - 1)...]
       emit_mapped(ir, pointer, from, nil_objects(ir, depth))
     return with_pointer(ir, operand, inner, shift)
-  type := ir_type(optional_type(inner))
-  inner_ir := ir_type(inner)
+  type := ir_type(ir.program, optional_type(inner))
+  inner_ir := ir_type(ir.program, inner)
   present := "{ i1 true, #{inner_ir} zeroinitializer }"
   ir.assign("insertvalue #{type} #{present}, #{inner_ir} #{operand}, 1")
 
 # An i1 that is true when the optional value is not nil.
 export emit_is_present := (ir: IrBuilder, operand: String, type: Type) ->
-  if is_nil_by_null(type)
+  if is_nil_by_null(ir.program, type)
     return ir.is_not_null(pointer_of(ir, operand, type))
-  ir.assign("extractvalue #{ir_type(type)} #{operand}, 0")
+  ir.assign("extractvalue #{ir_type(ir.program, type)} #{operand}, 0")
 
 export emit_is_nil := (ir: IrBuilder, operand: String, type: Type) ->
   ir.negate(emit_is_present(ir, operand, type))
 
 # The value without nil, which must not be nil.
 export emit_unwrap := (ir: IrBuilder, operand: String, type: Type) ->
-  return ir.assign("extractvalue #{ir_type(type)} #{operand}, 1") unless is_nil_by_null(type)
+  unless is_nil_by_null(ir.program, type)
+    return ir.assign("extractvalue #{ir_type(ir.program, type)} #{operand}, 1")
   inner := type is OptionalType then type.inner else panic('expected an optional type')
   return operand unless inner is OptionalType
   depth := optional_depth(inner)
@@ -50,7 +52,13 @@ export emit_unwrap := (ir: IrBuilder, operand: String, type: Type) ->
 export emit_as_caller := (ir: IrBuilder, value: String, own: Type, caller: Type) ->
   return value if optional_depth(own) <= optional_depth(caller)
   present := emit_is_present(ir, value, own)
-  emit_branch(ir, ir_type(caller), present, -> emit_unwrap(ir, value, own), nil_constant(caller))
+  emit_branch(
+    ir
+    ir_type(ir.program, caller)
+    present
+    -> emit_unwrap(ir, value, own)
+    nil_constant(ir.program, caller)
+  )
 
 # How many times the type is optional, as an opaque type argument made optional is again.
 optional_depth := (type: Type): Int ->
@@ -85,7 +93,7 @@ pointer_of := (ir: IrBuilder, operand: String, type: Type) ->
 with_pointer := (ir: IrBuilder, operand: String, type: Type, shift: (String) -> String) ->
   shifted := shift(pointer_of(ir, operand, type))
   return shifted if is_reference_type(type)
-  ir.assign("insertvalue #{ir_type(type)} #{operand}, ptr #{shifted}, 0")
+  ir.assign("insertvalue #{ir_type(ir.program, type)} #{operand}, ptr #{shifted}, 0")
 
 # An i1: whether the optional value is not nil and `test` holds for it without nil; it is tested
 # only then.

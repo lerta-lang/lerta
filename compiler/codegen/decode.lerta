@@ -31,14 +31,14 @@ export emit_decode := (
 
 emit_read_call := (ir: IrBuilder, reader: Coder, type: Type) ->
   symbol := read_function(ir.module, reader, type)
-  ir.assign("call #{ir_type(type)} #{symbol}(ptr #{reader.operand})")
+  ir.assign("call #{ir_type(ir.program, type)} #{symbol}(ptr #{reader.operand})")
 
 read_function := (module: IrModule, reader: Coder, type: Type) ->
   define := (name: String, defined: IrModule) ->
     ir := IrBuilder(defined)
     own := Coder(reader..., operand: '%reader')
-    ir.emit "ret #{ir_type(type)} #{emit_read_parts(ir, own, type)}"
-    ir.finish "private #{ir_type(type)} #{name}(ptr %reader)"
+    ir.emit "ret #{ir_type(module.program, type)} #{emit_read_parts(ir, own, type)}"
+    ir.finish "private #{ir_type(module.program, type)} #{name}(ptr %reader)"
   module.named("decode #{type_key(reader.type)} #{type_key(type)}", '@lerta.decode', define)
 
 # The body of the function of a type: its parts, or the value itself for a type that others read
@@ -64,7 +64,13 @@ emit_read := (ir: IrBuilder, reader: Coder, type: Type, unwind: () -> void): Str
       is_null := call_method(ir, reader, 'read_nil', bool_type, [], unwind)
       present := ir.negate(is_null)
       read_inner := -> emit_wrap(ir, emit_read(ir, reader, type.inner, unwind), type.inner)
-      emit_branch(ir, ir_type(type), present, read_inner, nil_constant(type))
+      emit_branch(
+        ir
+        ir_type(ir.program, type)
+        present
+        read_inner
+        nil_constant(ir.program, type)
+      )
     when EnumType then emit_read_member(ir, reader, type, unwind)
     else
       if scalar := SCALARS[kind_of(type)]
@@ -226,7 +232,7 @@ emit_read_object := (ir: IrBuilder, reader: Coder, type: ObjectType) ->
   make := (values: FieldValues) ->
     args: String[]
     for field at i in fields
-      args.push "#{ir_type(field.type)} #{values.value(i)}"
+      args.push "#{ir_type(ir.program, field.type)} #{values.value(i)}"
       args.push "i1 #{values.given(i)}" if field.has_default
 
     # The constructor takes the values over, owned, and releases them if it throws.
@@ -249,7 +255,7 @@ class FieldValues
     slots: FieldSlots[] = []
 
     values := -> [@value(i) for i in 0..@fields.length]
-    value := (i: Int) -> @ir.load(ir_type(@fields[i].type), @slots[i].value)
+    value := (i: Int) -> @ir.load(ir_type(@ir.program, @fields[i].type), @slots[i].value)
     given := (i: Int) -> @ir.load('i1', @slots[i].given)
 
     unwind := ->
@@ -267,9 +273,10 @@ emit_read_fields := (
 ) ->
   values := FieldValues(ir, fields, type)
   for field in fields
-    slot := ir.alloca(ir_type(field.type))
-    empty := field.type is OptionalType then nil_constant(field.type) else 'zeroinitializer'
-    ir.store ir_type(field.type), empty, slot
+    slot := ir.alloca(ir_type(ir.program, field.type))
+    empty :=
+      field.type is OptionalType then nil_constant(ir.program, field.type) else 'zeroinitializer'
+    ir.store ir_type(ir.program, field.type), empty, slot
     given := ir.alloca('i1')
     ir.store 'i1', 'false', given
     values.slots.push { value: slot, given }
@@ -300,7 +307,7 @@ emit_read_field_of_key := (
     ir.branch_if matches, read, next
     ir.start_block read
     value := emit_read(ir, reader, field.type, unwind)
-    ir.store ir_type(field.type), value, values.slots[i].value
+    ir.store ir_type(ir.program, field.type), value, values.slots[i].value
     ir.store 'i1', 'true', values.slots[i].given
     ir.branch done
     ir.start_block next

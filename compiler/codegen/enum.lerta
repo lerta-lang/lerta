@@ -16,7 +16,7 @@ export emit_member_literal := (ir: IrBuilder, value: String, type: EnumType) ->
 
 emit_text_at := (ir: IrBuilder, value: String, type: EnumType, texts: String) ->
   array_type := member_texts_type(type)
-  place := ir.assign("zext #{ir_type(type)} #{value} to i64")
+  place := ir.assign("zext #{ir_type(ir.program, type)} #{value} to i64")
   pointer := ir.assign("getelementptr #{array_type}, ptr #{texts}, i64 0, i64 #{place}")
   ir.load('ptr', pointer)
 
@@ -27,17 +27,17 @@ export emit_parse := (ir: IrBuilder, text: String, type: EnumType) ->
   index := call_runtime(ir, 'i64 @lerta_enum_parse(ptr, i64, ptr)', args)
   is_found := ir.assign("icmp sge i64 #{index}, 0")
   optional := optional_type(type)
-  result_type := ir_type(optional)
-  member := ir.assign("trunc i64 #{index} to #{ir_type(type)}")
+  result_type := ir_type(ir.program, optional)
+  member := ir.assign("trunc i64 #{index} to #{ir_type(ir.program, type)}")
   found := "#{result_type} #{emit_wrap(ir, member, type)}"
-  ir.assign("select i1 #{is_found}, #{found}, #{result_type} #{nil_constant(optional)}")
+  ir.assign("select i1 #{is_found}, #{found}, #{result_type} #{nil_constant(ir.program, optional)}")
 
 # std's `platform` in a build for no target, which reads the system where the code runs: the member
 # whose text is the system's name.
 export emit_platform_member := (ir: IrBuilder, type: EnumType) ->
   args := "ptr #{member_texts(ir, type)}, i64 #{type.members.length}"
   place := call_runtime(ir, 'i64 @lerta_platform_member(ptr, i64)', args)
-  ir.assign("trunc i64 #{place} to #{ir_type(type)}")
+  ir.assign("trunc i64 #{place} to #{ir_type(ir.program, type)}")
 
 member_texts_type := (type: EnumType) -> "[#{type.members.length} x ptr]"
 

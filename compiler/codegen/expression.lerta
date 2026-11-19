@@ -65,7 +65,7 @@ export type_of := (g: Generator, node: Node) -> g.facts.types[node] else panic('
 # example); void calls return ''.
 export generate := (g: Generator, expression: Expression) ->
   target := g.facts.conversions[expression]
-  return nil_constant(target!) if expression is NilLiteral
+  return nil_constant(g.code.program, target!) if expression is NilLiteral
   operand := generate_value(g, expression)
   return operand if target == nil
   source := type_of(g, expression)
@@ -201,7 +201,8 @@ emit_narrowed_cast := (g: Generator, cast: Cast, object: String) ->
   narrowed := inner_of(value_type)
   unless is_assignable(narrowed, member)
     emit_release_value ir, object, value_type
-    return nil_constant(optional_type(member)) unless cast.throws
+    unless cast.throws
+      return nil_constant(ir.program, optional_type(member))
     throw_if g, 'true', FAILED_CAST
     return 'undef'
   if cast.throws and value_type is OptionalType
@@ -240,7 +241,12 @@ generate_cast := (g: Generator, cast: Cast) ->
   if is_boxed(member)
     optional := optional_type(member)
     value := -> emit_wrap(ir, emit_unbox(ir, object, member), member)
-    result := emit_branch(ir, ir_type(optional), holds, value, nil_constant(optional))
+    result := emit_branch
+      ir
+      ir_type(ir.program, optional)
+      holds
+      value
+      nil_constant(ir.program, optional)
     emit_retain_value ir, result, optional
     emit_release ir, object
     return result
@@ -307,7 +313,7 @@ read_field := (g: Generator, object: String, type: Type, name: String, is_owned:
     emit_release ir, object if is_owned
     return value
   assert type is ObjectType
-  field := field_named(info_of(g.code.program, type), name)
+  field := field_named(info_of(ir.program, type), name)
   field_type := field.type!
   loaded := held_field(g, object, type, name)
 
@@ -329,7 +335,7 @@ export held_field := (g: Generator, object: String, type: ObjectType, name: Stri
   info := info_of(g.code.program, type)
   pointer := emit_field_pointer(g.ir, object, info, name)
   field_type := field_named(info, name).type!
-  g.ir.load(ir_type(field_type), pointer, field_tag(g.ir, field_type))
+  g.ir.load(ir_type(g.code.program, field_type), pointer, field_tag(g.ir, field_type))
 
 # A field of a class, a struct or an anonymous struct, or one that every member of a union has,
 # of the object, which is released if it is owned.
@@ -344,7 +350,13 @@ export read_any_field := (
   unless object_type is UnionType
     return read_field(g, object, object_type, name, is_owned)
   of_member := (type: Type) -> read_field(g, object, type, name, is_owned)
-  emit_member_dispatch(g.ir, object, object_type.members, ir_type(field_type), of_member)
+  emit_member_dispatch(
+    g.ir
+    object
+    object_type.members
+    ir_type(g.code.program, field_type)
+    of_member
+  )
 
 # The object that a weak `T!` field's box holds, borrowed; it throws if the object is gone.
 weak_object := (g: Generator, box: String) ->
@@ -527,7 +539,7 @@ export held_value := (g: Generator, local: CodegenLocal) ->
   case local
     when SlotLocal
       pointer := slot_pointer(g, local)
-      g.ir.load(ir_type(local.type), pointer, slot_tag(g.ir, local))
+      g.ir.load(ir_type(g.code.program, local.type), pointer, slot_tag(g.ir, local))
     when ValueLocal then local.operand
 
 # The value of the declared type as the narrower one where it is narrowed: without nil, or as one
@@ -549,7 +561,13 @@ export emit_narrowed := (ir: IrBuilder, value: String, declared: Type, type: Typ
   unless type is OptionalType
     return emit_unbox(ir, value, type)
   member := -> emit_wrap(ir, emit_unbox(ir, value, type.inner), type.inner)
-  emit_branch(ir, ir_type(type), ir.is_not_null(value), member, nil_constant(type))
+  emit_branch(
+    ir
+    ir_type(ir.program, type)
+    ir.is_not_null(value)
+    member
+    nil_constant(ir.program, type)
+  )
 
 # As emit_narrowed, of a value that is owned and given over.
 emit_narrowed_owned := (ir: IrBuilder, value: String, declared: Type, type: Type) ->

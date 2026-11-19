@@ -32,7 +32,8 @@ export generate_awaiting_function := (
     g.ir.branch g.coroutine!.free_label
   generate_coroutine g, body_symbol, ['ptr %promise', params...], generate_body, end
   emit_ramp g.ir.module, linkage, symbol, body_symbol, params, (ir) ->
-    promise := call_runtime(ir, 'ptr @lerta_promise_new(i32)', "i32 #{item_kind(value)}")
+    promise :=
+      call_runtime(ir, 'ptr @lerta_promise_new(i32)', "i32 #{item_kind(g.code.program, value)}")
     emit_retain ir, promise
     promise
 
@@ -40,7 +41,7 @@ export generate_awaiting_function := (
 emit_resolve := (ir: IrBuilder, type: Type, result: String) ->
   unless returns_nothing(type)
     slot := call_runtime(ir, 'ptr @lerta_promise_slot(ptr)', 'ptr %promise')
-    ir.store ir_type(type), result, slot
+    ir.store ir_type(ir.program, type), result, slot
   call_void_runtime ir, 'void @lerta_promise_resolve(ptr)', 'ptr %promise'
 
 # The value of the promise, which the body waits for if it is pending; its exception is thrown.
@@ -70,7 +71,7 @@ emit_await := (g: Generator, promise: String, value: Type) ->
     if returns_nothing(value)
       ''
     else
-      ir.load ir_type(value), slot
+      ir.load ir_type(ir.program, value), slot
   unless result.is_empty()
     emit_retain_value ir, result, value
   emit_release ir, promise

@@ -17,18 +17,20 @@ export INTERFACE_IR_TYPE := '{ ptr, ptr }'
 
 # Whether nil of the optional type is a null pointer: that of a reference, or the data of an
 # interface value.
-export is_nil_by_null := (type: Type) ->
+export is_nil_by_null := (program: ProgramWide, type: Type) ->
   is_reference_type(type) or is_kind(without_nil(type), INTERFACE)
 
 # The type without nil, however many times it is optional (see OptionalType).
 without_nil := (type: Type): Type -> type is OptionalType then without_nil(type.inner) else type
 
-export ir_type := (type: Type): String ->
+# The program decides how some types are laid out, as which small types are values (see
+# checker value_layout).
+export ir_type := (program: ProgramWide, type: Type): String ->
   # A reference is nil when null, and so is an interface value when its data is; a value carries a
   # flag that tells whether it is there.
   if type is OptionalType
-    return ir_type(type.inner) if is_nil_by_null(type)
-    return "{ i1, #{ir_type(type.inner)} }"
+    return ir_type(program, type.inner) if is_nil_by_null(program, type)
+    return "{ i1, #{ir_type(program, type.inner)} }"
   return scalar.ir_type if scalar := scalar_of(type)
   case kind_of(type)
     when 'String', 'Binary', ARRAY, ITER, PROMISE, MAP, OBJECT, UNION, RECORD, TUPLE, FUNCTION
@@ -37,10 +39,12 @@ export ir_type := (type: Type): String ->
     when INTERFACE then INTERFACE_IR_TYPE
     else panic("no IR type for #{kind_of(type)}")
 
-export ir_return_type := (type: Type) -> returns_nothing(type) then 'void' else ir_type(type)
+export ir_return_type := (program: ProgramWide, type: Type) ->
+  returns_nothing(type) then 'void' else ir_type(program, type)
 
 # The parameters of a function of the types, typed, `%p<i>` each.
-export typed_params := (types: Type[]) -> ["#{ir_type(type)} %p#{i}" for type at i in types]
+export typed_params := (program: ProgramWide, types: Type[]) ->
+  ["#{ir_type(program, type)} %p#{i}" for type at i in types]
 
 export returns_nothing := (result: Type) -> is_one_of_kinds(result, ['void', 'never'])
 
@@ -51,13 +55,14 @@ extension := (type: Type) ->
   return '' if scalar.is_float or scalar.bits > 16
   scalar.signed then 'signext' else 'zeroext'
 
-export ir_c_return_type := (type: Type) ->
+export ir_c_return_type := (program: ProgramWide, type: Type) ->
   attribute := extension(type)
-  attribute.is_empty() then ir_return_type(type) else "#{attribute} #{ir_type(type)}"
+  return ir_return_type(program, type) if attribute.is_empty()
+  "#{attribute} #{ir_type(program, type)}"
 
-export ir_param_type := (type: Type) ->
+export ir_param_type := (program: ProgramWide, type: Type) ->
   attribute := extension(type)
-  attribute.is_empty() then ir_type(type) else "#{ir_type(type)} #{attribute}"
+  attribute.is_empty() then ir_type(program, type) else "#{ir_type(program, type)} #{attribute}"
 
 # Symbols of generated functions; the prefixes keep them apart from the runtime's C symbols.
 export function_symbol := (module: String, name: String) -> quoted("lerta.fn.#{module}.#{name}")
@@ -190,7 +195,7 @@ export enum Ownership
   COROUTINE
   TRACE
 
-export ownership := (type: Type): Ownership ->
+export ownership := (program: ProgramWide, type: Type): Ownership ->
   case
     when is_reference_type(type) then REFERENCE
     when is_kind(without_nil(type), INTERFACE) then INTERFACE
@@ -198,10 +203,10 @@ export ownership := (type: Type): Ownership ->
 
 # Reference counting of a value of the type: of the references it holds, if any.
 export emit_retain_value := (ir: IrBuilder, operand: String, type: Type) ->
-  emit_retain_as ir, operand, ownership(type)
+  emit_retain_as ir, operand, ownership(ir.program, type)
 
 export emit_release_value := (ir: IrBuilder, operand: String, type: Type) ->
-  emit_release_as ir, operand, ownership(type)
+  emit_release_as ir, operand, ownership(ir.program, type)
 
 emit_retain_as := (ir: IrBuilder, operand: String, owned: Ownership) ->
   emit_retain ir, reference if reference := reference_of(ir, operand, owned)
