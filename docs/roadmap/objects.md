@@ -4,7 +4,6 @@ The planned design of classes and structs, interfaces, generics and equality.
 
 ## Classes and structs
 
-- Small structs as values, large ones still shared by reference counting: see [small values unboxed](language.md#types).
 - **Function fields.** A function literal member declared `var`, `var on_hover = -> log 'hover'`, is a function field held per instance, so that it can be replaced (class only). One declared with `:=` stays a method, except in `args`, where it is a function field that a constructor may replace, as a callback. The difference in representation follows from whether reassignment is allowed.
 - **Derived fields.** A struct's field whose initializer reads `@`, `area := @r * @r * PI`, is not a constructor argument, and a spread computes it again, as a class's computed field. One that does not read `@`, `step := 1`, stays an argument with a default.
   - Why: now `Circle(r: 2, area: 1)` is allowed, and `Circle(c..., r: 10)` keeps the `area` of `c`, so a field computed from others can disagree with them, and `==` compares that.

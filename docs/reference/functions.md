@@ -396,7 +396,7 @@ Its type gives its parameters and result:
 | an enum | `uint8_t`, its member's place among the members |
 | a reference | a pointer; an optional one is NULL for nil |
 | any other optional value, such as `Int?` or `Bool?` | none: rejected |
-| a tuple or an anonymous struct of at most 16 bytes, which is a value rather than a reference | none: rejected |
+| a struct, an anonymous struct or a tuple of at most 16 bytes, which is a value rather than a reference | none: rejected |
 
 - Arguments are borrowed, and a returned reference is owned.
 - The result may be `void`, or `never` for a C function that does not return, or returns only after throwing (see [lerta_raise](../internals/execution.md#exceptions)), as `exit` of a code out of range does.
