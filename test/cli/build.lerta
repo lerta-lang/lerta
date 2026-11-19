@@ -362,6 +362,15 @@ function_body := (lines: String[], name: String) ->
   last += 1 while lines[last] != '}'
   lines[start..last]
 
+EXCEPTION_READ := 'load ptr, ptr @lerta_exception'
+ASSUME := 'call void @llvm.assume('
+
+# A function's body after the read of the pending exception that its start makes, and the
+# assumption that none is pending, so that what is left are the reads of its checks.
+after_start := (body: String[]) ->
+  start := body.find_index((line) -> ASSUME in line) else return body
+  body[(start + 1)..]
+
 JOINED_LITERALS := "#{root_dir}/tests/string/joined_literals.lerta"
 
 # Literals joined by `+` are one String in the IR, which the runtime does not join.
@@ -371,7 +380,7 @@ dump_joined_literals_check := ->
     ir := dumped.result.stdout_text()
     reasons := expect_status(0, dumped.result.status)
     body := function_body(ir.split("\n"), 'joined') else return [reasons..., 'no function joined']
-    reasons.push 'a call in joined' if body.any((line) -> 'call ' in line)
+    reasons.push 'a call in joined' if after_start(body).any((line) -> 'call ' in line)
     joined_text :=
       'a text too long for a line of its own, which is split over lines, with an escape\09' +
         'and joined by the compiler'
@@ -418,8 +427,7 @@ dump_unchecked_methods_check := ->
       'negated'
       'float_quotient'
     checked := ['joined', 'bytes_joined']
-    reads_exception := (body: String[]) ->
-      body.any((line) -> 'load ptr, ptr @lerta_exception' in line)
+    reads_exception := (body: String[]) -> after_start(body).any((line) -> EXCEPTION_READ in line)
     reasons := expect_status(0, dumped.result.status)
     for name in unchecked + checked
       body := function_body(lines, name)
@@ -443,6 +451,23 @@ dump_hidden_exception_check := ->
     reasons
   )
 
+# A function starts by assuming that no exception is pending, which it reads first.
+dump_start_assumption_check := ->
+  Check(name: 'lerta dump-llvm assumes no exception where a function starts', run: ->
+    dumped := await run_in_new_dir(compiler, ['dump-llvm', UNCHECKED_METHODS])
+    reasons := expect_status(0, dumped.result.status)
+    body := function_body(dumped.result.stdout_text().split("\n"), 'code') else return [
+      reasons...
+      'no function code'
+    ]
+    read := body.find_index((line) -> EXCEPTION_READ in line) else return [
+      reasons...
+      'no read of the exception'
+    ]
+    reasons.push 'no assumption right after the read' unless ASSUME in body[read + 2]
+    reasons
+  )
+
 # The array that Array(n, v) makes is assumed to have the length n, but only after the check for
 # the exception that a negative n throws.
 dump_filled_length_check := ->
@@ -451,11 +476,12 @@ dump_filled_length_check := ->
     dumped := await run_in_new_dir(compiler, ['dump-llvm', source])
     reasons := expect_status(0, dumped.result.status)
     lines := dumped.result.stdout_text().split("\n")
-    body := function_body(lines, 'marked') else return [reasons..., 'no function marked']
+    marked := function_body(lines, 'marked') else return [reasons..., 'no function marked']
+    body := after_start(marked)
     at := (text: String) -> body.find_index((line) -> text in line) else -1
     filled := at('@lerta_array_filled(')
-    checked := at('load ptr, ptr @lerta_exception')
-    assumed := at('call void @llvm.assume(')
+    checked := at(EXCEPTION_READ)
+    assumed := at(ASSUME)
     in_order := filled in 0..checked and checked < assumed
     reasons.push 'no assumption after the check' unless in_order
     reasons
@@ -946,6 +972,7 @@ export checks: Check[] = [
   dump_unchecked_methods_check()
   dump_filled_length_check()
   dump_hidden_exception_check()
+  dump_start_assumption_check()
   dump_float_ranges_check()
   dump_compound_tree_check()
   dump_batched_writes_check()

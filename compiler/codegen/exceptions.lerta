@@ -7,7 +7,7 @@ import
   generate_block, generate_block_value, no_locals, release_scope, store_in_slot
 from './function'
 import CodegenLocal, Finally, Generator, Handler, located, SlotLocal from './generator'
-import emit_seldom_branch, IrBuilder, phi_incoming from './ir_builder'
+import emit_assume, emit_seldom_branch, IrBuilder, phi_incoming from './ir_builder'
 import emit_type_test from './heap_object'
 import
   emit_interface_data, emit_release_as, INTERFACE_IR_TYPE, ir_type, ownership, returns_nothing,
@@ -72,6 +72,13 @@ export emit_exception_check_if := (g: Generator, thrown: String) ->
 export emit_check_with := (ir: IrBuilder, unwind: () -> void) ->
   data := ir.load('ptr', exception_global(ir), pointer_tag(ir))
   emit_unwind_if ir, ir.is_not_null(data), unwind
+
+# Tells LLVM that no exception is pending, as none is where a function starts: once it inlines a
+# function that throws on a rare path, the check after the call keeps its read of the global on
+# that path alone, as on the others it knows the exception is none.
+export emit_assume_no_exception := (ir: IrBuilder) ->
+  data := ir.load('ptr', exception_global(ir), pointer_tag(ir))
+  emit_assume ir, ir.assign("icmp eq ptr #{data}, null")
 
 emit_unwind_if := (ir: IrBuilder, thrown: String, unwind: () -> void) ->
   unwind_label := ir.fresh_label('unwind')
