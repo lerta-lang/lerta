@@ -68,7 +68,7 @@
 
 - **The Go approach.** An interface value is a fat pointer, `{ ptr data, ptr itab }`: two pointers (16 bytes on a 64-bit target), whose data is an owned reference.
   - Its optional type has the same representation, nil when the data is null.
-  - Arrays and maps hold interface values as 16-byte items (`LertaItemKind` in `runtime/lerta.h`).
+  - Arrays and maps hold interface values as 16-byte items, on every target (`LertaItemKind` in `runtime/lerta.h`).
 - There is no `any`, so the concrete type of a conversion to an interface is known at compile time, and itabs are generated statically.
   - The checker records each conversion's plan: how the type gives each member.
   - Each module defines the itabs it converts with as private constants.
@@ -86,10 +86,15 @@ What `std:builtins`, in the files of `std/builtins/`, cannot write in Lerta (see
 
 ### Built into the compiler
 
-- **Optional items.** An optional value that is not a reference, of a number, `Bool`, `Char` or an enum, is an item of its own kind (`LERTA_OPTIONAL_ITEMS`), its `{ i1, T }` in the 16 bytes of a `LertaItem`. The runtime moves it by its size, and gives the functions that compare and hash items its address in place of a word (`lerta_word_item`), which they read it through (`from_item` in `compiler/codegen/items.lerta`).
-- **Values as items.** A struct, an anonymous struct or a tuple that is a value, or an optional one nil by null, is an item of its own kind (`LERTA_VALUE_ITEMS`), in place rather than in a box: 8 bytes, or 16 (`LERTA_WIDE_ITEMS`) if it is larger as counted on a 64-bit target. The kind has a bit for each place of a pointer in the item that holds a counted reference (`LERTA_REFERENCE_PLACES`), two on a 64-bit target and four on a 32-bit one, which the runtime retains, releases and visits. As the places depend on the size of a pointer, which the IR does not, the generated code computes the kind by instructions from the offsets of the references (`emit_item_kind`), which LLVM folds for the target. The runtime gives such an item by its address, as an optional item; an optional value with a flag stays in a box, as it may be larger and holds its references only where the flag is set (`ItemForm` in `compiler/codegen/items.lerta`). The functions that compare and hash items read the address, and those of keys the box (`item_functions` in `compiler/codegen/equality.lerta`, and `from_item_word` and `from_key` in `items.lerta`).
+- **Masked items.** An item that is not an integer narrower than a word is masked (`LERTA_MASKED_ITEMS`): 8 bytes, or 16 (`LERTA_WIDE_ITEMS`), with a bit for each place of a pointer in it that holds a counted reference (`LERTA_REFERENCE_PLACES`), two on a 64-bit target and four on a 32-bit one, which the runtime retains, releases and visits. Each form of item (`ItemForm` in `compiler/codegen/items.lerta`) is so:
+  - a plain word, as an `Int`, 8 bytes of none; a reference, 8 bytes, at the first place; an interface value, 16 bytes, its data at the first place;
+  - an optional value that is not a reference, of a number, `Bool`, `Char` or an enum, its `{ i1, T }` in 16 bytes of none;
+  - a struct's, an anonymous struct's or a tuple's value, or an optional one nil by null, in place rather than in a box: 8 bytes, or 16 if it is larger as counted on a 64-bit target. As the places of its references depend on the size of a pointer, which the IR does not, the generated code computes its kind by instructions from their offsets (`emit_item_kind`), which LLVM folds for the target;
+  - an optional value with a flag, in a box, at the first place, as it may be larger and holds its references only where the flag is set.
+- The runtime gives the functions that compare and hash items a masked item by its address, which they read it through, and an integer item as its word (`lerta_item_word`; `from_item_word` in `compiler/codegen/items.lerta`); those of keys take a key's word, and the box of a value (`from_key`).
+- Until the seed is refreshed, the runtime also takes the kinds that its IR passes (`LERTA_SEED_PLAIN_ITEMS` and the others), whose items go to those functions as words.
 - **Items in place.** The generated code reads and writes the items of arrays, maps and Iters in place, as their types, at the place that the runtime gives once it has checked the index (`lerta_array_checked_items`) or found or placed the key (`lerta_map_find` and `lerta_map_place`), so that no copy of a size known only at run time is made.
-  - An item is an integer of fewer than 64 bits, or a `Bool` as a byte, at its own size; two pointers for an interface value; 16 bytes for an optional value that is not a reference (see optional items above); and 8 bytes otherwise. Items are retained by kind (see [memory management](memory.md)).
+  - An item is an integer of fewer than 64 bits, or a `Bool` as a byte, at its own size; 16 bytes for an interface value or an optional value that is not a reference, and for a value that needs them (see masked items above); and 8 bytes otherwise. Items are retained by kind (see [memory management](memory.md)).
   - The operations: `length`, indexing, `push`, `pop`, `remove`, `keys`, `iter`, and the Iter protocol, `has_next` and `next`.
   - Their loads and stores have a type-based alias tag of their own (see [alias analysis](memory.md#alias-analysis)).
 - `s.binary` passes on the String itself.

@@ -64,14 +64,10 @@ item_form := (program: ProgramWide, type: Type): ItemForm ->
     when TRACE then panic('no item holds a trace')
 
 # The kinds and the flags of LertaItemKind in runtime/lerta.h.
-PLAIN_ITEMS := 0
-REFERENCE_ITEMS := 1
-INTERFACE_ITEMS := 2
 NO_ITEMS := 4
-OPTIONAL_ITEMS := 5
 INTEGER_ITEMS := 0x10
 SIGNED_ITEMS := 0x20
-VALUE_ITEMS := 0x40
+MASKED_ITEMS := 0x40
 WIDE_ITEMS := 0x80
 FIRST_REFERENCE_PLACE := 0x100
 
@@ -93,15 +89,15 @@ export emit_item_kind := (ir: IrBuilder, type: Type) ->
   case item_form(program, type)
     when NONE then "#{NO_ITEMS}"
     when NARROW then "#{narrow_item_kind(type)!}"
-    when PLAIN then "#{PLAIN_ITEMS}"
-    when REFERENCE, BOXED then "#{REFERENCE_ITEMS}"
-    when INTERFACE then "#{INTERFACE_ITEMS}"
-    when OPTIONAL then "#{OPTIONAL_ITEMS}"
+    when PLAIN then "#{MASKED_ITEMS}"
+    when REFERENCE, BOXED then "#{MASKED_ITEMS | FIRST_REFERENCE_PLACE}"
+    when INTERFACE then "#{MASKED_ITEMS | WIDE_ITEMS | FIRST_REFERENCE_PLACE}"
+    when OPTIONAL then "#{MASKED_ITEMS | WIDE_ITEMS}"
     when VALUE then emit_value_item_kind(ir, type)
 
 emit_value_item_kind := (ir: IrBuilder, type: Type) ->
   program := ir.program
-  kind := VALUE_ITEMS | (is_wide_value(program, type) then WIDE_ITEMS else 0)
+  kind := MASKED_ITEMS | (is_wide_value(program, type) then WIDE_ITEMS else 0)
   value_type := ir_type(program, type)
   pointer_size := 'ptrtoint (ptr getelementptr (ptr, ptr null, i64 1) to i64)'
   place_bit := (path: Int[]) ->
@@ -131,10 +127,10 @@ item_ir_type := (program: ProgramWide, type: Type) ->
     else 'i64'
 
 # The room that an item of the type takes, as the runtime's lerta_item_size gives it: an optional
-# value takes a whole LertaItem, whatever its `{ i1, T }` takes.
+# value or an interface value takes a whole LertaItem, whatever its IR type takes.
 export item_room_type := (program: ProgramWide, type: Type) ->
   case item_form(program, type)
-    when OPTIONAL then '{ i64, i64 }'
+    when OPTIONAL, INTERFACE then '{ i64, i64 }'
     when VALUE
       is_wide_value(program, type) then '{ i64, i64 }' else 'i64'
     else item_ir_type(program, type)
@@ -154,13 +150,13 @@ from_item := (ir: IrBuilder, item: String, type: Type) ->
   scalar := scalar_of(type) else return ir.assign("inttoptr i64 #{item} to ptr")
   narrowed_from_word(ir, item, scalar)
 
-# The value of an item's word as the runtime gives it, borrowed as the item is: that in the box of
-# a boxed item.
+# The value of an item's word as the runtime gives it to the functions that compare and hash items
+# (see lerta_item_word), borrowed as the item is: its address, read through, but an integer item's
+# word.
 export from_item_word := (ir: IrBuilder, word: String, type: Type) ->
-  if item_form(ir.program, type) == BOXED
-    emit_unbox(ir, ir.assign("inttoptr i64 #{word} to ptr"), type)
-  else
-    from_item(ir, word, type)
+  if item_form(ir.program, type) == NARROW
+    return from_item(ir, word, type)
+  emit_load_item(ir, ir.assign("inttoptr i64 #{word} to ptr"), type)
 
 # The item that holds the value, owned, which it takes over.
 to_held_item := (ir: IrBuilder, operand: String, type: Type) ->
@@ -174,7 +170,7 @@ to_held_item := (ir: IrBuilder, operand: String, type: Type) ->
 # The value of an item as it is held, borrowed as the item is.
 from_held_item := (ir: IrBuilder, item: String, type: Type) ->
   case item_form(ir.program, type)
-    when BOXED then from_item_word(ir, item, type)
+    when BOXED then emit_unbox(ir, from_item(ir, item, type), type)
     when NARROW
       is_kind(type, 'Bool') then ir.assign("trunc i8 #{item} to i1") else item
     when OPTIONAL, VALUE, INTERFACE then item

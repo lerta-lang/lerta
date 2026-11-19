@@ -6,25 +6,28 @@
 LERTA_STATIC_STRING(pop_from_empty, "pop from an empty array");
 
 int64_t lerta_item_size(LertaItemKind kind) {
-  // One test for both flags, which keeps the common kinds as quick as before values were items.
-  if (kind & (LERTA_INTEGER_ITEMS | LERTA_VALUE_ITEMS)) {
-    if (kind & LERTA_INTEGER_ITEMS) return kind & LERTA_ITEM_BYTES;
-    return kind & LERTA_WIDE_ITEMS ? 16 : 8;
-  }
+  if (kind & LERTA_MASKED_ITEMS) return kind & LERTA_WIDE_ITEMS ? 16 : 8;
+  if (kind & LERTA_INTEGER_ITEMS) return kind & LERTA_ITEM_BYTES;
   switch (kind) {
-    case LERTA_INTERFACE_ITEMS: return 2 * (int64_t)sizeof(void *);
+    case LERTA_SEED_INTERFACE_ITEMS: return 2 * (int64_t)sizeof(void *);
     case LERTA_NO_ITEMS: return 0;
-    case LERTA_OPTIONAL_ITEMS: return (int64_t)sizeof(LertaItem);
+    case LERTA_SEED_OPTIONAL_ITEMS: return (int64_t)sizeof(LertaItem);
     default: return 8;
   }
 }
 
-// The references that a value holds, at the places of pointers whose bits are set, the first the
-// lowest. Kept out of the callers, so that those of the other kinds stay as small as before values
-// were items, for LLVM to inline.
-__attribute__((noinline)) static void visit_value_references(LertaItemKind kind, const void *item,
-                                                             LertaVisitor visitor) {
-  unsigned places = (kind & LERTA_REFERENCE_PLACES) >> 8;
+// The places of the pointers in an item that hold references, a bit each, the first the lowest.
+static unsigned reference_places(LertaItemKind kind) {
+  if (kind & LERTA_MASKED_ITEMS) return (kind & LERTA_REFERENCE_PLACES) >> 8;
+  return kind == LERTA_SEED_REFERENCE_ITEMS || kind == LERTA_SEED_INTERFACE_ITEMS;
+}
+
+static bool holds_references(LertaItemKind kind) { return reference_places(kind) != 0; }
+
+// The references of a value at more places than the first. Kept out of the callers, so that those
+// stay small enough for LLVM to inline.
+__attribute__((noinline)) static void visit_references_at(unsigned places, const void *item,
+                                                          LertaVisitor visitor) {
   for (int place = 0; places; place++, places >>= 1) {
     if (!(places & 1)) continue;
     void *reference;
@@ -33,22 +36,17 @@ __attribute__((noinline)) static void visit_value_references(LertaItemKind kind,
   }
 }
 
-static bool holds_references(LertaItemKind kind) {
-  if (kind & LERTA_VALUE_ITEMS) return kind & LERTA_REFERENCE_PLACES;
-  return kind == LERTA_REFERENCE_ITEMS || kind == LERTA_INTERFACE_ITEMS;
-}
-
-// The reference that an item of another kind than a value holds is its first 8 bytes: a reference,
-// or an interface value's data.
+// An item of a reference at the first place alone, the most common, a reference or an interface
+// value's data, costs no loop.
 static inline void visit_references(LertaItemKind kind, const void *item, LertaVisitor visitor) {
-  if (kind & LERTA_VALUE_ITEMS) {
-    visit_value_references(kind, item, visitor);
-    return;
+  unsigned places = reference_places(kind);
+  if (places == 1) {
+    void *reference;
+    memcpy(&reference, item, sizeof reference);
+    visitor(reference);
+  } else if (places) {
+    visit_references_at(places, item, visitor);
   }
-  if (!holds_references(kind)) return;
-  void *reference;
-  memcpy(&reference, item, sizeof reference);
-  visitor(reference);
 }
 
 void lerta_visit_item(LertaItemKind kind, const void *item, LertaVisitor visitor) {
@@ -68,14 +66,8 @@ static uint8_t *item_at(const LertaArray *array, int64_t index) {
 }
 
 // The targets are all little-endian, so that an item narrower than a word is the word's first
-// bytes. An optional item or a value, which may be wider than a word, is given by its address, which
-// the generated code reads it through (see compiler/codegen/items.lerta).
-int64_t lerta_word_item(const LertaArray *array, int64_t index) {
-  return lerta_item_word(array->item_kind, item_at(array, index));
-}
-
-int64_t lerta_item_word(LertaItemKind kind, const void *item) {
-  if (kind == LERTA_OPTIONAL_ITEMS || kind & LERTA_VALUE_ITEMS) return (int64_t)(intptr_t)item;
+// bytes, which an integer item's sign extends.
+static int64_t word_of(LertaItemKind kind, const void *item) {
   int64_t word;
   if (!(kind & LERTA_INTEGER_ITEMS)) {
     memcpy(&word, item, sizeof word);
@@ -86,6 +78,18 @@ int64_t lerta_item_word(LertaItemKind kind, const void *item) {
   int unused_bits = 64 - 8 * (int)lerta_item_size(kind);
   if (!(kind & LERTA_SIGNED_ITEMS)) return (int64_t)bits;
   return (int64_t)(bits << unused_bits) >> unused_bits;
+}
+
+int64_t lerta_word_item(const LertaArray *array, int64_t index) {
+  return word_of(array->item_kind, item_at(array, index));
+}
+
+// A masked item, or the seed's optional item, is given by its address, which the generated code
+// reads it through (see compiler/codegen/items.lerta); another as its word.
+int64_t lerta_item_word(LertaItemKind kind, const void *item) {
+  bool by_address = kind & LERTA_MASKED_ITEMS || kind == LERTA_SEED_OPTIONAL_ITEMS;
+  if (by_address) return (int64_t)(intptr_t)item;
+  return word_of(kind, item);
 }
 
 static inline void visit_array(void *object, LertaVisitor visitor) {
@@ -226,12 +230,12 @@ static LertaItem hold_item(const LertaArray *array, int64_t index) {
 }
 
 static bool same_items(const LertaArray *a, const LertaArray *b, int64_t index, LertaEquals equals) {
-  LertaItemKind kind = a->item_kind;
   LertaItem a_item = hold_item(a, index);
   LertaItem b_item = hold_item(b, index);
-  bool same = equals(lerta_item_word(kind, &a_item), lerta_item_word(kind, &b_item));
-  lerta_release_item(kind, &a_item);
-  lerta_release_item(kind, &b_item);
+  bool same =
+      equals(lerta_item_word(a->item_kind, &a_item), lerta_item_word(b->item_kind, &b_item));
+  lerta_release_item(a->item_kind, &a_item);
+  lerta_release_item(b->item_kind, &b_item);
   return same;
 }
 

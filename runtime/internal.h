@@ -122,10 +122,11 @@ int64_t lerta_item_size(LertaItemKind kind);
 void lerta_retain_item(LertaItemKind kind, const void *item);
 void lerta_release_item(LertaItemKind kind, const void *item);
 void lerta_visit_item(LertaItemKind kind, const void *item, LertaVisitor visitor);
-// The item at the index of an array of any kind but interface values, as 8 bytes: an integer item
-// is extended by its sign, as the generated code widens it, and an optional item is its address.
+// The first 8 bytes of the item at the index of an array, for C to read a plain item or a reference:
+// an integer item is extended by its sign, as the generated code widens it.
 int64_t lerta_word_item(const LertaArray *array, int64_t index);
-// An item of the kind, at the address, as 8 bytes, as lerta_word_item gives it.
+// An item of the kind, at the address, as the functions that compare and hash items take it: its
+// address, or its word for an integer item or one of the seed's kinds.
 int64_t lerta_item_word(LertaItemKind kind, const void *item);
 // Arrays (array.c): the generated code pushes in place.
 void lerta_array_append(LertaArray *array, const void *item);

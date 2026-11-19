@@ -52,32 +52,41 @@ struct LertaString {
 // The LertaString of a LERTA_STATIC_STRING.
 #define LERTA_STR(name) ((const LertaString *)&(name))
 
-// How arrays and maps hold their items. A plain item is 8 bytes, an Int as is; a reference is 8
-// bytes, its address, and is retained while it is held. An interface value is two pointers, its
-// data, a reference, then its itab. LERTA_NO_ITEMS take no bytes, as the values of a set, a map
+// How arrays and maps hold their items. LERTA_NO_ITEMS take no bytes, as the values of a set, a map
 // without values, do. An integer narrower than 8 bytes, a Bool or a Float32's bits, is
 // LERTA_INTEGER_ITEMS with its size in bytes in LERTA_ITEM_BYTES, and LERTA_SIGNED_ITEMS if it is
-// signed, and takes that size. LERTA_OPTIONAL_ITEMS are optional values that are not references,
-// a flag then the value, in the 16 bytes of a LertaItem. LERTA_VALUE_ITEMS are values of structs,
-// anonymous structs or tuples, of 8 bytes, or of 16 if LERTA_WIDE_ITEMS, which hold a reference at
-// each place of a pointer whose bit is set in LERTA_REFERENCE_PLACES, the first place the lowest:
-// two places on a 64-bit target, four on a 32-bit one.
+// signed, and takes that size. Any other item is LERTA_MASKED_ITEMS, of 8 bytes, or of 16 if
+// LERTA_WIDE_ITEMS, which holds a reference, retained while it is held, at each place of a pointer
+// whose bit is set in LERTA_REFERENCE_PLACES, the first place the lowest: two places on a 64-bit
+// target, four on a 32-bit one. So a plain item is 8 bytes of no reference, an Int as is; a
+// reference is 8 bytes, its address; an interface value is 16, its data, a reference, then its
+// itab; an optional value that is not a reference is 16 of no reference, its flag then its value;
+// and a struct's, an anonymous struct's or a tuple's value takes the room that its size needs.
 // C moves items only by memcpy, never as a C type: the generated code reads and writes them as a
 // type of their own in type-based alias analysis (see compiler/codegen/items.lerta).
 typedef enum {
-  LERTA_PLAIN_ITEMS,
-  LERTA_REFERENCE_ITEMS,
-  LERTA_INTERFACE_ITEMS,
+  // The kinds that the seed's IR passes for plain, reference, interface and optional items, until
+  // the seed is refreshed: the functions that compare and hash their items take them as words (see
+  // lerta_item_word), not by their addresses, and the runtime tells them by their numbers. The
+  // arrays that the runtime makes itself are masked, so code built from the seed must not compare
+  // or hash them meanwhile.
+  LERTA_SEED_PLAIN_ITEMS,
+  LERTA_SEED_REFERENCE_ITEMS,
+  LERTA_SEED_INTERFACE_ITEMS,
   // 3 was the kind of bytes, before the integer items; 4 stays, as the seed's IR passes it.
   LERTA_NO_ITEMS = 4,
-  LERTA_OPTIONAL_ITEMS = 5,
+  LERTA_SEED_OPTIONAL_ITEMS = 5,
   // The mask and the flags of a kind, not kinds.
   LERTA_ITEM_BYTES = 0x0F,
   LERTA_INTEGER_ITEMS = 0x10,
   LERTA_SIGNED_ITEMS = 0x20,
-  LERTA_VALUE_ITEMS = 0x40,
+  LERTA_MASKED_ITEMS = 0x40,
   LERTA_WIDE_ITEMS = 0x80,
-  LERTA_REFERENCE_PLACES = 0xF00
+  LERTA_REFERENCE_PLACES = 0xF00,
+  LERTA_FIRST_REFERENCE_PLACE = 0x100,
+  // The kinds that the runtime's own code makes.
+  LERTA_PLAIN_ITEMS = LERTA_MASKED_ITEMS,
+  LERTA_REFERENCE_ITEMS = LERTA_MASKED_ITEMS | LERTA_FIRST_REFERENCE_PLACE
 } LertaItemKind;
 
 // Room for an item of any kind.
