@@ -29,6 +29,21 @@ void lerta_raise(LertaErrorKind kind, const LertaString *message) {
   registered_raise((int32_t)kind, message);
 }
 
+// Compared only by address, never read, so that it holds no reference; forgotten as it is freed, so
+// that an error made later at its address is not taken for it.
+static const void *late_nan = NULL;
+
+void lerta_raise_nan(LertaErrorKind kind, const LertaString *message) {
+  lerta_raise(kind, message);
+  late_nan = lerta_exception.data;
+}
+
+bool lerta_is_late_nan(const void *exception) { return exception == late_nan; }
+
+void lerta_forget_late_nan(const void *object) {
+  if (object == late_nan) late_nan = NULL;
+}
+
 LERTA_STATIC_STRING(index_out_of_range, "index out of range");
 
 void lerta_raise_index_out_of_range(void) {

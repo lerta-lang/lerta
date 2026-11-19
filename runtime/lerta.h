@@ -488,6 +488,9 @@ typedef enum {
 // Throws an error of the kind with the message, borrowed (see
 // docs/internals/execution.md#exceptions): the caller returns at once.
 void lerta_raise(LertaErrorKind kind, const LertaString *message);
+// As lerta_raise, for a NaN that a check may have found after the operation that made it: an
+// uncaught one ends the program with a hint at --eager-nan-checks.
+void lerta_raise_nan(LertaErrorKind kind, const LertaString *message);
 void lerta_register_raise(void (*raise)(int32_t kind, const LertaString *message));
 
 // `panic` of std:builtins.

@@ -142,5 +142,4 @@ The size classes of the allocator ([internals](../internals/memory.md#allocation
 ## Open questions
 
 - Whether stack overflow should be an exception that can be caught, instead of a panic. That needs the remaining stack checked at function entry instead of [the guard page](../internals/execution.md#stack-overflow), as on the targets without one, such as [microcontrollers](#platforms). Catching it then works like any throw, since the handler runs after unwinding.
-- Whether a build without `-O` checks each float operation for NaN by default, as [`--eager-nan-checks`](../reference/compiler.md#--eager-nan-checks) does, so that a NaN is reported where it is made. Against: whether a NaN never used throws would then differ by build.
 - How to pass values to workers (candidates: deep copy only + sharing immutable `Binary` / run-time moves like JS transfer).

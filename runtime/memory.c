@@ -62,6 +62,7 @@ static LertaHeader *allocate_object(int64_t size) {
 
 static void free_object(void *object) {
   lerta_trace_forget(object);
+  lerta_forget_late_nan(object);
 #ifdef LERTA_DEBUG
   // The count follows the prefix, where the allocator fills a freed place with FREED_BYTE; but
   // where pointers are 4 bytes, the prefix is 8 bytes, and the count lies in the place's next 8,

@@ -48,7 +48,7 @@ export OVERFLOW := CheckedError(type_name: 'ArithmeticError', message: 'integer 
 export DIVISION_BY_ZERO := CheckedError(type_name: 'ArithmeticError', message: 'division by zero')
 export SHIFT_OUT_OF_RANGE :=
   CheckedError(type_name: 'ArithmeticError', message: 'shift out of range')
-export NOT_A_NUMBER := CheckedError(type_name: 'ArithmeticError', message: 'not a number')
+NOT_A_NUMBER := CheckedError(type_name: 'ArithmeticError', message: 'not a number')
 export UNWRAPPED_NIL := CheckedError(type_name: 'NilError', message: 'unwrapped nil')
 export FAILED_CAST := CheckedError(type_name: 'CastError', message: 'failed cast')
 export DEAD_OBJECT := CheckedError(type_name: 'WeakError', message: 'weak object is gone')
@@ -59,6 +59,15 @@ type_name := (itab: Itab) -> (itab.type as ObjectType!).name
 
 # Throws the error where the condition holds, and unwinds from there.
 export throw_if := (g: Generator, condition: String, error: CheckedError) ->
+  emit_raise_if g, condition, error, '@lerta_raise'
+
+# Throws `not a number` where the condition holds. Without `--eager-nan-checks`, the NaN may come
+# from an operation before the check, which an uncaught one hints at (see lerta_raise_nan).
+export throw_nan_if := (g: Generator, condition: String) ->
+  raise := g.code.eager_nan_checks then '@lerta_raise' else '@lerta_raise_nan'
+  emit_raise_if g, condition, NOT_A_NUMBER, raise
+
+emit_raise_if := (g: Generator, condition: String, error: CheckedError, raise: String) ->
   ir := g.ir
   raise_label := ir.fresh_label('raise')
   continue_label := ir.fresh_label('continue')
@@ -67,6 +76,6 @@ export throw_if := (g: Generator, condition: String, error: CheckedError) ->
   message := string_constant(ir, error.message)
   errors := ir.program.runtime_errors
   kind := errors.find_index((itab) -> type_name(itab) == error.type_name)!
-  call_void_runtime ir, 'void @lerta_raise(i32, ptr)', "i32 #{kind}, ptr #{message}"
+  call_void_runtime ir, "void #{raise}(i32, ptr)", "i32 #{kind}, ptr #{message}"
   emit_traced_unwind g, TRACE_START
   ir.start_block continue_label

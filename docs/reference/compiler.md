@@ -165,7 +165,7 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 
 - Has each operation of `Float`s and `Float32`s check its result for NaN where it is, so that `not a number` is thrown by the operation that makes the NaN, before anything else runs, rather than where the value is used (see [Float](types.md#float)). A NaN that is never used throws too.
 - The program is slower, as it checks more.
-- It is there for finding where a NaN comes from.
+- It is there for finding where a NaN comes from. Without it, a `not a number` that a check throws and nothing catches ends the program with a hint at it after its trace.
 
 #### `--target <target>`
 

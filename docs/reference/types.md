@@ -226,7 +226,7 @@ The NaN is thrown where the value is used, since the operations that a NaN goes 
 - But a local that a loop or a comprehension reads, declared outside of it, is checked where it is declared, so that it is not checked at each turn.
 - A chain of operations throws at its last one, after the calls in it, whose arguments are checked as they are passed.
 
-So `not a number` may be reported at a line after the one that makes the NaN, and a NaN never used throws nowhere, unless a loop or a comprehension reads its local: it then throws where the local is declared, even if the loop never turns. [`--eager-nan-checks`](compiler.md#build) throws at each operation that makes one.
+So `not a number` may be reported at a line after the one that makes the NaN, and a NaN never used throws nowhere, unless a loop or a comprehension reads its local: it then throws where the local is declared, even if the loop never turns. [`--eager-nan-checks`](compiler.md#--eager-nan-checks) throws at each operation that makes one; without it, one that ends the program adds a line to its trace that says so.
 
 ### Comparison
 

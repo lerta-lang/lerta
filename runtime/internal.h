@@ -71,6 +71,12 @@ void lerta_release_kept(void);
 // Each returns whether it reported any, which ends the program with LERTA_LEAK_EXIT_CODE.
 bool lerta_report_leaks(void);
 bool lerta_report_unreachable(void);
+
+// Whether the exception is the last that lerta_raise_nan threw (errors.c).
+bool lerta_is_late_nan(const void *exception);
+// Called as an object is freed, as lerta_trace_forget is.
+void lerta_forget_late_nan(const void *object);
+
 // Apart from the codes that the runtime and the compiler use, so that a leak is told from them; a
 // program may still exit with it itself.
 #define LERTA_LEAK_EXIT_CODE 23

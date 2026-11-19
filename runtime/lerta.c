@@ -124,6 +124,10 @@ static void write_exception(const char *prefix, bool panicking) {
   lerta_stderr_write_string(message);
   lerta_stderr_write_text("\n");
   write_trace(lerta_exception.data);
+  if (lerta_is_late_nan(lerta_exception.data)) {
+    lerta_stderr_write_text(
+        "  hint: the NaN may have been made earlier; --eager-nan-checks reports where\n");
+  }
 }
 
 void lerta_print_trace(void *data, void *const *itab) {
