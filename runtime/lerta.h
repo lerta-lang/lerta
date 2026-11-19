@@ -149,6 +149,10 @@ typedef struct LertaIter {
 void *lerta_new(int64_t size, const LertaType *type);
 void lerta_retain(void *object);
 void lerta_release(void *object);
+// Registers a global of the generated code that holds an object made as the program runs, as a
+// regular expression literal's Regex, so that it is released as the program ends, before the leak
+// check, as the top-level values are.
+void lerta_keep_until_exit(void **slot);
 // Runs a class's deinit on its object, whose count has reached zero, from its drop function. The
 // object counts as referenced once while deinit runs, so that passing it on and releasing it again
 // does not drop it twice; deinit must not keep it, which would bring a dropped object back.

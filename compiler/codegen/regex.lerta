@@ -1,13 +1,32 @@
 # Regular expression literals: a Regex made from the program that the checker compiled, embedded
 # as a constant, by regex_of_literal of std/builtins/regex.lerta, so that nothing is parsed at run
-# time.
+# time. Each literal's Regex is made once, the first time it is evaluated, and kept in a global of
+# its own, as a Regex keeps what its searches reuse, which the runtime releases as the program ends
+# (lerta_keep_until_exit).
 import RegexLiteral from '../ast'
 import Generator from './generator'
-import binary_constant, function_symbol, string_constant from './lerta_ir'
+import emit_branch from './ir_builder'
+import binary_constant, emit_retain, function_symbol, string_constant from './lerta_ir'
+import call_void_runtime from './runtime_calls'
 
 REGEX_MODULE := 'std:builtins/regex'
 
+# The literal's Regex, owned.
 export generate_regex := (g: Generator, literal: RegexLiteral) ->
+  ir := g.ir
+  kept := ir.module.global('lerta.regex', 'internal global ptr null')
+  held := ir.load('ptr', kept)
+  is_new := ir.assign("icmp eq ptr #{held}, null")
+  make := ->
+    made := make_regex(g, literal)
+    ir.store 'ptr', made, kept
+    call_void_runtime ir, 'void @lerta_keep_until_exit(ptr)', "ptr #{kept}"
+    made
+  regex := emit_branch(ir, 'ptr', is_new, make, held)
+  emit_retain ir, regex
+  regex
+
+make_regex := (g: Generator, literal: RegexLiteral) ->
   program := g.facts.regex_programs[literal]!
   ir := g.ir
   names := [name else '' for name in program.names].join(',')

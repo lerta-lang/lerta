@@ -62,6 +62,10 @@ void *lerta_mem_realloc(void *memory, int64_t size);
 // the runtime checks.
 void lerta_mem_slab_counts(int64_t *in_use, int64_t *empty, int64_t *discarded);
 
+// Releases what lerta_keep_until_exit registered (memory.c), as the program ends, before the leak
+// check.
+void lerta_release_kept(void);
+
 // The leak check (leaks.c), of the debug runtime, as the program ends: of what is left alive, and,
 // as `exit` ends it, which holds what is still in use, of the objects that nothing in use holds.
 // Each returns whether it reported any, which ends the program with LERTA_LEAK_EXIT_CODE.

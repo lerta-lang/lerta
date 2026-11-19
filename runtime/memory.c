@@ -25,6 +25,29 @@ void *lerta_checked_calloc(size_t count, size_t size) {
   return memory;
 }
 
+// The globals that lerta_keep_until_exit registers.
+static void ***kept = NULL;
+static int64_t kept_length = 0;
+static int64_t kept_capacity = 0;
+
+void lerta_keep_until_exit(void **slot) {
+  if (kept_length == kept_capacity) {
+    kept = lerta_grow_buffer(kept, &kept_capacity, sizeof(void **), 8);
+  }
+  kept[kept_length++] = slot;
+}
+
+// Each global is unset before its release, so that what a deinit that the release runs reads of
+// it is nil rather than a released object.
+void lerta_release_kept(void) {
+  for (int64_t i = 0; i < kept_length; i++) {
+    void *object = *kept[i];
+    *kept[i] = NULL;
+    lerta_release(object);
+  }
+  kept_length = 0;
+}
+
 static LertaHeader *allocate_object(int64_t size) {
 #ifdef LERTA_DEBUG
   LertaPrefix *prefix = lerta_mem_alloc((int64_t)sizeof(LertaPrefix) + size);
