@@ -5,16 +5,19 @@
 ### Classes and structs
 
 - A class or struct object is a heap object: the header, then its fields, each in its IR type, and, for a class, the pointer to its [weak box](memory.md#weak-references).
-- An anonymous struct is a heap object like a struct, with its fields, and so is a tuple, with its items, but one that is a value (see [values](#values)).
+- An anonymous struct is a heap object like a struct, with its fields, and so is a tuple, with its items; but a struct, an anonymous struct or a tuple that is a value is none (see [values](#values)).
 - The fields are laid out by alignment, largest first, else as declared, so that no padding comes between them (`field_order` in `compiler/checker/value_layout.lerta`); what goes through them in order, as `to_literal`, `==` and std:json, goes as declared, an anonymous struct's in name order. Each structural type has its own LLVM type and type of objects, generated where it is first used.
 - Methods are functions that take the object first.
 
 ### Values
 
-- An anonymous struct or a tuple of at most 16 bytes, which does not hold itself, is a value rather than a heap object (`value_layout` and `is_value_type` in `compiler/checker/value_layout.lerta`): an LLVM struct of its fields as laid out above, made by `insertvalue` and read by `extractvalue`, in locals, arguments, results, fields, captures and cells.
+- A struct, an anonymous struct or a tuple of at most 16 bytes, which does not hold itself, is a value rather than a heap object (`value_layout` and `is_value_type` in `compiler/checker/value_layout.lerta`): an LLVM struct of its fields as laid out above, made by `insertvalue` and read by `extractvalue`, in locals, arguments, results, fields, captures and cells.
 - It holds its references in its fields: a retain or a release of it is one of each reference it holds (`emit_each_reference` in `compiler/codegen/lerta_ir.lerta`), of the ownership `VALUE`. A heap object's field of it is visited and dropped so.
 - Its optional type is nil by the null at its nil_path, a reference that is not optional or an interface value's data, in a field or that of a value inside, in the size of the value (see [nil](memory.md#nil)). One without a nil_path is `{ i1, T }`, of whatever size, which holds its references only where the flag is set.
-- It is held in a box, as a union's member is (see [unions](#unions)), where a word must hold it: as a union's member, an interface value's data, or an array's or a map's item or key. A key that the runtime only looks up is boxed on the stack, immortal, so that looking it up allocates nothing (`emit_stack_box`).
+- A struct's constructor builds its value in a stack slot, which the defaults read as `@` as it is so far, and returns it; its methods and its `init` take it as a value.
+- It is held in a box, as a union's member is (see [unions](#unions)), where a word must hold it: as a union's member, an interface value's data, or an array's or a map's item or key. A key that the runtime only looks up is boxed on the stack, immortal, so that looking it up allocates nothing (`emit_stack_box`). An itab's entry of a method written in Lerta takes it out of its box for the method (`define_unboxing_entry`), and so does a cast or a catch that narrows the interface value to the struct.
+- The checker records where one goes into a union apart from the conversions (`NodeFacts.boxings`), as whether it is a value is known only once the fields of the structs are typed, and fmt reads the conversions as they do not depend on it.
+- std:json finds a cycle through a struct's value at the array or the map on its way back to itself, which it enters in its place, as the value has no address of its own (`leads_to_value_cycle`).
 
 ### Construction
 

@@ -1,12 +1,13 @@
 # The functions that write values of a type through an Encoder (see codegen/codable), which borrow
 # the value. A writer that throws is let go of as it is, so a function releases only what it took.
+import is_value_type from '../checker/value_layout'
 import info_of from '../checker/object_types'
 import ProgramWide from '../checker/shared'
 import emit_borrowed_item, emit_item_slot, emit_length, emit_take_item, emit_taken from './array'
 import emit_member_name from './enum'
 import emit_check_with, emit_return_thrown from './exceptions'
 import emit_member_value from './boxes'
-import emit_borrowed_value, emit_field_pointer, emit_member_dispatch from './heap_object'
+import emit_borrowed_field, emit_borrowed_value, emit_member_dispatch from './heap_object'
 import emit_count_up, emit_if_else, emit_while, IrBuilder, IrModule from './ir_builder'
 import call_void_method, Coder, is_inline, map_shape, MAP, name_arg, SCALARS, SET from './codable'
 import emit_release, emit_release_value, ir_type from './lerta_ir'
@@ -75,18 +76,50 @@ emit_write := (ir: IrBuilder, writer: Coder, value: String, type: Type, unwind: 
 emit_write_array := (
   ir: IrBuilder, writer: Coder, array: String, element: Type, unwind: () -> void
 ): void ->
+  may_cycle := leads_to_value_cycle(ir.program, element, Set())
+  if may_cycle
+    emit_enter ir, writer, array, unwind
   call_void_method ir, writer, 'begin_array', [], unwind
   write_item := (index: String) ->
     call_void_method ir, writer, 'next_item', [], unwind
     emit_write ir, writer, emit_borrowed_item(ir, array, index, element), element, unwind
   emit_count_up ir, emit_length(ir, array), write_item
   call_void_method ir, writer, 'end_array', [], unwind
+  if may_cycle
+    call_void_method ir, writer, 'leave', [], unwind
+
+# Enters the object, so that the writer finds a cycle back to it.
+emit_enter := (ir: IrBuilder, writer: Coder, object: String, unwind: () -> void) ->
+  address := ir.assign("ptrtoint ptr #{object} to i64")
+  call_void_method ir, writer, 'enter', ["i64 #{address}"], unwind
+
+# Whether a value of the type, an array's item or a map's key or value, leads to a struct's value
+# that may hold itself, through objects of which the array or the map may be the one on its way
+# back; as that value has no address, the array or the map is entered instead. An object, an array
+# or a map further in is entered itself.
+leads_to_value_cycle := (program: ProgramWide, type: Type, visited: Set<String>): Bool ->
+  part_leads := (part: Type) -> leads_to_value_cycle(program, part, visited)
+  case type
+    when OptionalType then part_leads(type.inner)
+    when TupleType then type.items.any(part_leads)
+    when RecordType then type.fields.any((field) -> part_leads(field.type))
+    when UnionType then type.members.any(part_leads)
+    when ObjectType
+      return false unless is_value_type(program, type)
+      return true if may_hold_itself(program, type)
+      return false unless visited.add(type_key(type))
+      info_of(program, type).fields.any((field) -> part_leads(field.type!))
+    else false
 
 # The entries in their order, through a cursor of the runtime, which gives each key and value
 # owned: a set's items, a map's keys of String with their values, or another map's entries, each of
 # a key and a value (see map_shape).
 emit_write_map := (ir: IrBuilder, writer: Coder, map: String, type: MapType): void ->
   shape := map_shape(type)
+  may_cycle := [type.key, type.value].any((part) -> leads_to_value_cycle(ir.program, part, Set()))
+  return_thrown := -> emit_return_thrown(ir, void_type)
+  if may_cycle
+    emit_enter ir, writer, map, return_thrown
   cursor := call_runtime(ir, 'ptr @lerta_map_cursor(ptr)', "ptr #{map}")
   release_cursor := ->
     emit_release ir, cursor
@@ -129,6 +162,8 @@ emit_write_map := (ir: IrBuilder, writer: Coder, map: String, type: MapType): vo
   emit_while ir, more, write_entry
   emit_release ir, cursor
   call_void_method ir, writer, "end_#{shape}", [], -> emit_return_thrown(ir, void_type)
+  if may_cycle
+    call_void_method ir, writer, 'leave', [], return_thrown
 
 emit_write_tuple := (
   ir: IrBuilder, writer: Coder, tuple: String, type: TupleType, unwind: () -> void
@@ -155,17 +190,18 @@ emit_write_object := (
   ir: IrBuilder, writer: Coder, object: String, type: ObjectType, unwind: () -> void
 ): void ->
   info := info_of(writer.program, type)
-  may_cycle := may_hold_itself(writer.program, type)
+
+  # A struct's value has no address: the array or the map on its way back to itself is entered
+  # instead (see leads_to_value_cycle).
+  may_cycle := not is_value_type(writer.program, type) and may_hold_itself(writer.program, type)
   if may_cycle
-    address := ir.assign("ptrtoint ptr #{object} to i64")
-    call_void_method ir, writer, 'enter', ["i64 #{address}"], unwind
+    emit_enter ir, writer, object, unwind
   call_void_method ir, writer, 'begin_record', [], unwind
   for field in info.fields
     name := field.name.name
     field_type := field.type!
-    pointer := emit_field_pointer(ir, object, info, name)
     emit_write_field ir, writer, name, unwind
-    emit_write ir, writer, ir.load(ir_type(ir.program, field_type), pointer), field_type, unwind
+    emit_write ir, writer, emit_borrowed_field(ir, object, info, field), field_type, unwind
   call_void_method ir, writer, 'end_record', [], unwind
   if may_cycle
     call_void_method ir, writer, 'leave', [], unwind

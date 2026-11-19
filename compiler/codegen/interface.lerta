@@ -17,7 +17,8 @@ import function_generator, Generator from './generator'
 import IrBuilder, IrModule from './ir_builder'
 import
   emit_interface_data, emit_release, emit_release_value, emit_retain_value, extension_symbol,
-  instance_symbol, INTERFACE_IR_TYPE, ir_return_type, ir_type, method_symbol, typed_params
+  instance_symbol, INTERFACE_IR_TYPE, ir_return_type, ir_type, method_symbol, returns_nothing,
+  typed_params
 from './lerta_ir'
 import FunctionType, InterfaceType, Type, type_key from '../types'
 
@@ -67,15 +68,37 @@ define_itab := (g: Generator, itab: Itab) ->
   g.ir.module.named(key, '@lerta.itab', define)
 
 # The function of the entry: the method that gives the member, if it is written in Lerta, which
-# takes its object first; otherwise a function that reads the member, defined once. A value has no
-# method written in Lerta, as a tuple or an anonymous struct cannot be extended.
+# takes its object first, or one that calls it with the value in the box of a struct's value;
+# otherwise a function that reads the member, defined once.
 entry_function := (g: Generator, itab: Itab, entry: ItabEntry) ->
+  method := method_of(g, entry) else return define_reader(g, itab.type, entry)
+  return method unless is_value_type(g.code.program, itab.type)
+  define_unboxing_entry(g, itab.type, entry, method)
+
+# The symbol of the method that gives the member, if it is written in Lerta.
+method_of := (g: Generator, entry: ItabEntry) ->
   return instance_symbol(g.code.program, instance) if instance := entry.instance
   source := entry.target is Method then entry.target.source
   case source
     when OwnMethod then method_symbol(source.receiver, entry.member.name)
     when ExtensionSource then extension_symbol(g.code.program, source.method)
-    else define_reader(g, itab.type, entry)
+    else nil
+
+# A function that calls the method of the symbol with the value in the box, `%data`, which it
+# borrows, as the method does its object.
+define_unboxing_entry := (g: Generator, type: Type, entry: ItabEntry, method: String) ->
+  function_type := function_type_of(entry.member.type)
+  define := (symbol: String, module: IrModule) ->
+    ir := IrBuilder(module)
+    program := ir.program
+    params := typed_params(program, function_type.params)
+    value := "#{ir_type(program, type)} #{emit_unbox(ir, '%data', type)}"
+    result := call_user_function(ir, method, function_type, [value, params...].join(', '))
+    result_type := function_type.result
+    return_type := ir_return_type(program, result_type)
+    ir.emit returns_nothing(result_type) then 'ret void' else "ret #{return_type} #{result}"
+    ir.finish "private #{return_type} #{symbol}(#{['ptr %data', params...].join(', ')})"
+  g.ir.module.named("unboxing #{method}", '@lerta.unboxing', define)
 
 # A function that gives the member of a value of the type: calls a builtin method or a field that
 # holds a function, or reads a field or a property.

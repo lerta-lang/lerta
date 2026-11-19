@@ -1,5 +1,6 @@
 # Generates a function of a program: its blocks, declarations, returns and constructors;
 # control_flow generates control flow, and assignment assignments.
+import is_value_type from '../checker/value_layout'
 import
   Assignment, BinaryOperation, Declaration, EnumDeclaration, Expression, Extend, Extern, Intrinsic,
   For, FunctionLiteral, If, Import, InterfaceDeclaration, Jump, NilLiteral, Pass, Return, Statement,
@@ -26,8 +27,8 @@ import
   emit_assume_no_exception, emit_exception_check, leave_scopes, while_holding
 from './exceptions'
 import
-  emit_deferred_check, generate, held_value, read_borrowed, read_local, release_if_reference,
-  type_at_use, type_of
+  conversion_of, emit_deferred_check, generate, held_value, read_borrowed, read_local,
+  release_if_reference, type_at_use, type_of
 from './expression'
 import
   CellSlot, CodegenLocal, function_generator, Generator, located, SlotLocal, TopLevelGlobal,
@@ -35,8 +36,9 @@ import
 from './generator'
 import is_fused_source from './inlined_methods'
 import
-  access_tag, emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer, emit_weak_box_of,
-  emit_weak_object, emit_weak_slot_or_null, fixed, HeapField, value_field
+  access_tag, emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer,
+  emit_slot_field_pointer, emit_weak_box_of, emit_weak_object, emit_weak_slot_or_null, fixed,
+  HeapField, value_field
 from './heap_object'
 import emit_when, IrBuilder, IrModule from './ir_builder'
 import
@@ -386,55 +388,66 @@ export generate_body_returning_last := (g: Generator, body: Statement[], result:
 # exception on the way releases the fields, which start as nil, and frees the object without
 # running its deinit, or panics if init let it escape. An argument with a default comes with whether
 # it is given (see generate_construction). It has the linkage (see Definition).
+# A struct that is a value (see value_layout) is built in a slot of its own, which `@` reads as it
+# is so far, and is returned whole.
 export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo) ->
   ir := g.ir
   g.result_type = info.type
-  object := emit_allocate(ir, info)
-  field_pointer := (field: FieldInfo) -> emit_field_pointer(ir, object, info, field.name.name)
+  type := ir_type(ir.program, info.type)
+  is_value := is_value_type(ir.program, info.type)
+  object := is_value then ir.alloca(type) else emit_allocate(ir, info)
+  field_pointer := (field: FieldInfo) ->
+    name := field.name.name
+    if is_value
+      emit_slot_field_pointer(ir, object, info, name)
+    else
+      emit_field_pointer(ir, object, info, name)
+  this := -> is_value then ir.load(type, object) else object
   for field in info.fields
     ir.store ir_type(ir.program, field.type!), 'zeroinitializer', field_pointer(field)
   g.unwind_cleanup = ->
-    mark := call_runtime(ir, 'i64 @lerta_drop_mark()', '')
+    mark := is_value then '' else call_runtime(ir, 'i64 @lerta_drop_mark()', '')
     for field in info.fields
-      type := field.type!
-      emit_release_stored ir, field_pointer(field), type
-    weak_slot := emit_weak_slot_or_null(ir, object, info)
-    args := "ptr #{object}, ptr #{weak_slot}, i64 #{mark}"
-    call_void_runtime ir, 'void @lerta_free_unfinished(ptr, ptr, i64)', args
+      emit_release_stored ir, field_pointer(field), field.type!
+    unless is_value
+      weak_slot := emit_weak_slot_or_null(ir, object, info)
+      args := "ptr #{object}, ptr #{weak_slot}, i64 #{mark}"
+      call_void_runtime ir, 'void @lerta_free_unfinished(ptr, ptr, i64)', args
   arguments := [field for field in info.fields when is_argument(field)]
   given := (field: FieldInfo) -> "%given#{argument_index(arguments, field)}"
   for field at i in arguments
-    store_argument := -> store_field(g, object, info, field, "%p#{i}")
+    store_argument := -> store_field(g, field_pointer(field), field, "%p#{i}")
     if field.has_default
       emit_when ir, given(field), store_argument
     else
       store_argument()
   scope := g.locals.push()
-  scope['@'] = ValueLocal(operand: object, type: info.type)
   for field in info.fields
     value := field.value else continue
-    compute := -> store_field(g, object, info, field, generate(g, value))
+    compute := ->
+      scope['@'] = ValueLocal(operand: this(), type: info.type)
+      store_field g, field_pointer(field), field, generate(g, value)
     if field.has_default
       emit_when ir, ir.negate(given(field)), compute
     else
       compute()
   g.locals.pop()
+  result := this()
   init := special_method_symbol(ir.program, info, 'init')
   if info.has_init
-    ir.emit "call void #{init}(ptr #{object})"
+    ir.emit "call void #{init}(#{type} #{result})"
     emit_exception_check g
-  ir.emit "ret ptr #{object}"
+  ir.emit "ret #{type} #{result}"
   params: String[]
   for argument at i in arguments
     params.push "#{ir_type(ir.program, argument.type!)} %p#{i}"
     params.push "i1 %given#{i}" if argument.has_default
-  finish g, "#{linkage}ptr #{constructor_symbol(info.type)}(#{params.join(', ')})"
+  finish g, "#{linkage}#{type} #{constructor_symbol(info.type)}(#{params.join(', ')})"
 
 argument_index := (arguments: FieldInfo[], field: FieldInfo) -> arguments.index_of(field)!
 
-# The field takes over the value, owned; a weak field takes its box instead.
-store_field := (g: Generator, object: String, info: ObjectInfo, field: FieldInfo, value: String) ->
-  pointer := emit_field_pointer(g.ir, object, info, field.name.name)
+# The field at the pointer takes over the value, owned; a weak field takes its box instead.
+store_field := (g: Generator, pointer: String, field: FieldInfo, value: String) ->
   stored := field.weak then weak_box_of(g, value, field.type!) else value
   emit_release g.ir, value if field.weak
   g.ir.store ir_type(g.code.program, field.type!), stored, pointer
@@ -684,7 +697,7 @@ holds_borrowed := (g: Generator, declaration: Declaration) ->
 # that is converted, as into a union's box, is generated as any value is.
 generate_declared_value := (g: Generator, declaration: Declaration, is_held_as_is: Bool) ->
   value := declaration.value
-  is_converted := g.facts.conversions[value] != nil
+  is_converted := conversion_of(g, value) != nil
   if value is FunctionLiteral and is_held_as_is and not declaration.mutable and not is_converted
     return generate_closure(g, value, declaration.name not in g.facts.escaping_locals)
   generate(g, value)

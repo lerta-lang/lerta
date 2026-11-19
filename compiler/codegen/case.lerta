@@ -1,5 +1,6 @@
 # `case` and `then`/`else` in the generated code: the tests of their arms, and the values they
 # merge.
+import is_value_type from '../checker/value_layout'
 import Case, CaseArm, Conditional, Expression, If, NilLiteral, Statement from '../ast'
 import generate_borrowed_value, is_borrowable_in_scope from './borrowing'
 import generate_condition_of, generate_if from './control_flow'
@@ -123,7 +124,10 @@ generate_test := (g: Generator, arm: CaseArm, subject_type: Type?, operand: Stri
 
 # A subject of a union narrowed to one of its members is still tested for its type.
 pattern_test := (g: Generator, subject: String, type: Type, pattern: Expression) ->
-  if type is UnionType | ObjectType
+  # A struct's value has no header to test, as its type is known.
+  if is_value_type(g.code.program, type)
+    type == type_of(g, pattern) then 'true' else 'false'
+  else if type is UnionType | ObjectType
     emit_type_test(g.ir, subject, type_of(g, pattern))
   else
     value_test(g, subject, type, pattern)

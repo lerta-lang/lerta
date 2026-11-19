@@ -149,12 +149,31 @@ export emit_heap_allocate := (ir: IrBuilder, layout: String, type: String) ->
 
 # The pointer to the field of the name.
 export emit_field_pointer := (ir: IrBuilder, object: String, info: ObjectInfo, name: String) ->
-  place := field_place(ir.module.program, info.type, field_types(info), field_index(info, name))
+  place := object_field_place(ir.program, info, name)
   emit_heap_field_pointer(ir, object_ir_type(info.type), object, place)
 
-# The value of the field of the class or struct, borrowed.
+# The value of the field of the class or struct, borrowed: of the object, or of the value.
 export emit_borrowed_field := (ir: IrBuilder, object: String, info: ObjectInfo, field: FieldInfo) ->
-  ir.load(ir_type(ir.program, field.type!), emit_field_pointer(ir, object, info, field.name.name))
+  name := field.name.name
+  unless is_value_type(ir.program, info.type)
+    return ir.load(ir_type(ir.program, field.type!), emit_field_pointer(ir, object, info, name))
+  place := object_field_place(ir.program, info, name)
+  ir.assign("extractvalue #{ir_type(ir.program, info.type)} #{object}, #{place}")
+
+# The pointer to the field of the name of a struct's value in the slot, as its constructor builds
+# it.
+export emit_slot_field_pointer := (ir: IrBuilder, slot: String, info: ObjectInfo, name: String) ->
+  place := object_field_place(ir.program, info, name)
+  ir.assign("getelementptr #{ir_type(ir.program, info.type)}, ptr #{slot}, i32 0, i32 #{place}")
+
+# The place of the field of the name among the fields of the class or struct as laid out (see
+# field_order), looked up by the info, which is quicker to hash than its type.
+object_field_place := (program: ProgramWide, info: ObjectInfo, name: String) ->
+  places_of := ->
+    order := field_order(program, field_types(info))
+    names := [info.fields[index].name.name for index in order]
+    Map([(name, place) for name at place in names])
+  program.object_field_places.get_or_add(info, places_of)[name]!
 
 # The field of the name, which the class or struct has.
 export field_named := (info: ObjectInfo, name: String) -> info.fields[field_index(info, name)]

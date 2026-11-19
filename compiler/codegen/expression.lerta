@@ -24,14 +24,14 @@ import
   CodegenLocal, Generator, located_value, SlotLocal, ValueLocal, with_deferred_checks
 from './generator'
 import
-  emit_field_pointer, emit_member_dispatch, emit_record, emit_record_field, emit_type_test,
-  emit_value_at, emit_values, emit_weak_object, field_named, record_field_index
+  emit_borrowed_field, emit_field_pointer, emit_member_dispatch, emit_record, emit_record_field,
+  emit_type_test, emit_value_at, emit_values, emit_weak_object, field_named, record_field_index
 from './heap_object'
 import EnumValue, InterfaceProperty, Method, Property, PropertyKind from '../checker/member_targets'
 import FunctionReference, LocalFunction, ScopedLocal, TopLevelValue from '../checker/references'
 import info_of from '../checker/object_types'
 import ProgramWide from '../checker/shared'
-import boxes_into, is_boxed_member from '../checker/value_layout'
+import boxes_member_into, is_boxed_member, is_value_type from '../checker/value_layout'
 import
   emit_throw_error, generate_try, holding, pop_temporaries, push_temporary, while_holding
 from './exceptions'
@@ -66,7 +66,7 @@ export type_of := (g: Generator, node: Node) -> g.facts.types[node] else panic('
 # Returns the IR operand holding the value, converted where it is used (an Int as an Int?, for
 # example); void calls return ''.
 export generate := (g: Generator, expression: Expression) ->
-  target := g.facts.conversions[expression]
+  target := conversion_of(g, expression)
   return nil_constant(g.code.program, target!) if expression is NilLiteral
   operand := generate_value(g, expression)
   return operand if target == nil
@@ -77,7 +77,7 @@ export generate := (g: Generator, expression: Expression) ->
   if inner_of(target) is UnionType and itab != nil
     return emit_box_value(g.ir, emit_interface_value(g, operand, itab), itab.target)
 
-  if boxes_into(g.code.program, source, target)
+  if boxes_member_into(g.code.program, source, target)
     return emit_box_value(g.ir, operand, source)
   if settles_into(source, target)
     closure := emit_settling_closure(g, operand, source, inner_of(target))
@@ -101,7 +101,17 @@ wrapped_type := (source: Type, target: Type) ->
 # The type of the operand that `generate` returns: the type the expression is converted to, if
 # it is.
 export type_at_use := (g: Generator, expression: Expression) ->
-  g.facts.conversions[expression] else type_of(g, expression)
+  conversion_of(g, expression) else type_of(g, expression)
+
+# The type that the expression is converted to where it is used, or the union it goes into, which
+# holds it in a box if it is a value (see NodeFacts.boxings); nil if neither.
+export conversion_of := (g: Generator, expression: Expression): Type? ->
+  return converted if converted := g.facts.conversions[expression]
+  boxed := g.facts.boxings[expression] else return nil
+  if is_value_type(g.code.program, inner_of(type_of(g, expression)))
+    boxed
+  else
+    nil
 
 # An i1 for a condition: a Bool, or an optional value that holds when not nil.
 export generate_condition := (g: Generator, expression: Expression) ->
@@ -264,6 +274,9 @@ emit_interface_cast := (g: Generator, cast: Cast, value: String) ->
   ir := g.ir
   value_type := type_of(g, cast.value)
   holds := emit_member_test(g, value, cast.value, cast.type)
+  member := type_of(g, cast.type)
+  if is_value_type(ir.program, member)
+    return emit_value_cast(g, cast, value, value_type, member, holds)
   object := emit_interface_data(ir, emit_narrowed(ir, value, value_type, inner_of(value_type)))
   if cast.throws
     fails := ir.negate(holds)
@@ -271,6 +284,34 @@ emit_interface_cast := (g: Generator, cast: Cast, value: String) ->
     return object
   result := ir.assign("select i1 #{holds}, ptr #{object}, ptr null")
   emit_retain ir, result
+  emit_release_value ir, value, value_type
+  result
+
+# As emit_interface_cast, of a struct's value, which the interface value holds in a box: the value
+# taken out, retained, where `holds`.
+emit_value_cast := (
+  g: Generator, cast: Cast, value: String, value_type: Type, member: Type, holds: String
+) ->
+  ir := g.ir
+  taken := ->
+    data := emit_interface_data(ir, emit_narrowed(ir, value, value_type, inner_of(value_type)))
+    unboxed := emit_unbox(ir, data, member)
+    emit_retain_value ir, unboxed, member
+    unboxed
+  if cast.throws
+    fails := ir.negate(holds)
+    while_holding g, value, value_type, -> throw_if(g, fails, FAILED_CAST)
+    result := taken()
+    emit_release_value ir, value, value_type
+    return result
+  optional := optional_type(member)
+  wrapped := -> emit_wrap(ir, taken(), member)
+  result := emit_branch
+    ir
+    ir_type(ir.program, optional)
+    holds
+    wrapped
+    nil_constant(ir.program, optional)
   emit_release_value ir, value, value_type
   result
 
@@ -331,12 +372,15 @@ read_field := (g: Generator, object: String, type: Type, name: String, is_owned:
       when is_owned then holding(g, object, type, read_weak)
       else read_weak()
   emit_retain_value ir, value, field_type
-  emit_release ir, object if is_owned
+  if is_owned
+    emit_release_value ir, object, type
   value
 
 # What a field of a class or struct holds, borrowed: its value, or a weak field's box.
 export held_field := (g: Generator, object: String, type: ObjectType, name: String) ->
   info := info_of(g.code.program, type)
+  if is_value_type(g.code.program, type)
+    return emit_borrowed_field(g.ir, object, info, field_named(info, name))
   pointer := emit_field_pointer(g.ir, object, info, name)
   field_type := field_named(info, name).type!
   g.ir.load(ir_type(g.code.program, field_type), pointer, field_tag(g.ir, field_type))
@@ -353,7 +397,14 @@ export read_any_field := (
 ) ->
   unless object_type is UnionType
     return read_field(g, object, object_type, name, is_owned)
-  of_member := (type: Type) -> read_field(g, object, type, name, is_owned)
+
+  # A struct's value is read in its box, which the union holds.
+  of_member := (type: Type) ->
+    unless is_value_type(g.code.program, type)
+      return read_field(g, object, type, name, is_owned)
+    value := read_field(g, emit_unbox(g.ir, object, type), type, name, false)
+    emit_release g.ir, object if is_owned
+    value
   emit_member_dispatch(
     g.ir
     object
@@ -557,7 +608,12 @@ export emit_narrowed := (ir: IrBuilder, value: String, declared: Type, type: Typ
         emit_unwrap ir, value, declared
       else
         value
-    return emit_interface_data(ir, held)
+    data := emit_interface_data(ir, held)
+    return
+      if is_value_type(ir.program, type)
+        emit_unbox(ir, data, type)
+      else
+        data
   unless is_boxed_narrowing(ir.program, declared, type)
     present := declared is OptionalType and type is not OptionalType
     return present then emit_unwrap(ir, value, declared) else value
@@ -600,8 +656,9 @@ generate_assertion_throw := (g: Generator, message: Expression) ->
   is_assertion_error := (itab: Itab) -> (itab.type as ObjectType!).name == 'AssertionError'
   itab := g.code.program.runtime_errors.find(is_assertion_error)!
   text := generate(g, message)
-  constructor := constructor_symbol(itab.type as ObjectType!)
-  error := g.ir.assign("call ptr #{constructor}(ptr #{text})")
+  type := itab.type as ObjectType!
+  error :=
+    g.ir.assign("call #{ir_type(g.code.program, type)} #{constructor_symbol(type)}(ptr #{text})")
   emit_throw_error(g, emit_interface_value(g, error, itab), false)
 
 generate_throw := (g: Generator, throw_expression: Throw) ->

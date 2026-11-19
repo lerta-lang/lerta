@@ -1,4 +1,6 @@
 # Exceptions in the generated code (see docs/internals/execution.md#exceptions).
+import emit_unbox from './boxes'
+import is_value_type from '../checker/value_layout'
 import Catch, Position, Statement, Try from '../ast'
 import pointer_tag from './alias_tags'
 import merge from './case'
@@ -10,8 +12,8 @@ import CodegenLocal, Finally, Generator, Handler, located, SlotLocal from './gen
 import emit_assume, emit_seldom_branch, IrBuilder, phi_incoming from './ir_builder'
 import emit_type_test from './heap_object'
 import
-  emit_interface_data, emit_release_as, emit_release_value, INTERFACE_IR_TYPE, ir_type, ownership,
-  returns_nothing, shared_string_constant
+  emit_interface_data, emit_release, emit_release_as, emit_release_value, emit_retain_value,
+  INTERFACE_IR_TYPE, ir_type, ownership, returns_nothing, shared_string_constant
 from './lerta_ir'
 import call_runtime, call_void_runtime from './runtime_calls'
 import module_location from '../source'
@@ -210,6 +212,15 @@ export generate_try := (g: Generator, try_expression: Try) ->
   while_holding g, result, type, run_finally
   result
 
+# The exception's data, owned, as the caught type: the object, or the value in its box, retained, as
+# the box is released.
+caught_object := (ir: IrBuilder, data: String, type: Type) ->
+  return data unless is_value_type(ir.program, type)
+  value := emit_unbox(ir, data, type)
+  emit_retain_value ir, value, type
+  emit_release ir, data
+  value
+
 # Runs the catch's block where the exception is of the caught type, with the catch's name bound to
 # it; elsewhere, falls through to the next catch.
 generate_catch := (
@@ -227,7 +238,7 @@ generate_catch := (
   ir.branch_if matched, clause_label, next_label
   ir.start_block clause_label
   emit_clear_exception ir
-  caught := takes_any then exception else data
+  caught := takes_any then exception else caught_object(ir, data, caught_type)
   define := (scope: Map<String, CodegenLocal>) ->
     slot := store_in_slot(g, caught, caught_type)
     scope[clause.name.name] = SlotLocal(pointer: slot.pointer, type: slot.type, caught: true)

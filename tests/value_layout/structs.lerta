@@ -1,0 +1,140 @@
+# Structs of at most 16 bytes are values: built in their constructors, whose defaults read the
+# fields set before them, passed to their methods and init, held in a box as an interface value or
+# a union's member, and taken out of it again.
+import decode_json, encode_json from 'std:json'
+
+interface Shape
+  area: () -> Int
+
+struct Square: Shape
+  side: Int
+  label := "square #{@side}"
+  area := -> @side * @side
+
+struct Checked
+  count: Int
+  init := -> throw ValueError("negative #{@count}") if @count < 0
+
+struct Pair<T>
+  first: T
+  second: T
+
+struct Failure: Error
+  code: Int
+
+square := Square(3)
+print "#{square.label} #{square.area()} #{square}"
+print Square(square..., side: 4).label
+shapes: Shape[] = [square, Square(2)]
+print [shape.area() for shape in shapes]
+first := shapes[0]
+print (first as Square!).label
+print (first as Square?) != nil
+
+try
+  Checked -1
+catch e: ValueError
+  print e.message
+print Checked(2).count
+
+pair := Pair(first: 'a', second: 'b')
+print "#{pair.first}#{pair.second} #{pair == Pair(first: 'a', second: 'b')}"
+
+try
+  throw Failure(message: 'failed', code: 7)
+catch e: Failure
+  print "#{e.message} #{e.code}"
+
+either: Square | String = square
+print either.side if either is Square
+
+text := encode_json([square, Square(5)])
+print text
+print [each.label for each in decode_json<Square[]>(text)]
+
+# A cast that fails gives nil, or throws; a field that every member of a union has is read from the
+# member's box.
+struct Circle: Shape
+  radius: Int
+  area := -> 3 * @radius * @radius
+round: Shape = Circle(1)
+print (round as Square?) == nil
+try
+  print (round as Square!).side
+catch e: CastError
+  print 'not a Square'
+struct Named
+  name: String
+struct Titled
+  name: String
+  title: String
+make := (n: Int): Named | Titled ->
+  if n == 0
+    Named('n')
+  else
+    Titled(name: 't', title: 'x')
+print "#{make(0).name} #{make(1).name}"
+mixed := (flag: Bool): Square | String -> flag then Square(6) else 'none'
+print "#{mixed(true)} #{mixed(false)}"
+
+# A cycle through a struct's value is found at the array on its way back; a shared array is none.
+struct Tree
+  left: Tree[]
+  right: Tree[]
+shared: Tree[]
+print encode_json(Tree(left: shared, right: [{ left: shared, right: [] }]))
+loop := Tree(left: [], right: [])
+loop.right.push loop
+try
+  print encode_json(loop)
+catch e
+  print e.message
+loop.right.pop()
+
+# A struct's value held for an assert stays boxed where it goes into a union; an untyped catch casts
+# it back.
+takes := (shape: Square | String) -> shape is Square
+assert takes(Square(7))
+try
+  throw Failure(message: 'any', code: 8)
+catch e
+  print (e as Failure!).code
+
+# A nil interface value casts to nil, or throws; a union of a struct's value and a class's object
+# reads their common field; a field of a struct's value serves an interface's field.
+none: Shape? = nil
+print (none as Square?) == nil
+try
+  print (none as Square!).side
+catch e: CastError
+  print 'nil is no Square'
+class Box
+  args
+    name: String
+boxed := (n: Int): Named | Box -> n == 0 then Named('v') else Box('b')
+print "#{boxed(0).name} #{boxed(1).name}"
+interface Labeled
+  label: String
+labeled: Labeled = Square(8)
+print labeled.label
+
+# A default that throws releases the fields set before it.
+checked_count := (name: String): Int -> throw ValueError("no count for #{name}")
+struct Guarded
+  name: String
+  count := checked_count(@name)
+try
+  print Guarded('g').count
+catch e: ValueError
+  print e.message
+
+# A map whose values may lead back to a struct's value is entered.
+struct Node
+  children: Map<String, Node>
+root := Node(Map())
+root.children['self'] = root
+try
+  print encode_json(root)
+catch e
+  print e.message
+root.children.remove 'self'

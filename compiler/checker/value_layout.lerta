@@ -65,11 +65,15 @@ find_layout := (program: ProgramWide, type: Type): ValueLayout? ->
   ]
   { alignment, fields: laid, size: rounded, nil_path: nil_path_in(program, laid) }
 
-# Whether the values of the type are values rather than heap objects: an anonymous struct's or a
-# tuple's that value_layout lays out. A struct's are not yet (see docs/roadmap/language.md#types).
+# Whether the values of the type are values rather than heap objects: a struct's, an anonymous
+# struct's or a tuple's that value_layout lays out.
 export is_value_type := (program: ProgramWide, type: Type) ->
-  kind := kind_of(type)
-  kind in [RECORD, TUPLE] and value_layout(program, type) != nil
+  may_be_value :=
+    case type
+      when ObjectType then type.is_struct
+      when RecordType, TupleType then true
+      else false
+  may_be_value and value_layout(program, type) != nil
 
 # Whether a union holds a value of the type, one of its members, in a box: as is_boxed tells, or a
 # value, which is no object of its own.
@@ -78,9 +82,19 @@ export is_boxed_member := (program: ProgramWide, member: Type) ->
 
 # Whether a value of the type, a T or a T?, fits where the union, or an optional one, is expected
 # only in a box: as an Int where an `Int | String` is.
-export boxes_into := (program: ProgramWide, type: Type, target: Type) ->
+export boxes_member_into := (program: ProgramWide, type: Type, target: Type) ->
+  into_union(type, target) and is_boxed_member(program, inner_of(type))
+
+# Whether a value of the type may be held in a box where the union is expected, as
+# boxes_member_into tells once the fields of the structs are typed: a struct, an anonymous struct
+# or a tuple, which may be a value (see NodeFacts.boxings).
+export may_box_value_into := (type: Type, target: Type) ->
   value := inner_of(type)
-  inner_of(target) is UnionType and value is not UnionType and is_boxed_member(program, value)
+  may_be_value := kind_of(value) in [RECORD, TUPLE] or (value is ObjectType and value.is_struct)
+  into_union(type, target) and may_be_value
+
+into_union := (type: Type, target: Type) ->
+  inner_of(target) is UnionType and inner_of(type) is not UnionType
 
 # The places of parts of the types as they are laid out, a value's or a heap object's: those of
 # larger alignment first, so that no padding comes between them, else as declared. A part of no
