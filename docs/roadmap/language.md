@@ -65,9 +65,8 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
 - **The downcast of an interface value.**
 - **Unused types warned about,** as unused names are ([errors](../reference/errors.md#unused-names)): a class, struct, enum, interface or type alias that its module declares, does not export and never names. Now only values are, so a type that no code names any more goes unnoticed. Every place that names a type counts: annotations, casts and patterns, bounds, fields, extends and aliases.
 - **Not planned:** an array literal's item type as one that every item fits, rather than that of its first item that decides its own ([the reference](../reference/types.md#array-literals)). It would type `[import, statements...]`, of an `Import` and the items of a `Statement[]`, as a `Statement[]`, which a return type of `Statement` does now. The literals that need a written type are of one item to be held as a union's array, as `[conditional.then_value]` as a `Statement[]`, or of items whose types make a union of none of them, as `(ImportedName | ModuleAlias)[]`, which the rule types neither.
-- **Small values as items.** A struct, an anonymous struct or a tuple that is a value (see [internals](../internals/representation.md#values)) held in place as an array's item, a map's value and an Iter's item, in the 16 bytes of a `LertaItem`, rather than in a box: the runtime would tell the words that hold references by a mask in the item's kind, which the interface items' kind would become, of the first word only.
-  - Gain: `for (k, v) in m` and an array of tokens with a `Position` allocate nothing per item.
-  - Map keys stay in a box, as the runtime keeps a key in a word; keys of 16 bytes may come later.
+- **Item kinds as masks.** The kinds of references, interface values and optional values as items (`LERTA_REFERENCE_ITEMS`, `LERTA_INTERFACE_ITEMS`, `LERTA_OPTIONAL_ITEMS`) made value items of a mask (see [internals](../internals/representation.md#builtins)), once the seed no longer passes them.
+- **Small values as map keys.** A key that is a value is held in a box, as the runtime keeps a key in a word; keys of 16 bytes may come later.
 
 ## Numeric types
 

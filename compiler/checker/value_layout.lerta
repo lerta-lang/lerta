@@ -28,6 +28,10 @@ export struct ValueLayout
   # type of the value, which so needs no flag.
   nil_path: Int[]?
 
+  # Whether the fields, or those of the values inside, hold a counted reference: a reference, or an
+  # interface value's data.
+  holds_references: Bool
+
 struct Room
   size: Int
   alignment: Int
@@ -63,7 +67,17 @@ find_layout := (program: ProgramWide, type: Type): ValueLayout? ->
     for i in order
       LayoutField(index: i, type: parts[i])
   ]
-  { alignment, fields: laid, size: rounded, nil_path: nil_path_in(program, laid) }
+  nil_path := nil_path_in(program, laid)
+  holds_references := parts.any((part) -> holds_counted(program, part))
+  { alignment, fields: laid, size: rounded, nil_path, holds_references }
+
+# Whether a value of the type, optional or not, holds a counted reference: is a reference or an
+# interface value, or a value that holds one.
+holds_counted := (program: ProgramWide, type: Type): Bool ->
+  inner := inner_of(type)
+  if layout := is_value_type(program, inner) then value_layout(program, inner)
+    return layout.holds_references
+  is_kind(inner, INTERFACE) or is_reference_type(inner)
 
 # Whether the values of the type are values rather than heap objects: a struct's, an anonymous
 # struct's or a tuple's that value_layout lays out.

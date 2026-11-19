@@ -58,7 +58,10 @@ struct LertaString {
 // without values, do. An integer narrower than 8 bytes, a Bool or a Float32's bits, is
 // LERTA_INTEGER_ITEMS with its size in bytes in LERTA_ITEM_BYTES, and LERTA_SIGNED_ITEMS if it is
 // signed, and takes that size. LERTA_OPTIONAL_ITEMS are optional values that are not references,
-// a flag then the value, in the 16 bytes of a LertaItem.
+// a flag then the value, in the 16 bytes of a LertaItem. LERTA_VALUE_ITEMS are values of structs,
+// anonymous structs or tuples, of 8 bytes, or of 16 if LERTA_WIDE_ITEMS, which hold a reference at
+// each place of a pointer whose bit is set in LERTA_REFERENCE_PLACES, the first place the lowest:
+// two places on a 64-bit target, four on a 32-bit one.
 // C moves items only by memcpy, never as a C type: the generated code reads and writes them as a
 // type of their own in type-based alias analysis (see compiler/codegen/array.lerta).
 typedef enum {
@@ -71,7 +74,10 @@ typedef enum {
   // The mask and the flags of a kind, not kinds.
   LERTA_ITEM_BYTES = 0x0F,
   LERTA_INTEGER_ITEMS = 0x10,
-  LERTA_SIGNED_ITEMS = 0x20
+  LERTA_SIGNED_ITEMS = 0x20,
+  LERTA_VALUE_ITEMS = 0x40,
+  LERTA_WIDE_ITEMS = 0x80,
+  LERTA_REFERENCE_PLACES = 0xF00
 } LertaItemKind;
 
 // Room for an item of any kind.

@@ -5,7 +5,7 @@
 import compares_by_contents, has_own_hash, own_equality from '../checker/equality'
 import FieldInfo, info_of from '../checker/object_types'
 import ProgramWide from '../checker/shared'
-import from_key from './array'
+import from_item_word, from_key from './array'
 import emit_member_value from './boxes'
 import emit_own_equals, emit_own_hash, EQUAL, GREATER, LESS from './comparison_methods'
 import emit_float_word from './float'
@@ -55,8 +55,8 @@ is_identity := (program: ProgramWide, type: Type) ->
 
 # The functions that compare and hash items of the type, as a map with keys of it takes them.
 export item_functions := (module: IrModule, program: ProgramWide, type: Type) ->
-  equals := item_equals_function(module, program, type)
-  { equals, hash: item_hash_function(module, program, type) }
+  equals := key_equals_function(module, program, type)
+  { equals, hash: key_hash_function(module, program, type) }
 
 # The same object is equal to itself at once, which also ends `s == s` for a value that holds
 # itself through an array (see docs/reference/objects.md#equality-and-order).
@@ -81,21 +81,41 @@ hash_function := (module: IrModule, program: ProgramWide, type: Type) ->
     ir.finish "private i64 #{name}(#{ir_type(program, type)} %a)"
   module.named("hash #{type_key(type)}", '@lerta.hash', define)
 
+# The functions that compare and hash the words that the runtime gives of items, or of keys, which
+# differ for a value: the address of an item held in place, or a key's box.
 item_equals_function := (module: IrModule, program: ProgramWide, type: Type) ->
-  define := (name: String, defined: IrModule) ->
-    ir := IrBuilder(defined)
-    left := from_key(ir, '%a', type)
-    right := from_key(ir, '%b', type)
-    ir.emit "ret i1 #{emit_equals(ir, program, left, right, type)}"
-    ir.finish "private zeroext i1 #{name}(i64 %a, i64 %b)"
-  module.named("item equals #{type_key(type)}", '@lerta.item_equals', define)
+  word_equals_function(module, program, type, 'item', from_item_word)
+
+key_equals_function := (module: IrModule, program: ProgramWide, type: Type) ->
+  word_equals_function(module, program, type, 'key', from_key)
 
 item_hash_function := (module: IrModule, program: ProgramWide, type: Type) ->
+  word_hash_function(module, program, type, 'item', from_item_word)
+
+key_hash_function := (module: IrModule, program: ProgramWide, type: Type) ->
+  word_hash_function(module, program, type, 'key', from_key)
+
+word_equals_function := (
+  module: IrModule, program: ProgramWide, type: Type, word: String,
+  from_word: (IrBuilder, String, Type) -> String
+) ->
   define := (name: String, defined: IrModule) ->
     ir := IrBuilder(defined)
-    ir.emit "ret i64 #{emit_hash(ir, program, from_key(ir, '%a', type), type)}"
+    left := from_word(ir, '%a', type)
+    right := from_word(ir, '%b', type)
+    ir.emit "ret i1 #{emit_equals(ir, program, left, right, type)}"
+    ir.finish "private zeroext i1 #{name}(i64 %a, i64 %b)"
+  module.named("#{word} equals #{type_key(type)}", "@lerta.#{word}_equals", define)
+
+word_hash_function := (
+  module: IrModule, program: ProgramWide, type: Type, word: String,
+  from_word: (IrBuilder, String, Type) -> String
+) ->
+  define := (name: String, defined: IrModule) ->
+    ir := IrBuilder(defined)
+    ir.emit "ret i64 #{emit_hash(ir, program, from_word(ir, '%a', type), type)}"
     ir.finish "private i64 #{name}(i64 %a)"
-  module.named("item hash #{type_key(type)}", '@lerta.item_hash', define)
+  module.named("#{word} hash #{type_key(type)}", "@lerta.#{word}_hash", define)
 
 emit_equals := (
   ir: IrBuilder, program: ProgramWide, left: String, right: String, type: Type

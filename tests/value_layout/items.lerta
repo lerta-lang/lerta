@@ -1,0 +1,112 @@
+# A value is held in place as an array's item, a map's value and a Promise's result, its references
+# counted at their places; a map's key, and an optional value with a flag, stay in a box.
+import spawn from 'std:async'
+import sleep from 'std:time'
+
+interface Shape
+  area: () -> Int
+
+struct Square: Shape
+  side: Int
+  area := -> @side * @side
+
+struct Tagged
+  count: Int
+  name: String
+
+struct Holder
+  shape: Shape
+
+struct Small
+  a: Int32
+  b: Int32
+
+pairs := [(1, 'a'), (2, 'b')]
+pairs.push (3, 'c')
+print pairs.pop()
+pairs.push (4, 'd')
+pairs[0] = (5, 'e')
+print pairs
+print pairs[1..]
+print pairs.remove_at(0)
+pairs.insert 0, (11, 'k')
+print "#{pairs.index_of((4, 'd'))!} #{pairs.contains((11, 'k'))} #{pairs.remove((11, 'k'))}"
+print Array(2, (6, 'f'))
+print [name for (_, name) in pairs]
+print pairs == [(2, 'b'), (4, 'd')]
+
+tagged: Tagged[] = [{ count: 2, name: 'two' }, { count: 1, name: 'one' }]
+print [each.name for each in tagged.sorted_by((a) -> a.count)]
+holders := [Holder(Square(2)), Holder(Square(3))]
+print [holder.shape.area() for holder in holders]
+smalls: Small[] = [{ a: 1, b: 2 }, { a: 3, b: 4 }]
+print [small.a + small.b for small in smalls]
+
+# The same type as a map's key, in a box, and as an array's item, in place.
+counts := Map<(Int, String), Int>()
+counts[(1, 'a')] = 1
+counts[(1, 'a')] = counts[(1, 'a')]! + 1
+print counts[(1, 'a')]!
+print [(1, 'a')] == [(1, 'a')]
+print Set([[(1, 'a')], [(1, 'a')]]).length
+
+by_name := Map<String, (Int, String)>()
+by_name['x'] = (7, 'g')
+by_name['x'] = (8, 'h')
+print by_name['x']!
+print by_name.remove('x')
+print by_name == Map<String, (Int, String)>()
+
+nil_by_null: (Int, String)?[] = [(9, 'i'), nil]
+print nil_by_null
+flagged: (Int, Int)?[] = [(1, 2), nil]
+print flagged
+
+# Items compared and hashed through the runtime: an optional value with a flag, in its box, and
+# values with references at both places, or one, overwritten and removed.
+print "#{flagged == [(1, 2), nil]} #{flagged.contains((1, 2))} #{flagged.index_of(nil)!}"
+print Set([flagged, [(1, 2), nil]]).length
+flagged_by_name: Map<String, (Int, Int)?> = { 'a': (1, 2) }
+print flagged_by_name == { 'a': (1, 2) }
+both := [('a', 'b'), ('c', 'd')]
+both[0] = ('e', 'f')
+print both.remove_at(1)
+print both
+nil_by_null[0] = nil
+print nil_by_null.remove_at(1) == nil
+named: { s: String }[] = [{ s: 'g' }]
+named[0] = { s: 'h' }
+print named
+shapes_by_name := { 'a': Holder(Square(4)) }
+print shapes_by_name['a']!.shape.area()
+smalls_by_name := { 'a': Small(a: 5, b: 6) }
+print smalls_by_name['a']!.b
+maybe_named: { s: String? }[] = [{ s: nil }, { s: 'i' }]
+maybe_named[1] = { s: nil }
+print maybe_named.remove_at(0)
+print maybe_named
+counted := [(1, 'l'), (2, 'm')]
+counted[1] = (3, 'n')
+print counted.pop()
+print counted
+struct Text
+  s: String
+texts := [Text('o')]
+texts[0] = Text('p')
+print texts.index_of(Text('p'))!
+print Set([Text('p'), Text('p')]).length
+
+later := ->
+  await sleep(0)
+  (10, 'j')
+held := ->
+  await sleep(0)
+  Holder(Square(5))
+plain := ->
+  await sleep(0)
+  Small(a: 7, b: 8)
+main := ->
+  print await later()
+  print (await plain()).b
+  print (await held()).shape.area()
+spawn main()

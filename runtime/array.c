@@ -6,7 +6,11 @@
 LERTA_STATIC_STRING(pop_from_empty, "pop from an empty array");
 
 int64_t lerta_item_size(LertaItemKind kind) {
-  if (kind & LERTA_INTEGER_ITEMS) return kind & LERTA_ITEM_BYTES;
+  // One test for both flags, which keeps the common kinds as quick as before values were items.
+  if (kind & (LERTA_INTEGER_ITEMS | LERTA_VALUE_ITEMS)) {
+    if (kind & LERTA_INTEGER_ITEMS) return kind & LERTA_ITEM_BYTES;
+    return kind & LERTA_WIDE_ITEMS ? 16 : 8;
+  }
   switch (kind) {
     case LERTA_INTERFACE_ITEMS: return 2 * (int64_t)sizeof(void *);
     case LERTA_NO_ITEMS: return 0;
@@ -15,28 +19,48 @@ int64_t lerta_item_size(LertaItemKind kind) {
   }
 }
 
+// The references that a value holds, at the places of pointers whose bits are set, the first the
+// lowest. Kept out of the callers, so that those of the other kinds stay as small as before values
+// were items, for LLVM to inline.
+__attribute__((noinline)) static void visit_value_references(LertaItemKind kind, const void *item,
+                                                             LertaVisitor visitor) {
+  unsigned places = (kind & LERTA_REFERENCE_PLACES) >> 8;
+  for (int place = 0; places; place++, places >>= 1) {
+    if (!(places & 1)) continue;
+    void *reference;
+    memcpy(&reference, (const uint8_t *)item + place * sizeof reference, sizeof reference);
+    visitor(reference);
+  }
+}
+
 static bool holds_references(LertaItemKind kind) {
+  if (kind & LERTA_VALUE_ITEMS) return kind & LERTA_REFERENCE_PLACES;
   return kind == LERTA_REFERENCE_ITEMS || kind == LERTA_INTERFACE_ITEMS;
 }
 
-// The reference an item holds is its first 8 bytes: a reference, or an interface value's data.
-static void *reference_of(LertaItemKind kind, const void *item) {
-  if (!holds_references(kind)) return NULL;
+// The reference that an item of another kind than a value holds is its first 8 bytes: a reference,
+// or an interface value's data.
+static inline void visit_references(LertaItemKind kind, const void *item, LertaVisitor visitor) {
+  if (kind & LERTA_VALUE_ITEMS) {
+    visit_value_references(kind, item, visitor);
+    return;
+  }
+  if (!holds_references(kind)) return;
   void *reference;
   memcpy(&reference, item, sizeof reference);
-  return reference;
-}
-
-void lerta_retain_item(LertaItemKind kind, const void *item) {
-  lerta_retain(reference_of(kind, item));
-}
-
-void lerta_release_item(LertaItemKind kind, const void *item) {
-  lerta_release(reference_of(kind, item));
+  visitor(reference);
 }
 
 void lerta_visit_item(LertaItemKind kind, const void *item, LertaVisitor visitor) {
-  visitor(reference_of(kind, item));
+  visit_references(kind, item, visitor);
+}
+
+void lerta_retain_item(LertaItemKind kind, const void *item) {
+  visit_references(kind, item, lerta_retain);
+}
+
+void lerta_release_item(LertaItemKind kind, const void *item) {
+  visit_references(kind, item, lerta_release);
 }
 
 static uint8_t *item_at(const LertaArray *array, int64_t index) {
@@ -44,14 +68,14 @@ static uint8_t *item_at(const LertaArray *array, int64_t index) {
 }
 
 // The targets are all little-endian, so that an item narrower than a word is the word's first
-// bytes. An optional item, wider than a word, is given by its address, which the generated code
-// reads it through (see compiler/codegen/array.lerta).
+// bytes. An optional item or a value, which may be wider than a word, is given by its address, which
+// the generated code reads it through (see compiler/codegen/array.lerta).
 int64_t lerta_word_item(const LertaArray *array, int64_t index) {
   return lerta_item_word(array->item_kind, item_at(array, index));
 }
 
 int64_t lerta_item_word(LertaItemKind kind, const void *item) {
-  if (kind == LERTA_OPTIONAL_ITEMS) return (int64_t)(intptr_t)item;
+  if (kind == LERTA_OPTIONAL_ITEMS || kind & LERTA_VALUE_ITEMS) return (int64_t)(intptr_t)item;
   int64_t word;
   if (!(kind & LERTA_INTEGER_ITEMS)) {
     memcpy(&word, item, sizeof word);
@@ -70,7 +94,7 @@ static inline void visit_array(void *object, LertaVisitor visitor) {
   // that loop, which costs a pass over a long array of numbers.
   if (!holds_references(array->item_kind)) return;
   for (int64_t i = 0; i < array->length; i++) {
-    lerta_visit_item(array->item_kind, item_at(array, i), visitor);
+    visit_references(array->item_kind, item_at(array, i), visitor);
   }
 }
 

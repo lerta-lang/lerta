@@ -9,7 +9,8 @@ import emit_when, IrBuilder, IrModule from './ir_builder'
 import call_void_runtime from './runtime_calls'
 import scalar_of from './scalar'
 import
-  is_kind, is_one_of_kinds, is_reference_type, kind_of, ObjectType, OptionalType, Type, type_key
+  is_kind, is_one_of_kinds, is_reference_type, kind_of, ObjectType, OptionalType, RecordType,
+  TupleType, Type, type_key
 from '../types'
 
 export LERTA_IMMORTAL := '-9223372036854775808'
@@ -41,6 +42,19 @@ export without_nil := (type: Type): Type ->
 # The program decides how some types are laid out, as which small types are values (see
 # checker value_layout).
 export ir_type := (program: ProgramWide, type: Type): String ->
+  return find_ir_type(program, type) unless may_be_value(type)
+  program.ir_types.get_or_add(type, -> find_ir_type(program, type))
+
+# Whether a value of the type, or of the type without nil, may be a value rather than a reference,
+# whose IR type depends on its layout.
+may_be_value := (type: Type) ->
+  inner := without_nil(type)
+  case inner
+    when ObjectType then inner.is_struct
+    when RecordType, TupleType then true
+    else false
+
+find_ir_type := (program: ProgramWide, type: Type): String ->
   # A reference is nil when null, and so is an interface value when its data is, and a value whose
   # nil_path is; another carries a flag that tells whether it is there.
   if type is OptionalType
@@ -217,7 +231,8 @@ export ownership := (program: ProgramWide, type: Type): Ownership ->
   inner := without_nil(type)
   return INTERFACE if is_kind(inner, INTERFACE)
   layout := value_layout_of(program, inner)
-  return REFERENCE if layout == nil and is_reference_type(type)
+  return layout.holds_references then VALUE else NONE if layout
+  return REFERENCE if is_reference_type(type)
   parts := value_parts(type, layout) else return NONE
   if parts.any((part) -> ownership(program, part) != NONE)
     VALUE
@@ -263,6 +278,21 @@ export emit_each_reference := (
   for part_type at place in value_parts(type, value_layout_of(program, type))!
     continue if ownership(program, part_type) == NONE
     emit_each_reference ir, part(place), part_type, each
+
+# The paths, of indexes into the value's IR type, of the counted references that a value of the
+# type holds, as emit_each_reference visits them; of a value that is nil by null, or none, only.
+export reference_paths := (program: ProgramWide, type: Type): Int[][] ->
+  case ownership(program, type)
+    when REFERENCE then [[]]
+    when INTERFACE then [[0]]
+    when VALUE
+      inner := without_nil(type)
+      [
+        for part_type at place in value_parts(inner, value_layout_of(program, inner))!
+          for path in reference_paths(program, part_type)
+            [place, path...]
+      ]
+    else []
 
 # Releases what the value holds, but a value's, which emit_release_value releases, as it needs its
 # type.
