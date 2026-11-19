@@ -126,7 +126,7 @@ void lerta_visit_item(LertaItemKind kind, const void *item, LertaVisitor visitor
 // an integer item is extended by its sign, as the generated code widens it.
 int64_t lerta_word_item(const LertaArray *array, int64_t index);
 // An item of the kind, at the address, as the functions that compare and hash items take it: its
-// address, or its word for an integer item or one of the seed's kinds.
+// address, or its word for an integer item.
 int64_t lerta_item_word(LertaItemKind kind, const void *item);
 // Arrays (array.c): the generated code pushes in place.
 void lerta_array_append(LertaArray *array, const void *item);

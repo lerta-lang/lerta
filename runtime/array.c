@@ -8,18 +8,13 @@ LERTA_STATIC_STRING(pop_from_empty, "pop from an empty array");
 int64_t lerta_item_size(LertaItemKind kind) {
   if (kind & LERTA_MASKED_ITEMS) return kind & LERTA_WIDE_ITEMS ? 16 : 8;
   if (kind & LERTA_INTEGER_ITEMS) return kind & LERTA_ITEM_BYTES;
-  switch (kind) {
-    case LERTA_SEED_INTERFACE_ITEMS: return 2 * (int64_t)sizeof(void *);
-    case LERTA_NO_ITEMS: return 0;
-    case LERTA_SEED_OPTIONAL_ITEMS: return (int64_t)sizeof(LertaItem);
-    default: return 8;
-  }
+  if (kind == LERTA_NO_ITEMS) return 0;
+  lerta_panic("unknown item kind");
 }
 
 // The places of the pointers in an item that hold references, a bit each, the first the lowest.
 static unsigned reference_places(LertaItemKind kind) {
-  if (kind & LERTA_MASKED_ITEMS) return (kind & LERTA_REFERENCE_PLACES) >> 8;
-  return kind == LERTA_SEED_REFERENCE_ITEMS || kind == LERTA_SEED_INTERFACE_ITEMS;
+  return (kind & LERTA_REFERENCE_PLACES) >> 8;
 }
 
 static bool holds_references(LertaItemKind kind) { return reference_places(kind) != 0; }
@@ -84,11 +79,10 @@ int64_t lerta_word_item(const LertaArray *array, int64_t index) {
   return word_of(array->item_kind, item_at(array, index));
 }
 
-// A masked item, or the seed's optional item, is given by its address, which the generated code
-// reads it through (see compiler/codegen/items.lerta); another as its word.
+// A masked item is given by its address, which the generated code reads it through (see
+// compiler/codegen/items.lerta); an integer item as its word.
 int64_t lerta_item_word(LertaItemKind kind, const void *item) {
-  bool by_address = kind & LERTA_MASKED_ITEMS || kind == LERTA_SEED_OPTIONAL_ITEMS;
-  if (by_address) return (int64_t)(intptr_t)item;
+  if (kind & LERTA_MASKED_ITEMS) return (int64_t)(intptr_t)item;
   return word_of(kind, item);
 }
 

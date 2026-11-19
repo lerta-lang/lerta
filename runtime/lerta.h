@@ -65,17 +65,8 @@ struct LertaString {
 // C moves items only by memcpy, never as a C type: the generated code reads and writes them as a
 // type of their own in type-based alias analysis (see compiler/codegen/items.lerta).
 typedef enum {
-  // The kinds that the seed's IR passes for plain, reference, interface and optional items, until
-  // the seed is refreshed: the functions that compare and hash their items take them as words (see
-  // lerta_item_word), not by their addresses, and the runtime tells them by their numbers. The
-  // arrays that the runtime makes itself are masked, so code built from the seed must not compare
-  // or hash them meanwhile.
-  LERTA_SEED_PLAIN_ITEMS,
-  LERTA_SEED_REFERENCE_ITEMS,
-  LERTA_SEED_INTERFACE_ITEMS,
-  // 3 was the kind of bytes, before the integer items; 4 stays, as the seed's IR passes it.
+  // 4 stays, as the seed's IR passes it.
   LERTA_NO_ITEMS = 4,
-  LERTA_SEED_OPTIONAL_ITEMS = 5,
   // The mask and the flags of a kind, not kinds.
   LERTA_ITEM_BYTES = 0x0F,
   LERTA_INTEGER_ITEMS = 0x10,
