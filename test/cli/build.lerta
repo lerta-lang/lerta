@@ -235,11 +235,9 @@ failed_target_check := ->
 optimized_runtime_check := ->
   Check(name: 'lerta build -O inlines the runtime into the program', run: ->
     source := "#{root_dir}/tests/string/split.lerta"
-
-    # --source-lines keeps the symbols, by whose names the check finds a call to lerta_retain.
     built := await run_in_new_dir(
       compiler
-      ['build', source, '-o', "split#{host_executable_suffix}", '-O', '--source-lines']
+      ['build', source, '-o', "split#{host_executable_suffix}", '-O']
     )
     succeed 'build', built.result
     executable := "#{built.cwd}/split#{host_executable_suffix}"
@@ -278,20 +276,15 @@ optimized_runtime_check := ->
     lines.any(is_call) then ['lerta_retain is not inlined'] else no_reasons
   )
 
-# An optimized build has no symbol of the runtime's static functions, as write_trace, unless
-# --source-lines keeps them.
-stripped_check := (flags: String[]) ->
-  keeps := '--source-lines' in flags
-  optimized := ['-O', flags...]
-  Check(
-    name: "lerta build #{optimized.join(' ')} #{keeps then 'keeps' else 'strips'} the symbols"
-    run: ->
-      executable := "#{cli_work_dir}/hello-symbols-#{flags.length}#{host_executable_suffix}"
-      built := await run_in_new_dir(compiler, ['build', hello, '-o', executable, optimized...])
-      succeed 'build', built.result
-      program := await read_file(executable)
-      named := program.index_of(b'write_trace') != nil
-      named == keeps then no_reasons else ["the symbols are #{keeps then 'stripped' else 'kept'}"]
+# An optimized build keeps the symbols, as of the runtime's static function write_trace, for a
+# debugger or a profiler to name the functions by.
+kept_symbols_check := ->
+  Check(name: 'lerta build -O keeps the symbols', run: ->
+    executable := "#{cli_work_dir}/hello-symbols#{host_executable_suffix}"
+    built := await run_in_new_dir(compiler, ['build', hello, '-o', executable, '-O'])
+    succeed 'build', built.result
+    program := await read_file(executable)
+    program.index_of(b'write_trace') != nil then no_reasons else ['the symbols are stripped']
   )
 
 # libuv's loop is linked only into a program that waits on it, as on a sleep's timer; --source-lines
@@ -957,8 +950,7 @@ export checks: Check[] = [
   no_clang_check()
   failed_target_check()
   optimized_runtime_check()
-  stripped_check(no_build_flags)
-  stripped_check(['--source-lines'])
+  kept_symbols_check()
   loop_linked_check('a program that prints', b"print 'hi'\n", false)
   loop_linked_check('a program that sleeps', SLEEPS, true)
   dump_llvm_check()
