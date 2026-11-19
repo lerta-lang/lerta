@@ -335,11 +335,13 @@ extend Binary
 
   # The UInt32 at `index`, counted in UInt32s, of the bytes read as little-endian ones. The last
   # byte is checked against the length, rather than `index` against `@length / 4`, from which LLVM
-  # does not see the bytes in range and keeps a check for each; `index` is checked first, so that a
-  # huge one throws an IndexError rather than an overflow. The reads are at constant steps from
-  # `start`, which LLVM merges into one load (see emit_binary_get).
+  # does not see the bytes in range and keeps a check for each; an `index` so huge that its bytes'
+  # place overflows throws an ArithmeticError, rather than an IndexError after a test of `index`
+  # against the length: in a loop LLVM keeps that test and the overflow's, but drops the test of
+  # the last byte. The reads are at constant steps from `start`, which LLVM merges into one load
+  # (see emit_binary_get).
   uint32_at := (index: Int) ->
-    index_out_of_range() if index not in 0..@length or index * 4 + 3 >= @length
+    index_out_of_range() if index < 0 or index * 4 + 3 >= @length
     start := index * 4
     @[start].to_uint32() |
       @[start + 1].to_uint32() << 8 |

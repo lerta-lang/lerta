@@ -26,12 +26,6 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - How to see it: `mail me@lerta.org` comes out as its text, without an error, where GitHub links the address. None is in `docs/` so far.
 - How to fix it: fail on a word with an `@` between a name and a domain, as on a bare URL.
 
-## Binary.uint32_at checks its range three times where C checks once
-
-- Where: `uint32_at` in `std/builtins/text.lerta`, built with `-O`.
-- How to see it: its machine code tests `index` against the length, the overflow of `index * 4` and `index * 4 + 3` against the length before its one load, where C's `p = bytes + 4 * i` checks once. LLVM does not see `4 * index + 3 < length` from `index < length / 4`, so the last test stays to drop the checks of the four bytes. Checking a Binary's index as unsigned, in one comparison, made the compiler and `bench/json` 1% slower, as a loop's condition no longer drops it.
-- How to fix it: give LLVM the bound of the four bytes from the one test of `index`, if a form of it does, and measure where `uint32_at` is used.
-
 ## A regular expression literal in an interpolation is cut at a `}` or a `"` in it
 
 - Where: `find_interpolation_end` in `compiler/lexer/string_literal.lerta` passes over a string literal in `#{...}`, but not over a regular expression literal.

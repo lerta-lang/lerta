@@ -375,7 +375,7 @@ These throw a `ValueError`:
 | `b.starts_with(prefix)`, `b.ends_with(suffix)` | Whether `b` begins or ends with the bytes of a `Binary`. |
 | `b.occurs_at(index, part)` | Whether the bytes of `part` occur at `index`; false where `part` does not fit. |
 | `b.index_of(part, from = 0)` | The place of the first occurrence of `part`, a `Binary` or a `Byte`, at `from` or after it, or nil: `'abcabc'.binary.index_of('c'.binary, 3)` is 5. |
-| `b.uint32_at(index)` | The `index`-th `UInt32` of `b`, counted in `UInt32`s: its bytes `4 * index` to `4 * index + 3`, little-endian; an `IndexError` where they are not all in `b`. |
+| `b.uint32_at(index)` | The `index`-th `UInt32` of `b`, counted in `UInt32`s: its bytes `4 * index` to `4 * index + 3`, little-endian; an `IndexError` where they are not all in `b`, or an `ArithmeticError` where `4 * index` overflows. |
 
 - `index_of` gives nil whenever `from` is past the end. An empty `part` occurs at `from` when `from` is at most the length. A negative `from` throws an `IndexError`.
 - `for b in bytes` and comprehensions go through the bytes (see [for](control-flow.md#for-and-ranges)).
