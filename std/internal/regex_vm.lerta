@@ -49,6 +49,10 @@ export class Searcher
     # The bytes that a match may start with, or nil for a program that matches with none, as `a*`:
     # where no thread is alive, the search passes over the others without stepping.
     first_bytes := first_bytes_of(@words)
+
+    # The ASCII code points of each CLASS, as bits in the two words from twice its place, so that an
+    # ASCII byte is tested without decoding it or searching the ranges.
+    ascii_classes := ascii_classes_of(@words)
     var current = Threads(length: @length, slot_count: @slot_count)
     var next = Threads(length: @length, slot_count: @slot_count)
 
@@ -128,13 +132,27 @@ export class Searcher
         @visited[word] |= bit
         case @word(place)
           when MATCH then return @work[0..]
+          # An ASCII byte is read and passed over here, rather than by code_at, class_has and
+          # sequence_length, which took 6% more instructions of bench/regex.
           when CHAR
-            break if at == text.length or char_at(text, at).to_int() != @word(place + 1)
-            at += sequence_length(text[at])
+            break if at == text.length
+            byte := text[at]
+            if byte < 0x80
+              break if byte.to_int() != @word(place + 1)
+              at += 1
+            else
+              break if char_at(text, at).to_int() != @word(place + 1)
+              at += sequence_length(byte)
             place += 2
           when CLASS
-            break if at == text.length or not @in_class(place, char_at(text, at).to_int())
-            at += sequence_length(text[at])
+            break if at == text.length
+            byte := text[at]
+            if byte < 0x80
+              break unless @in_ascii_class(place, byte.to_int())
+              at += 1
+            else
+              break unless @in_class(place, char_at(text, at).to_int())
+              at += sequence_length(byte)
             place += 2 + 2 * @word(place + 1)
           when JUMP then place = @word(place + 1)
           when SPLIT
@@ -182,7 +200,7 @@ export class Searcher
         @add text, current, 0, at
       break if matched != nil and current.count == 0
       ended := at == text.length
-      code := ended then -1 else char_at(text, at).to_int()
+      code := ended then -1 else code_at(text, at)
       width := ended then 0 else sequence_length(text[at])
       next.clear()
       for i in 0..current.count
@@ -197,7 +215,7 @@ export class Searcher
               @step_from text, current, first, next, place + 2, at + width
           when CLASS
             count := @word(place + 1)
-            if @in_class(place, code)
+            if @class_has(place, code)
               @step_from text, current, first, next, place + 2 + 2 * count, at + width
           else pass
       break if ended
@@ -213,7 +231,20 @@ export class Searcher
       @work[k] = from.slots[first + k]
     @add text, to, place, at
 
-  # Whether the code point is in the ranges of the CLASS at `place`, found by a binary search.
+  # Whether the code point, or -1 for none, is in the CLASS at `place`.
+  class_has := (place: Int, code: Int) ->
+    if code in 0..0x80
+      @in_ascii_class(place, code)
+    else
+      @in_class(place, code)
+
+  # Whether the code point, of ASCII, is in the CLASS at `place`.
+  in_ascii_class := (place: Int, code: Int) ->
+    bit: UInt64 = 1 << (code % 64).to_uint64()!
+    @ascii_classes[2 * place + code / 64] & bit != 0
+
+  # Whether the code point, beyond ASCII, is in the ranges of the CLASS at `place`, found by a
+  # binary search.
   in_class := (place: Int, code: Int) ->
     var low = 0
     var high = @word(place + 1)
@@ -300,6 +331,31 @@ first_bytes_of := (words: Int[]) ->
           add_first_bytes bytes, words[first], words[first + 1]
       else pass
   bytes
+
+# The code point whose UTF-8 starts at the place: an ASCII byte read as it is, rather than by a call
+# of char_at.
+code_at := (text: Binary, at: Int) ->
+  byte := text[at]
+  byte < 0x80 then byte.to_int() else char_at(text, at).to_int()
+
+# The bits of ascii_classes in Searcher.
+ascii_classes_of := (words: Int[]) ->
+  bits: UInt64[] = Array(2 * words.length, 0)
+  var place = 0
+  while place < words.length
+    case words[place]
+      when CLASS
+        count := words[place + 1]
+        for range in 0..count
+          first := place + 2 + 2 * range
+          for code in words[first]..=min(words[first + 1], 0x7F)
+            bit: UInt64 = 1 << (code % 64).to_uint64()!
+            bits[2 * place + code / 64] |= bit
+        place += 2 + 2 * count
+      when MATCH then place += 1
+      when SPLIT then place += 3
+      else place += 2
+  bits
 
 # The first bytes of the UTF-8 of the code points from `low` to `high`: those themselves below
 # 0x80, and every lead byte, from 0xC2 to 0xF4, for any above.
