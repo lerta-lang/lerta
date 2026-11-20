@@ -43,6 +43,7 @@ The commands of the compiler are in [the reference](docs/reference/compiler.md).
 
 | Document | Contents |
 |---|---|
+| [docs/tour/](docs/tour/README.md) | A tour of the language for programmers who know another, in short programs with their output |
 | [docs/philosophy.md](docs/philosophy.md) | What Lerta stands for: its design principles, safety, performance and non-goals |
 | [docs/reference/](docs/reference/README.md) | The external specification as implemented: the language, the standard modules and the commands, as a program and its user observe them. It grows with the implementation |
 | [docs/internals/](docs/internals/README.md) | The internal specification as implemented: the architecture, the runtime rules and the bootstrap, the compiler, execution, memory, the representation of values, iteration and awaiting, input and output and the platforms |
@@ -187,7 +188,7 @@ make site              # build/site, the website
 make site-serve        # serves it at http://127.0.0.1:8000/ to look at
 ```
 
-- `site/site.lerta` writes the pages that `site/pages.lerta` lists: `site/index.md`, the top page, whose links are written as from `docs/`, and those of `docs/` but `roadmap/` and `issues.md`, each at its path in `docs/`, so that their links work as on GitHub. A link to what is not on the site goes to GitHub (`site/links.lerta`).
+- `site/site.lerta` writes the pages that `site/pages.lerta` lists: `site/index.md`, the top page, whose links are written as from `docs/`, `docs/philosophy.md`, and those of `docs/tour/`, `docs/reference/` and `docs/internals/`, each at its path in `docs/`, so that their links work as on GitHub. A link to what is not on the site goes to GitHub (`site/links.lerta`).
 - The site is served at the root of its domain: its links start with `/`.
 - `site/markdown.lerta` takes only the Markdown that `docs/` writes: headings, paragraphs, lists, tables and fenced code; code spans, emphasis and links. Anything else fails the build with its line.
 - A ```` ```lerta ```` block followed by an ```` ```output ```` block, blank lines between them allowed, is a sample, which must print the output and nothing else, and succeed: the run tests run those of README.md and of the site's pages. An output block after anything else fails the build. README.md is read for its samples as `docs/` is, so it keeps to the same Markdown.
@@ -197,6 +198,7 @@ make site-serve        # serves it at http://127.0.0.1:8000/ to look at
 ### Changing the language
 
 - Implement a feature as [the roadmap](docs/roadmap/README.md) specifies it. When it is implemented, move its description to [the reference](docs/reference/README.md) or [the internals](docs/internals/README.md) and remove it from the roadmap.
+- The tour shows the language as a newcomer meets it, not every rule: a feature goes there only if such a reader would miss it, and a change that alters what a page shows updates the page.
 - When a design question is not covered, apply [the principles](docs/philosophy.md) in priority order.
 - Follow [the runtime rules](docs/internals/architecture.md#runtime-rules), and [the bootstrap](docs/internals/architecture.md#bootstrap) for which features the compiler may use.
 
