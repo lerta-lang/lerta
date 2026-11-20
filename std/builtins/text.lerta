@@ -19,24 +19,27 @@ extern lerta_float_literal_bits: (String) -> Int
 
 extern lerta_float_from_bits: (Int) -> Float
 
-# The types that have `to_string()`, which print and interpolation require.
+## The types that have `to_string()`, which print and interpolation require.
 export interface Stringable
   to_string: () -> String
 
-# The types that have `to_literal()`, the text of the literal that gives the value, as an array's
-# text writes its items: `'a'` for a String, where `to_string()` gives `a`.
+## The types that have `to_literal()`, the text of the literal that gives the value, as an array's
+## text writes its items: `'a'` for a String, where `to_string()` gives `a`.
 export interface Literal
   to_literal: () -> String
 
-# The normal forms of Unicode, which String.normalize gives: canonical decomposition, NFD, then
-# composition, NFC, and those of compatibility, NFKD and NFKC.
+## The normal forms of Unicode, which String.normalize gives: canonical decomposition, NFD, then
+## composition, NFC, and those of compatibility, NFKD and NFKC.
 export enum NormalForm
   NFC
   NFD
   NFKC
   NFKD
 
+## Writes the value's `to_string()` and a line end to stdout.
 export print := <T: Stringable>(x: T) -> print_stdout_line(x.to_string())
+
+## Writes the value's `to_string()` and a line end to stderr.
 export print_error := <T: Stringable>(x: T) -> print_stderr_line(x.to_string())
 
 # Not generic, so that they are checked even if print and print_error are never called.
@@ -55,12 +58,13 @@ extend Char
     code := @to_int()
     ASCII_TEXTS.get(code) else text_of(@)
 
-  # Quoted as a String of the one Char is.
+  ## Quoted as a String of the one Char is.
   to_literal := -> @to_string().to_literal()
 
-  # Unicode's classes and simple case mappings (see std/internal/unicode.lerta). A digit is `0` to
-  # `9` alone, as code takes its value as `c.to_int() - '0'.to_int()`.
+  ## Whether it is `0` to `9` alone, so that `c.to_int() - '0'.to_int()` is its value.
   is_digit := -> @ in '0'..='9'
+
+  # Unicode's classes and simple case mappings (see std/internal/unicode.lerta).
   is_letter := -> unicode.is_letter(@)
   is_numeric := -> unicode.is_numeric(@)
   is_alphanumeric := -> @is_letter() or @is_numeric()
@@ -71,11 +75,13 @@ extend Char
   to_upper := -> unicode.upper(@)
   to_lower := -> unicode.lower(@)
 
-  # That of the Byte of the same number (see Byte.hex_value), or nil above the Bytes.
+  ## That of the Byte of the same number (see Byte.hex_value), or nil above the Bytes.
   hex_value := -> @to_int().to_byte()?.hex_value()
 
-  # The Char that many places on, or back, which throws where no Char is.
+  ## The Char that many places on, which throws where no Char is.
   add := (count: Int) -> (@to_int() + count).to_char() else throw not_a_char()
+
+  ## The Char that many places back, which throws where no Char is.
   sub := (count: Int) -> (@to_int() - count).to_char() else throw not_a_char()
 
 # The escape of a Char in a "..." literal (see docs/reference/syntax.md), or nil if it needs none.
@@ -97,18 +103,19 @@ extend String
   to_string := -> @
   is_empty := -> @binary.is_empty()
 
-  # By code points, so a combining mark moves away from its base.
+  ## By code points, so a combining mark moves away from its base.
   reversed := -> [char for char in @].reversed().join()
 
-  # In single quotes, or, for a String that holds a single quote or a control character, in
-  # double quotes, with what they would take otherwise escaped.
+  ## In single quotes, or, for a String that holds a single quote or a control character, in
+  ## double quotes, with what they would take otherwise escaped.
   to_literal := ->
     return "'#{@}'" unless @any((c) -> c == "'" or is_control(c))
     double_quoted(@, escape_in_double_quotes)
 
-  # The Chars.
+  ## The Chars.
   iter := (): Iter<Char> -> Chars(@binary)
 
+  ## The Int that the text writes in decimal, with an optional `-`, or nil.
   # The digits are accumulated as a negative number, which can hold the minimum Int.
   parse_int := ->
     bytes := @binary
@@ -125,7 +132,7 @@ extend String
     return nil if not negative and value == INT_MIN
     negative then value else -value
 
-  # The Float that the text writes, as to_string writes it: an infinity as `inf` or `-inf`.
+  ## The Float that the text writes, as to_string writes it: an infinity as `inf` or `-inf`.
   parse_float := ->
     return INFINITY if @ == 'inf'
     return -INFINITY if @ == '-inf'
@@ -133,9 +140,8 @@ extend String
     bits := lerta_float_literal_bits(@)
     bits != -1 then lerta_float_from_bits(bits)
 
-  # The pieces between the occurrences of the separator, or between the matches of a Regex (see
-  # split_by_regex). A valid separator starts and ends at code points, so the pieces are cut at
-  # them.
+  ## The pieces between the occurrences of the separator, or between the matches of a Regex.
+  # A valid separator starts and ends at code points, so the pieces are cut at them.
   split := (separator: String | Regex) ->
     return split_by_regex(@, separator) if separator is Regex
     throw ValueError('split by an empty separator') if separator.is_empty()
@@ -153,8 +159,8 @@ extend String
     pieces.push lerta_string_slice(@, start, bytes.length)
     pieces
 
-  # The lines without their `\n` or `\r\n`, and no empty line after a last `\n`.
-  # Only a piece that a `\n` ends loses its `\r`.
+  ## The lines without their `\n` or `\r\n`, and no empty line after a last `\n`.
+  ## Only a piece that a `\n` ends loses its `\r`.
   lines := ->
     pieces := @split("\n")
     rest := pieces.pop()
@@ -165,7 +171,7 @@ extend String
     ended.push rest unless rest.is_empty()
     ended
 
-  # The pieces between runs of spaces (see Char.is_space), none empty.
+  ## The pieces between runs of spaces (see Char.is_space), none empty.
   split_whitespace := ->
     bytes := @binary
     words: String[]
@@ -189,7 +195,7 @@ extend String
   without_suffix := (suffix: String) ->
     @ends_with(suffix) then @binary.text(0, @binary.length - suffix.binary.length)!
 
-  # By the first byte that differs, or else by length, so that a prefix goes first.
+  ## By the first byte that differs, or else by length, so that a prefix goes first.
   compare := (other: String) ->
     (bytes, other_bytes) := (@binary, other.binary)
     for i in 0..min(bytes.length, other_bytes.length)
@@ -197,29 +203,30 @@ extend String
         return bytes[i].compare(other_bytes[i])
     bytes.length.compare(other_bytes.length)
 
-  # The empty String occurs in every one, as index_of finds an empty part.
+  ## Whether the part occurs in the String; the empty String occurs in every one.
+  # As index_of finds an empty part at the start.
   contains := (part: String) -> @binary.index_of(part.binary) != nil
 
-  # Whether the String is one or more ASCII digits (see Char.is_digit).
+  ## Whether the String is one or more ASCII digits (see Char.is_digit).
   is_digits := -> not @is_empty() and @all(Char.is_digit)
 
-  # Whether every byte is ASCII, which no byte of a multi-byte character is.
+  ## Whether every byte is ASCII, which no byte of a multi-byte character is.
   is_ascii := -> @binary.all((b) -> b < 0x80)
 
-  # Without the spaces at both ends (see Char.is_space).
+  ## Without the spaces at both ends (see Char.is_space).
   trim := ->
     start := text_start(@binary)
     lerta_string_slice(@, start, text_end(@binary, start))
 
-  # Likewise, at the start only.
+  ## Without the spaces at the start (see Char.is_space).
   trim_start := -> lerta_string_slice(@, text_start(@binary), @binary.length)
 
-  # Likewise, at the end only.
+  ## Without the spaces at the end (see Char.is_space).
   trim_end := -> lerta_string_slice(@, 0, text_end(@binary, 0))
 
-  # Each occurrence of the part, from the start and without overlapping, or each match of a Regex,
-  # replaced by `by`, as it is, or by what `by` gives for its Match (see replace_matches). By a
-  # String, the common case, no Match is made.
+  ## Each occurrence of the part, from the start and without overlapping, or each match of a Regex,
+  ## replaced by `by`, as it is, or by what `by` gives for its Match.
+  # By a String, the common case, no Match is made.
   replace := (part: String | Regex, by: String | ((Match) -> String)) ->
     throw ValueError('replace of an empty part') if part is String and part.is_empty()
     if by is String
@@ -233,8 +240,10 @@ extend String
         occurrences @, part
     replace_matches(@, matches, by)
 
-  # The full case mappings, which may give more than one character, as `ß` gives `SS`.
+  ## The full case mapping, which may give more than one character, as `ß` gives `SS`.
   to_upper := -> unicode.upper_text(@)
+
+  ## The full case mapping, which may give more than one character.
   to_lower := -> unicode.lower_text(@)
 
   normalize := (form: NormalForm) ->
@@ -242,11 +251,12 @@ extend String
     composed := form in [NFC, NFKC]
     normalized(@, compatibility, composed)
 
-  # The String after as many of `fill`, one code point, as make it `width` code points long, or the
-  # String itself if it is no shorter.
+  ## The String after as many of `fill`, one code point, as make it `width` code points long, or the
+  ## String itself if it is no shorter; another fill throws a ValueError.
   pad_start := (width: Int, fill = ' ') -> padding(@, width, fill) + @
 
-  # Likewise, with the code points of `fill` after the String.
+  ## As pad_start, with the code points of `fill` after the String; another fill throws a
+  ## ValueError.
   pad_end := (width: Int, fill = ' ') -> @ + padding(@, width, fill)
 
   repeat := (count: Int) ->
@@ -255,17 +265,17 @@ extend String
     repeated += @ for _ in 0..count
     repeated
 
-  # What comes before the first occurrence of the part, or nil if there is none.
+  ## What comes before the first occurrence of the part, or nil if there is none.
   before := (part: String) ->
     found := @binary.index_of(part.binary) else return nil
     lerta_string_slice(@, 0, found)
 
-  # What comes after the first occurrence of the part, or nil if there is none.
+  ## What comes after the first occurrence of the part, or nil if there is none.
   after := (part: String) ->
     found := @binary.index_of(part.binary) else return nil
     lerta_string_slice(@, found + part.binary.length, @binary.length)
 
-  # The String after its first n code points, as `take(n)` gives them, so empty if it has no more.
+  ## The String after its first n code points, as `take(n)` gives them, so empty if it has no more.
   skip := (n: Int) ->
     bytes := @binary
     var at = 0
@@ -274,7 +284,7 @@ extend String
       at += sequence_length(bytes[at])
     lerta_string_slice(@, at, bytes.length)
 
-  # The String after the code points for which `skipped` holds, from the start.
+  ## The String after the code points for which `skipped` holds, from the start.
   skip_while := (skipped: (Char) -> Bool) ->
     bytes := @binary
     var at = 0
@@ -282,11 +292,11 @@ extend String
       at += sequence_length(bytes[at])
     lerta_string_slice(@, at, bytes.length)
 
-  # The number of its bytes, its UTF-8's, rather than of its code points, which `count()` gives.
+  ## The number of its bytes, its UTF-8's, rather than of its code points, which `count()` gives.
   byte_count := -> @binary.length
 
-  # What comes before the first occurrence of the separator and what comes after it, or nil if
-  # there is none.
+  ## What comes before the first occurrence of the separator and what comes after it, or nil if
+  ## there is none.
   split_once := (separator: String) ->
     throw ValueError('split by an empty separator') if separator.is_empty()
     bytes := @binary
@@ -303,8 +313,8 @@ extend Binary
   starts_with := (prefix: Binary) -> @occurs_at(0, prefix)
   ends_with := (suffix: Binary) -> @occurs_at(@length - suffix.length, suffix)
 
-  # The place of the first occurrence of `part`, bytes or a byte, at `from` or after it, or nil,
-  # always so past the end; an empty part occurs at `from` if it is at most the length.
+  ## The place of the first occurrence of `part`, bytes or a byte, at `from` or after it, or nil,
+  ## always so past the end; an empty part occurs at `from` if it is at most the length.
   index_of := (part: Binary | Byte, from = 0) ->
     throw IndexError('index_of from a negative place') if from < 0
     if part is Byte
@@ -318,7 +328,7 @@ extend Binary
       return i if @occurs_at(i, part)
     nil
 
-  # The bytes, read as the Iter is.
+  ## The bytes, read as the Iter is.
   iter := (): Iter<Byte> -> (b for b in @)
 
   occurs_at := (index: Int, part: Binary) ->
@@ -334,13 +344,13 @@ extend Binary
         @[start..end]
     lerta_binary_text(bytes)
 
-  # The UInt32 at `index`, counted in UInt32s, of the bytes read as little-endian ones. The last
-  # byte is checked against the length, rather than `index` against `@length / 4`, from which LLVM
-  # does not see the bytes in range and keeps a check for each; an `index` so huge that its bytes'
-  # place overflows throws an ArithmeticError, rather than an IndexError after a test of `index`
-  # against the length: in a loop LLVM keeps that test and the overflow's, but drops the test of
-  # the last byte. The reads are at constant steps from `start`, which LLVM merges into one load
-  # (see emit_binary_get).
+  ## The UInt32 at `index`, counted in UInt32s, of the bytes read as little-endian ones.
+  # The last byte is checked against the length, rather than `index` against `@length / 4`, from
+  # which LLVM does not see the bytes in range and keeps a check for each; an `index` so huge that
+  # its bytes' place overflows throws an ArithmeticError, rather than an IndexError after a test of
+  # `index` against the length: in a loop LLVM keeps that test and the overflow's, but drops the
+  # test of the last byte. The reads are at constant steps from `start`, which LLVM merges into one
+  # load (see emit_binary_get).
   uint32_at := (index: Int) ->
     index_out_of_range() if index < 0 or index * 4 + 3 >= @length
     start := index * 4
@@ -414,15 +424,19 @@ padding := (text: String, width: Int, fill: String) ->
 # The Strings or the Chars one after another, as a String, with the separator, if any, between each
 # two: of an array or an Iter, not of an Iterable (see docs/reference/builtins.md#iter).
 extend String[]
+  ## The parts as one String, with the separator between each two.
   join := (separator = '') -> joined_strings(@, separator)
 
 extend Iter<String>
+  ## The parts as one String, with the separator between each two.
   join := (separator = '') -> joined_strings(@, separator)
 
 extend Char[]
+  ## The parts as one String, with the separator between each two.
   join := (separator = '') -> joined_chars(@, separator)
 
 extend Iter<Char>
+  ## The parts as one String, with the separator between each two.
   join := (separator = '') -> joined_chars(@, separator)
 
 joined_strings := <I: Iterable<String>>(parts: I, separator: String) ->
@@ -441,7 +455,7 @@ joined_chars := <I: Iterable<Char>>(chars: I, separator: String) ->
   text
 
 extend Binary[]
-  # The Binarys one after another, with the separator, if any, between each two.
+  ## The Binarys one after another, with the separator, if any, between each two.
   join := (separator: Binary = b'') ->
     var joined = b''
     for part at i in @
@@ -450,8 +464,7 @@ extend Binary[]
     joined
 
 extend Byte[]
-  # The same bytes, copied into a Binary.
-  to_binary := ->
+  to_binary := ->  ## The same bytes, copied into a Binary.
     var bytes = b''
     bytes += byte for byte in @
     bytes

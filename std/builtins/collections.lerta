@@ -1,24 +1,25 @@
 # Arrays, Iters, Iterables, maps and sets (see docs/reference/builtins.md#iterable).
 
-# The types that `for` and comprehensions go through, by the Iter of `iter()`.
+## The types that `for` and comprehensions go through, by the Iter of `iter()`.
 export interface Iterable<T>
   iter: () -> Iter<T>
 
-# The types that `x in xs` tests, by `xs.contains(x)`: arrays, sets and maps, by their keys, and
-# Strings, by their parts.
+## The types that `x in xs` tests, by `xs.contains(x)`: arrays, sets and maps, by their keys, and
+## Strings, by their parts.
 export interface Contains<T>
   contains: (T) -> Bool
 
-# `[1, 2]`, with each item as the literal that gives it, `['a']`.
 extend<T: Literal> T[]
+  ## `[1, 2]`, with each item as the literal that gives it, `['a']`.
   to_string := (): String -> "[#{[item.to_literal() for item in @].join(', ')}]"
+
   to_literal := (): String -> @to_string()
 
 extend<T> T[]
-  # The items, read as the Iter is.
+  ## The items, read as the Iter is.
   iter := (): Iter<T> -> (x for x in @)
 
-  # A new array, so `xs += ys` leaves alone another name for the old `xs`, unlike `append`.
+  ## A new array, so `xs += ys` leaves alone another name for the old `xs`, unlike `append`.
   add := (other: T[]): T[] -> [@..., other...]
 
   is_empty := -> @length == 0
@@ -30,8 +31,8 @@ extend<T> T[]
     else
       nil
 
-  # The items in the order that `compare` gives (LESS when its first argument goes first), equal
-  # items keeping their order.
+  ## The items in the order that `compare` gives (LESS when its first argument goes first), equal
+  ## items keeping their order.
   # A default rather than a `sorted` of an extend of Comparable items, as two extends cannot give
   # a method of one name for different bounds.
   sorted := (compare: (T, T) -> Ordering = (a, b) -> a.compare(b)): T[] ->
@@ -39,7 +40,7 @@ extend<T> T[]
     copy.sort compare
     copy
 
-  # Orders the items in place, as `sorted` orders a copy.
+  ## Orders the items in place, as `sorted` orders a copy.
   # A merge sort: runs of `width` items, sorted, are merged in pairs, doubling it, from one array
   # into the other, so that the copy is the only array it makes.
   sort := (compare: (T, T) -> Ordering = (a, b) -> a.compare(b)) ->
@@ -70,7 +71,7 @@ extend<T> T[]
         for i in 0..count
           @[i] = runs[i]
 
-  # Pushes the items of another array, one by one; those of the array itself, if it is that, once.
+  ## Pushes the items of another array, one by one; those of the array itself, if it is that, once.
   append := (items: T[]) ->
     count := items.length
     @push items[i] for i in 0..count
@@ -81,7 +82,7 @@ extend<T> T[]
         @[@length - 1 - i]
     ]
 
-  # Reverses the items in place, as `reversed` does a copy.
+  ## Reverses the items in place, as `reversed` does a copy.
   reverse := ->
     for i in 0..(@length / 2)
       j := @length - 1 - i
@@ -89,7 +90,7 @@ extend<T> T[]
       @[i] = @[j]
       @[j] = kept
 
-  # Puts the item at `at`, in `0..=length`, moving the items from there on one place later.
+  ## Puts the item at `at`, in `0..=length`, moving the items from there on one place later.
   insert := (at: Int, item: T) ->
     throw IndexError(message: "insert at #{at}, of #{@length} items") unless at in 0..=@length
     @push item
@@ -97,7 +98,7 @@ extend<T> T[]
       @[i] = @[i - 1]
     @[at] = item
 
-  # Removes the item at `at` and gives it, moving the items after it one place earlier.
+  ## Removes the item at `at` and gives it, moving the items after it one place earlier.
   remove_at := (at: Int): T ->
     throw IndexError(message: "remove_at #{at}, of #{@length} items") unless at in 0..@length
     removed := @[at]
@@ -106,32 +107,33 @@ extend<T> T[]
     @pop()
     removed
 
-  # Removes every item.
+  ## Removes every item.
   clear := -> @truncate(0)
 
-  # Removes the items after the first `length`, if it has more.
+  ## Removes the items after the first `length`, if it has more.
   truncate := (length: Int) ->
     throw ValueError(message: 'truncate to a negative length') if length < 0
     @pop() while @length > length
 
-  # Removes the items from `at` on, and gives them, in order; `at` must be in `0..=length`, as the
-  # start of a slice.
+  ## Removes the items from `at` on, and gives them, in order; `at` must be in `0..=length`, as the
+  ## start of a slice.
   split_off := (at: Int): T[] ->
     taken := @[at..]
     @truncate at
     taken
 
-  # The items but the last; none for an empty array, for which a slice to one before the end throws.
+  ## The items but the last; none for an empty array.
+  # Not a slice to one before the end, which throws for an empty array.
   all_but_last := (): T[] ->
     if @is_empty()
       []
     else
       @[..(@length - 1)]
 
-  # The items in the order of their keys, as `sorted` orders them.
+  ## The items in the order of their keys, as `sorted` orders them.
   sorted_by := <K: Comparable>(key: (T) -> K): T[] -> @sorted((a, b) -> key(a).compare(key(b)))
 
-  # Orders the items in place by their keys, as `sorted_by` orders a copy.
+  ## Orders the items in place by their keys, as `sorted_by` orders a copy.
   sort_by := <K: Comparable>(key: (T) -> K) -> @sort((a, b) -> key(a).compare(key(b)))
 
 # The methods that find items by their `==`.
@@ -142,14 +144,14 @@ extend<T: Equatable> T[]
       return true if each == item
     false
 
-  # The index of the first item equal to `item`.
+  ## The index of the first item equal to `item`, or nil if there is none.
   index_of := (item: T): Int? ->
     for each at i in @
       return i if each == item
     nil
 
-  # Removes the first item equal to `item`, if there is one, moving those after it down, and tells
-  # whether it did.
+  ## Removes the first item equal to `item`, if there is one, moving those after it down, and tells
+  ## whether it did.
   remove := (item: T): Bool ->
     index := @index_of(item) else return false
     for i in index..(@length - 1)
@@ -158,11 +160,11 @@ extend<T: Equatable> T[]
     true
 
 extend<T> Iter<T>
-  # Itself, so that an Iter is Iterable.
+  ## Itself, so that an Iter is Iterable.
   iter := (): Iter<T> -> @
 
-  # The items after the first n, which it reads but does not give. Of an Iter, as an array is cut by
-  # a slice, and a String by its own skip.
+  ## The items after the first n, which it reads but does not give.
+  # Of an Iter, as an array is cut by a slice, and a String by its own skip.
   skip := (n: Int): Iter<T> ->
     var left = n
     for x in @
@@ -171,7 +173,7 @@ extend<T> Iter<T>
         continue
       yield x
 
-  # The items from the first for which `skipped` is false on.
+  ## The items from the first for which `skipped` is false on.
   skip_while := (skipped: (T) -> Bool): Iter<T> ->
     var skipping = true
     for x in @
@@ -204,31 +206,33 @@ extend<T> Iterable<T>
       return i if test(x)
     nil
 
-  # The first result of `f` that is not nil.
+  ## The first result of `f` that is not nil.
   find_map := <U>(f: (T) -> U?): U? ->
     for x in @
       return found if found := f(x)
     nil
 
-  # The number of items, as `for` goes through them: the Chars of a String.
+  ## The number of items, as `for` goes through them: the Chars of a String.
   count := (): Int ->
     var count = 0
     count += 1 for _ in @
     count
 
-  # `combine` applied to `initial` and the first item, then to that and the next, and so on.
+  ## `combine` applied to `initial` and the first item, then to that and the next, and so on.
   fold := <A>(initial: A, combine: (A, T) -> A): A ->
     var result = initial
     for x in @
       result = combine(result, x)
     result
 
-  # The item whose key is the least, the first of those with equal keys, or nil if there is none.
+  ## The item whose key is the least, the first of those with equal keys, or nil if there is none.
   min_by := <K: Comparable>(key: (T) -> K): T? -> extreme_by(@iter(), key, LESS)
 
-  # The item whose key is the greatest, the first of those with equal keys, or nil if there is none.
+  ## The item whose key is the greatest, the first of those with equal keys, or nil if there is
+  ## none.
   max_by := <K: Comparable>(key: (T) -> K): T? -> extreme_by(@iter(), key, GREATER)
 
+  ## The first n items.
   # It stops reading its source after them, which a comprehension could not.
   take := (n: Int): Iter<T> ->
     source := @iter()
@@ -239,12 +243,13 @@ extend<T> Iterable<T>
       source.next()
     { has_next, next }
 
-  # The items before the first for which `keep` is false, which it reads but does not give.
+  ## The items before the first for which `keep` is false, which it reads but does not give.
   take_while := (keep: (T) -> Bool): Iter<T> ->
     for x in @
       return unless keep(x)
       yield x
 
+  ## Pairs of the items of both, as long as both have one.
   zip := <U>(other: Iterable<U>): Iter<(T, U)> ->
     left := @iter()
     right := other.iter()
@@ -255,16 +260,16 @@ extend<T> Iterable<T>
     next := (): (T, U) -> (left.next(), right.next())
     { has_next, next }
 
-# `{ 'a': 1 }`, with each key and value as the literal that gives it; `{}` when empty, as a map
-# literal cannot write an empty map.
 extend<K: Literal, V: Literal> Map<K, V>
+  ## `{ 'a': 1 }`, with each key and value as the literal that gives it; `{}` when empty.
+  # `{}` though it is no map literal, which cannot be empty.
   to_string := (): String ->
     entries := ["#{key.to_literal()}: #{value.to_literal()}" for (key, value) in @]
     @is_empty() then '{}' else "{ #{entries.join(', ')} }"
   to_literal := (): String -> @to_string()
 
-# `Set([1, 2])`, with each item as the literal that gives it.
 extend<T: Literal> Set<T>
+  ## `Set([1, 2])`, with each item as the literal that gives it; `Set()` when empty.
   to_string := (): String ->
     @is_empty() then 'Set()' else "Set([#{[item.to_literal() for item in @].join(', ')}])"
   to_literal := (): String -> @to_string()
@@ -273,11 +278,11 @@ extend<K, V> Map<K, V>
   contains := (key: K): Bool -> @[key] != nil
   is_empty := -> @length == 0
 
-  # The values of the entries, as `iter()` gives them.
+  ## The values of the entries, as `iter()` gives them.
   values := (): Iter<V> -> (value for (_, value) in @)
 
-  # The value of the key, which `make` makes and the map holds first where it has none, as a cache
-  # does; `m[k] else d` reads without adding.
+  ## The value of the key, which `make` makes and the map holds first where it has none, as a cache
+  ## does; `m[k] else d` reads without adding.
   get_or_add := (key: K, make: () -> V): V ->
     return found if found := @[key]
     made := make()
@@ -289,22 +294,22 @@ extend<K, V> Map<K, V>
 extend<T> Set<T>
   is_empty := -> @length == 0
 
-  # The items of either.
+  ## `a | b`: the items of either, in the order of `a`, then of `b`.
   bit_or := (other: Set<T>): Set<T> ->
     union := Set<T>(@)
     union.add item for item in other
     union
 
-  # The items of this set that the other has too.
+  ## `a & b`: the items of this set that the other has too.
   bit_and := (other: Set<T>): Set<T> -> Set<T>([item for item in @ when other.contains(item)])
 
-  # The items of this set that the other has not.
+  ## `a - b`: the items of this set that the other has not.
   sub := (other: Set<T>): Set<T> -> Set<T>([item for item in @ when not other.contains(item)])
 
-  # The items of one set that the other has not.
+  ## `a ^ b`: the items of one set that the other has not.
   bit_xor := (other: Set<T>): Set<T> -> @ - other | (other - @)
 
-  # Whether the other has every item of this set.
+  ## Whether the other has every item of this set.
   is_subset := (other: Set<T>): Bool -> @iter().all(other.contains)
 
 # Writes the items of runs[start..middle] and runs[middle..end], each sorted by `compare`, to
@@ -335,15 +340,15 @@ extreme_by := <T, K: Comparable>(items: Iter<T>, key: (T) -> K, order: Ordering)
   found
 
 extend<T: Comparable> Iterable<T>
-  # The least item, the first of equal ones, or nil if there is none.
+  ## The least item, the first of equal ones, or nil if there is none.
   min := (): T? -> @min_by((x) -> x)
 
-  # The greatest item, the first of equal ones, or nil if there is none.
+  ## The greatest item, the first of equal ones, or nil if there is none.
   max := (): T? -> @max_by((x) -> x)
 
 extend<T: Add<T, T>> Iterable<T>
-  # The items added to `zero` one after another, from the first: 0 for numbers, and for other
-  # types their own, as `''` for Strings.
+  ## The items added to `zero` one after another, from the first: 0 for numbers, and for other
+  ## types their own, as `''` for Strings.
   sum := (zero: T = 0): T ->
     var total = zero
     total += x for x in @

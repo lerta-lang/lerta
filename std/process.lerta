@@ -29,21 +29,22 @@ extern lerta_current_dir: () -> Binary?
 
 NOT_UTF8 := 'a command-line argument is not valid UTF-8'
 
+## The program's command-line arguments, its own name first.
 export argv := [
   for argument in lerta_argv()
     argument.text() else throw ValueError(NOT_UTF8)
 ]
 
-# Where a program's output or errors go, besides a Writer or a Pipe: dropped, or, for its errors
-# alone, where its output goes, as `2>&1` does.
+## Where a program's output or errors go, besides a Writer or a Pipe: dropped, or, for its errors
+## alone, where its output goes, as `2>&1` does.
 export enum Output
   DISCARD
   STDOUT
 
-# How `run` runs a program: what it reads as its standard input, where its standard output and
-# error go, a Writer that they are copied to as they come or an Output, its directory, the
-# environment variables set and removed, and how long a cancel waits for it to end before it is
-# killed.
+## How `run` runs a program: what it reads as its standard input, where its standard output and
+## error go, a Writer that they are copied to as they come or an Output, its directory, the
+## environment variables set and removed, and how long a cancel waits for it to end before it is
+## killed.
 export struct RunOptions
   stdin: Binary | Reader | Pipe?
   stdout: Output | Writer | Pipe?
@@ -53,8 +54,8 @@ export struct RunOptions
   unset_env: String[] = []
   kill_after := 5.0
 
-# How a program ended: its exit code, which a signal makes 128 plus its number, as shells do, and
-# that signal.
+## How a program ended: its exit code, which a signal makes 128 plus its number, as shells do, and
+## that signal.
 export struct Exit
   code: Int
   signal: Int?
@@ -62,11 +63,13 @@ export struct Exit
 # The system reads a text only up to a NUL byte, so none that it is given may hold one.
 holds_nul := (text: String) -> "\0" in text
 
+## Ends the program with the code, which must be in 0 to 255; another throws a ValueError.
 # POSIX systems keep only 8 bits of an exit code, so a code outside 0 to 255 would be misread.
 export exit := (code: Int) ->
   throw ValueError('exit code out of range (0 to 255)') unless code in 0..=255
   lerta_exit code
 
+## Runs the program of the command with the arguments, as the options say, and gives how it ended.
 export run := (command: String, args: String..., options: RunOptions) ->
   check_options options
   { cwd, env, unset_env, kill_after } := options
@@ -329,6 +332,7 @@ check_options := (options: RunOptions) ->
     if set_names.any((each) -> same_env_name(each.binary, name.binary))
       throw ValueError("the environment variable #{name} is both set and removed")
 
+## The value of the environment variable of the name, or nil.
 # No variable's name holds `=`, which the system would take as the end of the name, nor a NUL byte.
 export env := (name: String) ->
   return nil if '=' in name or holds_nul(name)
@@ -337,15 +341,15 @@ export env := (name: String) ->
 
 export Platform, platform from './internal/platform'
 
-# Whether the program is built optimized, as by -O, which the compiler gives.
+## Whether the program is built optimized, as by -O, which the compiler gives.
 export intrinsic optimized: Bool
 
-# The last name of the path that the program was started by, as a usage message names it: without
-# `.exe` on Windows, where `\` separates names too.
+## The last name of the path that the program was started by, as a usage message names it: without
+## `.exe` on Windows, where `\` separates names too.
 export program := program_name(lerta_program_path().text() else throw ValueError(NOT_UTF8))
 
-# The absolute path of the program's executable file, as the system tells it, through which the
-# program may run itself again.
+## The absolute path of the program's executable file, as the system tells it, through which the
+## program may run itself again.
 export executable := ->
   lerta_executable()?.text() else throw IOError('cannot read the path of the program')
 
@@ -358,19 +362,23 @@ program_name := (path: String) ->
   bytes := name.binary
   bytes.text(0, bytes.length - b'.exe'.length)!
 
+## The number of the system's CPUs.
 export cpu_count := lerta_cpu_count()
 
 extern lerta_process_id: () -> Int
+
+## The program's own process ID.
 export process_id := lerta_process_id()
 
 extern lerta_is_running: (Int) -> Bool
 
+## Whether a process of the ID is running.
 # The ID is checked first, since the system takes 0 and the negative IDs for groups of processes.
 export is_running := (id: Int) -> id > 0 and id <= MAX_PROCESS_ID and lerta_is_running(id)
 
 MAX_PROCESS_ID := 2147483647
 
-# The absolute path of the current directory, which the paths of the program start from.
+## The absolute path of the current directory, which the paths of the program start from.
 export cwd := ->
   failure := 'cannot read the current directory'
   path := lerta_current_dir() else throw IOError(failure)

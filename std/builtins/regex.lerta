@@ -5,10 +5,12 @@ import flags_error, PatternError from '../internal/regex_syntax'
 import Searcher from '../internal/regex_vm'
 import lerta_string_slice, sequence_length from '../internal/utf8'
 
+## A regular expression of RE2's syntax, matched in time linear in the text; throws a ValueError
+## for an invalid pattern or flags.
 export class Regex
   args
-    pattern: String
-    flags := ''
+    pattern: String  ## The pattern as given.
+    flags := ''  ## Letters of `i`, `m` and `s`, each once, as if `(?flags)` began the pattern.
 
     # The pattern compiled, which a literal's construction gives as the compiler compiled it (see
     # regex_of_literal).
@@ -19,14 +21,15 @@ export class Regex
   # its searches.
   private searcher := Searcher(@program)
 
+  ## Whether it matches anywhere.
   test := (text: String) -> @searcher.find(text.binary, 0) != nil
 
-  # The leftmost match, or nil.
+  ## The leftmost match, or nil.
   find := (text: String) ->
     slots := @searcher.find(text.binary, 0) else return nil
     @match_of(text, slots)
 
-  # The matches that do not overlap, from the start (see all_slots).
+  ## The matches that do not overlap, from the start.
   find_all := (text: String): Iter<Match> ->
     yield @match_of(text, slots) for slots in @all_slots(text)
 
@@ -47,6 +50,7 @@ export class Regex
 
     match_of := (text: String, slots: Int[]) -> Match(slots, source: text, names: @program.names)
 
+## A match of a Regex in a text.
 # A match keeps its places, and its texts are sliced as they are read, so that one that is only
 # counted slices nothing.
 export class Match
@@ -56,13 +60,14 @@ export class Match
       slots: Int[]
       names: String?[]
 
+  ## The text of the whole match.
   text := -> @group(0)!
 
-  # The text of each group, from the whole match, nil for a group that took no part.
+  ## The text of each group, from the whole match, nil for a group that took no part.
   groups := -> [@group(i) for i in 0..@names.length]
 
-  # The text of the group at the index, from 0, the whole match, or nil if it took no part; an index
-  # the pattern has no group at throws an IndexError.
+  ## The text of the group at the index, from 0, the whole match, or nil if it took no part; an
+  ## index the pattern has no group at throws an IndexError.
   group := (index: Int) ->
     start := @slots[2 * index]
     return nil if start < 0
@@ -71,11 +76,14 @@ export class Match
   # The places of the match's bytes, from its start up to its end.
   private span := (@slots[0], @slots[1])
 
+  ## The text before the match.
   before := -> lerta_string_slice(@source, 0, @slots[0])
+
+  ## The text after the match.
   after := -> lerta_string_slice(@source, @slots[1], @source.binary.length)
 
-  # The text of the group of the name, or nil if it took no part; a name the pattern does not give
-  # throws a ValueError.
+  ## The text of the group of the name, or nil if it took no part; a name the pattern does not give
+  ## throws a ValueError.
   named := (name: String) ->
     index := @names.find_index((n) -> n == name) else throw ValueError("no group named #{name}")
     @group(index)

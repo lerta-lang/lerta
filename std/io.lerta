@@ -35,28 +35,30 @@ names_nothing := (path: String) -> "\0" in path
 require_names := (failure: String, paths: String...) ->
   throw IOError("#{failure}#{paths[0]}") if paths.any(names_nothing)
 
+## The contents of the file.
 export read_file := (path: String) ->
   failure := 'cannot read file: '
   require_names failure, path
   await lerta_read_file(path) else throw IOError("#{failure}#{path}")
 
-# The contents of a file as text, or nil if they are not valid UTF-8.
+## The contents of a file as text, or nil if they are not valid UTF-8.
 export read_text := (path: String) -> (await read_file(path)).text()
 
-# A String is written as its UTF-8.
+## Writes the data to the file, made or emptied first; a String as its UTF-8.
 export write_file := (path: String, data: String | Binary) ->
   failure := 'cannot write file: '
   require_names failure, path
   throw IOError("#{failure}#{path}") unless await lerta_write_file(path, bytes_of(data))
 
-# How open opens a file: so far only for writing, emptied or made.
+## How open opens a file: so far only for writing, emptied or made.
 export enum OpenMode
   WRITE
 
-# A file that open has opened (see docs/reference/std.md#stdio), closed once nothing holds it.
+## A file that open has opened (see docs/reference/std.md#stdio), closed once nothing holds it.
 export struct File
   writer: FileWriter
 
+## Opens the file as the mode says.
 # Opening is one system call, so it does not await (see docs/roadmap/runtime.md#concurrency).
 export open := (path: String, mode: OpenMode) ->
   failure := 'cannot open file: '
@@ -108,8 +110,7 @@ class FileWriter
       lerta_open_file_end @pointer, @buffer
       @buffer = b''
 
-  # Resolves once all that was written before it is in the file.
-  flush := ->
+  flush := ->  ## Resolves once all that was written before it is in the file.
     @check_open()
     await @write_out()
 
@@ -135,18 +136,22 @@ class FileWriter
 
   deinit := -> lerta_open_file_free(@pointer, @buffer)
 
+## Whether the path names a file.
 export is_file := (path: String) -> kind_at(path) == FILE
 
+## Whether the path names a directory.
 export is_dir := (path: String) -> kind_at(path) == DIR
 
 # The kind of what the path names, or nil if nothing is there or its status cannot be read.
 kind_at := (path: String) -> stat(path)?.kind
 
+## The absolute path, with symbolic links resolved.
 export real_path := (path: String) ->
   failure := "cannot resolve path: #{path}"
   require_names 'cannot resolve path: ', path
   path_text(lerta_resolve_path(path) else throw IOError(failure), failure)
 
+## Makes a new, empty directory for temporary files; gives its path.
 export make_temp_dir := ->
   failure := 'cannot make a temporary directory'
   path_text(lerta_make_temp_dir() else throw IOError(failure), failure)
@@ -190,40 +195,45 @@ export make_dir := (path: String) ->
     lerta_make_one_dir bytes[..i] if is_separator(bytes[i]) and not is_separator(bytes[i - 1])
   throw IOError("#{failure}#{path}") unless lerta_make_one_dir(bytes)
 
+## Removes the file.
 export remove_file := (path: String) ->
   failure := 'cannot remove file: '
   require_names failure, path
   throw IOError("#{failure}#{path}") unless lerta_remove_file(path)
 
+## Moves the file or directory to the new path.
 export rename := (from: String, to: String) ->
   failure := 'cannot rename: '
   require_names failure, from, to
   throw IOError("#{failure}#{from}") unless lerta_rename_path(from, to)
 
+## Makes a symbolic link to the target.
 export make_link := (target: String, path: String) ->
   failure := 'cannot make link: '
   require_names failure, path, target
   throw IOError("#{failure}#{path}") unless lerta_symlink(target, path)
 
+## Copies the file, replacing one at `to`.
 export copy_file := (from: String, to: String) ->
   failure := 'cannot copy file: '
   require_names failure, from, to
   throw IOError("#{failure}#{from}") unless await lerta_copy_file(from, to)
 
+## What a path names: a file, a directory, or something else.
 export enum FileKind
   FILE
   DIR
   OTHER
 
-# What a path names: its kind, its size in bytes, and when it was last modified, in seconds since
-# the Unix epoch, as `time` of std:time tells them.
+## What a path names: its kind, its size in bytes, and when it was last modified, in seconds since
+## the Unix epoch, as `time` of std:time tells them.
 export struct FileStatus
   kind: FileKind
   size: Int
   modified_time: Float
 
-# The status of what the path names, through symbolic links, or nil if nothing is there or its
-# status cannot be read.
+## The status of what the path names, through symbolic links, or nil if nothing is there or its
+## status cannot be read.
 export stat := (path: String) ->
   return nil if names_nothing(path)
   fields: Int[]
@@ -240,9 +250,9 @@ extern lerta_stream_write: (Int, Binary) -> Promise
 extern lerta_stream_flush: (Int) -> Promise
 extern lerta_stream_is_terminal: (Int) -> Bool
 
-# What data is written to, as a stream: `end` closes it, which its reader reads as its end, once at
-# least what the Writer holds of the writes before it is written, and is rejected if that failed. A
-# write under way is settled on its own, which a Writer's end may not wait for.
+## What data is written to, as a stream: `end` closes it, which its reader reads as its end, once at
+## least what the Writer holds of the writes before it is written, and is rejected if that failed. A
+## write under way is settled on its own, which a Writer's end may not wait for.
 export interface Writer
   write: (String | Binary) -> Promise
   end: () -> Promise
@@ -261,8 +271,8 @@ struct StandardOutput
 
   is_terminal := -> lerta_stream_is_terminal(@fd)
 
-  # Whether to color the output, as NO_COLOR, FORCE_COLOR and TERM ask (see no-color.org), or else
-  # whether it goes to a terminal.
+  ## Whether to color the output, as NO_COLOR, FORCE_COLOR and TERM ask (see no-color.org), or else
+  ## whether it goes to a terminal.
   uses_color := ->
     return false if is_set('NO_COLOR')
     return true if is_set('FORCE_COLOR')
@@ -274,11 +284,14 @@ is_set := (name: String) ->
   value := lerta_env(name) else return false
   not value.is_empty()
 
+## The standard output, a Writer.
 export stdout := StandardOutput(1)
+
+## The standard error, a Writer.
 export stderr := StandardOutput(2)
 
-# A Writer that keeps what is written, at most `limit` bytes, as run of std:process keeps a
-# program's output. A write past the limit or after the end throws, and adds nothing.
+## A Writer that keeps what is written, at most `limit` bytes, as run of std:process keeps a
+## program's output. A write past the limit or after the end throws, and adds nothing.
 export class Buffer
   args
     limit: Int?
@@ -300,11 +313,11 @@ export class Buffer
 
   text := -> @binary.text()
 
-# A Reader that reads what its Writer writes: a write is resolved once the reader has taken its
-# chunk, and the reader reads nil once the writer has ended and all has been taken, or throws the
-# error that the writer has failed with. Once the reader is closed, the writes fail, as those to a
-# system pipe whose reader has gone do. A Pipe that run of std:process is given before anything has
-# used it becomes a system pipe that its programs share (see SystemPipe).
+## A Reader that reads what its Writer writes: a write is resolved once the reader has taken its
+## chunk, and the reader reads nil once the writer has ended and all has been taken, or throws the
+## error that the writer has failed with. Once the reader is closed, the writes fail, as those to a
+## system pipe whose reader has gone do. A Pipe that run of std:process is given before anything has
+## used it becomes a system pipe that its programs share.
 export struct Pipe
   writer := PipeWriter()
   reader := reader_of_pipe(@writer)
@@ -539,6 +552,7 @@ class PipeChunk
 
 extern lerta_dir_names: (String) -> Binary[]?
 
+## The names in the directory.
 # An empty path is refused, as Windows would read `\*` in it as the root of the drive.
 export list_dir := (path: String) ->
   failure := 'cannot list directory: '
@@ -551,8 +565,8 @@ export list_dir := (path: String) ->
   ]
   names.sorted()
 
-# The files under the directory, at any depth, as paths from it (see list_tree in
-# docs/reference/std.md).
+## The files under the directory, at any depth, as paths from it (see list_tree in
+## docs/reference/std.md).
 export list_tree := (path: String, enters: (String) -> Bool = (_) -> true) ->
   tree_files(path, '', [], enters)
 
@@ -573,12 +587,12 @@ tree_files := (dir: String, prefix: String, above: String[], enters: (String) ->
 
 extern lerta_stdin_read: () -> Promise<Binary?>
 
-# A line with more bytes before its "\n" than a read of it takes.
+## A line with more bytes before its "\n" than a read of it takes.
 export struct LineTooLongError: Error
 
-# A stream read in chunks through a buffer: `read_chunk` gives the next chunk, or nil at the end. A
-# read must end before the next one starts: one that starts while another is pending throws.
-# `on_close` tells the source that nothing reads it any more, as a pipe's writer is told.
+## A stream read in chunks through a buffer: `read_chunk` gives the next chunk, or nil at the end. A
+## read must end before the next one starts: one that starts while another is pending throws.
+## `on_close` tells the source that nothing reads it any more, as a pipe's writer is told.
 export class Reader
   args
     read_chunk: () -> Promise<Binary?>
@@ -592,19 +606,19 @@ export class Reader
     # it, so that a read that throws or is cancelled leaves it for the next.
     var taken = b''
 
-  # The next line, without its "\n" and a "\r" before it, or nil at the end. A LineTooLongError
-  # if more than `max` bytes, a "\r" among them, come before its "\n", which leaves them unread.
+  ## The next line, without its "\n" and a "\r" before it, or nil at the end. A LineTooLongError
+  ## if more than `max` bytes, a "\r" among them, come before its "\n", which leaves them unread.
   read_line := (max: Int = INT_MAX) ->
     throw ValueError("read a line of a negative count of bytes: #{max}") if max < 0
     await @exclusive(-> await @line(max))
 
-  # The bytes there are to read, at most `max`, waiting for some only if there are none; nil at the
-  # end. A `max` of 0 takes none, and tells only whether the end has come.
+  ## The bytes there are to read, at most `max`, waiting for some only if there are none; nil at the
+  ## end. A `max` of 0 takes none, and tells only whether the end has come.
   read := (max: Int) ->
     throw ValueError("read a negative count of bytes: #{max}") if max < 0
     await @exclusive(-> await @some(max))
 
-  # `count` bytes, or nil at the end. An IOError if the end comes after some of them.
+  ## `count` bytes, or nil at the end. An IOError if the end comes after some of them.
   read_exactly := (count: Int) ->
     throw ValueError("read a negative count of bytes: #{count}") if count < 0
     await @exclusive(->
@@ -616,7 +630,7 @@ export class Reader
       bytes
     )
 
-  # All that is left.
+  ## All that is left.
   read_all := -> await @exclusive(-> await @rest())
 
   close := -> on_close() if on_close := @on_close
@@ -697,4 +711,5 @@ ended_line_text := (bytes: Binary) ->
 
 utf8_line := (bytes: Binary) -> bytes.text() else throw ValueError('a line is not valid UTF-8')
 
+## The standard input.
 export stdin := Reader(-> lerta_stdin_read())

@@ -108,7 +108,7 @@ None:
 
 - Their text is kept as it is written.
 - One that ends a line follows two spaces.
-- Write a [doc comment](syntax.md#doc-comments) at the end of the line of its declaration if it fits there, and otherwise on the lines above it. The formatter leaves it where it is written.
+- Write a [doc comment](syntax.md#doc-comments) at the end of the line of its declaration if it fits there, and otherwise on the lines above it. Put those of a run of declarations alike: above, if one of them goes above. A run is the declarations that a comment heads as a group, or else those of a block. The formatter leaves them where they are written.
 - One that ends the line of `=`, `:=`, `return`, `then`, `else` or a key puts the value on the next line, deeper.
 - These are reported for you to move, and their statement kept as it is written:
   - one that ends the line of `not`, `not in`, or a `(` or a `-` before an operand, rather than of a call or between operands;

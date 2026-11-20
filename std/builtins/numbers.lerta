@@ -7,9 +7,8 @@ extern lerta_float32_to_string: (Float32) -> String
 extern pow as libm_pow: (Float, Float) -> Float
 extern floor as libm_floor: (Float) -> Float
 
-# The least and the greatest Int.
-export INT_MIN := -9223372036854775808
-export INT_MAX := 9223372036854775807
+export INT_MIN := -9223372036854775808  ## The least Int.
+export INT_MAX := 9223372036854775807  ## The greatest Int.
 
 # The positive infinity, which std:builtins' own modules use and std:math exports.
 export INFINITY := 1.0 / 0.0
@@ -17,7 +16,8 @@ export INFINITY := 1.0 / 0.0
 extend Float
   to_string := -> lerta_float_to_string(@)
 
-  # As C's pow gives it, which is NaN for a finite negative base and an exponent that is no integer.
+  ## As C's pow gives it, which is NaN for a finite negative base and an exponent that is no
+  ## integer.
   pow := (exponent: Float) ->
     if @ < 0.0 and @ != -INFINITY and libm_floor(exponent) != exponent
       throw ArithmeticError('a negative number to a fractional power')
@@ -29,12 +29,13 @@ extend Float
     return '-INFINITY' if @ == -INFINITY
     @to_string()
 
-  # The Int of the value truncated toward zero, or nil where it is beyond an Int.
+  ## The Int of the value truncated toward zero, or nil where it is beyond an Int.
   to_int := -> lerta_float_fits_int(@) then lerta_float_to_int(@)
 
-  # The text with `digits` digits after the point: the whole part exactly, and the fraction times
-  # 10 to the `digits` rounded half away from zero, carried into the whole part if it rounds up to
-  # it. The product may round, so a fraction just below a half may round up; the rest after
+  ## The text with `digits` digits after the point: the whole part exactly, and the fraction times
+  ## 10 to the `digits` rounded half away from zero, carried into the whole part if it rounds up to
+  ## it.
+  # The product may round, so a fraction just below a half may round up; the rest after
   # truncating it is exact, so that rounding adds no error of its own, as adding 0.5 would.
   to_fixed := (digits: Int) ->
     throw ValueError("to_fixed of #{digits} digits, not 0 to 18") unless digits in 0..=18
@@ -67,9 +68,10 @@ extend Bool
   to_literal := -> @to_string()
 
 extend Int
-  # The magnitude, which throws for the least Int, whose magnitude no Int holds.
+  ## The magnitude, which throws for the least Int, whose magnitude no Int holds.
   abs := -> @ < 0 then -@ else @
 
+  ## The power, which throws where it does not fit.
   # By squaring, which leaves out the square after the last factor, so that it throws only where the
   # power itself does not fit.
   pow := (n: Int) ->
@@ -91,13 +93,14 @@ extend Int
 
   to_literal := -> @to_string()
 
-  # As a UInt64's; a negative number has no one such text, so it throws.
+  ## The digits in lower-case hexadecimal, with zeros before them to make at least `width` digits; a
+  ## negative number throws, as it has no one such text.
   to_hex := (width = 0) ->
     throw ValueError("to_hex of #{@}, a negative number") if @ < 0
     @to_uint64()!.to_hex(width)
 
-  # The same bits as a UInt64: the value itself if not negative, else 2 to the 64 more. Each half
-  # fits in a non-negative Int, which to_uint64 converts.
+  ## The same bits as a UInt64: the value itself if not negative, else 2 to the 64 more.
+  # Each half fits in a non-negative Int, which to_uint64 converts.
   to_bits := (): UInt64 ->
     high := (@ >> 32 & 0xFFFFFFFF).to_uint64()!
     low := (@ & 0xFFFFFFFF).to_uint64()!
@@ -127,7 +130,7 @@ extend UInt64
   to_string := -> digits_text(@, 10)
   to_literal := -> @to_string()
 
-  # The digits in lower-case hexadecimal, with zeros before them to make `width` digits.
+  ## The digits in lower-case hexadecimal, with zeros before them to make at least `width` digits.
   to_hex := (width = 0) -> digits_text(@, 16).pad_start(width, '0')
 
 # A byte's classes are those of ASCII, which are those of the Char of the same number below 0x80:
@@ -136,8 +139,7 @@ extend Byte
   to_string := -> @to_int().to_string()
   to_literal := -> @to_string()
 
-  # As that of an Int (see UInt64.to_hex).
-  to_hex := (width = 0) -> @to_int().to_hex(width)
+  to_hex := (width = 0) -> @to_int().to_hex(width)  ## As that of an Int (see Int.to_hex).
 
   is_digit := -> @ in b'0'..=b'9'
   is_letter := -> @is_lower() or @is_upper()
@@ -147,8 +149,7 @@ extend Byte
   is_upper := -> @ in b'A'..=b'Z'
   is_utf8_continuation := -> is_continuation(@)
 
-  # The value of a hexadecimal digit, of either case, or nil if the byte is none.
-  hex_value := ->
+  hex_value := ->  ## The value of a hexadecimal digit, of either case, or nil if the byte is none.
     case
       when @ in b'0'..=b'9' then (@ - b'0').to_int()
       when @ in b'a'..=b'f' then (@ - b'a').to_int() + 10

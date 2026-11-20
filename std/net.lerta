@@ -21,29 +21,34 @@ extern lerta_udp_send: (Int, Binary, String, Int) -> Promise
 
 new_handle := -> Handle(lerta_tcp_new())
 
+## A TCP connection: its `reader` reads what the other end sends.
 export struct Socket
   handle: Handle
   reader: Reader
 
+  ## Sends the data.
   write := (data: String | Binary) -> await write_handle(@handle, data)
 
+  ## Ends the sending side, once what the writes before it wrote has gone.
   # The writes before it were all awaited, so that the system holds what they wrote.
   end := (): Promise -> end_handle(@handle)
 
+  ## Closes the connection.
   close := -> close_handle(@handle)
 
 socket_of := (handle: Handle) -> Socket(handle, reader: reader_of(handle))
 
+## A TCP socket that listens at `port`, as `listen_tcp` gives one.
 export struct Listener
   handle: Handle
   port: Int
 
-  accept := ->
+  accept := ->  ## The next connection that comes, once it has come.
     socket := new_handle()
     await lerta_tcp_accept(@handle.pointer, socket.pointer)
     socket_of(socket)
 
-  close := -> close_handle(@handle)
+  close := -> close_handle(@handle)  ## Stops listening.
 
 # Fails as the operation `failure` does at the address, before the runtime is given what it cannot
 # take: a host that holds a NUL byte, which C would read up to, or a port out of range.
@@ -51,12 +56,13 @@ check_address := (failure: String, host: String, port: Int) ->
   throw ValueError("port out of range (0 to 65535): #{port}") unless port in 0..=65535
   throw IOError("#{failure}#{address_text(host, port)}") if "\0" in host
 
-# Listens at once, at a free port if `port` is 0.
+## Listens at once, at a free port if `port` is 0.
 export listen_tcp := (host: String, port = 0) ->
   check_address 'cannot listen at ', host, port
   handle := new_handle()
   Listener(handle, port: lerta_tcp_listen(handle.pointer, host, port))
 
+## A connection to the host and port.
 export connect_tcp := (host: String, port: Int) ->
   check_address 'cannot connect to ', host, port
   handle := new_handle()
@@ -69,16 +75,18 @@ class UdpHandle
     pointer: Int
   deinit := -> lerta_udp_free(@pointer)
 
+## The data of a UDP packet, and the host and port that sent it.
 export struct Datagram
   data: Binary
   host: String
   port: Int
 
+## A UDP socket bound at `port`, as `bind_udp` gives one.
 export struct UdpSocket
   handle: UdpHandle
   port: Int
 
-  receive := ->
+  receive := ->  ## The next datagram that comes, once it has come.
     data := await lerta_udp_receive(@handle.pointer)
     Datagram(
       data
@@ -86,13 +94,13 @@ export struct UdpSocket
       port: lerta_udp_sender_port(@handle.pointer)
     )
 
-  send := (data: String | Binary, host: String, port: Int) ->
+  send := (data: String | Binary, host: String, port: Int) ->  ## Sends the data there.
     check_address 'cannot send to ', host, port
     await lerta_udp_send(@handle.pointer, bytes_of(data), host, port)
 
-  close := -> lerta_udp_close(@handle.pointer)
+  close := -> lerta_udp_close(@handle.pointer)  ## Closes the socket.
 
-# Binds at once, at a free port if `port` is 0.
+## Binds at once, at a free port if `port` is 0.
 export bind_udp := (host: String, port = 0) ->
   check_address 'cannot bind at ', host, port
   handle := UdpHandle(lerta_udp_new())

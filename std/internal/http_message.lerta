@@ -3,18 +3,18 @@
 import Reader from 'std:io'
 import is_control from './chars'
 
-# Fields of a request or a response, whose names are told apart regardless of case, and which may
-# hold a name more than once.
+## Fields of a request or a response, whose names are told apart regardless of case, and which may
+## hold a name more than once.
 export class Headers
   # Each name in lower case, with its value.
   var fields: (String, String)[] = []
 
-  # The values of the name, joined by ", ", or nil if it has none.
+  ## The values of the name, joined by ", ", or nil if it has none.
   get := (name: String) ->
     values := @get_all(name)
     values.is_empty() then nil else values.join(', ')
 
-  # The values of the name, each apart, as those of Set-Cookie, which a ", " would not part.
+  ## The values of the name, each apart, as those of Set-Cookie, which a ", " would not part.
   get_all := (name: String) ->
     lower := ascii_lower(name)
     [value for (field, value) in @fields when field == lower]
@@ -25,13 +25,13 @@ export class Headers
     @remove name
     @append name, value
 
-  # Throws a ValueError for a name that is no token, or a value that would break the line it is
-  # written on, so that a value taken from a request cannot add fields of its own to a response.
+  ## Throws a ValueError for a name that is no token, or a value that would break the line it is
+  ## written on, so that a value taken from a request cannot add fields of its own to a response.
   append := (name: String, value: String) ->
     check_field name, value
     @fields.push (ascii_lower(name), value)
 
-  # Removes every field of the name, and tells whether there was one.
+  ## Removes every field of the name, and tells whether there was one.
   remove := (name: String) ->
     lower := ascii_lower(name)
     kept := [(field, value) for (field, value) in @fields when field != lower]
@@ -79,27 +79,27 @@ export keeps_alive := (version: String, headers: Headers) ->
   return false if 'close' in options
   version == 'HTTP/1.1' or 'keep-alive' in options
 
-# A body is read as it comes when it is a Reader, and sent so too.
+## A body is read as it comes when it is a Reader, and sent so too.
 export type Body = String | Binary | Reader
 
+## A request that a server's handler takes.
 export struct Request
   method: String
   url: String
   headers: Headers
   body: Body
 
-  binary := -> await body_binary(@body)
+  binary := -> await body_binary(@body)  ## The whole body, as bytes.
+  text := -> await body_text(@body)  ## The whole body, as text.
 
-  text := -> await body_text(@body)
-
+## What a handler gives, or what fetch gives back.
 export struct Response
   body: Body = ''
   status := 200
   headers := Headers()
 
-  binary := -> await body_binary(@body)
-
-  text := -> await body_text(@body)
+  binary := -> await body_binary(@body)  ## The whole body, as bytes.
+  text := -> await body_text(@body)  ## The whole body, as text.
 
 body_binary := (body: Body) ->
   case body
