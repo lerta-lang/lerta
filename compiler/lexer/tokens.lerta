@@ -507,29 +507,10 @@ is_space := (c: Byte) -> c == b' '
 is_identifier_start := (c: Byte) -> c.is_letter() or c == b'_'
 is_identifier_part := (c: Byte) -> is_identifier_start(c) or c.is_digit()
 
+# A decimal one may have one `_` between each two digits and starts with 0 only as 0 itself; a
+# hexadecimal one has no `_`.
+is_integer_literal := (text: String) -> /^(0x[0-9a-fA-F]+|0|[1-9](_?\d)*)$/.test(text)
+
+# It also takes an integer literal, which scan_number takes as one first.
 is_float_literal := (text: String) ->
-  parts := text.replace('e', 'E').split('E')
-  return false if parts.length > 2
-  significand := parts[0].split('.')
-  return false if significand.length > 2 or (parts.length == 1 and significand.length == 1)
-  return false if not is_integer_literal(significand[0]) or significand[0].starts_with('0x')
-  return false if significand.length == 2 and not is_digit_run(significand[1])
-  return true if parts.length == 1
-  exponent := parts[1].without_prefix('-') else parts[1].without_prefix('+') else parts[1]
-  is_digit_run(exponent)
-
-# Digits, with separators between them.
-is_digit_run := (text: String) ->
-  bytes := text.binary
-  return false if bytes.is_empty() or not bytes[0].is_digit()
-  for i in 1..bytes.length
-    c := bytes[i]
-    separates_digits := c == b'_' and i + 1 < bytes.length and bytes[i + 1].is_digit()
-    return false if not c.is_digit() and not separates_digits
-  true
-
-is_integer_literal := (text: String) ->
-  if digits := text.without_prefix('0x')
-    return not digits.is_empty() and digits.binary.all((byte) -> byte.hex_value() != nil)
-  return text == '0' if text.starts_with('0')
-  is_digit_run(text)
+  /^(0|[1-9](_?\d)*)(\.\d(_?\d)*)?([eE][+-]?\d(_?\d)*)?$/.test(text)
