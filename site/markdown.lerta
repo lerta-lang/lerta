@@ -12,12 +12,20 @@ struct InlineError: Error
   message: String
 
 # A page: its title, that of its heading of level 1; its HTML; the targets of its links, as they
-# are written, in order; and what it rendered otherwise than written, without failing.
+# are written, in order; its samples; and what it rendered otherwise than written, without failing.
 export struct Page
   title: String
   html: String
   links: String[]
+  samples: Sample[]
   warnings: String[]
+
+# A block of Lerta code followed by an `output` block, whose lines the code must print when run;
+# `line` is that of the code block's opening.
+export struct Sample
+  line: Int
+  code: String
+  output: String
 
 # `rewrite` gives the target to write for that of a link, or throws a ValueError for one that it
 # cannot take, which fails as the line of the link.
@@ -29,7 +37,7 @@ export render_markdown := (source: String, rewrite: (String) -> String) ->
   ]
   html := renderer.blocks(lines, false)
   title := renderer.title else throw MarkdownError('no heading of level 1')
-  Page(title, html, links: renderer.links, warnings: renderer.warnings)
+  Page(title, html, links: renderer.links, samples: renderer.samples, warnings: renderer.warnings)
 
 # A line of the source, the indentation of the blocks it is in taken off.
 struct Line
@@ -51,6 +59,7 @@ class Renderer
 
   # Whether the text being rendered is that of a link, where GitHub links no bare URL.
   var in_link_text = false
+  samples: Sample[] = []
   warnings: String[] = []
 
   # How many headings have taken each slug, so that a later one takes a suffix, as on GitHub.
@@ -89,14 +98,22 @@ class Renderer
     return @list(lines, at) if list_marker(text)
     @paragraph(lines, at, tight)
 
+  # A code block, and its output block if it is Lerta code followed by one.
   fence := (lines: Line[], at: Int) ->
+    (code, language, next) := code_fence(lines, at)
     opening := lines[at]
-    language := opening.text.without_prefix('```')!.trim()
-    var end = at + 1
-    end += 1 while end < lines.length and lines[end].text != '```'
-    fail opening, 'a code block is not closed' if end == lines.length
-    code := [lines[index].text for index in (at + 1)..end].join("\n")
-    (@code_block(code, language, opening), end + 1)
+    fail opening, 'an output block not after a Lerta code block' if language == 'output'
+    html := @code_block(code, language, opening)
+    return (html, next) unless language == 'lerta'
+    output_at := output_fence(lines, next) else return (html, next)
+    (text, _, end) := code_fence(lines, output_at)
+
+    # Each line of the block ends in a newline, which the text joined by them does not show: an
+    # empty block is no output, a block of one blank line is a newline.
+    is_empty_block := end == output_at + 2
+    output := is_empty_block then '' else "#{text}\n"
+    @samples.push { code, output, line: opening.number }
+    (html + "<pre class=\"output\"><code>#{escape_html(text)}</code></pre>\n", end)
 
   code_block := (code: String, language: String, opening: Line) ->
     body :=
@@ -290,6 +307,25 @@ class Renderer
     ("<a href=\"#{escape_html(href)}\">#{text}</a>", target_end + 1)
 
 fail := (line: Line, message: String) -> throw MarkdownError("line #{line.number}: #{message}")
+
+# The language of the code block that a line opens, or nil if it opens none.
+fence_language := (text: String) -> text.without_prefix('```')?.trim()
+
+# The index of the output block that the first line from `at` but blank ones opens, if any.
+output_fence := (lines: Line[], at: Int) ->
+  var index = at
+  index += 1 while index < lines.length and is_blank(lines[index].text)
+  return nil if index == lines.length
+  fence_language(lines[index].text) == 'output' then index
+
+# The code of the block that opens at `at`, its language, and the index of the line after it.
+code_fence := (lines: Line[], at: Int) ->
+  opening := lines[at]
+  var end = at + 1
+  end += 1 while end < lines.length and lines[end].text != '```'
+  fail opening, 'a code block is not closed' if end == lines.length
+  code := [lines[index].text for index in (at + 1)..end].join("\n")
+  (code, fence_language(opening.text)!, end + 1)
 
 is_blank := (text: String) -> text.trim().is_empty()
 

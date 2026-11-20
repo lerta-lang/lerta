@@ -1,0 +1,102 @@
+import MarkdownError, render_markdown from '../../site/markdown'
+
+page := render_markdown
+  '''
+    # T
+
+    ```lerta
+    print 1
+    ```
+
+    ```output
+    1
+    ```
+
+    ```lerta
+    not run
+    ```
+
+    - in a list:
+
+      ```lerta
+      print 'a < b'
+      ```
+      ```output
+      a < b
+      ```
+    '''
+  (target) -> target
+print page.html
+print "#{sample.line}: #{sample.code} -> #{sample.output}" for sample in page.samples
+
+misplaced :=
+  "# T\n\n```output\n1\n```"
+  "# T\n\n```\nx\n```\n\n```output\n1\n```"
+  "# T\n\n- a\n\n  ```\n  x\n  ```\n  ```output\n  1\n  ```"
+  "# T\n\n```lerta\nprint 1\n```\n```output\n1\n```\n```output\n1\n```"
+  "# T\n\n```lerta\nprint 1\n```\n\nA paragraph.\n\n```output\n1\n```"
+for source in misplaced
+  try
+    render_markdown source, (target) -> target
+  catch error: MarkdownError
+    print error.message
+
+edges := render_markdown
+  '''
+    # T
+
+    ```lerta
+    print 1
+    print 2
+    ```
+    ```output
+    1
+    2
+    ```
+
+    ```lerta
+    x := 1
+    ```
+    ```output
+    ```
+
+    ```lerta
+    print ''
+    ```
+    ```output
+
+    ```
+
+    ```lerta
+    y := 1
+    ```
+
+    ```
+    not output
+    ```
+
+    ```lerta
+    last := 1
+    ```
+
+    '''
+  (target) -> target
+print edges.html
+for sample in edges.samples
+  print "#{sample.line}: #{sample.code.replace("\n", '|')} -> #{sample.output.replace("\n", '|')}"
+
+try
+  render_markdown "# T\n\n```lerta\nx := 1\n```\n\n```output\n1", (target) -> target
+catch error: MarkdownError
+  print error.message
+
+# A sample is taken even when the lexer rejects its code, so that its run test fails.
+rejected := "# T\n\n```lerta\nx :=\tlater\n```\n```output\n1\n```"
+print render_markdown(rejected, (target) -> target).samples.length
+
+# The blocks of a list item are apart from those around the list.
+outside := "# T\n\n```lerta\nprint 1\n```\n- a\n\n  ```output\n  1\n  ```"
+try
+  render_markdown outside, (target) -> target
+catch error: MarkdownError
+  print error.message

@@ -1,34 +1,17 @@
 # Writes the website into a directory, from the repository's root: `lerta run site/site.lerta --
-# <output>`. Its pages are index.md, here, and those of docs/ but roadmap/ and issues.md, each at
-# its path in docs/, as HTML, so that their links stay as GitHub reads them; a link to what is not
-# on the site, as the roadmap, goes to GitHub.
-import copy_file, list_dir, make_dir, read_text, write_file from 'std:io'
+# <output>`. Its pages (see pages.lerta) are written each at its path in docs/, as HTML, so that
+# their links stay as GitHub reads them; a link to what is not on the site, as the roadmap, goes to
+# GitHub.
+import copy_file, make_dir, read_text, write_file from 'std:io'
 import argv, exit from 'std:process'
-import lay_out, SECTIONS from './layout'
-import DOCS_DIR, directory_of, html_path, link_target from './links'
+import lay_out from './layout'
+import directory_of, html_path, link_target from './links'
 import MarkdownError, Page, render_markdown from './markdown'
-
-SITE_DIR := 'site'
-
-# A page to write: its path as from docs/, and the file it is written from.
-struct Source
-  path: String
-  file: String
+import SITE_DIR, Source, sources from './pages'
 
 struct Rendered
   source: Source
   page: Page
-
-sources := ->
-  all: Source[] =
-    { path: 'index.md', file: "#{SITE_DIR}/index.md" }
-    { path: 'philosophy.md', file: "#{DOCS_DIR}/philosophy.md" }
-  for section in SECTIONS
-    for name in list_dir("#{DOCS_DIR}/#{section}")
-      path := "#{section}/#{name}"
-      if name.ends_with('.md')
-        all.push { path, file: "#{DOCS_DIR}/#{path}" }
-  all
 
 render := (source: Source, paths: Set<String>): Promise<Rendered?> ->
   markdown := await read_text(source.file) else throw ValueError("not UTF-8: #{source.file}")

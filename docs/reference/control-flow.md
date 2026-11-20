@@ -166,6 +166,12 @@ for i in 0..3
   print square
 ```
 
+```output
+0
+1
+4
+```
+
 ### What for goes through
 
 | `for x in <value>` | Runs its block for |

@@ -109,7 +109,7 @@ make test-target TARGET=<target>  # the tests of that target here, as test-targe
 make check             # the code in the style (lerta fmt)
 ```
 
-- Every language feature gets run tests in `tests/`: a Lerta source and its expected output, as the top of `test/run.lerta` describes. Programs in `examples/` are run as tests too.
+- Every language feature gets run tests in `tests/`: a Lerta source and its expected output, as the top of `test/run.lerta` describes. Programs in `examples/` are run as tests too, and so are the samples of the documents (see [Website](#website)).
 - A test of values, rather than of what a program writes, checks them with `assert` in the `test`s of [tests/lib/test.lerta](tests/lib/test.lerta), as [tests/args/args.lerta](tests/args/args.lerta) does, and needs no expected file.
 - The compilers that the tests run share the compiler's default [cache](docs/reference/compiler.md#cache), or the one that `LERTA_CACHE_DIR` names, with every other build and worktree, as each entry is keyed by what it is made from, so that no build of another compiler or with other flags takes it. It only grows: run `bin/lerta clean` to free the space, or set `LERTA_CACHE_DIR` to an empty directory to test with an empty cache.
 - `make check` checks the tests' style too. Code that breaks it on purpose, as a test of a form that the style rewrites, keeps it with `# fmt: skip` or `# fmt: off` (see [fmt](docs/reference/compiler.md#fmt)). A file that does not parse starts with `# fmt: off`.
@@ -132,7 +132,7 @@ The tests build many programs and run each for the first time, which macOS and W
 
 - **macOS** scans them with XProtect unless the app that runs them is a developer tool. Add the apps that run `make`, as Terminal, Visual Studio Code, or `/usr/libexec/sshd-keygen-wrapper` for SSH sessions, to System Settings › Privacy & Security › Developer Tools, and restart them, or log in again. If the list is missing, `sudo spctl developer-mode enable-terminal` shows it.
 - **Microsoft Defender** scans them in real time. Exclude the tree, the [cache](docs/reference/compiler.md#cache) and the temporary directory, where `ssh` targets run, in PowerShell as administrator:
-  ```powershell
+  ```
   Add-MpPreference -ExclusionPath C:\path\to\lerta, $env:LOCALAPPDATA\lerta, $env:TEMP
   ```
 - **Smart App Control**, on Windows 11, asks the cloud about each program before it runs. Turn it off in Windows Security › App & browser control › Smart App Control settings. Once off, it stays off until Windows is reinstalled.
@@ -182,9 +182,10 @@ make site              # build/site, the website
 make site-serve        # serves it at http://127.0.0.1:8000/ to look at
 ```
 
-- `site/site.lerta` writes its pages: `site/index.md`, the top page, whose links are written as from `docs/`, and those of `docs/` but `roadmap/` and `issues.md`, each at its path in `docs/`, so that their links work as on GitHub. A link to what is not on the site goes to GitHub (`site/links.lerta`).
+- `site/site.lerta` writes the pages that `site/pages.lerta` lists: `site/index.md`, the top page, whose links are written as from `docs/`, and those of `docs/` but `roadmap/` and `issues.md`, each at its path in `docs/`, so that their links work as on GitHub. A link to what is not on the site goes to GitHub (`site/links.lerta`).
 - The site is served at the root of its domain: its links start with `/`.
 - `site/markdown.lerta` takes only the Markdown that `docs/` writes: headings, paragraphs, lists, tables and fenced code; code spans, emphasis and links. Anything else fails the build with its line.
+- A ```` ```lerta ```` block followed by an ```` ```output ```` block, blank lines between them allowed, is a sample, which must print the output and nothing else, and succeed: the run tests run those of README.md and of the site's pages. An output block after anything else fails the build. README.md is read for its samples as `docs/` is, so it keeps to the same Markdown.
 - A ```` ```lerta ```` block is colored by the compiler's lexer (`site/highlight.lerta`); one that the lexer rejects, as code of a planned feature, is shown without colors, with a warning.
 - The run tests write the site, which must give no warning, and the tests in `tests/site/` check the Markdown and the colors.
 

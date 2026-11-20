@@ -18,7 +18,9 @@
 #                          run for Windows
 #   tests/**/windows/      tests of what only Windows has, such as drives, which are run only for
 #                          Windows
-import Buffer, is_dir, is_file, list_dir, make_dir, read_file from 'std:io'
+# The samples (see site/markdown.lerta) of README.md and of the site's pages run as tests too,
+# written into the work directory, each labeled by its file and line.
+import Buffer, is_dir, is_file, list_dir, make_dir, read_file, read_text, write_file from 'std:io'
 import env, Exit, platform, run from 'std:process'
 import compare_output, compare_text, lines from './lib/expect'
 import
@@ -26,6 +28,8 @@ import
 from './lib/lerta'
 import at_once, Check, in_slot, jobs, select, SuiteChecks from './lib/report'
 import host_target, Target from './lib/target'
+import MarkdownError, render_markdown from '../site/markdown'
+import sources from '../site/pages'
 import no_wine_prefixes, start_wine_prefixes, WINE_DLL_OVERRIDES from './lib/wine'
 
 # The target that the suite was given.
@@ -38,12 +42,13 @@ struct Suite
   expected_dir: String
   extensions: String[]
 
-# `label` is shown in failures, such as `examples/hello`. The expected files are read before the
-# checks start, so that a check reaches its first wait only in its build (see unoptimized_runs).
+# `label` is shown in failures, such as `examples/hello`; `dir` holds the source, `<name>.lerta`.
+# The expected files are read before the checks start, so that a check reaches its first wait only
+# in its build (see unoptimized_runs).
 struct TestCase
   label: String
   name: String
-  suite: Suite
+  dir: String
   expected: Map<String, Binary>
 
 EXPECTED_EXTENSIONS := ['out', 'err', 'warn']
@@ -113,8 +118,37 @@ collect := (suite: Suite): Promise<TestCase[]> ->
         path := "#{root_dir}/#{suite.expected_dir}/#{name}.#{extension}"
         if is_file(path)
           expected[extension] = await read_file(path)
-      { name, suite, expected, label: "#{suite.source_dir}/#{name}" }
+      {
+        name
+        expected
+        dir: "#{root_dir}/#{suite.source_dir}"
+        label: "#{suite.source_dir}/#{name}"
+      }
   ]
+
+# The checks of the samples of the Markdown files, each written into the work directory as a test
+# of its own. A file that does not render fails as a check of its own, so that the other tests run.
+sample_checks := (): Promise<Check[]> ->
+  return [] if self_check_dir
+  dir := "#{work_dir}/samples"
+  make_dir dir
+  var count = 0
+  checks: Check[]
+  for file in ['README.md'] + [source.file for source in sources()]
+    markdown := await read_text("#{root_dir}/#{file}") else throw SetupError("not UTF-8: #{file}")
+    page :=
+      try
+        render_markdown markdown, (target) -> target
+      catch error: MarkdownError
+        checks.push { name: file, run: -> at_once([error.message]) }
+        continue
+    for sample in page.samples
+      count += 1
+      name := "sample-#{count}"
+      await write_file("#{dir}/#{name}.lerta", sample.code)
+      label := "#{file}:#{sample.line}"
+      checks.append test_checks({ name, dir, label, expected: { 'out': sample.output.binary } })
+  checks
 
 # Files in the expected directory that no test would read, such as the expected output of a
 # deleted source.
@@ -159,15 +193,18 @@ after_place := (line: String) ->
 is_diagnostic := (line: String) -> after_place(line) != nil
 is_warning := (line: String) -> after_place(line)?.starts_with('warning: ') else false
 
+# A number for each build, which names its executable, as a label may hold what a file name cannot.
+var builds = 0
+
 # Diagnostics are reported as the CLI prints them for a bare file name, so that the expected files
 # do not depend on where the test directory is.
 compile_and_run := (test: TestCase, optimize: Bool) ->
   source_file := "#{test.name}.lerta"
-  name := "#{test.label.replace('/', '_')}#{optimize then '_O' else ''}"
-  executable := "#{work_dir}/#{name}#{target.executable_suffix}"
+  builds += 1
+  executable := "#{work_dir}/build-#{builds}#{target.executable_suffix}"
   optimize_args: String[] = optimize then ['-O'] else []
   args := ['build', source_file, '-o', executable, optimize_args..., target.args...]
-  built := await run_file(compiler, args, "#{root_dir}/#{test.suite.source_dir}")
+  built := await run_file(compiler, args, test.dir)
   diagnostics := [line for line in built.errors.split("\n") when not line.is_empty()]
   warnings := [line for line in diagnostics when is_warning(line)]
   others := [line for line in diagnostics when not is_warning(line)]
@@ -363,6 +400,9 @@ optimized_check := (test: TestCase) ->
     await run_test(test, true)
   Check(wait, name: "#{test.label} (-O)", run: check)
 
+test_checks := (test: TestCase): Check[] ->
+  [{ name: test.label, run: -> await run_test(test, false) }, optimized_check(test)]
+
 # The checks that the suite selected, if any, of the programs built for `given`.
 export suite := (given: Target) ->
   target = given
@@ -377,9 +417,8 @@ export suite := (given: Target) ->
     for file in stray_files(group)
       all_checks.push { name: file, run: -> at_once(['stray file: no test reads it']) }
   for group in suites(skipped)
-    for test in await collect(group)
-      all_checks.push { name: test.label, run: -> await run_test(test, false) }
-      all_checks.push optimized_check(test)
+    all_checks.append test_checks(test) for test in await collect(group)
+  all_checks.append await sample_checks()
   checks := select(title, all_checks) else return nil
   print "not run for this target: #{dir}" for dir in skipped
   set_up := ->
