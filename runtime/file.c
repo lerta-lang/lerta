@@ -269,6 +269,130 @@ void lerta_open_file_free(int64_t pointer, const LertaString *rest) {
   finish_if_done(open);
 }
 
+// A file of std:io's open, which Lerta holds by its address and frees. Each read on the thread pool
+// reads at the place after what the reads before gave, which only one that is not cancelled moves
+// on: a read cancelled goes on, and the next one, which may start meanwhile, reads the same bytes.
+// Once closed or freed, the file is closed when no read is left on the thread pool; once freed, the
+// ReadFile is freed then too.
+typedef struct {
+  int64_t file;
+  int64_t position;
+  int reads;
+  bool failed;
+  bool closed;
+  bool file_closed;
+  bool freed;
+} ReadFile;
+
+// The promise gives what was read, or NULL at the end or on failure, which `failed` tells.
+typedef struct {
+  ReadFile *open;
+  LertaPromise *promise;
+  int64_t offset;
+  int64_t size;
+  uint8_t *bytes;
+  int64_t length;
+  bool cancelled;
+} FileRead;
+
+static ReadFile *read_file_of(int64_t pointer) {
+  return (ReadFile *)(intptr_t)pointer;
+}
+
+static void finish_reads_if_done(ReadFile *open) {
+  if (open->reads > 0) return;
+  if (open->closed && !open->file_closed) {
+    lerta_os_close(open->file);
+    open->file_closed = true;
+  }
+  if (open->freed) free(open);
+}
+
+// 0 if the file cannot be opened, or is not a regular file.
+int64_t lerta_open_reader(const LertaString *path) {
+  char *name = lerta_c_string(path);
+  int64_t file = lerta_os_open_for_reading(name);
+  free(name);
+  if (file < 0) return 0;
+  ReadFile *open = lerta_checked_calloc(1, sizeof(ReadFile));
+  open->file = file;
+  return (int64_t)(intptr_t)open;
+}
+
+bool lerta_reader_failed(int64_t pointer) {
+  return read_file_of(pointer)->failed;
+}
+
+static void file_read_work(void *data) {
+  FileRead *read = data;
+  read->bytes = malloc((size_t)read->size);
+  if (read->bytes == NULL) {
+    read->length = LERTA_OUT_OF_MEMORY;
+    return;
+  }
+  read->length = lerta_os_read_at(read->open->file, read->offset, read->bytes, read->size);
+}
+
+static void cancel_file_read(void *context) {
+  FileRead *read = context;
+  read->cancelled = true;
+  lerta_promise_reject_cancelled(read->promise);
+}
+
+static void end_file_read(void *data) {
+  FileRead *read = data;
+  ReadFile *open = read->open;
+  // On the loop, as a panic touches what only the main thread may.
+  if (read->length == LERTA_OUT_OF_MEMORY) lerta_panic("out of memory");
+  if (!read->cancelled) {
+    LertaString *chunk = NULL;
+    if (read->length < 0) {
+      open->failed = true;
+    } else if (read->length > 0) {
+      chunk = lerta_string_from_bytes(read->bytes, read->length);
+      open->position += read->length;
+    }
+    *(LertaString **)lerta_promise_slot(read->promise) = chunk;
+    lerta_promise_resolve(read->promise);
+  }
+  free(read->bytes);
+  lerta_release(read->promise);
+  free(read);
+  open->reads--;
+  finish_reads_if_done(open);
+}
+
+// The next bytes, at most `size`, or nil at the end, after a close and on failure.
+LertaPromise *lerta_reader_read(int64_t pointer, int64_t size) {
+  ReadFile *open = read_file_of(pointer);
+  LertaPromise *promise = lerta_promise_new(LERTA_REFERENCE_ITEMS);
+  if (open->closed || open->failed) {
+    *(LertaString **)lerta_promise_slot(promise) = NULL;
+    lerta_promise_resolve(promise);
+    return promise;
+  }
+  FileRead *read = lerta_checked_calloc(1, sizeof(FileRead));
+  *read = (FileRead){.open = open, .promise = promise, .offset = open->position, .size = size};
+  lerta_retain(promise);
+  open->reads++;
+  lerta_loop_work(read, file_read_work, end_file_read);
+  lerta_promise_on_cancel(promise, cancel_file_read, read);
+  return promise;
+}
+
+void lerta_reader_close(int64_t pointer) {
+  ReadFile *open = read_file_of(pointer);
+  open->closed = true;
+  finish_reads_if_done(open);
+}
+
+void lerta_reader_free(int64_t pointer) {
+  ReadFile *open = read_file_of(pointer);
+  open->closed = true;
+  open->freed = true;
+  finish_reads_if_done(open);
+}
+
 // std:io refuses an empty path.
 bool lerta_make_one_dir(const LertaString *path) {
   char *name = lerta_c_string(path);

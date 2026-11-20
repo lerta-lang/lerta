@@ -4,8 +4,9 @@ import Signal from 'std:async'
 import platform from './internal/platform'
 import bytes_of from './internal/utf8'
 
-# A failure gives false, nil or, for lerta_open_file, 0, of which the functions below make the
-# error; the open file's writes tell theirs through lerta_open_file_failed.
+# A failure gives false, nil or, for lerta_open_file and lerta_open_reader, 0, of which the
+# functions below make the error; the open files' writes and reads tell theirs through
+# lerta_open_file_failed and lerta_reader_failed.
 extern lerta_read_file: (String) -> Promise<Binary?>
 extern lerta_write_file: (String, Binary) -> Promise<Bool>
 extern lerta_resolve_path: (String) -> Binary?
@@ -22,6 +23,11 @@ extern lerta_open_file_failed: (Int) -> Bool
 extern lerta_open_file_append: (Int, Binary) -> Promise
 extern lerta_open_file_end: (Int, Binary) -> void
 extern lerta_open_file_free: (Int, Binary) -> void
+extern lerta_open_reader: (String) -> Int
+extern lerta_reader_failed: (Int) -> Bool
+extern lerta_reader_read: (Int, Int) -> Promise<Binary?>
+extern lerta_reader_close: (Int) -> void
+extern lerta_reader_free: (Int) -> void
 
 # std:process imports std:io, so std:io reads the environment itself.
 extern lerta_env: (String) -> Binary?
@@ -50,24 +56,43 @@ export write_file := (path: String, data: String | Binary) ->
   require_names failure, path
   throw IOError("#{failure}#{path}") unless await lerta_write_file(path, bytes_of(data))
 
-## How open opens a file: so far only for writing, emptied or made.
-export enum OpenMode
-  WRITE
-
-## A file that open has opened (see docs/reference/std.md#stdio), closed once nothing holds it.
-export struct File
-  writer: FileWriter
-
-## Opens the file as the mode says.
+## A Reader of the file, read in chunks on the event loop (see
+## docs/reference/std.md#open-and-create).
 # Opening is one system call, so it does not await (see docs/roadmap/runtime.md#concurrency).
-export open := (path: String, mode: OpenMode) ->
+export open := (path: String) ->
   failure := 'cannot open file: '
   require_names failure, path
-  case mode
-    when WRITE
-      pointer := lerta_open_file(path)
-      throw IOError("#{failure}#{path}") if pointer == 0
-      File(FileWriter(pointer, path))
+  pointer := lerta_open_reader(path)
+  throw IOError("#{failure}#{path}") if pointer == 0
+  file := FileReading(pointer, path)
+  Reader(read_chunk: -> await file.read_chunk(), on_close: -> file.close())
+
+## A Writer of the file, emptied or made (see docs/reference/std.md#open-and-create).
+export create := (path: String) ->
+  failure := 'cannot create file: '
+  require_names failure, path
+  pointer := lerta_open_file(path)
+  throw IOError("#{failure}#{path}") if pointer == 0
+  FileWriter(pointer, path)
+
+# What a chunk of a file's Reader holds at most.
+FILE_CHUNK_SIZE := 65536
+
+# The reads of a file that open has opened, which the closures of its Reader hold, so that the file
+# is closed once nothing holds the Reader.
+class FileReading
+  args
+    pointer: Int
+    path: String
+
+  read_chunk := ->
+    chunk := await lerta_reader_read(@pointer, FILE_CHUNK_SIZE)
+    throw IOError("cannot read file: #{@path}") if lerta_reader_failed(@pointer)
+    chunk
+
+  close := -> lerta_reader_close(@pointer)
+
+  deinit := -> lerta_reader_free(@pointer)
 
 # As much as stdout's buffer holds before a write waits (see runtime/output.c).
 FILE_BUFFER_SIZE := 65536
@@ -76,7 +101,7 @@ FILE_BUFFER_SIZE := 65536
 # FILE_BUFFER_SIZE bytes, or when flushed. Its end writes out the rest, as a flush does, and closes
 # the file after; what is left when it is freed, it writes out at once. A write out that fails fails
 # every later write, flush and end (see lerta_open_file_failed).
-class FileWriter
+export class FileWriter
   args
     pointer: Int
     path: String

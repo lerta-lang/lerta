@@ -433,7 +433,7 @@ server := serve(serve_files('public'), port: 8080)
 | `make_link(target: String, path: String)` | Makes a symbolic link at `path` to `target` (below). |
 | `real_path(path: String): String` | The absolute path of what the path names, without `.`, `..` or symbolic links (below). |
 
-- `open` is under [open and File](#open-and-file).
+- `open` and `create` are under [open and create](#open-and-create).
 - `read_file`, `write_file`, `remove_tree` and `copy_file` run on the event loop, at the same time as each other and as the program. So one that depends on another, as a read of a file that a write makes, awaits it first.
 
 #### copy_file
@@ -493,15 +493,22 @@ server := serve(serve_files('public'), port: 8080)
 - On POSIX systems, the system works a path out as it reads it. So a `..` names the directory above the one that a symbolic link before it points into, and a path through a name that is not there names nothing.
 - On Windows, it works `.` and `..` out as text first. So a `..` cancels the name before it, a link or not, there or not.
 
-### open and File
+### open and create
 
 | Name | |
 |---|---|
-| `open(path: String, mode: OpenMode): File` | Opens a file, at once, as it is one system call. Throws `cannot open file: <path>` on failure, including for a path that holds a NUL byte. |
-| `OpenMode` | An enum of how `open` opens a file: so far only `WRITE`, for writing, which empties the file or makes it. |
-| `File` | A struct of a file that `open` has opened, whose `writer` is a `Writer` of it. |
+| `open(path: String): Reader` | Opens a file for reading, at once, as it is one system call, and gives a [Reader](#reader) of it. Throws `cannot open file: <path>` on failure, including for a path that holds a NUL byte and for a file that is not regular, as `read_file` does. |
+| `create(path: String): FileWriter` | Opens a file for writing, emptied or made, at once, and gives a `FileWriter` of it, a `Writer`. Throws `cannot create file: <path>` on failure, including for a path that holds a NUL byte. |
+| `FileWriter` | A class of a `Writer` of a file, with `flush` (below). |
 
-The `writer`:
+The `Reader` of `open`:
+
+- It reads chunks of up to 64 KiB on the event loop, from where the chunks before it ended, so that a file larger than memory is read a piece at a time.
+- A read that fails rejects the read with `cannot read file: <path>`, and every later one gives the end.
+- A read that is cancelled lets the next read the same bytes.
+- `close()` closes the file, once a read under way has ended; a read after it gives the end. A `Reader` that nothing holds any more closes it too.
+
+The `FileWriter`:
 
 - It gathers what is written in a buffer, which it writes out on the event loop once it holds 64 KiB.
 - A write that fills the buffer is resolved once the bytes are written out, as for `stdout`.
@@ -549,7 +556,7 @@ An interface, exported, of what data is written to, as a stream.
 | `end(): Promise` | Closes it, so that its reader reads its end. Resolved once at least what it holds of the writes before it is written, or rejected if that failed; a write under way is settled on its own, which an end may not wait for, as those of a `Socket` and a `Pipe` do not. |
 
 - A write after the end is rejected, but by `stdout` and `stderr`, whose `end` only flushes (see [stdout and stderr](#stdout-and-stderr)).
-- `stdout`, `stderr`, a `Buffer`, the `writer` of a `File` and of a `Pipe`, and a `Socket` of [std:net](#stdnet) are `Writer`s.
+- `stdout`, `stderr`, a `Buffer`, a `FileWriter`, the `writer` of a `Pipe`, and a `Socket` of [std:net](#stdnet) are `Writer`s.
 
 ### Buffer
 

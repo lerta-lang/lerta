@@ -84,6 +84,22 @@ uint8_t *lerta_os_read_file(const char *path, int64_t *length) {
   return contents;
 }
 
+int64_t lerta_os_open_for_reading(const char *path) {
+  uv_file file = open_file(path, UV_FS_O_RDONLY | UV_FS_O_NONBLOCK, 0);
+  if (file < 0) return -1;
+  if (is_regular(file)) return file;
+  close_file(file);
+  return -1;
+}
+
+int64_t lerta_os_read_at(int64_t file, int64_t offset, uint8_t *buffer, int64_t size) {
+  uv_buf_t chunk = uv_buf_init((char *)buffer, (unsigned int)lerta_io_chunk(size));
+  uv_fs_t request;
+  int64_t count = uv_fs_read(NULL, &request, (uv_file)file, &chunk, 1, offset, NULL);
+  uv_fs_req_cleanup(&request);
+  return count < 0 ? -1 : count;
+}
+
 // From `offset`, or from the file's position if it is -1.
 static bool write_all(uv_file file, int64_t offset, const uint8_t *bytes, int64_t length) {
   while (length > 0) {

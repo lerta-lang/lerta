@@ -33,12 +33,15 @@
 
 #### Open files
 
-- A `File` of `open` writes through an `OpenFile` of `runtime/file.c`, which holds the file. Lerta holds it by its address in a `FileWriter` of `std:io`, whose `deinit` frees it.
+- A `FileWriter` of `create` writes through an `OpenFile` of `runtime/file.c`, which holds the file. Lerta holds it by its address in the `FileWriter`, whose `deinit` frees it.
 - The buffer is the `FileWriter`'s, a `Binary` that `+=` grows in place, written out by a task on the thread pool, one at a time.
 - Each write takes the place after the one before it, written at that offset, so that the last one, which the free writes at once, as the program may end before the loop would run it, does not race with one on the thread pool for the file's position.
 - An `end` writes the rest on the thread pool, with no promise. The file is closed once it has ended or been freed and the writes on the thread pool have ended.
 - A write that fails marks the `OpenFile`, so that every later write and flush fails rather than leave a hole at its place.
 - A write's promise has no cancel hook, so a cancelled flush waits for its write before it throws, and the write it holds stays the one that the next flush waits for.
+- A `Reader` of `open` reads through a `ReadFile` of `runtime/file.c`. Lerta holds it by its address in a `FileReading` of `std:io`, which the closures of the `Reader` hold, and whose `deinit` frees it.
+  - Each read on the thread pool reads at the place after what the reads before it gave, which only a read that is not cancelled moves on. So a cancelled read goes on, and the next one, which may start meanwhile, reads the same bytes at its own offset, with no race for the file's position.
+  - The file is closed once the `Reader` is closed or freed and no read is left on the thread pool.
 
 #### stdin
 
