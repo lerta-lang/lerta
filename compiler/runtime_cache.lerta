@@ -219,11 +219,8 @@ reject_path_target := (target: String) ->
 version_line_value := (clang_version: String, prefix: String) ->
   clang_version.lines().find_map((line) -> line.without_prefix(prefix))
 
-# The number before the first `.` of the word after `version`, as in `clang version 17.0.0`.
-major_version := (clang_version: String) ->
-  words := clang_version.split("\n")[0].split(' ')
-  at := words.index_of('version') else return nil
-  words.get(at + 1)?.split('.')[0]
+# The major version, from the first line, as 17 in `clang version 17.0.0`.
+major_version := (clang_version: String) -> /^.*?\bversion (\d+)/.find(clang_version)?.group(1)
 
 # FNV-1a of 64 bits.
 FNV_OFFSET_BASIS: UInt64 = 0xCBF29CE484222325
@@ -312,11 +309,9 @@ function_attributes := (ir: String) ->
 
 # The attributes of the group that the IR's one function has, as in `define void @f() #0 {`.
 attribute_group_of_function := (ir: String) ->
-  lines := ir.split("\n")
   missing := CompileError('clang IR has no function attributes')
-  definition := lines.find((line) -> line.starts_with('define ')) else throw missing
-  group := definition.split(' ').find((word) -> word.starts_with('#')) else throw missing
-  lines.find((line) -> line.starts_with("attributes #{group} = { ")) else throw missing
+  group := /^define [^#\n]*(#\d+)/m.find(ir)?.group(1) else throw missing
+  ir.lines().find((line) -> line.starts_with("attributes #{group} = { ")) else throw missing
 
 TARGET_ATTRIBUTES := ['target-cpu', 'target-features', 'tune-cpu']
 
