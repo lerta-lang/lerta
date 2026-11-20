@@ -30,27 +30,18 @@ Blocks are indented, as in the program above, with no braces and no `end`, and t
 ## Types, mostly inferred
 
 ```lerta
-interface Shape
-  area: () -> Float
+average := (xs: Int[]) -> xs.sum() / xs.length  # gives an Int
 
-struct Square
-  side: Float
-  area := -> @side * @side
-
-struct Rect
-  w: Float
-  h: Float
-  area := -> @w * @h
-
-shapes: Shape[] = [Square(2), Rect(w: 1, h: 3)]
-print shapes.map((shape) -> shape.area()).sum()
+scores := { 'ana': [90, 72], 'bo': [65, 80, 71] }  # a Map<String, Int[]>
+print "#{name}: #{average(xs)}" for (name, xs) in scores
 ```
 
 ```output
-7.0
+ana: 81
+bo: 72
 ```
 
-Types are written where they say something, as for fields, and inferred elsewhere: the methods' results above, and the locals. A type satisfies an interface by having its members, without naming it.
+Only the parameters of a function are written. The types of its result, of the locals and of what a loop takes apart are inferred, and checked when the program compiles.
 
 ## Safe by default
 
