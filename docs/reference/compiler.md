@@ -578,6 +578,7 @@ A language server, of the [Language Server Protocol](https://microsoft.github.io
 #### Hover and definition
 
 - `textDocument/hover` gives the types of the name at the position, as `name: Type` in a block of Lerta, one line for each type it has: in a generic function or class, the one at its definition, in which a type parameter stands for itself, then those in its instances.
+  - A union is written by the name of an alias of it that the module declares or imports, also within a type, as `Shape?[]`: its own before an imported one, and the first declared or imported among each. The name of an alias itself is given what it names, as `Shape: A | B`.
   - Below them, the [doc comments](syntax.md#doc-comments) of the name's declaration, in a standard module too.
   - A name of an import has no type, and so only its doc comments.
 - `textDocument/definition` gives where it is declared:

@@ -12,10 +12,13 @@ import ExtensionSource, OwnMethod from '../checker/methods'
 import info_of from '../checker/object_types'
 import Constructor, ExternReference, FunctionReference, TopLevelValue from '../checker/references'
 import NodeFacts, ProgramWide, Shared from '../checker/shared'
+import resolved_alias from '../checker/type_names'
 import is_name_character, name_start from './complete'
 import doc_comment from './doc_comments'
 import is_standard_name, module_location, read_source, text_key from '../source'
-import EnumType, format_type, InterfaceType, ObjectType, Type from '../types'
+import
+  EnumType, format_type, format_type_naming, inner_of, InterfaceType, ObjectType, Type, UnionType
+from '../types'
 
 # A declaration: a name of a module, by the module's place.
 struct Declared
@@ -23,11 +26,12 @@ struct Declared
   name: Identifier
 
 # A name as it is written in the module's code, with its type if the checker found one, and its
-# declaration, found when asked.
+# declaration, found when asked. The type of an alias's name is written in full, as what it names.
 struct Candidate
   name: Identifier
   type: Type?
   declaration: () -> Declared?
+  names_alias: Bool
 
 # The place among the program's modules of the module at the location, as diagnostics give it.
 export module_at := (program: ProgramWide, location: String) ->
@@ -40,18 +44,39 @@ export location_of := (program: ProgramWide, module_index: Int) ->
 
 # The Markdown of the name at the position of the module's source: the types it has, in a generic
 # body one at its definition and one for each instance, written as `name: Type` in a block of Lerta,
-# then the doc comments of its declaration; nil if it has neither.
+# a union by the name of an alias of it that the module knows, then the doc comments of its
+# declaration; nil if it has neither.
 export hover_markdown := (program: ProgramWide, module_index: Int, source: String, at: Position) ->
   candidates := candidates_at(program, module_index, source, at)
+  names := union_alias_names(program, module_index)
   lines: Set<String>
   for candidate in candidates
     type := candidate.type else continue
-    lines.add "#{candidate.name.name}: #{format_type(type)}"
+    written := candidate.names_alias then format_type(type) else format_type_naming(type, names)
+    lines.add "#{candidate.name.name}: #{written}"
   parts: String[]
   parts.push "```lerta\n#{lines.to_array().join("\n")}\n```" unless lines.is_empty()
   if declared := candidates.find_map(Candidate.declaration)
     parts.push doc if doc := doc_of(program, declared)
   parts.is_empty() then nil else parts.join("\n\n")
+
+# The names of the aliases of unions that the module declares or imports, by their unions; where
+# more than one names a union, the module's own before the imported ones, and among each the one
+# declared or imported first. An alias of another type is left out, as `Int` would read as its alias
+# everywhere.
+union_alias_names := (program: ProgramWide, module_index: Int) ->
+  shared := program.shared[module_index]
+  names: Map<Type, String>
+  add := (declarer: Shared, alias: String, local: String) ->
+    type := resolved_alias(declarer, alias) else return
+    names[type] = local if inner_of(type) is UnionType and type not in names
+  for alias in shared.aliases.keys()
+    add shared, alias, alias
+  for imported in shared.imports.names.values()
+    source := imported.source
+    continue unless source is ExportRef
+    add program.shared[source.module_index], source.name, imported.name.name
+  names
 
 # The declaration of the name at the position, if the checker found one.
 export definition_of := (program: ProgramWide, module_index: Int, source: String, at: Position) ->
@@ -157,11 +182,26 @@ type AddCandidate = (Candidate) -> void
 add_fact_names := (add: AddCandidate, program: ProgramWide, module_index: Int, facts: NodeFacts) ->
   for (node, type) in facts.types
     if node is Identifier
-      add { type, name: node, declaration: -> name_declaration(program, module_index, facts, node) }
+      add {
+        type
+        name: node
+        declaration: -> name_declaration(program, module_index, facts, node)
+        names_alias: false
+      }
     else if node is Member
-      add { type, name: node.name, declaration: -> member_declaration(program, facts, node) }
+      add {
+        type
+        name: node.name
+        declaration: -> member_declaration(program, facts, node)
+        names_alias: false
+      }
       if enum_name := enum_name_of(node, facts)
-        add { type, name: enum_name, declaration: -> type_declaration(program, type) }
+        add {
+          type
+          name: enum_name
+          declaration: -> type_declaration(program, type)
+          names_alias: false
+        }
 
 # The callees of generic functions, which lead to the generic functions.
 add_generic_callees := (add: AddCandidate, program: ProgramWide, facts: NodeFacts) ->
@@ -171,7 +211,7 @@ add_generic_callees := (add: AddCandidate, program: ProgramWide, facts: NodeFact
     instance := link.instance
     generic := generic_of(program, instance.generic)
     declared := Declared(module_index: generic.module_index, name: generic.name)
-    add { name: callee, type: instance.entry.type, declaration: -> declared }
+    add { name: callee, type: instance.entry.type, declaration: -> declared, names_alias: false }
 
 # The names of types that the module writes, which lead to their declarations or to their aliases.
 add_type_names := (add: AddCandidate, program: ProgramWide, module_index: Int) ->
@@ -183,7 +223,7 @@ add_type_names := (add: AddCandidate, program: ProgramWide, module_index: Int) -
         if alias
           return Declared(module_index, name: alias)
         type_declaration(program, type)
-      add { type, name: written_name(type_name), declaration }
+      add { type, name: written_name(type_name), declaration, names_alias: alias != nil }
 
 # The names that the module imports from other modules, which lead to their declarations.
 add_imported_names := (add: AddCandidate, program: ProgramWide, module_index: Int) ->
@@ -195,6 +235,7 @@ add_imported_names := (add: AddCandidate, program: ProgramWide, module_index: In
       name: imported.name
       type: nil
       declaration: -> top_level_declaration(program, ref.module_index, ref.name)
+      names_alias: false
     }
 
 # The names that the module exports from other modules, which lead to their declarations.
@@ -214,6 +255,7 @@ add_reexported_names := (add: AddCandidate, program: ProgramWide, module_index: 
           name
           type: nil
           declaration: -> top_level_declaration(program, ref.module_index, ref.name)
+          names_alias: false
         }
 
 # The doc comments of the declaration, from the text that its module was checked from.

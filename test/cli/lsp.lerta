@@ -448,6 +448,47 @@ hover_definition_check := ->
       )...
     ]
 
+alias_hover_check := ->
+  Check name: 'lerta lsp writes a union by its alias but an alias by its union', run: ->
+    dir := new_cli_dir('lsp-alias-hover')
+    path := "#{dir}/a.lerta"
+    await write_file("#{dir}/b.lerta", "export struct C\n  n: Int\nexport type Far = C | String\n")
+    text :=
+      "import C, Far as Near from './b'"
+      'struct A'
+      '  n: Int'
+      'struct B'
+      '  s: String'
+      'type Shape = A | B'
+      'shape: Shape = A(n: 1)'
+      'shapes: Shape?[] = [shape]'
+      'near: Near = C(n: 1)'
+      'print shapes.length, near'
+      ''
+    .join("\n")
+    await write_file(path, text)
+    uri := uri_of(path)
+    messages :=
+      did_open(uri, text)
+      hover_request(uri, 6, 0, 1)
+      hover_request(uri, 7, 0, 2)
+      hover_request(uri, 6, 8, 3)
+      hover_request(uri, 8, 0, 4)
+    .join()
+    ran := await session(dir, messages)
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout_text()
+        [
+          hover_fragment(1, 'shape: Shape')
+          hover_fragment(2, 'shapes: Shape?[]')
+          hover_fragment(3, 'Shape: A | B')
+          hover_fragment(4, 'near: Near')
+        ]
+      )...
+    ]
+
 generic_hover_check := ->
   Check name: 'lerta lsp gives generic values the types of their definitions and instances', run: ->
     dir := new_cli_dir('lsp-generic-hover')
@@ -1316,6 +1357,7 @@ export checks :=
   changed_import_check()
   close_unsaved_import_check()
   hover_definition_check()
+  alias_hover_check()
   generic_hover_check()
   generic_callee_check()
   definition_contexts_check()

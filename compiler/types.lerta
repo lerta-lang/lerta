@@ -282,11 +282,19 @@ UNION_VALUE_KINDS: TypeKind[] = [NUMBER_KINDS..., 'Char', 'Bool', 'String', 'Bin
 # module where `qualified` says so, or where a union holds another of the same name.
 export format_type := (type: Type) -> format_qualified(type, false)
 
-export format_qualified := (type: Type, qualified: Bool): String ->
-  format := (inner: Type) -> format_qualified(inner, qualified)
+export format_qualified := (type: Type, qualified: Bool) -> write_type(type, qualified, Map())
+
+# How a type is written in an editor's hover: as format_type writes it, but a type that has a name
+# in `names`, as a union that an alias names, and any part of it that has one, by that name.
+export format_type_naming := (type: Type, names: Map<Type, String>) ->
+  write_type(type, false, names)
+
+write_type := (type: Type, qualified: Bool, names: Map<Type, String>): String ->
+  return name if name := names[type]
+  format := (inner: Type) -> write_type(inner, qualified, names)
   case type
     when SimpleType then type.kind.to_string()
-    when ArrayType then "#{operand_text(type.element, format)}[]"
+    when ArrayType then "#{operand_text(type.element, format, type.element in names)}[]"
     when IterType then "Iter<#{format(type.item)}>"
     when PromiseType then promise_text(type, format)
     when MapType then map_text(type, format)
@@ -301,17 +309,18 @@ export format_qualified := (type: Type, qualified: Bool): String ->
     when UnionType
       members := [
         for member in type.members
-          format_member_qualified(member, type, qualified)
+          write_member(member, type, qualified, names)
       ]
       members.join(' | ')
-    when OptionalType then "#{operand_text(type.inner, format)}?"
+    when OptionalType then "#{operand_text(type.inner, format, type.inner in names)}?"
     when TypeParameterType then type.name
     when FunctionType
       "(#{[format(param) for param in type.params].join(', ')}) -> #{format(type.result)}"
 
-# The type that `?` or `[]` follows, in parentheses if it would otherwise apply to a part of it.
-operand_text := (operand: Type, write: (Type) -> String) ->
-  needs_parentheses := operand is FunctionType | UnionType
+# The type that `?` or `[]` follows, in parentheses if it would otherwise apply to a part of it,
+# which a type written by its name would not.
+operand_text := (operand: Type, write: (Type) -> String, is_named = false) ->
+  needs_parentheses := not is_named and operand is FunctionType | UnionType
   needs_parentheses then "(#{write(operand)})" else write(operand)
 
 map_text := (type: MapType, format: (Type) -> String) ->
@@ -331,16 +340,18 @@ format_named := (
   qualified then "#{written} (of #{module})" else written
 
 # A member of a union, with its module if another member has the same name.
-export format_member := (member: Type, union: Type) -> format_member_qualified(member, union, false)
+export format_member := (member: Type, union: Type) -> write_member(member, union, false, Map())
 
-format_member_qualified := (member: Type, union: Type, qualified: Bool) ->
-  return "(#{format_qualified(member, qualified)})" if member is FunctionType
-  return format_qualified(member, qualified) unless member is ObjectType
-  return format_qualified(member, qualified) unless union is UnionType
+write_member := (member: Type, union: Type, qualified: Bool, names: Map<Type, String>) ->
+  return "(#{write_type(member, qualified, names)})" if member is FunctionType
+  unless member is ObjectType
+    return write_type(member, qualified, names)
+  unless union is UnionType
+    return write_type(member, qualified, names)
   shares_name := (other: Type) ->
     return false unless other is ObjectType
     other.name == member.name and other != member
-  format_qualified(member, qualified or union.members.any(shares_name))
+  write_type(member, qualified or union.members.any(shares_name), names)
 
 # Two types for a message: as format_type writes them, or, if that cannot tell them apart, with
 # the modules of their classes and structs.
