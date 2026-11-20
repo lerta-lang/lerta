@@ -1,0 +1,57 @@
+# The style check of the samples of the documents (see site/pages.lerta), which lerta fmt cannot
+# take where they are: each is written into a file of its own, and fmt's reports on those files are
+# turned into places in the documents.
+import Buffer, is_dir, make_dir, remove_tree, write_file from 'std:io'
+import run from 'std:process'
+import MarkdownError from '../../site/markdown'
+import read_samples, sample_files from '../../site/pages'
+
+SAMPLES_DIR := 'build/samples'
+
+# Where a sample's code is: its document, and the line before its first, that of its code block's
+# opening.
+export struct Place
+  file: String
+  line: Int
+
+# Whether the samples are in the style, which `compiler` checks; what is not is printed.
+export check_samples := (compiler: String) ->
+  # Afresh, so that no file of a sample since removed is checked.
+  await remove_tree(SAMPLES_DIR) if is_dir(SAMPLES_DIR)
+  make_dir SAMPLES_DIR
+  places: Place[]
+  var rendered = true
+  for file in sample_files()
+    samples :=
+      try
+        await read_samples(file)
+      catch error: MarkdownError | ValueError
+        print_error "#{file}: #{error.message}"
+        rendered = false
+        continue
+    for sample in samples
+      places.push { file, line: sample.line }
+      await write_file(sample_path(places.length), "#{sample.code}\n")
+  return rendered if places.is_empty()
+  errors := Buffer()
+  paths := [sample_path(index) for index in 1..=places.length]
+  ran := await run(compiler, 'fmt', paths..., stderr: errors)
+  for line in errors.text()!.lines()
+    print_error placed(line, places)
+  rendered and ran.code == 0
+
+sample_path := (number: Int) -> "#{SAMPLES_DIR}/sample-#{number}.lerta"
+
+# A line that fmt reports on the file of the sample of a number, from 1, with its document in place
+# of the file: `<path>:<line>:<rest>` with the line in the document, and `<path>: <rest>`, of no
+# line, with that of the sample's code block. Any other line as it is.
+export placed := (report: String, places: Place[]) ->
+  rest := report.without_prefix("#{SAMPLES_DIR}/sample-") else return report
+  (number_text, after) := rest.split_once('.lerta:') else return report
+  number := number_text.parse_int() else return report
+  return report unless number in 1..=places.length
+  place := places[number - 1]
+  of_block := "#{place.file}:#{place.line}:#{after}"
+  (line_text, column) := after.split_once(':') else return of_block
+  line := line_text.parse_int() else return of_block
+  "#{place.file}:#{place.line + line}:#{column}"

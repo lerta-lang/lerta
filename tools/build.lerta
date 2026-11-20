@@ -14,6 +14,7 @@ import
   make_seed, make_stage2, test_bootstrap
 from './build/stages'
 import write_embedded from './build/embed'
+import check_samples from './build/samples'
 import BuildError, call, captured, shared_batches, step from './build/steps'
 import test_target, test_targets from './build/targets'
 
@@ -84,7 +85,7 @@ test := ->
 # The .lerta files that git lists, those not added yet included, but those deleted and not yet
 # from git, are in the style, tests/ too, where `# fmt: skip` and `# fmt: off` keep the code that
 # breaks it on purpose. They go to runs of lerta fmt at once, a share for each core, as each run
-# uses one (see shared_batches).
+# uses one (see shared_batches). So do the samples of the documents (see build/samples).
 check := ->
   await make_host_compiler()
   git_args := ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', '*.lerta']
@@ -99,7 +100,8 @@ check := ->
   ]
   codes := await all_of(runs)
   passed := codes.all((code) -> code == 0)
-  exit passed then 0 else 1
+  samples_passed := await check_samples(HOST_COMPILER)
+  exit passed and samples_passed then 0 else 1
 
 # What a command line of Windows, the shortest, holds, with room for the command.
 COMMAND_LINE_LIMIT := 30000

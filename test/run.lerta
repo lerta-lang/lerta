@@ -20,7 +20,7 @@
 #                          Windows
 # The samples (see site/markdown.lerta) of README.md and of the site's pages run as tests too,
 # written into the work directory, each labeled by its file and line.
-import Buffer, is_dir, is_file, list_dir, make_dir, read_file, read_text, write_file from 'std:io'
+import Buffer, is_dir, is_file, list_dir, make_dir, read_file, write_file from 'std:io'
 import env, Exit, platform, run from 'std:process'
 import compare_output, compare_text, lines from './lib/expect'
 import
@@ -28,8 +28,8 @@ import
 from './lib/lerta'
 import at_once, Check, in_slot, jobs, select, SuiteChecks from './lib/report'
 import host_target, Target from './lib/target'
-import MarkdownError, render_markdown from '../site/markdown'
-import sources from '../site/pages'
+import MarkdownError from '../site/markdown'
+import read_samples, sample_files from '../site/pages'
 import no_wine_prefixes, start_wine_prefixes, WINE_DLL_OVERRIDES from './lib/wine'
 
 # The target that the suite was given.
@@ -134,15 +134,14 @@ sample_checks := (): Promise<Check[]> ->
   make_dir dir
   var count = 0
   checks: Check[]
-  for file in ['README.md'] + [source.file for source in sources()]
-    markdown := await read_text("#{root_dir}/#{file}") else throw SetupError("not UTF-8: #{file}")
-    page :=
+  for file in sample_files()
+    samples :=
       try
-        render_markdown markdown, (target) -> target
-      catch error: MarkdownError
+        await read_samples(file)
+      catch error: MarkdownError | ValueError
         checks.push { name: file, run: -> at_once([error.message]) }
         continue
-    for sample in page.samples
+    for sample in samples
       count += 1
       name := "sample-#{count}"
       await write_file("#{dir}/#{name}.lerta", sample.code)
