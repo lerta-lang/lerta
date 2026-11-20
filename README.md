@@ -4,20 +4,25 @@ Lerta is a statically typed, compiled language with CoffeeScript-like syntax and
 
 The name comes from the Esperanto word *lerta*, meaning "skillful", "deft" or "good at".
 
-The language as planned (for what works today, see [the reference](docs/reference/README.md)):
+```lerta
+text := 'the quick fox and the lazy dog and the end'
 
+counts: Map<String, Int>
+for word in text.split(' ')
+  counts[word, default: 0] += 1
+
+for (word, count) in counts.to_array().sorted_by(((_, n)) -> -n)
+  print "#{word.pad_end(6)} #{'*'.repeat(count)}"
 ```
-struct Circle
-  r: Float
-  area := @r * @r * PI
 
-eval := (e: Expr): Int ->
-  case e
-    when Num then e.value
-    when Neg then -eval(e.operand)
-    when Plus then eval(e.left) + eval(e.right)
-
-print "area: #{Circle(r: 2).area}"
+```output
+the    ***
+and    **
+quick  *
+fox    *
+lazy   *
+dog    *
+end    *
 ```
 
 ## Status
