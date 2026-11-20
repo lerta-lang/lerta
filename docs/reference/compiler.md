@@ -577,12 +577,14 @@ A language server, of the [Language Server Protocol](https://microsoft.github.io
 #### Hover and definition
 
 - `textDocument/hover` gives the types of the name at the position, as `name: Type` in a block of Lerta, one line for each type it has: in a generic function or class, the one at its definition, in which a type parameter stands for itself, then those in its instances.
+  - Below them, the [doc comments](syntax.md#doc-comments) of the name's declaration, in a standard module too.
+  - A name of an import has no type, and so only its doc comments.
 - `textDocument/definition` gives where it is declared:
   - a local, a parameter, a top-level value, a function, an import;
   - a class, struct or enum member, a field or a method, own or of an extend;
   - the class, struct, interface, enum or alias that a type name names, as in an annotation or the enum of `Color.RED`.
 - They answer from the last check of the document's program, or of an open document's program that holds it, as far as it was checked.
-- They give nothing for a name that the checker gave no type, as a builtin type's name or a type parameter, or whose declaration is in a standard module.
+- They give nothing for a name that the checker gave no type, as a builtin type's name or a type parameter, but hover gives the doc comments of an import's name. Definition gives nothing for a declaration in a standard module.
 
 #### Completion
 

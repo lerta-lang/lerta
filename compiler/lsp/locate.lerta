@@ -1,5 +1,6 @@
 # The names of a checked program by their positions, for an editor's hover and going to a
-# definition: what the checker found of the name at a place, its types and its declaration.
+# definition: what the checker found of the name at a place, its types and its declaration, and the
+# doc comments of its declaration.
 import
   EnumDeclaration, Identifier, Import, InterfaceDeclaration, Member, NamedType, Position
 from '../ast'
@@ -11,6 +12,7 @@ import info_of from '../checker/object_types'
 import Constructor, ExternReference, FunctionReference, TopLevelValue from '../checker/references'
 import NodeFacts, ProgramWide, Shared from '../checker/shared'
 import is_name_character from './complete'
+import doc_comment from './doc_comments'
 import module_location from '../source'
 import EnumType, format_type, InterfaceType, ObjectType, Type from '../types'
 
@@ -35,14 +37,20 @@ export module_at := (program: ProgramWide, location: String) ->
 export location_of := (program: ProgramWide, module_index: Int) ->
   module_location(program.entry_path, program.modules[module_index].display_path)
 
-# The types that the name at the position of the module's source has, in a generic body one at its
-# definition and one for each instance, written as `name: Type`; none if no name is there.
-export hover_lines := (program: ProgramWide, module_index: Int, source: String, at: Position) ->
+# The Markdown of the name at the position of the module's source: the types it has, in a generic
+# body one at its definition and one for each instance, written as `name: Type` in a block of Lerta,
+# then the doc comments of its declaration; nil if it has neither.
+export hover_markdown := (program: ProgramWide, module_index: Int, source: String, at: Position) ->
+  candidates := candidates_at(program, module_index, source, at)
   lines: Set<String>
-  for candidate in candidates_at(program, module_index, source, at)
+  for candidate in candidates
     type := candidate.type else continue
     lines.add "#{candidate.name.name}: #{format_type(type)}"
-  lines.to_array()
+  parts: String[]
+  parts.push "```lerta\n#{lines.to_array().join("\n")}\n```" unless lines.is_empty()
+  if declared := candidates.find_map(Candidate.declaration)
+    parts.push doc if doc := doc_of(program, declared)
+  parts.is_empty() then nil else parts.join("\n\n")
 
 # The declaration of the name at the position, if the checker found one.
 export definition_of := (program: ProgramWide, module_index: Int, source: String, at: Position) ->
@@ -129,6 +137,11 @@ add_reexported_names := (add: AddCandidate, program: ProgramWide, module_index: 
           type: nil
           declaration: -> top_level_declaration(program, ref.module_index, ref.name)
         }
+
+# The doc comments of the declaration, from the text that its module was checked from.
+doc_of := (program: ProgramWide, declared: Declared) ->
+  source := program.modules[declared.module_index].source
+  doc_comment(source, location_of(program, declared.module_index), declared.name)
 
 # What the name refers to: a top-level value, a function, a class or struct, an extern, or else a
 # local, whose declaration the checker kept.

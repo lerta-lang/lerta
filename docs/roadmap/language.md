@@ -15,7 +15,7 @@ The planned syntax, control flow, types and operators. Interfaces and generics a
   - as the argument of a call without brackets (`print`, then `case` on the next line);
   - after the `then` of a `case` arm.
   - Why: so that the [style](../reference/style.md) can always put it there.
-- **Doc comments,** which `lerta lsp` shows in hover and a tool makes a reference of.
+- **A reference of [doc comments](../reference/syntax.md#doc-comments),** which a tool makes.
 - **Destructuring of arrays,** with a spread for the rest: `[init..., last] := xs` for what `all_but_last` and `pop` give, `[first, rest...] := xs`. To decide: what too few items do (a throw, or a binding only in the condition of an `if` or a `while`), and whether the rest is a copy.
 
 ## Control flow

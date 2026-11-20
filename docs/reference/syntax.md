@@ -4,6 +4,22 @@
 - Comments run from `#` to the end of the line. There are no block comments.
 - Identifiers are `[A-Za-z_][A-Za-z0-9_]*` (ASCII only).
 
+## Doc comments
+
+A doc comment documents a declaration for the tools, as the hover of [`lerta lsp`](compiler.md#hover-and-definition). Other comments stay for notes on the code.
+
+```lerta
+## A place on the plane.
+# Not a doc comment: a note on how it works.
+struct Point
+  x: Float  ## The horizontal position.
+```
+
+- It starts with `##`, followed by a space or the end of the line; so `###` starts none.
+- It documents the declaration whose line it ends, or the one on the line below it, it and the comments between them on lines of their own at that line's indentation.
+- That declaration starts its line: its name comes first, or after only the words of the declaration, as `export var` or `struct`, or `extern lerta_write as`. So a parameter takes one only on a line of its own, and a name declared in a condition or a `for` takes none.
+- Its text, without the `## `, is Markdown. A `##` alone is a blank line, which starts a paragraph.
+
 ## Number literals
 
 ### Integer literals

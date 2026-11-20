@@ -101,5 +101,6 @@
 - **Hover and definitions** (`locate.lerta`) look among the names of the facts of the module's code, and of the instances of its generic functions and classes, for those whose text the source writes at the position.
   - The checker records each expression's type, a name's reference, a member's target, and, for an editor alone, the declaration of the local that a name reads or assigns (`NodeFacts.local_declarations`), and what each type name of a module names (`Shared.type_names`, `Shared.alias_names`).
   - The parser's and the checker's own names, such as `?2:3` of `x?.y` or the `to_string` of an interpolation, are not written in the source, so they are not found.
+  - Doc comments (`doc_comments.lerta`) come from the text that the declaring module was checked from (`Module.source`), whose positions the declaration's name has, lexed again for its comments, which the parser drops.
 - **Completion** (`complete.lerta`) checks the program with the name under the cursor replaced by the checker's `COMPLETION_NAME`. Where the checker meets that name, as a name or as a member, it records in `ProgramWide.completion` the locals that the code there sees, or the type of the member's object, or the module or enum that the object names (`compiler/checker/completion_probe.lerta`). The items come from that.
 

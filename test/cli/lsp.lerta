@@ -7,9 +7,9 @@ import make_dir, write_file from 'std:io'
 import encode_json from 'std:json'
 import
   uri_of, frame, did_open, did_change, did_change_at, did_close, formatting_request,
-  definition_request, hover_request, location_fragment, hover_fragment, initialize, finish, session,
-  message_bodies, diagnostic_body, published_diagnostics, initialize_response, exact_responses,
-  exact_messages
+  definition_request, hover_request, location_fragment, hover_fragment, doc_fragment, initialize,
+  finish, session, message_bodies, diagnostic_body, published_diagnostics, initialize_response,
+  exact_responses, exact_messages
 from '../lib/lsp'
 
 initialize_check := ->
@@ -1142,6 +1142,95 @@ imported_hover_definition_check := ->
       ]
   )
 
+doc_comment_check := ->
+  Check name: 'lerta lsp gives the doc comments of a declaration with its types', run: ->
+    dir := new_cli_dir('lsp-doc-comments')
+    path := "#{dir}/a.lerta"
+    text :=
+      "import shade from './lib'"
+      '## A place.'
+      '# A note.'
+      '##'
+      '## Kept apart.'
+      'struct Point'
+      '  x: Int  ## Across.'
+      '  ## Up.'
+      '  y: Int'
+      '## Not for its parameter.'
+      'g := (n: Int) -> n'
+      '### Banner'
+      'h := ('
+      '  ## Taken.'
+      '  m: Int'
+      ') -> m'
+      '## Lost by the blank line.'
+      ''
+      'var total = 0  ## The sum.'
+      'if total == 0'
+      '  print total'
+      '  ## Ends the block.'
+      "q := '\u{E9}'.count()  ## Counted."
+      '## The text of a Float.'
+      'extern lerta_float_to_string as text_of: (Float) -> String'
+      'p := Point(x: 1, y: 2)'
+      'print p.x + p.y + g(1) + h(2) + total + q'
+      'print text_of(1.0) + shade'
+      '##x'
+      'export count := 0'
+      'class Counter'
+      '  ## Adds one.'
+      '  # How: in place.'
+      '  bump := -> 1  # Not a doc comment.'
+      'Counter().bump()'
+      'print count'
+      ''
+    .join("\n")
+    await write_file(path, b'')
+    await write_file("#{dir}/lib.lerta", b"## A shade of gray.\nexport shade := 'gray'\n")
+    uri := uri_of(path)
+    asks :=
+      (26, 8)
+      (26, 14)
+      (26, 18)
+      (10, 17)
+      (26, 25)
+      (15, 5)
+      (26, 32)
+      (26, 40)
+      (25, 5)
+      (27, 6)
+      (0, 7)
+      (27, 21)
+      (35, 6)
+      (34, 10)
+    messages := [did_open(uri, text)]
+    for ask at i in asks
+      (line, character) := ask
+      messages.push hover_request(uri, line, character, i + 1)
+    ran := await session(dir, messages.join())
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout_text()
+        [
+          hover_fragment(1, 'x: Int', 'Across.')
+          hover_fragment(2, 'y: Int', 'Up.')
+          hover_fragment(3, 'g: (Int) -> Int', 'Not for its parameter.')
+          hover_fragment(4, 'n: Int')
+          hover_fragment(5, 'h: (Int) -> Int')
+          hover_fragment(6, 'm: Int', 'Taken.')
+          hover_fragment(7, 'total: Int', 'The sum.')
+          hover_fragment(8, 'q: Int', 'Counted.')
+          hover_fragment(9, 'Point: Point', "A place.\n\nKept apart.")
+          hover_fragment(10, 'text_of: (Float) -> String', 'The text of a Float.')
+          doc_fragment(11, 'A shade of gray.')
+          hover_fragment(12, 'shade: String', 'A shade of gray.')
+          hover_fragment(13, 'count: Int')
+          hover_fragment(14, 'bump: () -> Int', 'Adds one.')
+        ]
+      )...
+    ]
+
 extern_definition_check := ->
   Check name: 'lerta lsp finds extern definitions in the current and imported modules', run: ->
     dir := new_cli_dir('lsp-extern-definition')
@@ -1241,5 +1330,6 @@ export checks :=
   partial_block_check()
   type_name_check()
   imported_hover_definition_check()
+  doc_comment_check()
   extern_definition_check()
   reexport_definition_check()

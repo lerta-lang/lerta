@@ -1,7 +1,8 @@
 # `lerta lsp`: a language server over stdin and stdout (see docs/reference/compiler.md#lsp). It
 # takes the whole text of a document on each change, publishes the diagnostics of the program
 # whose entry module is the document when it is opened or changed, formats it as `lerta fmt --fix`
-# would write it, and gives the types of a name in it and where the name is declared.
+# would write it, and gives the types and the doc comments of a name in it and where the name is
+# declared.
 import is_file from 'std:io'
 import exit from 'std:process'
 import JsonError from 'std:json'
@@ -14,7 +15,7 @@ import
   source_position
 from './diagnostics'
 import completion_items, CompletionItem, probe_text, writing_at from './complete'
-import definition_of, hover_lines, is_written, location_of, module_at from './locate'
+import definition_of, hover_markdown, is_written, location_of, module_at from './locate'
 import
   decode_header, decode_notification, decode_request, INTERNAL_ERROR, INVALID_PARAMS,
   METHOD_NOT_FOUND, PARSE_ERROR, notify, read_message, Request, respond, respond_error
@@ -211,16 +212,15 @@ class Server
       await @publish(file) for file in files
       @uris.remove text_key(path)
 
-    # The types of the name at the position, as a block of Lerta, from the program of the document's
-    # own check if it has one, or of another open document's that holds it.
+    # The types and the doc comments of the name at the position, from the program of the
+    # document's own check if it has one, or of another open document's that holds it.
     hover := (params: PositionParams) ->
       path := path_of_uri(params.text_document.uri) else return nil
       program := @program_of(path) else return nil
       module_index := module_at(program, path) else return nil
       at := await source_position(path, params.position, @encoding)
-      lines := hover_lines(program, module_index, await read_source(path), at)
-      return nil if lines.is_empty()
-      Hover({ kind: 'markdown', value: "```lerta\n#{lines.join("\n")}\n```" })
+      markdown := hover_markdown(program, module_index, await read_source(path), at) else return nil
+      Hover({ kind: 'markdown', value: markdown })
 
     # Where the name at the position is declared, if in a file that still writes it there.
     definition := (params: PositionParams) ->

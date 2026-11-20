@@ -1,0 +1,56 @@
+# Doc comments, which an editor's hover shows with a name's types (see
+# docs/reference/syntax.md#doc-comments).
+import Identifier from '../ast'
+import Comment, lex, TokenKind from '../lexer/tokens'
+
+LAYOUT: TokenKind[] = [NEWLINE, INDENT, DEDENT, EOF]
+
+# The words that may come before a declared name on its line, as `export var`. An extern named
+# apart from its symbol has its symbol and `as` too (see starts_declaration).
+DECLARATION_WORDS :=
+  'export', 'private', 'var', 'weak', 'const', 'struct', 'class', 'enum', 'interface', 'type',
+  'extern'
+
+# The Markdown of the doc comments of the name that the source, of the path, declares, as their
+# lines without `## `; nil if it has none.
+export doc_comment := (source: String, path: String, name: Identifier) ->
+  { tokens, comments } := lex(source, path)
+  { line, column } := name.position
+  code := [
+    for token in tokens when token.line == line and token.kind not in LAYOUT
+      token
+  ]
+  return nil unless starts_declaration([token.text for token in code when token.column < column])
+  lines := source.lines()
+  docs: String[]
+  for comment in written_comments(comments, line, code[0].column)
+    docs.push doc if doc := doc_text(lines[comment.line - 1].skip(comment.column - 1))
+  docs.is_empty() then nil else docs.join("\n")
+
+# Whether the words are those of a declaration before its name, which then starts its line, rather
+# than a name that the line's own declaration declares too, as a parameter after `f := (`.
+starts_declaration := (words: String[]) ->
+  named_apart := words.length >= 3 and words[words.length - 3] == 'extern' and words.last() == 'as'
+  keywords := named_apart then words[..(words.length - 2)] else words
+  keywords.all((word) -> word in DECLARATION_WORDS)
+
+# The comments of a declaration on the line, which starts at the column: those on the lines right
+# above it at that column, in their order, then the one that ends the line.
+written_comments := (comments: Comment[], line: Int, column: Int) ->
+  own_lines := Map([(comment.line, comment) for comment in comments when comment.own_line])
+  above: Comment[]
+  var at = line - 1
+  while comment := own_lines[at]
+    break if comment.column != column
+    above.push comment
+    at -= 1
+  written := above.reversed()
+  is_ending := (comment: Comment) -> comment.line == line and not comment.own_line
+  written.push ending if ending := comments.find(is_ending)
+  written
+
+# The text of a comment that starts with `##`, which a space or the end of the line follows, without
+# them; nil for another comment, as one of `#` or `###`.
+doc_text := (comment: String) ->
+  text := comment.trim_end().without_prefix('##') else return nil
+  text.is_empty() then text else text.without_prefix(' ')
