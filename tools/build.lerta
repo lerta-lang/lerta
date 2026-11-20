@@ -8,7 +8,7 @@
 import parse_args, parse_command from 'std:args'
 import all as all_of from 'std:async'
 import is_dir, remove_tree, stat from 'std:io'
-import argv, cpu_count, exit from 'std:process'
+import argv, cpu_count, exit, Output, run from 'std:process'
 import
   bootstrap_for, HARNESS_PROGRAM, HOST_COMPILER, make_compiler, make_harness, make_host_compiler,
   make_seed, make_stage2, test_bootstrap
@@ -28,6 +28,7 @@ enum Command
   test_bootstrap
   seed
   check
+  format
   bench
   bench_http
   site
@@ -42,6 +43,7 @@ COMMAND_SPEC :=
   test_bootstrap: { help: 'check that the compiler builds itself' }
   seed: { help: 'write the seed anew' }
   check: { help: 'check the style' }
+  format: { help: 'lay out the code in the style' }
   bench: { help: 'run the benchmarks' }
   bench_http: { help: 'run the benchmarks of std:http' }
   site: { help: 'write the website' }
@@ -82,11 +84,26 @@ test := ->
   await make_stage2(bootstrap_for(nil))
   exit await call('nice', HARNESS_PROGRAM)
 
-# The .lerta files that git lists, those not added yet included, but those deleted and not yet
-# from git, are in the style, tests/ too, where `# fmt: skip` and `# fmt: off` keep the code that
-# breaks it on purpose. They go to runs of lerta fmt at once, a share for each core, as each run
-# uses one (see shared_batches). So do the samples of the documents (see build/samples).
+# The .lerta files and the samples of the documents (see build/samples) are in the style.
 check := ->
+  unformatted := await unformatted_batches(true)
+  samples_passed := await check_samples(HOST_COMPILER)
+  exit unformatted.is_empty() and samples_passed then 0 else 1
+
+# The .lerta files laid out in the style; the samples of the documents are left to be fixed by hand.
+# A batch is fixed only after the one before it is, as fmt reads the modules that a file imports,
+# which a batch fixed at the same time could be writing.
+format := ->
+  var fixed = true
+  for batch in await unformatted_batches(false)
+    fixed = await call('nice', HOST_COMPILER, 'fmt', '--fix', batch...) == 0 and fixed
+  exit fixed then 0 else 1
+
+# The batches of lerta fmt that fail, of the .lerta files that git lists, those not added yet
+# included, but those deleted and not yet from git, tests/ too, where `# fmt: skip` and
+# `# fmt: off` keep the code that breaks the style on purpose. The batches run at once, a share for
+# each core, as each run uses one (see shared_batches); what fmt reports is printed if `reported`.
+unformatted_batches := (reported: Bool) ->
   await make_host_compiler()
   git_args := ['ls-files', '-z', '--cached', '--others', '--exclude-standard', '--', '*.lerta']
   listed := (await captured('git', git_args, b'')).text()!.split("\0")
@@ -94,14 +111,14 @@ check := ->
     for file in listed when not file.is_empty() and stat(file) != nil
       file
   ]
+  batches := shared_batches(files, cpu_count, COMMAND_LINE_LIMIT)
+  reports := reported then nil else Output.DISCARD
   runs := [
-    call('nice', HOST_COMPILER, 'fmt', batch...)
-    for batch in shared_batches(files, cpu_count, COMMAND_LINE_LIMIT)
+    for batch in batches
+      run('nice', HOST_COMPILER, 'fmt', batch..., stderr: reports)
   ]
-  codes := await all_of(runs)
-  passed := codes.all((code) -> code == 0)
-  samples_passed := await check_samples(HOST_COMPILER)
-  exit passed and samples_passed then 0 else 1
+  exits := await all_of(runs)
+  [batch for (batch, ended) in batches.zip(exits) when ended.code != 0]
 
 # What a command line of Windows, the shortest, holds, with room for the command.
 COMMAND_LINE_LIMIT := 30000
@@ -154,6 +171,7 @@ try
     when seed then await make_seed()
     when Command.test then await test()
     when Command.check then await check()
+    when Command.format then await format()
     when bench then await run_program('bench/run.lerta')
     when bench_http then await run_program('bench/http/run.lerta')
     when Command.site then await site()

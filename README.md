@@ -113,6 +113,7 @@ make test              # builds bin/lerta, then runs the tests, the bootstrap's 
 make test-targets      # the tests of the targets that test-targets.llit names, each where it says (see below)
 make test-target TARGET=<target>  # the tests of that target here, as test-targets runs them
 make check             # the code in the style (lerta fmt)
+make format            # lays out the .lerta files in the style (lerta fmt --fix); the documents' samples are left to fix by hand
 ```
 
 - Every language feature gets run tests in `tests/`: a Lerta source and its expected output, as the top of `test/run.lerta` describes. Programs in `examples/` are run as tests too, and so are the samples of the documents (see [Website](#website)).

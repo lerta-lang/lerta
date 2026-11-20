@@ -27,7 +27,7 @@ BUILD_TOOL_SOURCES := tools/build.lerta $(shell find tools/build compiler std -n
 
 # The goals, which tools/build.lerta builds once the Makefile has built it from the seed: see
 # README.md. Each runs it, as it finds what to make again itself.
-GOALS := all bin/lerta bin/test test test-bootstrap seed check bench bench-http site site-serve
+GOALS := all bin/lerta bin/test test test-bootstrap seed check format bench bench-http site site-serve
 
 $(GOALS): build/build$(HOST_EXE)
 	@build/build $@ $(if $(TARGET),--target $(TARGET))
