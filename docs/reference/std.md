@@ -279,7 +279,8 @@ print (await response.text())!
 - A body is read by `Content-Length`, or by its last chunk for `Transfer-Encoding: chunked`, whose extensions and trailer fields are dropped.
 - A read of a body fails with an `IOError`:
   - `a body ended early` once the connection ends before it;
-  - `a malformed body` for a chunk that is malformed, as a size that is not hexadecimal, which only spaces and tabs may follow, and only before its extensions, or a line longer than 64 KiB.
+  - `a malformed body` for a chunk that is malformed, as a size that is not hexadecimal, which only spaces and tabs may follow, and only before its extensions; a line longer than 64 KiB; or a line of the chunks or the trailer that ends with a lone LF or holds a lone CR, as RFC 9112 has each end with CR LF.
+    - Why: a proxy before the server that takes a lone LF or CR otherwise, as a line end where the server does not or the other way round, would find another end of the body, and so another request after it.
 - After a read that fails, every later one fails so too, and the response gives `Connection: close` and closes the connection.
 
 #### Requests answered without the handler
@@ -382,7 +383,7 @@ server := serve(serve_files('public'), port: 8080)
   - `a transfer coding not supported: <coding>` for another transfer coding;
   - `a response ended early` for a body read past where the connection ended;
   - `the connection closed before a response` for a connection that ends before the response.
-- Malformed are: a line longer than 64 KiB, more than 256 lines of fields, and the size of a chunk that the server would take as malformed.
+- Malformed are: a line longer than 64 KiB, more than 256 lines of fields, and the chunks that the server would take as malformed, their lines and the trailer included.
 - A field folded onto lines that start with a space or a tab is read as one, its lines joined by a space. It is malformed if longer than 64 KiB so joined; such a line before any field is malformed.
 
 #### Kept connections

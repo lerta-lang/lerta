@@ -95,9 +95,11 @@ export class ChunkedBody
         return if line.is_empty()
       throw ended_early(@name)
 
-    # A line, its line end counted as CR LF.
+    # A line, which only CR LF ends, as RFC 9112 writes chunks: a lone LF or CR, which a proxy
+    # before the server may take as a line end where the server does not, or the other way round,
+    # would let the two tell different ends of the body, and so different requests after it.
     line := ->
-      line := await well_formed(@reader.read_line(MAX_LINE), @name) else return nil
+      line := await well_formed(@reader.read_line(MAX_LINE, true), @name) else return nil
       @lines_taken += line.binary.length + 2
 
       # Compared so, as `room` may be INT_MAX.

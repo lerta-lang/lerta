@@ -43,6 +43,19 @@ for size in [' 3', '3 ', "3\r", "3\r;x", ' ;x', "3 \t;x"]
 await ask(chunked('/', "5\r\nhel"))
 await ask(chunked('/', "3\r\nabcX\r\n") + last)
 
+# Each line of chunks ends with CR LF alone: a lone LF, which a proxy before the server may not
+# take as a line end, after a size, after data, after an extension, which would hide the request
+# after it, and in the trailer; and a lone CR in an extension. Also when the body is not read.
+for body in [
+  "3\nabc\r\n0\r\n\r\n"
+  "3\r\nabc\n0\r\n\r\n"
+  "0;\n\r\n"
+  "0\r\nx-trailer: t\n\r\n"
+  "3;a\rb\r\nabc\r\n0\r\n\r\n"
+]
+  await ask(chunked('/', body) + last)
+await ask(chunked('/ignore', "0;\n\r\n") + last)
+
 # The bytes of a body up to max_body, and one more, also when it is not read; many small chunks,
 # whose lines come to more than 64 KiB; and lines beyond max_body and 64 KiB together.
 at_most := "11170\r\n#{'x'.repeat(70000)}\r\n0\r\n\r\n"
