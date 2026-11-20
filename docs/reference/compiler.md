@@ -546,6 +546,7 @@ A language server, of the [Language Server Protocol](https://microsoft.github.io
 | `textDocument/formatting` | [Formatting](#formatting) |
 | `textDocument/hover` | [Hover](#hover-and-definition) |
 | `textDocument/definition` | [Definition](#hover-and-definition) |
+| `textDocument/references` | [References](#references) |
 | `textDocument/completion` | [Completion](#completion) |
 
 #### Documents
@@ -585,6 +586,14 @@ A language server, of the [Language Server Protocol](https://microsoft.github.io
   - the class, struct, interface, enum or alias that a type name names, as in an annotation or the enum of `Color.RED`.
 - They answer from the last check of the document's program, or of an open document's program that holds it, as far as it was checked.
 - They give nothing for a name that the checker gave no type, as a builtin type's name or a type parameter, but hover gives the doc comments of an import's name. Definition gives nothing for a declaration in a standard module.
+
+#### References
+
+- `textDocument/references` gives the names that lead to the declaration that the name at the position leads to, as `textDocument/definition` finds it, or is, and the declaration too if `context.includeDeclaration` is true.
+- It looks in the programs of the open documents, and, for a declaration that other modules may name, a top-level name that its module exports or a member of a class, struct, interface, enum or extend, in the files of the workspace: those under the folders that the client gives to `initialize` (`workspaceFolders`, or else `rootUri`), but in directories whose names start with `.`. Of those, it checks the programs that hold the files that import the declaration's file, directly or not, and write its name, from the texts of the open documents and from the other files.
+- A name that leads to the declaration under another name, as one that a module exports under an alias, is found only in a file that writes the declaration's name too.
+- It gives nothing for a declaration in a standard module, or one that no name leads to.
+- It stops checking programs once it has found 1000 names, and gives the first 1000 by file, line and column.
 
 #### Completion
 

@@ -64,6 +64,18 @@ export definition_request := (uri: String, line: Int, character: Int, id: Int) -
 export hover_request := (uri: String, line: Int, character: Int, id: Int) ->
   position_request('hover', uri, line, character, id)
 
+export references_request := (
+  uri: String
+  line: Int
+  character: Int
+  id: Int
+  include_declaration = true
+) ->
+  position := { line, character }
+  context := { includeDeclaration: include_declaration }
+  params := { position, context, textDocument: { uri } }
+  framed_json({ jsonrpc: '2.0', id, method: 'textDocument/references', params })
+
 # The values of the expected answers, as structs, whose fields encode_json writes in the order that
 # they are declared in, which is the server's.
 struct Position
@@ -98,6 +110,14 @@ export location_fragment := (id: Int, uri: String, line: Int, start: Int, end: I
   range := Range(start: { line, character: start }, end: { line, character: end })
   result_fragment(id, encode_json(Location(uri, range)))
 
+# The locations, each a URI, a line, and the characters where its range starts and ends.
+export locations_fragment := (id: Int, locations: (String, Int, Int, Int)[]) ->
+  ranges := [
+    Location(uri, range: { start: { line, character: start }, end: { line, character: end } })
+    for (uri, line, start, end) in locations
+  ]
+  result_fragment(id, encode_json(ranges))
+
 # A hover of the types, as their lines, and the doc comments, if there are any.
 export hover_fragment := (id: Int, text: String, doc: String? = nil) ->
   types := "```lerta\n#{text}\n```"
@@ -115,8 +135,29 @@ export finish :=
   frame('{"jsonrpc":"2.0","method":"exit"}')
 .join()
 
-export session := (dir: String, messages: String) ->
-  input := frame(initialize) + messages + finish
+export session := (dir: String, messages: String) -> await session_from(dir, initialize, messages)
+
+# A session whose client gives the directory as the root of its workspace.
+export workspace_session := (dir: String, messages: String) ->
+  params := { capabilities: {}, rootUri: uri_of(dir) }
+  initialize_in := encode_json({ params, jsonrpc: '2.0', id: 0, method: 'initialize' })
+  await session_from(dir, initialize_in, messages)
+
+# A session whose client gives the folders of its workspace, and a root that they take the place of.
+export folders_session := (dir: String, folders: String[], messages: String) ->
+  workspace_folders := [
+    for folder in folders
+      { uri: uri_of(folder), name: folder }
+  ]
+  params :=
+    capabilities: {}
+    rootUri: uri_of("#{dir}/ignored")
+    workspaceFolders: workspace_folders
+  initialize_in := encode_json({ params, jsonrpc: '2.0', id: 0, method: 'initialize' })
+  await session_from(dir, initialize_in, messages)
+
+session_from := (dir: String, initialize_message: String, messages: String) ->
+  input := frame(initialize_message) + messages + finish
   await run_command(compiler, ['lsp'], dir, input.binary)
 
 export excludes := (output: String, token: String, reason: String): String[] ->
@@ -164,6 +205,7 @@ export initialize_response := (encoding: String) ->
   '{"jsonrpc":"2.0","id":0,' +
     "\"result\":{\"capabilities\":{\"positionEncoding\":\"#{encoding}\",\"textDocumentSync\":1," +
     '"documentFormattingProvider":true,"hoverProvider":true,"definitionProvider":true,' +
+    '"referencesProvider":true,' +
     '"completionProvider":{"triggerCharacters":["."]}},"serverInfo":{"name":"lerta"}}}'
 
 shutdown_response := '{"jsonrpc":"2.0","id":"end","result":null}'

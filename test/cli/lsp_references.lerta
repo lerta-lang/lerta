@@ -1,0 +1,196 @@
+# The language server finds the names that lead to a declaration, in the open documents' programs
+# and in the files of the workspace.
+import Check from '../lib/report'
+import expect_status from '../lib/expect'
+import new_cli_dir from '../lib/cli'
+import make_dir, write_file from 'std:io'
+import
+  did_open, exact_responses, folders_session, locations_fragment, references_request, session,
+  uri_of, workspace_session
+from '../lib/lsp'
+
+program_references_check := ->
+  Check name: 'lerta lsp finds the references of a declaration in its program', run: ->
+    dir := new_cli_dir('lsp-references-program')
+    path := "#{dir}/a.lerta"
+    text :=
+      'value := 1'
+      'print value'
+      'twice := (n: Int) -> n * 2'
+      'print twice(value)'
+      'class K'
+      '  var v: Int = 1'
+      '  inc := -> @v += 1'
+      'k := K()'
+      'k.inc()'
+      'print k.v'
+      'id := <T>(item: T) -> item'
+      'print id(1)'
+      "print id('a')"
+      'unused := 2'
+      ''
+    .join("\n")
+    await write_file(path, text)
+    uri := uri_of(path)
+    messages :=
+      did_open(uri, text)
+      references_request(uri, 1, 6, 1)
+      references_request(uri, 0, 0, 2)
+      references_request(uri, 1, 6, 3, false)
+      references_request(uri, 5, 6, 4)
+      references_request(uri, 10, 23, 5)
+      references_request(uri, 11, 6, 6)
+      references_request(uri, 13, 0, 7)
+      references_request(uri, 1, 0, 8)
+    .join()
+    ran := await session(dir, messages)
+    value := [(uri, 0, 0, 5), (uri, 1, 6, 11), (uri, 3, 12, 17)]
+    [
+      expect_status(0, ran.status)...
+      exact_responses(
+        ran.stdout_text()
+        [
+          locations_fragment(1, value)
+          locations_fragment(2, value)
+          locations_fragment(3, value[1..])
+          locations_fragment(4, [(uri, 5, 6, 7), (uri, 6, 13, 14), (uri, 9, 8, 9)])
+          locations_fragment(5, [(uri, 10, 10, 14), (uri, 10, 22, 26)])
+          locations_fragment(6, [(uri, 10, 0, 2), (uri, 11, 6, 8), (uri, 12, 6, 8)])
+          '"id":7,"result":[]'
+          '"id":8,"result":[]'
+        ]
+      )...
+    ]
+
+workspace_references_check := ->
+  Check
+    name: 'lerta lsp finds references in the files of the workspace that import the file'
+    run: ->
+      dir := new_cli_dir('lsp-references-workspace')
+      lib := "#{dir}/lib.lerta"
+      main := "#{dir}/main.lerta"
+      tool := "#{dir}/sub/tool.lerta"
+      lib_text := "export shared := 1\nexport helper := (n: Int) -> n + shared\n"
+      make_dir "#{dir}/sub"
+      make_dir "#{dir}/.hidden"
+      await write_file(lib, lib_text)
+      await write_file(main, "import helper, shared as other from './lib'\nprint helper(other)\n")
+      await write_file(tool, "import helper from '../lib'\nprint helper(2)\n")
+      await write_file(
+        "#{dir}/.hidden/skipped.lerta"
+        "import helper from '../lib'\nprint helper(3)\n"
+      )
+      await write_file("#{dir}/unrelated.lerta", "helper := 1\nprint helper\n")
+      lib_uri := uri_of(lib)
+      main_uri := uri_of(main)
+      tool_uri := uri_of(tool)
+      messages :=
+        did_open(lib_uri, lib_text)
+        references_request(lib_uri, 1, 7, 1)
+        references_request(lib_uri, 0, 7, 2)
+      .join()
+      in_workspace := await workspace_session(dir, messages)
+      alone := await session(dir, messages)
+      helper :=
+        (lib_uri, 1, 7, 13)
+        (main_uri, 0, 7, 13)
+        (main_uri, 1, 6, 12)
+        (tool_uri, 0, 7, 13)
+        (tool_uri, 1, 6, 12)
+      shared :=
+        (lib_uri, 0, 7, 13)
+        (lib_uri, 1, 33, 39)
+        (main_uri, 0, 25, 30)
+        (main_uri, 1, 13, 18)
+      [
+        expect_status(0, in_workspace.status)...
+        exact_responses(
+          in_workspace.stdout_text()
+          [locations_fragment(1, helper), locations_fragment(2, shared)]
+        )...
+        expect_status(0, alone.status)...
+        exact_responses(
+          alone.stdout_text()
+          ['"id":1,"result":[]', locations_fragment(2, [(lib_uri, 0, 7, 13), (lib_uri, 1, 33, 39)])]
+        )...
+      ]
+
+indirect_references_check := ->
+  Check
+    name: 'lerta lsp finds references in unopened, indirectly imported, and broken files'
+    run: ->
+      dir := new_cli_dir('lsp-references-indirect')
+      root := "#{dir}/root"
+      make_dir root
+      make_dir "#{dir}/ignored"
+      lib := "#{root}/lib.lerta"
+      mid := "#{root}/mid.lerta"
+      user := "#{root}/user.lerta"
+      broken := "#{root}/broken.lerta"
+      user_text := "import helper from './lib'\nprint helper(1)\n"
+      await write_file(lib, "export helper := (n: Int) -> n\n")
+      await write_file(
+        mid
+        "import helper from './lib'\nexport twice := (n: Int) -> helper(n) * 2\n"
+      )
+      await write_file("#{root}/top.lerta", "import twice from './mid'\nprint twice(1)\n")
+      await write_file(broken, "import helper from './lib'\nprint helper(1)\nprint (\n")
+      await write_file(
+        "#{dir}/ignored/other.lerta"
+        "import helper from '../root/lib'\nprint helper(2)\n"
+      )
+      await write_file(user, user_text)
+      user_uri := uri_of(user)
+      messages :=
+        did_open(user_uri, user_text)
+        references_request(user_uri, 1, 6, 1)
+        references_request(user_uri, 1, 6, 2, false)
+        references_request(user_uri, 0, 0, 3)
+      .join()
+      ran := await folders_session(dir, [root, "#{dir}/missing"], messages)
+      without_declaration :=
+        (uri_of(broken), 0, 7, 13)
+        (uri_of(broken), 1, 6, 12)
+        (uri_of(mid), 0, 7, 13)
+        (uri_of(mid), 1, 28, 34)
+        (user_uri, 0, 7, 13)
+        (user_uri, 1, 6, 12)
+      [
+        expect_status(0, ran.status)...
+        exact_responses(
+          ran.stdout_text()
+          [
+            locations_fragment(
+              1
+              [without_declaration[..2]..., (uri_of(lib), 0, 7, 13), without_declaration[2..]...]
+            )
+            locations_fragment(2, without_declaration)
+            '"id":3,"result":[]'
+          ]
+        )...
+      ]
+
+limit_check := ->
+  Check(name: 'lerta lsp gives 1000 references at most', run: ->
+    dir := new_cli_dir('lsp-references-limit')
+    path := "#{dir}/a.lerta"
+    lines := ['v := 1']
+    lines.push 'print v' for _ in 0..1000
+    text := "#{lines.join("\n")}\n"
+    await write_file(path, text)
+    uri := uri_of(path)
+    ran := await session(dir, [did_open(uri, text), references_request(uri, 0, 0, 1)].join())
+    expected := [(uri, 0, 0, 1)]
+    for line in 1..1000
+      expected.push (uri, line, 6, 7)
+    [
+      expect_status(0, ran.status)...
+      exact_responses(ran.stdout_text(), [locations_fragment(1, expected)])...
+    ]
+  )
+
+export checks :=
+  program_references_check()
+  workspace_references_check()
+  indirect_references_check()
+  limit_check()

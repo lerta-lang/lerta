@@ -124,7 +124,8 @@ The rest of [`lerta lsp`](../reference/compiler.md#lsp):
   - the methods of extends of interfaces (as `map` of `Iterable` for an array);
   - an enum's member written alone where the enum is expected;
   - the code after an error in the same function's body.
-- Hover and going to a definition from a named argument's label.
+- Hover, going to a definition and finding references from a named argument's label.
+- Finding references in the folders added to the workspace after the server starts (`workspace/didChangeWorkspaceFolders`).
 - A diagnostic's range over the whole token of its position, rather than the position alone.
 - Checking a document that is no file yet, which the loader takes a program's modules to be.
 - Finding the open documents that import a file by real paths, so that two spellings of one directory through a symbolic link are one.

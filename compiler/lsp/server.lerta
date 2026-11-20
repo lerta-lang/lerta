@@ -1,8 +1,8 @@
 # `lerta lsp`: a language server over stdin and stdout (see docs/reference/compiler.md#lsp). It
 # takes the whole text of a document on each change, publishes the diagnostics of the program
 # whose entry module is the document when it is opened or changed, formats it as `lerta fmt --fix`
-# would write it, and gives the types and the doc comments of a name in it and where the name is
-# declared.
+# would write it, gives the types and the doc comments of a name in it and where the name is
+# declared, and finds the names that lead to a declaration, in the files of the workspace too.
 import is_file from 'std:io'
 import exit from 'std:process'
 import JsonError from 'std:json'
@@ -15,15 +15,23 @@ import
   source_position
 from './diagnostics'
 import completion_items, CompletionItem, probe_text, writing_at from './complete'
-import definition_of, hover_markdown, is_written, location_of, module_at from './locate'
+import
+  definition_of, hover_markdown, is_shared, is_written, location_of, module_at, references_in,
+  target_at, Written
+from './locate'
 import
   decode_header, decode_notification, decode_request, INTERNAL_ERROR, INVALID_PARAMS,
   METHOD_NOT_FOUND, PARSE_ERROR, notify, read_message, Request, respond, respond_error
 from './protocol'
 import path_of_uri, uri_of_path from './uri'
+import entries_for from './workspace'
+import Identifier from '../ast'
 
+# The workspace's folders, or else its root, which finding references looks through.
 struct InitializeParams
   capabilities: ClientCapabilities
+  root_uri: String?
+  workspace_folders: { uri: String }[]?
 
 struct ClientCapabilities
   general: { position_encodings: String[]? }?
@@ -39,6 +47,7 @@ struct ServerCapabilities
   document_formatting_provider: Bool
   hover_provider: Bool
   definition_provider: Bool
+  references_provider: Bool
 
   # Completion after a `.` as well as where a name starts.
   completion_provider: { trigger_characters: String[] }
@@ -64,6 +73,11 @@ struct PositionParams
   text_document: TextDocument
   position: LspPosition
 
+struct ReferenceParams
+  text_document: TextDocument
+  position: LspPosition
+  context: { include_declaration: Bool }
+
 struct MarkupContent
   kind: String
   value: String
@@ -85,6 +99,9 @@ struct TextEdit
 
 FULL_SYNC := 1
 
+# More references than one reads: finding them stops checking programs once it has found these.
+REFERENCE_LIMIT := 1000
+
 class Server
   private
     var encoding = PositionEncoding.UTF16
@@ -105,6 +122,9 @@ class Server
     # server sends back, as the client knows the document by that spelling, while several URIs,
     # `file://localhost/a.lerta` and `file:///a.lerta`, name one path.
     uris := Map<String, String>()
+
+    # The directories of the workspace, whose files finding references looks through.
+    var roots: String[] = []
 
     # Handles each message until the input ends or an exit notification comes. A header that gives
     # no length tells nothing of where the next message starts, and a body that the end cuts short
@@ -162,6 +182,9 @@ class Server
         when 'textDocument/definition'
           request := decode_request<PositionParams>(body)
           await respond(request.id, await @definition(request.params))
+        when 'textDocument/references'
+          request := decode_request<ReferenceParams>(body)
+          await respond(request.id, await @references(request.params))
         when 'textDocument/completion'
           request := decode_request<PositionParams>(body)
           await respond(request.id, await @completion(request.params))
@@ -175,7 +198,13 @@ class Server
             await respond_error(given, METHOD_NOT_FOUND, "no method #{method}")
 
     initialize := (request: Request<InitializeParams>) ->
-      encodings := request.params.capabilities.general?.position_encodings else []
+      params := request.params
+      folder_uris := params.workspace_folders?.map((folder) -> folder.uri).to_array() else []
+      if folder_uris.is_empty()
+        folder_uris.push root_uri if root_uri := params.root_uri
+      for uri in folder_uris
+        @roots.push path if path := path_of_uri(uri)
+      encodings := params.capabilities.general?.position_encodings else []
       @encoding = UTF32 if 'utf-32' in encodings
       encoding := @encoding == UTF32 then 'utf-32' else 'utf-16'
       capabilities := ServerCapabilities
@@ -184,6 +213,7 @@ class Server
         document_formatting_provider: true
         hover_provider: true
         definition_provider: true
+        references_provider: true
         completion_provider: { trigger_characters: ['.'] }
       await respond(request.id, InitializeResult(capabilities, server_info: { name: 'lerta' }))
 
@@ -229,10 +259,51 @@ class Server
       module_index := module_at(program, path) else return nil
       at := await source_position(path, params.position, @encoding)
       declared := definition_of(program, module_index, await read_source(path), at) else return nil
-      location := location_of(program, declared.module_index)
+      await @written_location(location_of(program, declared.module_index), declared.name)
+
+    # The names that lead to the declaration that the name at the position leads to, or is, in the
+    # programs of the open documents, and, for a declaration that other modules may name, of the
+    # entry modules of the workspace that hold the other files that may write them (see
+    # workspace.lerta), up to about REFERENCE_LIMIT of them; none if
+    # no name leads to it, or it is in a standard module.
+    references := (params: ReferenceParams): Promise<Location[]> ->
+      path := path_of_uri(params.text_document.uri) else return []
+      program := @program_of(path) else return []
+      module_index := module_at(program, path) else return []
+      at := await source_position(path, params.position, @encoding)
+      target := target_at(program, module_index, await read_source(path), at) else return []
+      return [] if is_standard_name(target.key)
+      place := (written: Written) ->
+        { line, column } := written.name.position
+        (written.key, line, column)
+      found: Map<(String, Int, Int), Written>
+      covered: Set<String>
+      search := (searched: ProgramWide) ->
+        for each in await references_in(searched, target)
+          if place(each) != place(target)
+            found[place(each)] = each
+        for index in 0..searched.modules.length
+          covered.add text_key(location_of(searched, index))
+      await search(each) for each in @programs.values()
+      if is_shared(program, target)
+        for entry in await entries_for(@roots, target.key, target.name.name, covered)
+          break if found.length >= REFERENCE_LIMIT
+          await search(checked) if checked := (await check_file(entry, @encoding)).program
+      return [] if found.is_empty()
+      if params.context.include_declaration
+        found[place(target)] = target
+      places := found.keys().to_array().sorted().take(REFERENCE_LIMIT)
+      locations: Location[]
+      for each in places
+        written := found[each]!
+        locations.push location if location := await @written_location(written.key, written.name)
+      locations
+
+    # Where the file writes the name, if it is not a standard module, and still writes it there.
+    written_location := (location: String, name: Identifier) ->
       return nil if is_standard_name(location)
-      return nil unless is_written((await read_source(location)).split("\n"), declared.name)
-      range := await name_range(location, declared.name, @encoding)
+      return nil unless is_written((await read_source(location)).split("\n"), name)
+      range := await name_range(location, name, @encoding)
       Location(range, uri: @uri_of(location))
 
     # What may be written where a name is being written, from a check of the document's text with

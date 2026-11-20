@@ -2,6 +2,18 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
+## The language server finds no declaration for an imported enum or an aliased import's name
+
+- Where: `add_imported_names` in `compiler/lsp/locate.lerta` takes the names that `imports.names` holds by an `ExportRef`, which an imported enum is not, and the name of `import a as b` is held as `b` alone.
+- How to see it: in `import Shade, shared as other from './b'`, going to the definition of `Shade`, an enum, or of `shared` gives nothing, so finding references from them gives nothing, and does not list them.
+- How to fix it: lead an imported enum's name to its declaration, and the name before `as` too.
+
+## Finding references skips the files of an entry module whose program does not load
+
+- Where: `references` in `compiler/lsp/server.lerta` checks each entry that `entries_for` picks once, and takes nothing from one whose modules cannot be loaded, as one that imports a missing file.
+- How to see it: in a workspace where `main.lerta` imports `./missing` and `./mid`, and `mid.lerta` imports and uses `helper` of the open `lib.lerta`, references of `helper` leave out `mid.lerta`, which would check alone.
+- How to fix it: give the wanted files of a failed entry back to `entries_for`, to be held by other entries or checked as entries themselves.
+
 ## fmt rewrites a two-way value in a function literal that a `then` value ends with
 
 - Where: the rewrite of a long two-way value in `compiler/format/two_way.lerta`, where the value is the body of a function literal that is the `then` value of another two-way value: its tokens run on to the `else` of the outer value.

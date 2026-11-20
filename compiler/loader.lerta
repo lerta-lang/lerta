@@ -11,7 +11,7 @@ import parse, parse_partially from './parser/statement'
 import base_name, dir_name, join, relative from 'std:path'
 import
   given_sources, is_standard_name, module_location, read_entry_source, read_source, standard_file,
-  standard_import, standard_names, standard_source
+  SOURCE_EXTENSION, standard_import, standard_names, standard_source
 from './source'
 
 export class Module
@@ -268,13 +268,19 @@ imported_standard_source := (statement: Import, location: String) ->
 
 imported_file := (statement: Import, from: String, location: String) ->
   module := statement.module
-  if not module.starts_with('./') and not module.starts_with('../')
+  unless is_file_module(module)
     message := "unknown module '#{module}'; a file is imported by a path that starts with ./ or ../"
     import_error statement, location, message
-  path := join(from, "#{module}.lerta")
+  path := module_file(module, from)
   unless is_file(path)
     import_error statement, location, "cannot find module '#{module}'"
   path
+
+# Whether the module that an import names is a file, by a path relative to the importer's directory.
+export is_file_module := (module: String) -> module.starts_with('./') or module.starts_with('../')
+
+# The path of the file that the module names, from the importer's directory.
+export module_file := (module: String, from: String) -> join(from, "#{module}#{SOURCE_EXTENSION}")
 
 import_error := (statement: Import, location: String, message: String) ->
   { line, column } := statement.position

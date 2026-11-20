@@ -1,0 +1,115 @@
+# The files of a workspace, for finding the references to a declaration in those that no open
+# document's program holds: which of them import which, and the entry modules to check for them.
+import is_file, list_tree from 'std:io'
+import Import from '../ast'
+import CompileError from '../errors'
+import is_file_module, module_file from '../loader'
+import tokenize from '../lexer/tokens'
+import parse_partially from '../parser/statement'
+import read_source, SOURCE_EXTENSION, text_key from '../source'
+import dir_name, join from 'std:path'
+
+# The files of the workspace by the keys of their texts (see text_key): their texts, and the files
+# that each imports.
+struct ImportGraph
+  sources: Map<String, String>
+  imports: Map<String, String[]>
+
+# The entry modules whose programs hold, between them, each file of the workspace that may refer to
+# the declaration of the name in the file of the key and that `covered` leaves out: the file itself
+# and those that import it, directly or not, that write the name. Each entry holds the most of
+# those that the entries before it leave, so that the first ones find the most.
+export entries_for := (
+  roots: String[], declared_in: String, name: String, covered: Set<String>
+): Promise<String[]> ->
+  graph := await import_graph(roots)
+  return [] unless declared_in in graph.sources
+  users := reached(declared_in, importers_of(graph)).to_array().sorted()
+  may_refer := (file: String) -> file not in covered and graph.sources[file]!.contains(name)
+  wanted := Set(users.filter(may_refer))
+
+  # How many of the wanted files each user reaches, and the users that reach each file.
+  gains: Map<String, Int>
+  reached_by: Map<String, String[]>
+  reaches: Map<String, Set<String>>
+  for user in users
+    reaches[user] = reached(user, graph.imports)
+    gains[user] = reaches[user]!.filter((file) -> file in wanted).count()
+    for file in reaches[user]!
+      reached_by[file, default: []].push(user)
+  entries: String[]
+  until wanted.is_empty()
+    # A wanted file reaches itself, so that each entry holds one at least.
+    entry := users.max_by((user) -> gains[user]!)!
+    entries.push entry
+    for file in reaches[entry]!
+      continue unless wanted.remove(file)
+      for user in reached_by[file]!
+        gains[user] = gains[user]! - 1
+  entries
+
+# The files under the roots, but in directories whose names start with `.`, as `.git`, and those
+# that are not valid UTF-8; a root that cannot be listed has none.
+import_graph := (roots: String[]) ->
+  graph := ImportGraph(sources: Map(), imports: Map())
+  for path in lerta_files(roots)
+    key := text_key(path)
+    continue if key in graph.sources
+    source := await source_of(path) else continue
+    graph.sources[key] = source
+    graph.imports[key] = imported_files(path, source)
+  graph
+
+lerta_files := (roots: String[]) ->
+  enters := (name: String) -> not name.starts_with('.')
+  paths: String[]
+  for root in roots
+    files :=
+      try
+        list_tree root, enters
+      catch _: IOError | ValueError
+        continue
+    for file in files
+      if file.ends_with(SOURCE_EXTENSION)
+        paths.push join(root, file)
+  paths
+
+source_of := (path: String) ->
+  try
+    await read_source(path)
+  catch _: CompileError
+    nil
+
+# The files that the source of the file at the path imports, of its statements that parse.
+imported_files := (path: String, source: String): String[] ->
+  statements :=
+    try
+      parse_partially(tokenize(source, path), path).statements
+    catch _: CompileError
+      return []
+  files: String[]
+  for statement in statements
+    continue unless statement is Import
+
+    # One with a type embeds a file, rather than importing a module.
+    continue if statement.type or not is_file_module(statement.module)
+    imported := module_file(statement.module, dir_name(path))
+    files.push text_key(imported) if is_file(imported)
+  files
+
+importers_of := (graph: ImportGraph) ->
+  importers: Map<String, String[]>
+  for (file, imported) in graph.imports
+    for each in imported
+      importers[each, default: []].push(file)
+  importers
+
+# The file and those that the edges lead to from it, directly or not.
+reached := (start: String, edges: Map<String, String[]>) ->
+  seen := Set([start])
+  pending := [start]
+  until pending.is_empty()
+    file := pending.pop()
+    for next in edges[file] else []
+      pending.push next if seen.add(next)
+  seen

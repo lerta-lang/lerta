@@ -1,8 +1,9 @@
-# The names of a checked program by their positions, for an editor's hover and going to a
-# definition: what the checker found of the name at a place, its types and its declaration, and the
-# doc comments of its declaration.
+# The names of a checked program by their positions, for an editor's hover, going to a definition
+# and finding references: what the checker found of the name at a place, its types and its
+# declaration, the doc comments of its declaration, and the names that lead to a declaration.
 import
-  EnumDeclaration, Identifier, Import, InterfaceDeclaration, Member, NamedType, Position
+  EnumDeclaration, Extend, Identifier, Import, InterfaceDeclaration, Member, NamedType, Position,
+  Statement, TypeDeclaration
 from '../ast'
 import generic_of, GenericFunction from '../checker/generics'
 import export_ref, ExportRef from '../checker/imports'
@@ -11,9 +12,9 @@ import ExtensionSource, OwnMethod from '../checker/methods'
 import info_of from '../checker/object_types'
 import Constructor, ExternReference, FunctionReference, TopLevelValue from '../checker/references'
 import NodeFacts, ProgramWide, Shared from '../checker/shared'
-import is_name_character from './complete'
+import is_name_character, name_start from './complete'
 import doc_comment from './doc_comments'
-import module_location from '../source'
+import is_standard_name, module_location, read_source, text_key from '../source'
 import EnumType, format_type, InterfaceType, ObjectType, Type from '../types'
 
 # A declaration: a name of a module, by the module's place.
@@ -56,15 +57,92 @@ export hover_markdown := (program: ProgramWide, module_index: Int, source: Strin
 export definition_of := (program: ProgramWide, module_index: Int, source: String, at: Position) ->
   candidates_at(program, module_index, source, at).find_map(Candidate.declaration)
 
-# The names at the position in the module's code: those whose types and references its own facts
-# and those of the definitions and instances of its generic functions and classes hold, the callees
-# of generic functions, and the names it imports.
+# A name where a file writes it: the key of the file's text (see text_key), and the name.
+export struct Written
+  key: String
+  name: Identifier
+
+# The declaration that the name at the position leads to, or else the name itself, which is a
+# declaration if any name leads to it.
+export target_at := (
+  program: ProgramWide, module_index: Int, source: String, at: Position
+): Written? ->
+  if declared := definition_of(program, module_index, source, at)
+    return { key: key_of(program, declared.module_index), name: declared.name }
+  line := source.split("\n").get(at.line - 1) else return nil
+  start := name_start(line, at.column)
+  from_start := line.skip(start - 1)
+  name := from_start.without_suffix(from_start.skip_while(is_name_character))!
+  return nil if name.is_empty()
+  position := Position(at..., column: start)
+  { key: key_of(program, module_index), name: Identifier(name, position) }
+
+# The names that lead to the target in the program's modules but the standard ones, as far as
+# their files still write them. A module whose text does not write the target's name has none, as
+# a name that leads to a declaration of another module is imported by its name, if under another.
+export references_in := (program: ProgramWide, target: Written) ->
+  keys := [
+    for index in 0..program.modules.length
+      key_of(program, index)
+  ]
+  leads_to_target := (declared: Declared) ->
+    keys[declared.module_index] == target.key and declared.name.position == target.name.position
+  found: Written[]
+  for module_index in 0..program.modules.length
+    location := location_of(program, module_index)
+    continue if is_standard_name(location)
+    source := await read_source(location)
+    continue unless target.name.name in source
+    lines := source.split("\n")
+    for candidate in module_candidates(program, module_index)
+      continue unless is_written(lines, candidate.name)
+      declared := candidate.declaration() else continue
+      if leads_to_target(declared)
+        found.push { key: keys[module_index], name: candidate.name }
+  found
+
+# Whether the names of other modules may lead to the target, a declaration of the program: a
+# top-level name that its module exports, or a member of a class, a struct, an interface, an enum or
+# an extend, which values carry to any module. Not a local, nor any name that is not a declaration.
+export is_shared := (program: ProgramWide, target: Written) ->
+  is_declarer := (shared: Shared) -> key_of(program, shared.index) == target.key
+  module_index := program.shared.find(is_declarer)?.index else return false
+  is_target := (name: Identifier) -> name.position == target.name.position
+  return true if member_names(program.modules[module_index].program).any(is_target)
+  name := target.name.name
+  top_level := top_level_declaration(program, module_index, name) else return false
+  is_target(top_level.name) and name in program.shared[module_index].exported
+
+# The names of the members that the statements declare in classes, structs, interfaces, enums and
+# extends.
+member_names := (statements: Statement[]) ->
+  names: Identifier[]
+  for statement in statements
+    case statement
+      when TypeDeclaration, InterfaceDeclaration, Extend
+        names.push member.name for member in statement.members
+      when EnumDeclaration
+        for member in statement.members
+          names.push member if member is Identifier
+      else pass
+  names
+
+# The key of the text of the module of the place (see text_key).
+key_of := (program: ProgramWide, module_index: Int) -> text_key(location_of(program, module_index))
+
+# The names at the position in the module's code, as far as its source still writes them.
 candidates_at := (program: ProgramWide, module_index: Int, source: String, at: Position) ->
   lines := source.split("\n")
+  is_at := (candidate: Candidate) -> spans(candidate.name, at) and is_written(lines, candidate.name)
+  module_candidates(program, module_index).filter(is_at).to_array()
+
+# The names in the module's code: those whose types and references its own facts and those of the
+# definitions and instances of its generic functions and classes hold, the callees of generic
+# functions, and the names it imports.
+module_candidates := (program: ProgramWide, module_index: Int) ->
   shared := program.shared[module_index]
   found: Candidate[]
-  add := (candidate: Candidate) ->
-    found.push candidate if spans(candidate.name, at) and is_written(lines, candidate.name)
+  add := (candidate: Candidate) -> found.push(candidate)
   for facts in all_facts(shared)
     add_fact_names add, program, module_index, facts
     add_generic_callees add, program, facts

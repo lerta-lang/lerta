@@ -9,8 +9,8 @@ const MAX_HEADER_LENGTH = 1024
 // A client of `lerta lsp` (see docs/reference/compiler.md#lsp), written without the
 // vscode-languageclient package, so that the extension needs no install of its own: it sends the
 // Lerta documents' texts, shows the diagnostics that the server publishes, formats a document by
-// its edits, and asks the server for the types of a name, where it is declared, and what may be
-// written where a name is being written. One server runs
+// its edits, and asks the server for the types of a name, where it is declared, where it is
+// referred to, and what may be written where a name is being written. One server runs
 // for each lerta command, as each workspace folder may have its own.
 // A server that fails is started again only when a document is opened, not at each edit.
 function activate(context) {
@@ -61,7 +61,10 @@ function activate(context) {
       end(server, `lerta lsp ended (${signal ?? `exit code ${code}`}) ${stderr.trim()}`.trim())
     })
     // Nothing but the initialize request goes before its result comes, as the protocol has it.
-    const params = { processId: process.pid, rootUri: null, capabilities: {} }
+    // The folders open when it starts, whose files the server finds references in.
+    const folders = vscode.workspace.workspaceFolders ?? []
+    const workspaceFolders = folders.map(folder => ({ uri: folder.uri.toString(), name: folder.name }))
+    const params = { processId: process.pid, rootUri: null, workspaceFolders, capabilities: {} }
     server.ready = call(server, 'initialize', params).then(() => write(server, { method: 'initialized', params: {} }))
     server.ready.catch(() => {})
     return server
@@ -167,10 +170,10 @@ function activate(context) {
   }
 
   // A request about a position in a document, of the server that holds it.
-  async function askAt(document, position, method) {
+  async function askAt(document, position, method, more = {}) {
     const server = holders.get(document.uri.toString())
     if (!server) return null
-    const params = { textDocument: { uri: document.uri.toString() }, position: { line: position.line, character: position.character } }
+    const params = { textDocument: { uri: document.uri.toString() }, position: { line: position.line, character: position.character }, ...more }
     return request(server, method, params).catch(() => null)
   }
 
@@ -185,6 +188,14 @@ function activate(context) {
     async provideDefinition(document, position) {
       const location = await askAt(document, position, 'textDocument/definition')
       return location && new vscode.Location(vscode.Uri.parse(location.uri), toRange(location.range))
+    },
+  }
+
+  const references = {
+    async provideReferences(document, position, { includeDeclaration }) {
+      const params = { context: { includeDeclaration } }
+      const locations = (await askAt(document, position, 'textDocument/references', params)) ?? []
+      return locations.map(location => new vscode.Location(vscode.Uri.parse(location.uri), toRange(location.range)))
     },
   }
 
@@ -217,6 +228,7 @@ function activate(context) {
     vscode.languages.registerDocumentFormattingEditProvider({ language: 'lerta', scheme: 'file' }, formatter),
     vscode.languages.registerHoverProvider({ language: 'lerta', scheme: 'file' }, hovers),
     vscode.languages.registerDefinitionProvider({ language: 'lerta', scheme: 'file' }, definitions),
+    vscode.languages.registerReferenceProvider({ language: 'lerta', scheme: 'file' }, references),
     vscode.languages.registerCompletionItemProvider({ language: 'lerta', scheme: 'file' }, completions, '.'),
     { dispose: () => servers.forEach(stop) },
   )
