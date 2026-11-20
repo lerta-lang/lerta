@@ -1,14 +1,14 @@
 # The functions that write values of a type through an Encoder (see codegen/codable), which borrow
 # the value. A writer that throws is let go of as it is, so a function releases only what it took.
 import is_value_type from '../checker/value_layout'
-import info_of from '../checker/object_types'
+import field_names, part_types from '../checker/object_types'
 import ProgramWide from '../checker/shared'
 import emit_borrowed_item, emit_length from './array'
 import emit_item_slot, emit_take_item, emit_taken from './items'
 import emit_member_name from './enum'
 import emit_check_with, emit_return_thrown from './exceptions'
 import emit_member_value from './boxes'
-import emit_borrowed_field, emit_borrowed_value, emit_member_dispatch from './heap_object'
+import emit_borrowed_part, emit_borrowed_value, emit_member_dispatch from './heap_object'
 import emit_count_up, emit_if_else, emit_while, IrBuilder, IrModule from './ir_builder'
 import call_void_method, Coder, is_inline, map_shape, MAP, name_arg, SCALARS, SET from './codable'
 import emit_release, emit_release_value, ir_type from './lerta_ir'
@@ -47,8 +47,7 @@ emit_write_parts := (ir: IrBuilder, writer: Coder, value: String, type: Type) ->
     when ArrayType then emit_write_array(ir, writer, value, type.element, unwind)
     when MapType then emit_write_map(ir, writer, value, type)
     when TupleType then emit_write_tuple(ir, writer, value, type, unwind)
-    when RecordType then emit_write_record(ir, writer, value, type, unwind)
-    when ObjectType then emit_write_object(ir, writer, value, type, unwind)
+    when RecordType, ObjectType then emit_write_fields(ir, writer, value, type, unwind)
     when UnionType then emit_write_union(ir, writer, value, type, unwind)
     else emit_write(ir, writer, value, type, unwind)
 
@@ -99,18 +98,12 @@ emit_enter := (ir: IrBuilder, writer: Coder, object: String, unwind: () -> void)
 # back; as that value has no address, the array or the map is entered instead. An object, an array
 # or a map further in is entered itself.
 leads_to_value_cycle := (program: ProgramWide, type: Type, visited: Set<String>): Bool ->
-  part_leads := (part: Type) -> leads_to_value_cycle(program, part, visited)
-  case type
-    when OptionalType then part_leads(type.inner)
-    when TupleType then type.items.any(part_leads)
-    when RecordType then type.fields.any((field) -> part_leads(field.type))
-    when UnionType then type.members.any(part_leads)
-    when ObjectType
-      return false unless is_value_type(program, type)
-      return true if may_hold_itself(program, type)
-      return false unless visited.add(type_key(type))
-      info_of(program, type).fields.any((field) -> part_leads(field.type!))
-    else false
+  return false if type is ArrayType | MapType
+  if type is ObjectType
+    return false unless is_value_type(program, type)
+    return true if may_hold_itself(program, type)
+    return false unless visited.add(type_key(type))
+  part_types(program, type, nil).any((part) -> leads_to_value_cycle(program, part, visited))
 
 # The entries in their order, through a cursor of the runtime, which gives each key and value
 # owned: a set's items, a map's keys of String with their values, or another map's entries, each of
@@ -175,34 +168,24 @@ emit_write_tuple := (
     emit_write ir, writer, emit_borrowed_value(ir, tuple, type, i), item_type, unwind
   call_void_method ir, writer, 'end_tuple', [], unwind
 
-emit_write_record := (
-  ir: IrBuilder, writer: Coder, record: String, type: RecordType, unwind: () -> void
+# The fields of an anonymous struct, a class or a struct. A class or struct that may hold itself is
+# entered, so that the writer finds a cycle.
+emit_write_fields := (
+  ir: IrBuilder, writer: Coder, value: String, type: Type, unwind: () -> void
 ): void ->
-  write_field := (name: String, value: String, field_type: Type) ->
-    emit_write_field ir, writer, name, unwind
-    emit_write ir, writer, value, field_type, unwind
-  call_void_method ir, writer, 'begin_record', [], unwind
-  for field at i in type.fields
-    write_field field.name, emit_borrowed_value(ir, record, type, i), field.type
-  call_void_method ir, writer, 'end_record', [], unwind
-
-# A class or struct that may hold itself is entered, so that the writer finds a cycle.
-emit_write_object := (
-  ir: IrBuilder, writer: Coder, object: String, type: ObjectType, unwind: () -> void
-): void ->
-  info := info_of(writer.program, type)
+  { program } := writer
 
   # A struct's value has no address: the array or the map on its way back to itself is entered
   # instead (see leads_to_value_cycle).
-  may_cycle := not is_value_type(writer.program, type) and may_hold_itself(writer.program, type)
+  may_cycle :=
+    type is ObjectType and not is_value_type(program, type) and may_hold_itself(program, type)
   if may_cycle
-    emit_enter ir, writer, object, unwind
+    emit_enter ir, writer, value, unwind
   call_void_method ir, writer, 'begin_record', [], unwind
-  for field in info.fields
-    name := field.name.name
-    field_type := field.type!
-    emit_write_field ir, writer, name, unwind
-    emit_write ir, writer, emit_borrowed_field(ir, object, info, field), field_type, unwind
+  names := field_names(program, type)
+  for part at i in part_types(program, type, nil)
+    emit_write_field ir, writer, names[i], unwind
+    emit_write ir, writer, emit_borrowed_part(ir, value, type, i), part, unwind
   call_void_method ir, writer, 'end_record', [], unwind
   if may_cycle
     call_void_method ir, writer, 'leave', [], unwind
@@ -222,7 +205,7 @@ emit_write_field := (ir: IrBuilder, writer: Coder, name: String, unwind: () -> v
 # Whether a value of the class or struct may hold itself, through its parts and theirs.
 may_hold_itself := (program: ProgramWide, type: ObjectType) ->
   reach := Reach(program, target: type_key(type))
-  info_of(program, type).fields.any((field) -> reach.reaches(field.type!))
+  part_types(program, type, nil).any((part) -> reach.reaches(part))
 
 # The parts of types that lead to a value of the target, a class or struct by its key.
 class Reach
@@ -235,18 +218,8 @@ class Reach
     visited := Set<String>()
 
     reaches := (part: Type): Bool ->
-      case part
-        when OptionalType then @reaches(part.inner)
-        when ArrayType then @reaches(part.element)
-        when MapType then @reaches(part.key) or @reaches(part.value)
-        when TupleType then part.items.any(@reaches)
-        when RecordType then part.fields.any((field) -> @reaches(field.type))
-        when ObjectType then @reaches_object(part)
-        when UnionType then part.members.any(@reaches)
-        else false
-
-    reaches_object := (type: ObjectType) ->
-      key := type_key(type)
-      return true if key == @target
-      return false unless @visited.add(key)
-      info_of(@program, type).fields.any((field) -> @reaches(field.type!))
+      if part is ObjectType
+        key := type_key(part)
+        return true if key == @target
+        return false unless @visited.add(key)
+      part_types(@program, part, nil).any(@reaches)

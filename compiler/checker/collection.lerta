@@ -12,12 +12,12 @@ import float_first, is_contextual from './literals'
 import lookup, record_reference from './name'
 import CollectionMaker from './references'
 import Body, ProgramWide from './shared'
-import field_type, info_of from './object_types'
+import field_type, info_of, part_types from './object_types'
 import names_type_or_import, resolve from './type_names'
 import
   ArrayType, byte_type, format_type, inner_of_expected, int_type, InterfaceType, is_kind,
-  is_one_of_kinds, is_set, IterType, MapType, ObjectType, optional_type, OptionalType, RecordType,
-  set_of, TupleType, Type, type_key, UnionType
+  is_one_of_kinds, is_set, IterType, MapType, ObjectType, optional_type, OptionalType, set_of,
+  TupleType, Type, type_key
 from '../types'
 
 # The type of the values of a container, such as 'an Iter', which `at` gives: any type with
@@ -244,15 +244,13 @@ holds_changing := (program: ProgramWide, type: Type, at: Position, seen: Set<Str
   holds := (part: Type) -> holds_changing(program, part, at, seen)
   case type
     when ArrayType, MapType, IterType, InterfaceType then true
+    # A struct's fields are typed one at a time, up to the first that holds one, as one checked
+    # later may not be typed yet where an initializer fills an array with the struct.
     when ObjectType
       return true unless type.is_struct
       info := info_of(program, type)
       info.fields.any((field) -> holds(field_type(program, info, field, at)))
-    when TupleType then type.items.any(holds)
-    when RecordType then type.fields.any((field) -> holds(field.type))
-    when UnionType then type.members.any(holds)
-    when OptionalType then holds(type.inner)
-    else false
+    else part_types(program, type, at).any(holds)
 
 # The type that `Map<K, V>()` or `Set<T>()` writes, or else the one expected.
 written_or_expected := (body: Body, call: Call, name: String, expected: Type?) ->

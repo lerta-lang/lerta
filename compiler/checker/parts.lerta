@@ -12,12 +12,12 @@ import std_interface from './interfaces'
 import find_member, generic_method from './member'
 import Method, MemberTarget from './member_targets'
 import ExtensionSource, find_method from './methods'
-import field_type, info_of from './object_types'
+import part_types from './object_types'
 import find_interface_extension, satisfies from './satisfaction'
 import Body, InstanceLink, ProgramWide from './shared'
 import
-  ArrayType, FunctionType, is_set, MapType, ObjectType, OptionalType, RecordType, string_type,
-  TupleType, Type, type_key, UnionType
+  ArrayType, FunctionType, is_composite, MapType, OptionalType, string_type, TupleType, Type,
+  type_key, UnionType
 from '../types'
 
 # How the method of the name, `to_literal` or `compare`, of a value of the type is made: of its
@@ -63,10 +63,6 @@ gets_by_parts := (body: Body, type: Type, name: String, at: Position) ->
   return false if has_member(body, type, name, at)
   name == 'to_literal' or (name == 'to_string' and not has_own_literal(body, type, at))
 
-# A struct, a tuple or an anonymous struct, whose parts are its fields or items.
-is_composite := (type: Type) ->
-  (type is ObjectType and type.is_struct) or type is TupleType | RecordType
-
 # Whether the type has a field of the name, or gets a method of it from an extend of an interface.
 has_member := (body: Body, type: Type, name: String, at: Position) ->
   identifier := Identifier(name, position: at)
@@ -87,7 +83,7 @@ planned := (
   key := plan_key(method, type)
   ids := body.extensions.parts_plans
   return program.parts_plans[id] if id := ids[key]
-  parts := part_types(body, type, at)
+  parts := part_types(program, type, at)
   visiting := Set([type_key(type)])
   return nil unless parts.all((part) -> has_method(body, part, at, visiting))
   plan := PartsPlan(type, method, id: program.parts_plans.length)
@@ -100,19 +96,6 @@ planned := (
   plan
 
 plan_key := (method: String, type: Type) -> "#{method} #{type_key(type)}"
-
-part_types := (body: Body, type: Type, at: Position): Type[] ->
-  case type
-    when OptionalType then [type.inner]
-    when TupleType then type.items
-    when RecordType then [field.type for field in type.fields]
-    when ObjectType
-      info := info_of(body.program, type)
-      [
-        for field in info.fields
-          field_type(body.program, info, field, at)
-      ]
-    else []
 
 part_call := (body: Body, part: Type, method: String, at: Position) ->
   name := Identifier(name: method, position: at)
@@ -138,17 +121,14 @@ export is_literal := (body: Body, type: Type, at: Position) ->
 # of their own type takes for Literal, as a value that holds itself writes its literal by a
 # recursive call.
 is_literal_part := (body: Body, type: Type, at: Position, visiting: Set<String>): Bool ->
-  part := (each: Type) -> is_literal_part(body, each, at, visiting)
+  all_parts := ->
+    part_types(body.program, type, at).all((part) -> is_literal_part(body, part, at, visiting))
   case
-    when type is ArrayType then part(type.element)
-    when is_set(type) then part((type as MapType!).key)
-    when type is MapType then part(type.key) and part(type.value)
-    when type is OptionalType then part(type.inner)
-    when type is UnionType then type.members.all(part)
+    when type is ArrayType | MapType | OptionalType | UnionType then all_parts()
     when is_composite(type) and not has_own_literal(body, type, at)
       planned_already := plan_key('to_literal', type) in body.extensions.parts_plans
       return true if planned_already or not visiting.add(type_key(type))
-      part_types(body, type, at).all(part)
+      all_parts()
     else satisfies(body, type, std_interface(body.shared, 'Literal', at).type, at)
 
 # Whether the type satisfies Comparable, a tuple by its items, which cannot hold the tuple again.

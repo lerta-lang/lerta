@@ -23,7 +23,8 @@ import declared_symbol, has_declared_type, NodeFacts, ProgramWide, Shared from '
 import module_resolver, resolve, Resolver, with_type_parameters from './type_names'
 import has_standing, is_pattern, placeholders, substitute, type_depth from './type_patterns'
 import
-  format_type, FunctionType, inner_of, InterfaceType, ObjectType, OptionalType, Type
+  ArrayType, format_type, FunctionType, inner_of, InterfaceType, is_set, MapType, ObjectType,
+  OptionalType, RecordType, TupleType, Type, UnionType
 from '../types'
 
 export class FieldInfo
@@ -409,6 +410,36 @@ export field_type := (
     fail program, at, "the type of '#{field.name.name}' is not known yet; write it"
   check_info program, info
   field.type else abort_part()
+
+# The types of the values that a value of the type holds directly: of the fields of a class or a
+# struct, in order, the items of a tuple, the fields of an anonymous struct, in name order (see
+# record_type), the members of a union, what an optional holds, the items of an array or a set, and
+# the keys and values of a map. `at` is where a field's type is needed (see field_type), or nil for
+# where each field is declared.
+export part_types := (program: ProgramWide, type: Type, at: Position?): Type[] ->
+  case type
+    when ObjectType
+      info := info_of(program, type)
+      [
+        for field in info.fields
+          field_type(program, info, field, at else field.name.position)
+      ]
+    when TupleType then type.items
+    when RecordType then [field.type for field in type.fields]
+    when UnionType then type.members
+    when OptionalType then [type.inner]
+    when ArrayType then [type.element]
+    when MapType
+      is_set(type) then [type.key] else [type.key, type.value]
+    else []
+
+# The names of the fields of a class, a struct or an anonymous struct, in the order of their parts
+# (see part_types).
+export field_names := (program: ProgramWide, type: Type) ->
+  case type
+    when ObjectType then [field.name.name for field in info_of(program, type).fields]
+    when RecordType then [field.name for field in type.fields]
+    else panic('not a class, a struct or an anonymous struct')
 
 # A generic class or struct is checked by its instances (see check_pending_objects). Whether a
 # type satisfies the interface it names is checked once all are, as its methods may need the

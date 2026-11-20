@@ -2,11 +2,11 @@
 # fields are laid out in them (see docs/internals/representation.md#values).
 # Sizes are counted as on a 64-bit target, a reference as 8 bytes, so that the IR does not depend on
 # the target, as the seed's must not; a 32-bit target's are no larger.
-import info_of from './object_types'
+import part_types from './object_types'
 import ProgramWide from './shared'
 import
-  ENUM_BITS, inner_of, is_boxed, is_kind, is_reference_type, kind_of, ObjectType, OptionalType,
-  RecordType, TupleType, Type, TypeKind, UnionType
+  ENUM_BITS, inner_of, is_boxed, is_composite, is_kind, is_reference_type, kind_of, OptionalType,
+  Type, TypeKind, UnionType
 from '../types'
 
 export MAX_VALUE_BYTES := 16
@@ -52,7 +52,8 @@ export value_layout := (program: ProgramWide, type: Type): ValueLayout? ->
   layout
 
 find_layout := (program: ProgramWide, type: Type): ValueLayout? ->
-  parts := part_types(program, type) else return nil
+  return nil unless is_composite(type)
+  parts := part_types(program, type, nil)
   return nil if reaches(program, type, type, Set())
   rooms: Room[]
   for part in parts
@@ -82,12 +83,7 @@ holds_counted := (program: ProgramWide, type: Type): Bool ->
 # Whether the values of the type are values rather than heap objects: a struct's, an anonymous
 # struct's or a tuple's that value_layout lays out.
 export is_value_type := (program: ProgramWide, type: Type) ->
-  may_be_value :=
-    case type
-      when ObjectType then type.is_struct
-      when RecordType, TupleType then true
-      else false
-  may_be_value and value_layout(program, type) != nil
+  is_composite(type) and value_layout(program, type) != nil
 
 # Whether a union holds a value of the type, one of its members, in a box: as is_boxed tells, or a
 # value, which is no object of its own.
@@ -103,9 +99,7 @@ export boxes_member_into := (program: ProgramWide, type: Type, target: Type) ->
 # boxes_member_into tells once the fields of the structs are typed: a struct, an anonymous struct
 # or a tuple, which may be a value (see NodeFacts.boxings).
 export may_box_value_into := (type: Type, target: Type) ->
-  value := inner_of(type)
-  may_be_value := kind_of(value) in [RECORD, TUPLE] or (value is ObjectType and value.is_struct)
-  into_union(type, target) and may_be_value
+  into_union(type, target) and is_composite(inner_of(type))
 
 into_union := (type: Type, target: Type) ->
   inner_of(target) is UnionType and inner_of(type) is not UnionType
@@ -128,22 +122,11 @@ export field_place := (program: ProgramWide, type: Type, types: Type[], index: I
     [order.index_of(i)! for i in 0..types.length]
   program.field_places.get_or_add(type, places_of)[index]
 
-# The types of the parts that a value of the type would hold in itself: the fields of a struct, an
-# anonymous struct or a tuple; nil for another type.
-part_types := (program: ProgramWide, type: Type): Type[]? ->
-  case type
-    when ObjectType
-      return nil unless type.is_struct
-      [field.type! for field in info_of(program, type).fields]
-    when RecordType then [field.type for field in type.fields]
-    when TupleType then type.items
-    else nil
-
 # Whether `type`, or a value inside it through its parts, optional or not, holds a value of
 # `target`; `seen` keeps it from going round another cycle.
 reaches := (program: ProgramWide, type: Type, target: Type, seen: Set<Type>): Bool ->
-  parts := part_types(program, type) else return false
-  for part in parts
+  return false unless is_composite(type)
+  for part in part_types(program, type, nil)
     held := without_nil(part)
     return true if held == target
     continue if held in seen
@@ -164,7 +147,7 @@ room_of := (program: ProgramWide, type: Type): Room? ->
     return
       alignment: inner.alignment
       size: aligned(inner.alignment + inner.size, inner.alignment)
-  if part_types(program, type) != nil
+  if is_composite(type)
     layout := value_layout(program, type) else return REFERENCE_ROOM
     return { size: layout.size, alignment: layout.alignment }
   return scalar_room(type) if kind_of(type) in ['Bool', 'Char', TypeKind.ENUM, NUMBERS...]
@@ -199,7 +182,7 @@ nil_path_in := (program: ProgramWide, fields: LayoutField[]): Int[]? ->
 null_path := (program: ProgramWide, type: Type): Int[]? ->
   return nil if type is OptionalType
   return [] if is_kind(type, INTERFACE)
-  if part_types(program, type) != nil
+  if is_composite(type)
     layout := value_layout(program, type) else return []
     return layout.nil_path
   is_reference_type(type) then []

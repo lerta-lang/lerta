@@ -1,6 +1,6 @@
 # Objects on the heap with fields: classes and structs, anonymous structs and tuples, and cells
 # (see docs/internals/representation.md#objects).
-import FieldInfo, info_of, ObjectInfo from '../checker/object_types'
+import FieldInfo, info_of, ObjectInfo, part_types from '../checker/object_types'
 import ProgramWide from '../checker/shared'
 import field_order, field_place, is_boxed_member, is_value_type from '../checker/value_layout'
 import emit_box_test from './boxes'
@@ -302,16 +302,9 @@ export emit_member_dispatch := (
   return '' if result_type == 'void'
   ir.assign("phi #{result_type} #{incoming.join(', ')}")
 
-# The types of the values, as declared, a record's fields in name order.
-export value_types := (type: Type) ->
-  case type
-    when RecordType then [field.type for field in type.fields]
-    when TupleType then type.items
-    else panic('not an anonymous struct or a tuple')
-
 # The LLVM struct type of the type, defined with the type of its objects at the first use.
 values_layout := (ir: IrBuilder, type: Type) ->
-  types := value_types(type)
+  types := part_types(ir.program, type, nil)
   fields := [
     for i in field_order(ir.module.program, types)
       value_field(ir.program, types[i])
@@ -345,7 +338,7 @@ export emit_values := (ir: IrBuilder, type: Type, values: String[]) ->
     return value
   layout := values_layout(ir, type)
   object := emit_heap_allocate(ir, layout, values_type_symbol(type))
-  for value_type at i in value_types(type)
+  for value_type at i in part_types(ir.program, type, nil)
     ir.store ir_type(ir.program, value_type), values[i], emit_value_pointer(ir, object, type, i)
   object
 
@@ -355,22 +348,30 @@ export emit_record := (ir: IrBuilder, type: Type, values: Map<String, String>) -
 
 # The pointer to the value at the index.
 emit_value_pointer := (ir: IrBuilder, object: String, type: Type, index: Int) ->
-  place := field_place(ir.module.program, type, value_types(type), index)
+  place := field_place(ir.program, type, part_types(ir.program, type, nil), index)
   emit_heap_field_pointer(ir, values_layout(ir, type), object, place)
 
 # The value at the index, retained if a reference; the object is borrowed.
 export emit_value_at := (ir: IrBuilder, object: String, type: Type, index: Int) ->
   value := emit_borrowed_value(ir, object, type, index)
-  emit_retain_value ir, value, value_types(type)[index]
+  emit_retain_value ir, value, part_types(ir.program, type, nil)[index]
   value
 
 # The value of an anonymous struct or a tuple at the index, borrowed.
 export emit_borrowed_value := (ir: IrBuilder, values: String, type: Type, index: Int) ->
   if is_value_type(ir.program, type)
-    place := field_place(ir.program, type, value_types(type), index)
+    place := field_place(ir.program, type, part_types(ir.program, type, nil), index)
     return ir.assign("extractvalue #{ir_type(ir.program, type)} #{values}, #{place}")
-  value_type := value_types(type)[index]
+  value_type := part_types(ir.program, type, nil)[index]
   ir.load(ir_type(ir.program, value_type), emit_value_pointer(ir, values, type, index))
+
+# The part at the index of a value of a class, a struct, an anonymous struct or a tuple, borrowed
+# (see part_types).
+export emit_borrowed_part := (ir: IrBuilder, value: String, type: Type, index: Int) ->
+  unless type is ObjectType
+    return emit_borrowed_value(ir, value, type, index)
+  info := info_of(ir.program, type)
+  emit_borrowed_field(ir, value, info, info.fields[index])
 
 # The value of a field of an anonymous struct, as emit_value_at gives it.
 export emit_record_field := (ir: IrBuilder, record: String, type: Type, name: String) ->

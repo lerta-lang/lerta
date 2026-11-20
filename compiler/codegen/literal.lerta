@@ -4,14 +4,15 @@
 # the literals made so far.
 import PartsPlan, PartCall from '../checker/parts'
 import Method, Property from '../checker/member_targets'
-import info_of from '../checker/object_types'
+import field_names, part_types from '../checker/object_types'
+import ProgramWide from '../checker/shared'
 import emit_method_call, MethodCall from './call'
 import emit_closure_call from './closure'
 import emit_check_with, emit_return_thrown from './exceptions'
 import read_any_field from './expression'
 import finish from './function'
 import function_generator, Generator from './generator'
-import emit_borrowed_field, emit_borrowed_value from './heap_object'
+import emit_borrowed_part from './heap_object'
 import emit_branch, IrModule from './ir_builder'
 import emit_release, ir_type, string_constant from './lerta_ir'
 import emit_is_present, emit_unwrap from './optional'
@@ -39,28 +40,26 @@ literal_function := (g: Generator, parts: PartsPlan) ->
 
 write_literal := (w: Generator, parts: PartsPlan, value: String) ->
   type := parts.type
+  if type is OptionalType
+    present := emit_is_present(w.ir, value, type)
+    inner := -> part_literal(w, parts.calls[0], emit_unwrap(w.ir, value, type), type.inner, [])
+    emit_branch(w.ir, 'ptr', present, inner, string_constant(w.ir, 'nil'))
+  else
+    program := w.code.program
+    read := (index: Int) -> emit_borrowed_part(w.ir, value, type, index)
+    join_parts(w, parts, read, part_types(program, type, nil), texts_around(program, type))
+
+# The texts around the parts of a struct, an anonymous struct or a tuple.
+texts_around := (program: ProgramWide, type: Type) ->
   case type
-    when OptionalType
-      present := emit_is_present(w.ir, value, type)
-      inner := -> part_literal(w, parts.calls[0], emit_unwrap(w.ir, value, type), type.inner, [])
-      emit_branch(w.ir, 'ptr', present, inner, string_constant(w.ir, 'nil'))
-    when ObjectType
-      info := info_of(w.code.program, type)
-      names := [field.name.name for field in info.fields]
-      read := (index: Int) -> emit_borrowed_field(w.ir, value, info, info.fields[index])
-      types := [field.type! for field in info.fields]
-      join_parts(w, parts, read, types, named_texts("#{type.name}(", names, ')'))
+    when ObjectType then named_texts("#{type.name}(", field_names(program, type), ')')
     when RecordType
-      names := [field.name for field in type.fields]
-      read := (index: Int) -> emit_borrowed_value(w.ir, value, type, index)
-      types := [field.type for field in type.fields]
-      texts := names.is_empty() then ['{}'] else named_texts('{ ', names, ' }')
-      join_parts(w, parts, read, types, texts)
-    when TupleType
-      read := (index: Int) -> emit_borrowed_value(w.ir, value, type, index)
-      texts := ['(', Array(type.items.length - 1, ', ')..., ')']
-      join_parts(w, parts, read, type.items, texts)
-    else panic('only an optional, a struct, a tuple or an anonymous struct gets a literal by parts')
+      if type.fields.is_empty()
+        ['{}']
+      else
+        named_texts('{ ', field_names(program, type), ' }')
+    when TupleType then ['(', Array(type.items.length - 1, ', ')..., ')']
+    else panic('not a struct, a tuple or an anonymous struct')
 
 # The texts around the parts, each named: `Point(x: `, `, y: `, `)`.
 named_texts := (open: String, names: String[], close: String) ->
