@@ -10,7 +10,7 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 
 ## Finding references skips the files of an entry module whose program does not load
 
-- Where: `references` in `compiler/lsp/server.lerta` checks each entry that `entries_for` picks once, and takes nothing from one whose modules cannot be loaded, as one that imports a missing file.
+- Where: `references` in `compiler/lsp/requests.lerta` checks each entry that `entries_for` picks once, and takes nothing from one whose modules cannot be loaded, as one that imports a missing file.
 - How to see it: in a workspace where `main.lerta` imports `./missing` and `./mid`, and `mid.lerta` imports and uses `helper` of the open `lib.lerta`, references of `helper` leave out `mid.lerta`, which would check alone.
 - How to fix it: give the wanted files of a failed entry back to `entries_for`, to be held by other entries or checked as entries themselves.
 

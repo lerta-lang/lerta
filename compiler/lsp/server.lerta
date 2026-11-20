@@ -1,31 +1,19 @@
 # `lerta lsp`: a language server over stdin and stdout (see docs/reference/compiler.md#lsp). It
 # takes the whole text of a document on each change, publishes the diagnostics of the program
-# whose entry module is the document when it is opened or changed, formats it as `lerta fmt --fix`
-# would write it, gives the types and the doc comments of a name in it and where the name is
-# declared, and finds the names that lead to a declaration, in the files of the workspace too.
-import is_file from 'std:io'
+# whose entry module is the document when it is opened or changed (see documents.lerta), and
+# answers the requests about the documents (see requests.lerta).
 import exit from 'std:process'
 import JsonError from 'std:json'
-import ProgramWide from '../checker/shared'
-import CompileError from '../errors'
-import format_source from '../format/format'
-import is_standard_name, open_texts, read_source, text_key from '../source'
-import
-  characters, check_file, LspDiagnostic, LspPosition, LspRange, name_range, PositionEncoding,
-  source_position
-from './diagnostics'
-import completion_items, CompletionItem, probe_text, writing_at from './complete'
-import
-  definition_of, hover_markdown, is_shared, is_written, location_of, module_at, references_in,
-  target_at, Written
-from './locate'
+import Documents from './documents'
 import
   decode_header, decode_notification, decode_request, INTERNAL_ERROR, INVALID_PARAMS,
-  METHOD_NOT_FOUND, PARSE_ERROR, notify, read_message, Request, respond, respond_error
+  METHOD_NOT_FOUND, PARSE_ERROR, read_message, Request, respond, respond_error
 from './protocol'
-import path_of_uri, uri_of_path from './uri'
-import entries_for from './workspace'
-import Identifier from '../ast'
+import
+  completion, definition, DocumentParams, formatting_edits, hover, PositionParams, ReferenceParams,
+  references, TextDocument
+from './requests'
+import path_of_uri from './uri'
 
 # The workspace's folders, or else its root, which finding references looks through.
 struct InitializeParams
@@ -52,9 +40,6 @@ struct ServerCapabilities
   # Completion after a `.` as well as where a name starts.
   completion_provider: { trigger_characters: String[] }
 
-struct TextDocument
-  uri: String
-
 struct OpenedDocument
   uri: String
   text: String
@@ -66,65 +51,12 @@ struct DidChangeParams
   text_document: TextDocument
   content_changes: { text: String }[]
 
-struct DocumentParams
-  text_document: TextDocument
-
-struct PositionParams
-  text_document: TextDocument
-  position: LspPosition
-
-struct ReferenceParams
-  text_document: TextDocument
-  position: LspPosition
-  context: { include_declaration: Bool }
-
-struct MarkupContent
-  kind: String
-  value: String
-
-struct Hover
-  contents: MarkupContent
-
-struct Location
-  uri: String
-  range: LspRange
-
-struct PublishDiagnosticsParams
-  uri: String
-  diagnostics: LspDiagnostic[]
-
-struct TextEdit
-  range: LspRange
-  new_text: String
-
 FULL_SYNC := 1
-
-# More references than one reads: finding them stops checking programs once it has found these.
-REFERENCE_LIMIT := 1000
 
 class Server
   private
-    var encoding = PositionEncoding.UTF16
     var shut_down = false
-
-    # What the last check of each open document found, by its path: the diagnostics of each file of
-    # its program (see check_file). A file's diagnostics are those of all the open documents'
-    # checks.
-    found: Map<String, Map<String, LspDiagnostic[]>> = Map()
-
-    # The program of each open document's last check whose modules could be loaded, as far as it was
-    # checked, which hover and going to a definition read. A text that does not load, as one being
-    # written or one whose import is missing, keeps the program of the text before it, whose names
-    # are found where the new text still writes them (see locate.lerta).
-    programs: Map<String, ProgramWide> = Map()
-
-    # The URI that each open document was opened with, by its text's key (see text_key), which the
-    # server sends back, as the client knows the document by that spelling, while several URIs,
-    # `file://localhost/a.lerta` and `file:///a.lerta`, name one path.
-    uris := Map<String, String>()
-
-    # The directories of the workspace, whose files finding references looks through.
-    var roots: String[] = []
+    documents := Documents()
 
     # Handles each message until the input ends or an exit notification comes. A header that gives
     # no length tells nothing of where the next message starts, and a body that the end cuts short
@@ -159,35 +91,33 @@ class Server
           await respond_error(id, INTERNAL_ERROR, error.message)
 
     dispatch := (method: String, id: Int | String?, body: String) ->
+      documents := @documents
       case method
         when 'initialize' then await @initialize(decode_request<InitializeParams>(body))
         when 'textDocument/didOpen'
           params := decode_notification<DidOpenParams>(body)
-          await @set_text(params.text_document.uri, params.text_document.text)
+          await documents.set_text(params.text_document.uri, params.text_document.text)
         when 'textDocument/didChange'
           params := decode_notification<DidChangeParams>(body)
           if change := params.content_changes.last()
-            await @set_text(params.text_document.uri, change.text)
+            await documents.set_text(params.text_document.uri, change.text)
         when 'textDocument/didClose'
-          await @close(decode_notification<DocumentParams>(body).text_document.uri)
+          await documents.close(decode_notification<DocumentParams>(body).text_document.uri)
         when 'textDocument/formatting'
           request := decode_request<DocumentParams>(body)
-          await respond(
-            request.id
-            await formatting_edits(request.params.text_document.uri, @encoding)
-          )
+          await respond(request.id, await formatting_edits(documents, request.params))
         when 'textDocument/hover'
           request := decode_request<PositionParams>(body)
-          await respond(request.id, await @hover(request.params))
+          await respond(request.id, await hover(documents, request.params))
         when 'textDocument/definition'
           request := decode_request<PositionParams>(body)
-          await respond(request.id, await @definition(request.params))
+          await respond(request.id, await definition(documents, request.params))
         when 'textDocument/references'
           request := decode_request<ReferenceParams>(body)
-          await respond(request.id, await @references(request.params))
+          await respond(request.id, await references(documents, request.params))
         when 'textDocument/completion'
           request := decode_request<PositionParams>(body)
-          await respond(request.id, await @completion(request.params))
+          await respond(request.id, await completion(documents, request.params))
         when 'shutdown'
           @shut_down = true
           if given := id
@@ -203,10 +133,10 @@ class Server
       if folder_uris.is_empty()
         folder_uris.push root_uri if root_uri := params.root_uri
       for uri in folder_uris
-        @roots.push path if path := path_of_uri(uri)
+        @documents.roots.push path if path := path_of_uri(uri)
       encodings := params.capabilities.general?.position_encodings else []
-      @encoding = UTF32 if 'utf-32' in encodings
-      encoding := @encoding == UTF32 then 'utf-32' else 'utf-16'
+      @documents.encoding = UTF32 if 'utf-32' in encodings
+      encoding := @documents.encoding == UTF32 then 'utf-32' else 'utf-16'
       capabilities := ServerCapabilities
         position_encoding: encoding
         text_document_sync: FULL_SYNC
@@ -216,168 +146,5 @@ class Server
         references_provider: true
         completion_provider: { trigger_characters: ['.'] }
       await respond(request.id, InitializeResult(capabilities, server_info: { name: 'lerta' }))
-
-    # A document that is no file yet is formatted, but not checked: a program's modules are files.
-    # One whose file is gone keeps the diagnostics of its last check until it is closed, but not its
-    # program, whose positions its new text no longer has; the open documents that import it are
-    # checked again, from its new text.
-    set_text := (uri: String, text: String) ->
-      path := path_of_uri(uri) else return
-      open_texts[text_key(path)] = text
-      @uris[text_key(path)] = uri
-      unless is_file(path)
-        @programs.remove path
-        await @check(doc) for doc in @importers(path)
-        return
-      await @check(doc) for doc in [path, @importers(path)...]
-
-    # Its importers' checks, which took its text, are made again, from the file.
-    close := (uri: String) ->
-      path := path_of_uri(uri) else return
-      open_texts.remove text_key(path)
-      files := @found[path]?.keys().to_array() else []
-      @found.remove path
-      @programs.remove path
-      await @check(doc) for doc in @importers(path)
-      await @publish(file) for file in files
-      @uris.remove text_key(path)
-
-    # The types and the doc comments of the name at the position, from the program of the
-    # document's own check if it has one, or of another open document's that holds it.
-    hover := (params: PositionParams) ->
-      path := path_of_uri(params.text_document.uri) else return nil
-      program := @program_of(path) else return nil
-      module_index := module_at(program, path) else return nil
-      at := await source_position(path, params.position, @encoding)
-      markdown := hover_markdown(program, module_index, await read_source(path), at) else return nil
-      Hover({ kind: 'markdown', value: markdown })
-
-    # Where the name at the position is declared, if in a file that still writes it there.
-    definition := (params: PositionParams) ->
-      path := path_of_uri(params.text_document.uri) else return nil
-      program := @program_of(path) else return nil
-      module_index := module_at(program, path) else return nil
-      at := await source_position(path, params.position, @encoding)
-      declared := definition_of(program, module_index, await read_source(path), at) else return nil
-      await @written_location(location_of(program, declared.module_index), declared.name)
-
-    # The names that lead to the declaration that the name at the position leads to, or is, in the
-    # programs of the open documents, and, for a declaration that other modules may name, of the
-    # entry modules of the workspace that hold the other files that may write them (see
-    # workspace.lerta), up to about REFERENCE_LIMIT of them; none if
-    # no name leads to it, or it is in a standard module.
-    references := (params: ReferenceParams): Promise<Location[]> ->
-      path := path_of_uri(params.text_document.uri) else return []
-      program := @program_of(path) else return []
-      module_index := module_at(program, path) else return []
-      at := await source_position(path, params.position, @encoding)
-      target := target_at(program, module_index, await read_source(path), at) else return []
-      return [] if is_standard_name(target.key)
-      place := (written: Written) ->
-        { line, column } := written.name.position
-        (written.key, line, column)
-      found: Map<(String, Int, Int), Written>
-      covered: Set<String>
-      search := (searched: ProgramWide) ->
-        for each in await references_in(searched, target)
-          if place(each) != place(target)
-            found[place(each)] = each
-        for index in 0..searched.modules.length
-          covered.add text_key(location_of(searched, index))
-      await search(each) for each in @programs.values()
-      if is_shared(program, target)
-        for entry in await entries_for(@roots, target.key, target.name.name, covered)
-          break if found.length >= REFERENCE_LIMIT
-          await search(checked) if checked := (await check_file(entry, @encoding)).program
-      return [] if found.is_empty()
-      if params.context.include_declaration
-        found[place(target)] = target
-      places := found.keys().to_array().sorted().take(REFERENCE_LIMIT)
-      locations: Location[]
-      for each in places
-        written := found[each]!
-        locations.push location if location := await @written_location(written.key, written.name)
-      locations
-
-    # Where the file writes the name, if it is not a standard module, and still writes it there.
-    written_location := (location: String, name: Identifier) ->
-      return nil if is_standard_name(location)
-      return nil unless is_written((await read_source(location)).split("\n"), name)
-      range := await name_range(location, name, @encoding)
-      Location(range, uri: @uri_of(location))
-
-    # What may be written where a name is being written, from a check of the document's text with
-    # the checker's own name there (see complete.lerta), whose diagnostics are not published.
-    completion := (params: PositionParams): Promise<CompletionItem[]> ->
-      path := path_of_uri(params.text_document.uri) else return []
-      key := text_key(path)
-      text := open_texts[key] else return []
-      return [] unless is_file(path)
-      at := await source_position(path, params.position, @encoding)
-      lines := text.split("\n")
-      return [] unless at.line in 1..=lines.length
-      writing := writing_at(lines[at.line - 1], at.column)
-      open_texts[key] = probe_text(text, at.line - 1, writing)
-      checked :=
-        try
-          await check_file(path, @encoding)
-        finally
-          open_texts[key] = text
-      program := checked.program else return []
-      module_index := module_at(program, path) else return []
-      completion_items(program, module_index, program.completion)
-
-    program_of := (path: String) ->
-      return own if own := @programs[path]
-      for (doc, files) in @found
-        return @programs[doc] if path in files and doc in @programs
-      nil
-
-    # The other open documents whose programs hold the document at the path.
-    importers := (path: String) ->
-      [
-        for (doc, files) in @found when doc != path and path in files
-          doc
-      ]
-
-    # Checks the program whose entry module is the open document at the path, and publishes the
-    # diagnostics of the files of its program, as of this check and of the last one. Its program is
-    # kept if its modules cannot be loaded.
-    check := (path: String) ->
-      before := @found[path]?.keys().to_array() else []
-      checked := await check_file(path, @encoding)
-      found := checked.by_path
-      @found[path] = found
-      @programs[path] = program if program := checked.program
-      files := [file for file in before when file not in found]
-      files.append found.keys().to_array()
-      await @publish(file) for file in files
-
-    # The URI of the file as the client opened it, or else as the server writes one.
-    uri_of := (path: String) -> @uris[text_key(path)] else uri_of_path(path)
-
-    # Publishes the diagnostics that the open documents' checks found in the file, each once.
-    publish := (file: String) ->
-      diagnostics: Set<LspDiagnostic>
-      for found in @found.values()
-        diagnostics.add each for each in found[file] else []
-      params := PublishDiagnosticsParams(uri: @uri_of(file), diagnostics: diagnostics.to_array())
-      await notify('textDocument/publishDiagnostics', params)
-
-# The edit that writes the document in the style, of its whole text, or none if it is so already;
-# nil if it does not parse.
-formatting_edits := (uri: String, encoding: PositionEncoding) ->
-  path := path_of_uri(uri) else return nil
-  text := open_texts[text_key(path)] else return nil
-  try
-    formatted := (await format_source(text, path)).text
-    none: TextEdit[]
-    return none if formatted == text
-    lines := text.split("\n")
-    end := LspPosition(line: lines.length - 1, character: characters(lines.last()!, encoding))
-    range := LspRange(end, start: { line: 0, character: 0 })
-    [TextEdit(range, new_text: formatted)]
-  catch _: CompileError
-    nil
 
 export lsp_command := -> await Server().run()

@@ -96,7 +96,7 @@
   - It loads the program whose entry module is the document, each module with the statements that parse, in blocks too (`load_modules_partially`, `TokenStream.block_errors`), and checks it as `lerta build` does.
   - Warnings come through `check_modules`'s callback; errors from the `CompileError`, whose `errors` give them where they are found.
   - A file whose statements do not all parse has only its parse errors, since the checker's would mostly be of the names that the unparsed statements declare.
-  - The server keeps what each open document's last check found of each file of its program (`server.lerta`), and publishes a file's diagnostics as those of all of them.
+  - The server keeps what each open document's last check found of each file of its program (`documents.lerta`), and publishes a file's diagnostics as those of all of them.
   - It keeps each open document's program of its last check whose modules loaded, so that while a text does not load, as one being written, hover and going to a definition answer from the text before it, for the names that the new text still writes where they were.
 - **Hover and definitions** (`locate.lerta`) look among the names of the facts of the module's code, and of the instances of its generic functions and classes, for those whose text the source writes at the position.
   - The checker records each expression's type, a name's reference, a member's target, and, for an editor alone, the declaration of the local that a name reads or assigns (`NodeFacts.local_declarations`), and what each type name of a module names (`Shared.type_names`, `Shared.alias_names`).

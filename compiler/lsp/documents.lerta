@@ -1,0 +1,100 @@
+# The documents that the client has open: their texts, the checks of the programs whose entry
+# modules they are, and the diagnostics of those checks, which it publishes.
+import is_file from 'std:io'
+import ProgramWide from '../checker/shared'
+import open_texts, text_key from '../source'
+import check_file, LspDiagnostic, PositionEncoding from './diagnostics'
+import notify from './protocol'
+import path_of_uri, uri_of_path from './uri'
+
+struct PublishDiagnosticsParams
+  uri: String
+  diagnostics: LspDiagnostic[]
+
+export class Documents
+  var encoding = PositionEncoding.UTF16
+
+  # The directories of the workspace, whose files finding references looks through.
+  var roots: String[] = []
+
+  # The program of each open document's last check whose modules could be loaded, as far as it was
+  # checked, which hover and going to a definition read. A text that does not load, as one being
+  # written or one whose import is missing, keeps the program of the text before it, whose names
+  # are found where the new text still writes them (see locate.lerta).
+  programs: Map<String, ProgramWide> = Map()
+
+  private
+    # What the last check of each open document found, by its path: the diagnostics of each file of
+    # its program (see check_file). A file's diagnostics are those of all the open documents'
+    # checks.
+    found: Map<String, Map<String, LspDiagnostic[]>> = Map()
+
+    # The URI that each open document was opened with, by its text's key (see text_key), which the
+    # server sends back, as the client knows the document by that spelling, while several URIs,
+    # `file://localhost/a.lerta` and `file:///a.lerta`, name one path.
+    uris := Map<String, String>()
+
+  # A document that is no file yet is formatted, but not checked: a program's modules are files.
+  # One whose file is gone keeps the diagnostics of its last check until it is closed, but not its
+  # program, whose positions its new text no longer has; the open documents that import it are
+  # checked again, from its new text.
+  set_text := (uri: String, text: String) ->
+    path := path_of_uri(uri) else return
+    open_texts[text_key(path)] = text
+    @uris[text_key(path)] = uri
+    unless is_file(path)
+      @programs.remove path
+      await @check(doc) for doc in @importers(path)
+      return
+    await @check(doc) for doc in [path, @importers(path)...]
+
+  # Its importers' checks, which took its text, are made again, from the file.
+  close := (uri: String) ->
+    path := path_of_uri(uri) else return
+    open_texts.remove text_key(path)
+    files := @found[path]?.keys().to_array() else []
+    @found.remove path
+    @programs.remove path
+    await @check(doc) for doc in @importers(path)
+    await @publish(file) for file in files
+    @uris.remove text_key(path)
+
+  # The program of the document's own check if it has one, or of another open document's that holds
+  # it.
+  program_of := (path: String) ->
+    return own if own := @programs[path]
+    for (doc, files) in @found
+      return @programs[doc] if path in files and doc in @programs
+    nil
+
+  # The URI of the file as the client opened it, or else as the server writes one.
+  uri_of := (path: String) -> @uris[text_key(path)] else uri_of_path(path)
+
+  private
+    # The other open documents whose programs hold the document at the path.
+    importers := (path: String) ->
+      [
+        for (doc, files) in @found when doc != path and path in files
+          doc
+      ]
+
+    # Checks the program whose entry module is the open document at the path, and publishes the
+    # diagnostics of the files of its program, as of this check and of the last one. Its program
+    # is kept if its modules cannot be loaded.
+    check := (path: String) ->
+      before := @found[path]?.keys().to_array() else []
+      checked := await check_file(path, @encoding)
+      found := checked.by_path
+      @found[path] = found
+      @programs[path] = program if program := checked.program
+      files := [file for file in before when file not in found]
+      files.append found.keys().to_array()
+      await @publish(file) for file in files
+
+    # Publishes the diagnostics that the open documents' checks found in the file, each once.
+    publish := (file: String) ->
+      diagnostics: Set<LspDiagnostic>
+      for found in @found.values()
+        diagnostics.add each for each in found[file] else []
+      params := PublishDiagnosticsParams(uri: @uri_of(file), diagnostics: diagnostics.to_array())
+      await notify('textDocument/publishDiagnostics', params)
