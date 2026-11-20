@@ -45,15 +45,20 @@ syn match lertaRawString "'[^']*'"
 " Defined after lertaRawString, so that it wins where both start.
 syn region lertaRawMultilineString start=+'''+ end=+'''+
 
+" A `/` starts a regular expression after a token that is no value, or with whitespace before it and
+" none after, nor `=`, as the lexer decides. Defined after lertaOperator, so that it wins over `/`.
+syn match lertaRegex "\%(\%([([{,;=:+*%<>|&^~-]\s\=\)\@<=\|\%(^\|\s\)\@<=\%(/=\)\@!\)/[[:space:]/]\@!\%([^/\\]\|\\.\)*/\w*"
+
 syn match lertaComment "#.*$" contains=@Spell
 
-syn cluster lertaCode contains=lertaComment,lertaRawString,lertaRawMultilineString,lertaString,lertaMultilineString,lertaNumber,lertaFloat,lertaInvalidNumber,lertaDeclarationName,lertaBoolean,lertaWordOperator,lertaControl,lertaStorage,lertaConstant,lertaType,lertaCall,lertaOperator
+syn cluster lertaCode contains=lertaComment,lertaRawString,lertaRawMultilineString,lertaString,lertaMultilineString,lertaRegex,lertaNumber,lertaFloat,lertaInvalidNumber,lertaDeclarationName,lertaBoolean,lertaWordOperator,lertaControl,lertaStorage,lertaConstant,lertaType,lertaCall,lertaOperator
 
 hi def link lertaComment Comment
 hi def link lertaRawString String
 hi def link lertaRawMultilineString String
 hi def link lertaString String
 hi def link lertaMultilineString String
+hi def link lertaRegex String
 hi def link lertaEscape SpecialChar
 hi def link lertaInvalidEscape Error
 hi def link lertaInterpolationDelimiter Delimiter
