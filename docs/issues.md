@@ -2,12 +2,6 @@
 
 Known defects. Each says where it is, how to see it and how to fix it. An issue marked *unverified* was found by reading the code and has not been reproduced.
 
-## The language server keeps the client's spelling of an open document's path on Windows (*unverified*)
-
-- Where: `path_of_uri` in `compiler/lsp/uri.lerta` gives the path as the URI writes it, while a module of a program is located by `join`, which writes a drive in upper case.
-- How to see it: VS Code writes `file:///c%3A/proj/a.lerta`. With `a.lerta` and `b.lerta`, which imports `value` from `./a`, both open, removing `value` from `a` does not check `b` again, as `importers` compares `c:/proj/a.lerta` with `C:/proj/a.lerta`.
-- How to fix it: give `normalize(path)` from `path_of_uri`, and have a Windows check open documents as VS Code writes them.
-
 ## A file on a network share gets a URI of four slashes (*unverified*)
 
 - Where: `uri_of_path` in `compiler/lsp/uri.lerta` writes the root of `\\server\share\` into the URI's path, and `path_of_uri` reads a host other than `localhost` as no file.

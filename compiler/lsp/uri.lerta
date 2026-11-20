@@ -6,12 +6,15 @@ FILE_PREFIX := 'file://'
 
 # The path of the URI, or nil for one that names no file. A host may come before the path, as in
 # `file://localhost/a.lerta`, which names a file only when it is this machine.
-export path_of_uri := (uri: String): String? ->
+export path_of_uri := (uri: String) ->
   after_prefix := uri.without_prefix(FILE_PREFIX) else return nil
   (host, rest) := after_prefix.split_once('/') else return nil
   return nil if not host.is_empty() and host.to_lower() != 'localhost'
   path := percent_decoded("/#{rest}") else return nil
-  is_windows_drive(path) then path.without_prefix('/')! else path
+
+  # The path as std:path writes the locations of a program's modules, which the server compares
+  # it with, while a client may write it otherwise, as VS Code writes a drive in lower case.
+  normalize(is_windows_drive(path) then path.without_prefix('/')! else path)
 
 # The URI of the absolute path.
 export uri_of_path := (path: String) ->

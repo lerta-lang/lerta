@@ -2,8 +2,9 @@
 import Check from '../lib/report'
 import compare_text, expect_status, reason_unless from '../lib/expect'
 import compiler from '../lib/lerta'
-import new_cli_dir, run_command from '../lib/cli'
+import host_platform, new_cli_dir, run_command from '../lib/cli'
 import make_dir, write_file from 'std:io'
+import base_name, dir_name from 'std:path'
 import encode_json from 'std:json'
 import
   uri_of, frame, did_open, did_change, did_change_at, did_close, formatting_request,
@@ -371,32 +372,49 @@ shared_import_check := ->
   )
 
 changed_import_check := ->
-  Check name: 'lerta lsp rechecks open importers when an imported document changes', run: ->
-    dir := new_cli_dir('lsp-changed-import')
-    await write_file("#{dir}/a.lerta", b'')
-    await write_file("#{dir}/b.lerta", b'')
-    a := uri_of("#{dir}/a.lerta")
-    b := uri_of("#{dir}/b.lerta")
-    messages :=
-      did_open(b, "export b := 'text'\n")
-      did_open(a, "import b from './b'\nprint b\n")
-      did_change(b, "export c := 1\n")
-    .join()
-    ran := await session(dir, messages)
-    [
-      expect_status(0, ran.status)...
-      exact_messages(
-        ran.stdout_text()
-        [
-          published_diagnostics(b, [])
-          published_diagnostics(a, [])
-          published_diagnostics(b, [])
-          published_diagnostics(b, [])
-          published_diagnostics(a, [diagnostic_body(0, 7, 1, "'./b' has no export 'b'")])
-          published_diagnostics(b, [])
-        ]
-      )...
-    ]
+  Check(name: 'lerta lsp rechecks open importers when an imported document changes', run: ->
+    await changed_import_reasons('lsp-changed-import', uri_of)
+  )
+
+client_spelled_import_check := ->
+  Check(name: 'lerta lsp rechecks open importers whose URIs the client writes otherwise', run: ->
+    await changed_import_reasons('lsp-client-written-import', client_uri_of)
+  )
+
+# The URI of the path as a client may write it otherwise than the server: on Windows as VS Code
+# does, with the drive in lower case and its colon encoded, `file:///c%3A/a.lerta`, and elsewhere
+# through `.`.
+client_uri_of := (path: String) ->
+  return uri_of("#{dir_name(path)}/./#{base_name(path)}") unless host_platform == 'windows'
+  (drive, rest) := uri_of(path).without_prefix('file:///')!.split_once(':')!
+  "file:///#{drive.to_lower()}%3A#{rest}"
+
+changed_import_reasons := (name: String, uri_for: (String) -> String) ->
+  dir := new_cli_dir(name)
+  await write_file("#{dir}/a.lerta", b'')
+  await write_file("#{dir}/b.lerta", b'')
+  a := uri_for("#{dir}/a.lerta")
+  b := uri_for("#{dir}/b.lerta")
+  messages :=
+    did_open(b, "export b := 'text'\n")
+    did_open(a, "import b from './b'\nprint b\n")
+    did_change(b, "export c := 1\n")
+  .join()
+  ran := await session(dir, messages)
+  [
+    expect_status(0, ran.status)...
+    exact_messages(
+      ran.stdout_text()
+      [
+        published_diagnostics(b, [])
+        published_diagnostics(a, [])
+        published_diagnostics(b, [])
+        published_diagnostics(b, [])
+        published_diagnostics(a, [diagnostic_body(0, 7, 1, "'./b' has no export 'b'")])
+        published_diagnostics(b, [])
+      ]
+    )...
+  ]
 
 close_unsaved_import_check := ->
   Check name: 'lerta lsp uses an imported document file again when it closes', run: ->
@@ -1401,6 +1419,7 @@ export checks :=
   formatting_new_document_check()
   shared_import_check()
   changed_import_check()
+  client_spelled_import_check()
   close_unsaved_import_check()
   hover_definition_check()
   declaration_definition_check()
