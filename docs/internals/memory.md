@@ -58,7 +58,7 @@ A value is borrowed only by these consumers (`generate_borrowed`):
   - not a `weak` field, nor one narrowed to a member of a union in a box.
 - **An array's item**, from an array that is borrowed, not in place (as its position may run code), where no code of the program takes out an item of an array of its type, by `xs[i] = x` or `pop`, which `truncate` calls, called directly or through an interface value that the array converts to (`are_items_taken`, which the checker records as it checks each instance of a generic function, before codegen). The item then stays in its array as long as the array lives: `b := bodies[j]` in a loop retains and releases nothing.
   - So does the variable of a `for` over such an array, which the loop holds, unless the body suspends (`borrows_items` in `compiler/codegen/control_flow.lerta`). This took 7.7% of `bench/nbody`'s instructions off.
-- **A `const` initialized by a borrowed value** holds it borrowed for its whole scope (`holds_borrowed` in `compiler/codegen/function.lerta`, through `is_borrowable_in_scope`), where:
+- **A `const` initialized by a borrowed value** holds it borrowed for its whole scope (`holds_borrowed` in `compiler/codegen/statement.lerta`, through `is_borrowable_in_scope`), where:
   - the value is borrowed from no `var`, which any statement of the scope may assign;
   - and the body does not suspend, as the source may change meanwhile.
   - Reading it, as returning or capturing it, retains it as reading any local does.

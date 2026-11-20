@@ -1,55 +1,38 @@
-# Generates a function of a program: its blocks, declarations, returns and constructors;
-# control_flow generates control flow, and assignment assignments.
-import is_value_type from '../checker/value_layout'
-import
-  Assignment, BinaryOperation, Declaration, EnumDeclaration, Expression, Extend, Extern, Intrinsic,
-  For, FunctionLiteral, If, Import, InterfaceDeclaration, Jump, NilLiteral, Pass, Return, Statement,
-  TypeAlias, TypeDeclaration, While
-from '../ast'
+# Generates a function of a program: its body and its returns; statement generates its
+# statements, control_flow control flow, and constructor constructors.
+import Expression, FunctionLiteral, Statement from '../ast'
 import required_params from '../checker/functions'
-import FieldInfo, is_argument, ObjectInfo from '../checker/object_types'
 import Capture from '../checker/shared'
-import top_level_tag from './alias_tags'
-import generate_assignment from './assignment'
-import batched_field_writes, generate_batched_field_writes from './batched_writes'
-import generate_borrowed_value, is_borrowable_in_scope from './borrowing'
 import emit_await_owned, emit_loop_run, generate_awaiting_function from './awaiting'
 import call_user_function from './call'
-import float_tree from './operator'
 import
   capture_slot, emit_capture_pointer, emit_closure, emit_closure_call, emit_local_closure,
   emit_static_closure, function_type_of
 from './closure'
-import generate_control_jump, generate_for, generate_if, generate_while from './control_flow'
 import emit_suspend from './coroutine'
 import nan_free_operations from './float_ranges'
 import
   emit_assume_no_exception, emit_exception_check, leave_scopes, while_holding
 from './exceptions'
+import emit_deferred_check, held_value, read_borrowed, read_local from './local'
+import generate, type_at_use, type_of from './expression'
 import
-  conversion_of, emit_deferred_check, generate, held_value, read_borrowed, read_local,
-  release_if_reference, type_at_use, type_of
-from './expression'
-import
-  CellSlot, CodegenLocal, function_generator, Generator, located, SlotLocal, TopLevelGlobal,
-  with_deferred_checks, ValueLocal
+  CellSlot, CodegenLocal, function_generator, Generator, SlotLocal, TopLevelGlobal, ValueLocal
 from './generator'
-import is_fused_source from './inlined_methods'
 import
-  access_tag, emit_allocate, emit_cell, emit_cell_pointer, emit_field_pointer,
-  emit_slot_field_pointer, emit_weak_box_of, emit_weak_object, emit_weak_slot_or_null, fixed,
-  HeapField, value_field
+  access_tag, emit_cell_pointer, emit_weak_box_of, emit_weak_object, fixed, HeapField, value_field
 from './heap_object'
-import emit_when, IrBuilder, IrModule from './ir_builder'
+import IrBuilder, IrModule from './ir_builder'
 import
-  constructor_symbol, default_entry_symbol, emit_release, emit_release_stored, emit_retain,
-  emit_retain_value, ir_return_type, ir_type, returns_nothing, special_method_symbol, typed_params
+  default_entry_symbol, emit_release, emit_retain, emit_retain_value, ir_return_type, ir_type,
+  returns_nothing, typed_params
 from './lerta_ir'
-import referred_local, top_level_slot from './references'
-import call_runtime, call_void_runtime from './runtime_calls'
-import emit_mark_initialized, emit_release_globals from './top_level'
+import referred_local from './references'
+import call_void_runtime from './runtime_calls'
+import emit_release_globals from './top_level'
 import generate_yielding_function from './yielding'
 import is_kind, iterable_item, PromiseType, Type, void_type from '../types'
+import generate_block, generate_statement, generate_statements, store_in_slot from './statement'
 
 # A module's top-level code: the symbol of its function, and whether it awaits, which makes the
 # function return a Promise.
@@ -381,77 +364,6 @@ export generate_body_returning_last := (g: Generator, body: Statement[], result:
   else
     emit_return g, '', void_type
 
-# Takes the constructor arguments (see is_argument, in order) owned, unlike any other call, and
-# stores those given first, so that the fields own them before anything can throw; then computes
-# the other fields, and the defaults of the arguments not given, in order, and runs `init` last.
-# Storing the arguments first does not show, as an initializer reads only the fields before it. An
-# exception on the way releases the fields, which start as nil, and frees the object without
-# running its deinit, or panics if init let it escape. An argument with a default comes with whether
-# it is given (see generate_construction). It has the linkage (see Definition).
-# A struct that is a value (see value_layout) is built in a slot of its own, which `@` reads as it
-# is so far, and is returned whole.
-export generate_constructor := (g: Generator, linkage: String, info: ObjectInfo) ->
-  ir := g.ir
-  g.result_type = info.type
-  type := ir_type(ir.program, info.type)
-  is_value := is_value_type(ir.program, info.type)
-  object := is_value then ir.alloca(type) else emit_allocate(ir, info)
-  field_pointer := (field: FieldInfo) ->
-    name := field.name.name
-    if is_value
-      emit_slot_field_pointer(ir, object, info, name)
-    else
-      emit_field_pointer(ir, object, info, name)
-  this := -> is_value then ir.load(type, object) else object
-  for field in info.fields
-    ir.store ir_type(ir.program, field.type!), 'zeroinitializer', field_pointer(field)
-  g.unwind_cleanup = ->
-    mark := is_value then '' else call_runtime(ir, 'i64 @lerta_drop_mark()', '')
-    for field in info.fields
-      emit_release_stored ir, field_pointer(field), field.type!
-    unless is_value
-      weak_slot := emit_weak_slot_or_null(ir, object, info)
-      args := "ptr #{object}, ptr #{weak_slot}, i64 #{mark}"
-      call_void_runtime ir, 'void @lerta_free_unfinished(ptr, ptr, i64)', args
-  arguments := [field for field in info.fields when is_argument(field)]
-  given := (field: FieldInfo) -> "%given#{argument_index(arguments, field)}"
-  for field at i in arguments
-    store_argument := -> store_field(g, field_pointer(field), field, "%p#{i}")
-    if field.has_default
-      emit_when ir, given(field), store_argument
-    else
-      store_argument()
-  scope := g.locals.push()
-  for field in info.fields
-    value := field.value else continue
-    compute := ->
-      scope['@'] = ValueLocal(operand: this(), type: info.type)
-      store_field g, field_pointer(field), field, generate(g, value)
-    if field.has_default
-      emit_when ir, ir.negate(given(field)), compute
-    else
-      compute()
-  g.locals.pop()
-  result := this()
-  init := special_method_symbol(ir.program, info, 'init')
-  if info.has_init
-    ir.emit "call void #{init}(#{type} #{result})"
-    emit_exception_check g
-  ir.emit "ret #{type} #{result}"
-  params: String[]
-  for argument at i in arguments
-    params.push "#{ir_type(ir.program, argument.type!)} %p#{i}"
-    params.push "i1 %given#{i}" if argument.has_default
-  finish g, "#{linkage}#{type} #{constructor_symbol(info.type)}(#{params.join(', ')})"
-
-argument_index := (arguments: FieldInfo[], field: FieldInfo) -> arguments.index_of(field)!
-
-# The field at the pointer takes over the value, owned; a weak field takes its box instead.
-store_field := (g: Generator, pointer: String, field: FieldInfo, value: String) ->
-  stored := field.weak then weak_box_of(g, value, field.type!) else value
-  emit_release g.ir, value if field.weak
-  g.ir.store ir_type(g.code.program, field.type!), stored, pointer
-
 # A weak local or field holds the box of its object, which stays borrowed.
 export weak_box_of := (g: Generator, object: String, type: Type) ->
   emit_weak_box_of(g.ir, g.code.program, object, type)
@@ -462,7 +374,7 @@ export finish := (g: Generator, signature: String) -> g.ir.finish(signature)
 # while it holds the owned value of the type, which it then returns. The function's result type
 # decides the instruction: a returned value that never comes (`return throw ...`) is poison. The
 # body of a coroutine gives its value to `on_return`, if any, and goes to its end instead.
-emit_return := (g: Generator, value: String, type: Type): void ->
+export emit_return := (g: Generator, value: String, type: Type): void ->
   while_holding g, value, type, -> leave_scopes(g, 0)
   on_return value if on_return := g.on_return
   if exit := g.fused_exit
@@ -474,235 +386,3 @@ emit_return := (g: Generator, value: String, type: Type): void ->
   result := g.result_type
   g.ir.emit
     returns_nothing(result) then 'ret void' else "ret #{ir_type(g.code.program, result)} #{value}"
-
-# The only read of the local, if its value is generated there rather than where it is declared: one
-# that a loop goes through in place, whose parts that are evaluated before its loop cannot change
-# in between, and which the read goes through, as a loop or a comprehension does or as the object
-# of a method, in the local's own scope, so that what the value reads by name is the same there.
-defers_to_read := (g: Generator, declaration: Declaration) ->
-  read := g.facts.lazy_reads[declaration.name] else return nil
-
-  # A top-level value is read by functions too, which the checker counts no reads of.
-  return nil if g.top_level_code and g.locals.depth() == 1
-
-  is_fused_source(g, declaration.value, false) then read
-
-# Holds an owned reference in a scope of its own, which a jump out of it releases; the returned
-# function releases it where the code goes on.
-export hold := (g: Generator, value: String, type: Type) ->
-  scope := push_held_scope(g, value, type)
-  ->
-    release_scope g, scope
-    g.locals.pop()
-
-# The arguments' operands, which `generate_arg` generates, held in a scope pushed for them, under
-# names that the source cannot write, `(<prefix> argument <i>)`; the caller releases and pops it.
-export hold_arguments := (
-  g: Generator, args: Expression[], prefix: String, generate_arg: (Expression, Int) -> String
-) ->
-  scope := g.locals.push()
-  operands := [
-    for arg at i in args
-      operand := generate_arg(arg, i)
-      scope["(#{prefix} argument #{i})"] = store_in_slot(g, operand, type_at_use(g, arg))
-      operand
-  ]
-  (scope, operands)
-
-# Pushes a scope that holds an owned reference, which a jump out of it releases.
-export push_held_scope := (g: Generator, value: String, type: Type) ->
-  scope := g.locals.push()
-
-  # The name cannot be written in the source, so no code can read it.
-  scope['(held)'] = store_in_slot(g, value, type)
-  scope
-
-# A jump ends the block; the code after it, until the next label, is unreachable.
-export generate_jump := (g: Generator, jump: Jump | Return) ->
-  case jump
-    when Jump then generate_control_jump(g, jump)
-    when Return
-      value := jump.value
-      if value
-        emit_return g, generate(g, value), type_at_use(g, value)
-      else
-        emit_return g, '', void_type
-      g.ir.start_unreachable()
-
-# A block that gives a value: its last statement, if an expression, gives it, or ''. The value is
-# computed before the locals are released, as it may be one of them.
-export generate_block_value := (
-  g: Generator
-  body: Statement[]
-  define: (Map<String, CodegenLocal>) -> void = no_locals
-) ->
-  scope := g.locals.push()
-  define scope
-  generate_statements g, body.all_but_last()
-  last := body.last()!
-  expression := last as Expression?
-
-  # nil that ends a branch of an if or a try that gives no value has no type to be converted to.
-  is_discarded_nil := expression is NilLiteral and g.facts.conversions[expression] == nil
-  value := expression and not is_discarded_nil then generate(g, expression) else ''
-
-  generate_statement g, last if expression == nil
-  release_scope g, scope
-  g.locals.pop()
-  value
-
-# A block is a scope: the references held by its locals are released at its end. `define`
-# declares the locals that belong to it besides its statements'.
-export generate_block := (
-  g: Generator
-  body: Statement[]
-  define: (Map<String, CodegenLocal>) -> void = no_locals
-) -> generate_block_with(g, statements_code(g, body), define)
-
-# What generates the statements, for a block whose code is given that way.
-export statements_code := (g: Generator, statements: Statement[]) ->
-  -> generate_statements(g, statements)
-
-# The statements in order, those that are a batch of writes of Float fields together (see
-# batched_field_writes).
-export generate_statements := (g: Generator, statements: Statement[]) ->
-  var i = 0
-  while i < statements.length
-    count := batched_field_writes(g, statements, i)
-    if count > 1
-      generate_batched_field_writes g, statements[i..(i + count)]
-      i += count
-    else
-      generate_statement g, statements[i]
-      i += 1
-
-# A block whose code `generate` generates in its scope.
-export generate_block_with := (
-  g: Generator, generate_body: () -> void, define: (Map<String, CodegenLocal>) -> void
-) ->
-  scope := g.locals.push()
-  define scope
-  generate_body()
-  release_scope g, scope
-  g.locals.pop()
-
-export release_scope := (g: Generator, scope: Map<String, CodegenLocal>) ->
-  ir := g.ir
-  for local in scope.values()
-    continue unless local is SlotLocal
-    continue if local.top_level != nil or local.is_borrowed
-    if { cell, is_owned } := local.cell
-      emit_release ir, cell if is_owned
-    else
-      emit_release_stored ir, local.pointer, local.type
-
-export generate_statement := (g: Generator, statement: Statement) ->
-  located g, statement.position, -> generate_statement_node(g, statement)
-
-generate_statement_node := (g: Generator, statement: Statement): void ->
-  case statement
-    when For then generate_for(g, statement)
-    when While then generate_while(g, statement)
-    when If then generate_if(g, statement)
-    when Declaration then generate_declaration(g, statement)
-    when Assignment then generate_assignment(g, statement)
-    when TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias then pass
-    when Import, Extern, Intrinsic, Extend, Pass then pass
-    # One that ends a branch of an if that gives no value, which the checker allows alone.
-    when NilLiteral then pass
-    else release_if_reference(g, statement, generate(g, statement))
-
-generate_declaration := (g: Generator, declaration: Declaration) ->
-  if read := defers_to_read(g, declaration)
-    g.deferred_values[read] = declaration.value
-    return
-  code := g.code
-  is_top_level := g.top_level_code and g.locals.depth() == 1
-  globals := code.globals[code.module.index]
-  if global := is_top_level then globals[declaration.name.name]
-    generate_top_level_declaration g, declaration, global
-  else
-    generate_local_declaration g, declaration
-
-# A top-level value is never shared, as no function literal captures it.
-generate_top_level_declaration := (
-  g: Generator, declaration: Declaration, global: TopLevelGlobal
-) ->
-  ir := g.ir
-  type := type_of(g, declaration.name)
-  generated :=
-    if constant := global.constant
-      constant ir
-    else
-      generate_declared_value g, declaration, false
-  value := held_value_of(g, declaration, generated, type)
-  ir.store ir_type(ir.program, type), value, global.pointer, top_level_tag(ir)
-  emit_mark_initialized ir, global
-  g.locals.define declaration.name.name, top_level_slot(global, false)
-
-generate_local_declaration := (g: Generator, declaration: Declaration) ->
-  ir := g.ir
-  type := type_of(g, declaration.name)
-  { weak, mutable } := declaration
-  name := declaration.name.name
-  if holds_borrowed(g, declaration)
-    borrowed := generate_borrowed_value(g, declaration.value)
-    g.locals.define name, ValueLocal(type, operand: borrowed)
-    return
-  defers := defers_declaration(g, declaration)
-  generate_value := -> generate_declared_value(g, declaration, not weak)
-  generated := with_deferred_checks(g, g.defers_float_checks or defers, generate_value)
-  value := held_value_of(g, declaration, generated, type)
-  if declaration.name in g.facts.shared_vars
-    cell := emit_cell(ir, type, value)
-    pointer := emit_cell_pointer(ir, type, cell)
-    owned := CellSlot(cell, is_owned: true)
-    g.locals.define name, SlotLocal(type, pointer, weak, is_var: mutable, cell: owned)
-    return
-  slot := store_in_slot(g, value, type)
-  g.unchecked_floats.add slot.pointer if defers
-  g.locals.define name, SlotLocal(type, weak, is_var: mutable, pointer: slot.pointer)
-
-# What the declared name holds of the value generated for it: the value, or its weak box.
-held_value_of := (g: Generator, declaration: Declaration, generated: String, type: Type) ->
-  return generated unless declaration.weak
-  box := weak_box_of(g, generated, type)
-  emit_release g.ir, generated
-  box
-
-# Whether the const, which is no top-level value, holds its value unchecked for NaN: a tree of float
-# arithmetic (see float_tree) whose root may give a NaN, which is checked where the value leaves
-# the local, read but as an operand of a tree whose root checks it (see check_where_read), so
-# that the trees it goes on into check it once at their roots. A NaN that never leaves it throws
-# nowhere.
-defers_declaration := (g: Generator, declaration: Declaration) ->
-  return false if declaration.mutable or declaration.name in g.facts.shared_vars
-  value := declaration.value
-  return false if value is not BinaryOperation or g.defers_float_checks
-
-  # Not one that a loop reads, which would check it at each turn rather than once here.
-  read_in_loop := declaration.name in g.nan_free.read_in_loops
-  float_tree(g, value) and value not in g.nan_free.whole and not read_in_loop
-
-# Whether the local, which is no top-level value, holds its value borrowed, retaining nothing: a
-# const whose value stays where it is borrowed from while the local is in scope (see
-# is_borrowable_in_scope). A body that suspends holds it, as it does its parameters, since what it
-# is borrowed from may change while the body is suspended.
-holds_borrowed := (g: Generator, declaration: Declaration) ->
-  return false if declaration.mutable or declaration.weak or g.coroutine != nil
-  is_borrowable_in_scope(g, declaration.value)
-
-# The value of a local that is a const and is held as it is: the closure of a function literal
-# is local if the local never leaves the function, being only called (see escaping_locals). One
-# that is converted, as into a union's box, is generated as any value is.
-generate_declared_value := (g: Generator, declaration: Declaration, is_held_as_is: Bool) ->
-  value := declaration.value
-  is_converted := conversion_of(g, value) != nil
-  if value is FunctionLiteral and is_held_as_is and not declaration.mutable and not is_converted
-    return generate_closure(g, value, declaration.name not in g.facts.escaping_locals)
-  generate(g, value)
-
-export store_in_slot := (g: Generator, value: String, type: Type) ->
-  pointer := g.ir.alloca(ir_type(g.code.program, type))
-  g.ir.store ir_type(g.code.program, type), value, pointer
-  SlotLocal(pointer, type)

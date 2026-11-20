@@ -1,0 +1,169 @@
+# Generates `is` tests and `as` casts.
+import Cast, Expression, IsTest, TypeName from '../ast'
+import Generator from './generator'
+import emit_type_test from './heap_object'
+import is_boxed_member, is_value_type from '../checker/value_layout'
+import while_holding from './exceptions'
+import emit_unbox from './boxes'
+import emit_branch from './ir_builder'
+import
+  emit_interface_data, emit_release, emit_release_value, emit_retain, emit_retain_value, ir_type
+from './lerta_ir'
+import
+  emit_is_nil, emit_is_present, emit_present_test, emit_unwrap, emit_wrap, nil_constant
+from './optional'
+import FAILED_CAST, throw_if from './runtime_errors'
+import
+  inner_of, InterfaceType, is_assignable, optional_type, OptionalType, Type, UnionType
+from '../types'
+import emit_box_value, emit_narrowed, emit_narrowed_owned from './local'
+import generate, type_of from './expression'
+
+export generate_is_test := (g: Generator, test: IsTest) ->
+  object := generate(g, test.value)
+  result := emit_member_test(g, object, test.value, test.type)
+  emit_release_value g.ir, object, type_of(g, test.value)
+  result
+
+# The cast of a value narrowed to one member, held as the member itself, not boxed in the union:
+# whether it holds the type is known but for nil.
+emit_narrowed_cast := (g: Generator, cast: Cast, object: String) ->
+  ir := g.ir
+  member := type_of(g, cast.type)
+  value_type := type_of(g, cast.value)
+  narrowed := inner_of(value_type)
+  unless is_assignable(narrowed, member)
+    emit_release_value ir, object, value_type
+    unless cast.throws
+      return nil_constant(ir.program, optional_type(member))
+    throw_if g, 'true', FAILED_CAST
+    return 'undef'
+  if cast.throws and value_type is OptionalType
+    fails := emit_is_nil(ir, object, value_type)
+    while_holding g, object, value_type, -> throw_if(g, fails, FAILED_CAST)
+
+  # A union's value, a pointer, is null for nil, so it needs no unwrapping or wrapping.
+  if inner_of(member) is UnionType
+    return
+      if is_boxed_member(ir.program, narrowed)
+        emit_box_value(ir, object, value_type)
+      else
+        object
+
+  unless value_type is OptionalType
+    return cast.throws then object else emit_wrap(ir, object, member)
+  cast.throws then emit_unwrap(ir, object, value_type) else object
+
+# The object if it holds the type, and otherwise nil, or a throw.
+export generate_cast := (g: Generator, cast: Cast) ->
+  ir := g.ir
+  object := generate(g, cast.value)
+  member := type_of(g, cast.type)
+  value_type := type_of(g, cast.value)
+  is_object_cast := inner_of(value_type) is InterfaceType and member is not InterfaceType
+  if is_object_cast
+    return emit_interface_cast(g, cast, object)
+  unless inner_of(value_type) is UnionType
+    return emit_narrowed_cast(g, cast, object)
+  holds := emit_member_test(g, object, cast.value, cast.type)
+  if cast.throws
+    fails := ir.negate(holds)
+    while_holding g, object, value_type, -> throw_if(g, fails, FAILED_CAST)
+    return object unless is_boxed_member(ir.program, member)
+    return emit_narrowed_owned(ir, object, value_type, member)
+  if is_boxed_member(ir.program, member)
+    optional := optional_type(member)
+    value := -> emit_wrap(ir, emit_unbox(ir, object, member), member)
+    result := emit_branch
+      ir
+      ir_type(ir.program, optional)
+      holds
+      value
+      nil_constant(ir.program, optional)
+    emit_retain_value ir, result, optional
+    emit_release ir, object
+    return result
+  result := ir.assign("select i1 #{holds}, ptr #{object}, ptr null")
+  emit_retain ir, result
+  emit_release ir, object
+  result
+
+# The object that the interface value holds, owned as the value is, if it is of the class or struct,
+# and otherwise nil, or a throw.
+emit_interface_cast := (g: Generator, cast: Cast, value: String) ->
+  ir := g.ir
+  value_type := type_of(g, cast.value)
+  holds := emit_member_test(g, value, cast.value, cast.type)
+  member := type_of(g, cast.type)
+  if is_value_type(ir.program, member)
+    return emit_value_cast(g, cast, value, value_type, member, holds)
+  object := emit_interface_data(ir, emit_narrowed(ir, value, value_type, inner_of(value_type)))
+  if cast.throws
+    fails := ir.negate(holds)
+    while_holding g, value, value_type, -> throw_if(g, fails, FAILED_CAST)
+    return object
+  result := ir.assign("select i1 #{holds}, ptr #{object}, ptr null")
+  emit_retain ir, result
+  emit_release_value ir, value, value_type
+  result
+
+# As emit_interface_cast, of a struct's value, which the interface value holds in a box: the value
+# taken out, retained, where `holds`.
+emit_value_cast := (
+  g: Generator, cast: Cast, value: String, value_type: Type, member: Type, holds: String
+) ->
+  ir := g.ir
+  taken := ->
+    data := emit_interface_data(ir, emit_narrowed(ir, value, value_type, inner_of(value_type)))
+    unboxed := emit_unbox(ir, data, member)
+    emit_retain_value ir, unboxed, member
+    unboxed
+  if cast.throws
+    fails := ir.negate(holds)
+    while_holding g, value, value_type, -> throw_if(g, fails, FAILED_CAST)
+    result := taken()
+    emit_release_value ir, value, value_type
+    return result
+  optional := optional_type(member)
+  wrapped := -> emit_wrap(ir, taken(), member)
+  result := emit_branch
+    ir
+    ir_type(ir.program, optional)
+    holds
+    wrapped
+    nil_constant(ir.program, optional)
+  emit_release_value ir, value, value_type
+  result
+
+# An i1: whether the object, the value of a union type or of a member it is narrowed to, optional
+# or not, holds the type; or whether an interface value holds an object of the class or struct.
+emit_member_test := (g: Generator, object: String, value: Expression, type_name: TypeName) ->
+  value_type := type_of(g, value)
+  type := type_of(g, type_name)
+
+  # A value narrowed to one member is held as the member itself, not boxed in the union, so there is
+  # no header to test, and whether it holds the type is known.
+  held := inner_of(value_type)
+
+  # An interface value holds a value of its interface, unless it is nil.
+  if held is InterfaceType and type is InterfaceType
+    return
+      if value_type is OptionalType
+        emit_is_present(g.ir, object, value_type)
+      else
+        'true'
+
+  if held is InterfaceType
+    test_object := (each: String) -> emit_type_test(g.ir, emit_interface_data(g.ir, each), type)
+    return test_object(object) unless value_type is OptionalType
+    return emit_present_test(g.ir, object, value_type, test_object)
+  unless held is UnionType
+    return 'false' unless is_assignable(held, type)
+    return
+      if value_type is OptionalType
+        emit_is_present(g.ir, object, value_type)
+      else
+        'true'
+  test_of := (each: String) -> emit_type_test(g.ir, each, type)
+  return test_of(object) unless value_type is OptionalType
+  emit_present_test(g.ir, object, value_type, test_of)

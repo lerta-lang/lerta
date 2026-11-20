@@ -1,0 +1,114 @@
+# Reads locals, and narrows values to the types that they are known to have.
+import top_level_tag from './alias_tags'
+import emit_nan_check from './float'
+import CodegenLocal, Generator, SlotLocal, ValueLocal from './generator'
+import emit_weak_object from './heap_object'
+import ProgramWide from '../checker/shared'
+import is_boxed_member, is_value_type from '../checker/value_layout'
+import emit_box, emit_unbox from './boxes'
+import emit_branch, IrBuilder from './ir_builder'
+import emit_interface_data, emit_release, emit_retain_value, ir_type from './lerta_ir'
+import emit_is_present, emit_unwrap, emit_wrap, nil_constant from './optional'
+import emit_initialized_check from './top_level'
+import inner_of, InterfaceType, OptionalType, Type, UnionType from '../types'
+
+# The slot's pointer, once a top-level value is known to be initialized.
+export slot_pointer := (g: Generator, local: SlotLocal) ->
+  if { global, is_checked } := local.top_level
+    emit_initialized_check g, global if is_checked
+  local.pointer
+
+# The metadata of an access to the slot (see alias_tags).
+export slot_tag := (ir: IrBuilder, local: SlotLocal) ->
+  local.top_level then top_level_tag(ir) else ''
+
+# The local's value, retained if a reference, as the type it has where it is read: without nil
+# where it is narrowed.
+export read_local := (g: Generator, local: CodegenLocal, type: Type) ->
+  value := read_borrowed(g, local, type)
+  emit_retain_value g.ir, value, type
+  value
+
+# The local's value, borrowed, as read_local reads it.
+export read_borrowed := (g: Generator, local: CodegenLocal, type: Type) ->
+  ir := g.ir
+  held := held_value(g, local)
+
+  # A weak local's object, which may be gone, is never narrowed.
+  value := local.weak then emit_weak_object(ir, held) else held
+
+  check_where_read g, local, value
+  emit_narrowed(ir, value, local.type, type)
+
+# Checks the local for NaN if it holds a float not checked yet, as a read of it would.
+export emit_deferred_check := (g: Generator, local: CodegenLocal) ->
+  check_where_read g, local, held_value(g, local)
+
+# Checks the value read from the local for NaN if the local holds a float not checked yet (see
+# defers_declaration): but as an operand of a tree, whose root checks it.
+check_where_read := (g: Generator, local: CodegenLocal, value: String) ->
+  return if local is not SlotLocal or local.pointer not in g.unchecked_floats
+  if g.defers_float_checks
+    g.reads_unchecked_floats = true
+  else
+    emit_nan_check g, value, local.type
+
+# What the local holds, borrowed: its value, or a weak local's box.
+export held_value := (g: Generator, local: CodegenLocal) ->
+  case local
+    when SlotLocal
+      pointer := slot_pointer(g, local)
+      g.ir.load(ir_type(g.code.program, local.type), pointer, slot_tag(g.ir, local))
+    when ValueLocal then local.operand
+
+# The value of the declared type as the narrower one where it is narrowed: without nil, or as one
+# member of its union, out of its box if the union holds one; borrowed as `value` is.
+export emit_narrowed := (ir: IrBuilder, value: String, declared: Type, type: Type) ->
+  # An interface value narrowed to a class or struct is the object it holds.
+  if inner_of(declared) is InterfaceType and inner_of(type) is not InterfaceType
+    held :=
+      if declared is OptionalType
+        emit_unwrap ir, value, declared
+      else
+        value
+    data := emit_interface_data(ir, held)
+    return
+      if is_value_type(ir.program, type)
+        emit_unbox(ir, data, type)
+      else
+        data
+  unless is_boxed_narrowing(ir.program, declared, type)
+    present := declared is OptionalType and type is not OptionalType
+    return present then emit_unwrap(ir, value, declared) else value
+
+  # A union value is a pointer, null for nil, whether optional or not.
+  unless type is OptionalType
+    return emit_unbox(ir, value, type)
+  member := -> emit_wrap(ir, emit_unbox(ir, value, type.inner), type.inner)
+  emit_branch(
+    ir
+    ir_type(ir.program, type)
+    ir.is_not_null(value)
+    member
+    nil_constant(ir.program, type)
+  )
+
+# As emit_narrowed, of a value that is owned and given over.
+export emit_narrowed_owned := (ir: IrBuilder, value: String, declared: Type, type: Type) ->
+  unless is_boxed_narrowing(ir.program, declared, type)
+    return emit_narrowed(ir, value, declared, type)
+  narrowed := emit_narrowed(ir, value, declared, type)
+  emit_retain_value ir, narrowed, type
+  emit_release ir, value
+  narrowed
+
+# Whether the value of the union narrowed to the type, one member, optional or not, is in a box.
+export is_boxed_narrowing := (program: ProgramWide, declared: Type, type: Type) ->
+  inner_of(declared) is UnionType and is_boxed_member(program, inner_of(type))
+
+# A box of the value, owned, for a union, and of a T? a box or null.
+export emit_box_value := (ir: IrBuilder, value: String, type: Type) ->
+  unless type is OptionalType
+    return emit_box(ir, value, type)
+  box := -> emit_box(ir, emit_unwrap(ir, value, type), type.inner)
+  emit_branch(ir, 'ptr', emit_is_present(ir, value, type), box, 'null')

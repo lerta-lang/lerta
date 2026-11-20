@@ -1,0 +1,149 @@
+# Reads fields and properties.
+import Member from '../ast'
+import field_tag from './alias_tags'
+import emit_length from './array'
+import generate_borrowed from './borrowing'
+import Generator from './generator'
+import
+  emit_borrowed_field, emit_field_pointer, emit_member_dispatch, emit_record_field,
+  emit_weak_object, field_named, record_field_index
+from './heap_object'
+import EnumValue, InterfaceProperty, Method, Property, PropertyKind from '../checker/member_targets'
+import info_of from '../checker/object_types'
+import is_value_type from '../checker/value_layout'
+import holding from './exceptions'
+import emit_interface_read from './interface'
+import emit_unbox from './boxes'
+import emit_release, emit_release_value, emit_retain, emit_retain_value, ir_type from './lerta_ir'
+import emit_map_length from './map'
+import emit_binary_length from './string'
+import DEAD_OBJECT, throw_if from './runtime_errors'
+import InterfaceType, ObjectType, OptionalType, RecordType, Type, UnionType from '../types'
+import emit_narrowed_owned from './local'
+import generate, type_of from './expression'
+
+# A field's value, of a class, a struct or an anonymous struct; the object is released if it is
+# owned, and the value retained.
+read_field := (g: Generator, object: String, type: Type, name: String, is_owned: Bool) ->
+  ir := g.ir
+  if type is RecordType
+    value := emit_record_field(ir, object, type, name)
+    if is_owned
+      emit_release_value ir, object, type
+    return value
+  assert type is ObjectType
+  field := field_named(info_of(ir.program, type), name)
+  field_type := field.type!
+  loaded := held_field(g, object, type, name)
+
+  # The object is held while its weak `T!` field is checked; a `T?` one gives nil once its object is
+  # gone.
+  read_weak := -> weak_object(g, loaded)
+  value :=
+    case
+      when not field.weak then loaded
+      when field_type is OptionalType then emit_weak_object(ir, loaded)
+      when is_owned then holding(g, object, type, read_weak)
+      else read_weak()
+  emit_retain_value ir, value, field_type
+  if is_owned
+    emit_release_value ir, object, type
+  value
+
+# What a field of a class or struct holds, borrowed: its value, or a weak field's box.
+export held_field := (g: Generator, object: String, type: ObjectType, name: String) ->
+  info := info_of(g.code.program, type)
+  if is_value_type(g.code.program, type)
+    return emit_borrowed_field(g.ir, object, info, field_named(info, name))
+  pointer := emit_field_pointer(g.ir, object, info, name)
+  field_type := field_named(info, name).type!
+  g.ir.load(ir_type(g.code.program, field_type), pointer, field_tag(g.ir, field_type))
+
+# A field of a class, a struct or an anonymous struct, or one that every member of a union has,
+# of the object, which is released if it is owned.
+export read_any_field := (
+  g: Generator
+  object: String
+  object_type: Type
+  name: String
+  field_type: Type
+  is_owned = true
+) ->
+  unless object_type is UnionType
+    return read_field(g, object, object_type, name, is_owned)
+
+  # A struct's value is read in its box, which the union holds.
+  of_member := (type: Type) ->
+    unless is_value_type(g.code.program, type)
+      return read_field(g, object, type, name, is_owned)
+    value := read_field(g, emit_unbox(g.ir, object, type), type, name, false)
+    emit_release g.ir, object if is_owned
+    value
+  emit_member_dispatch(
+    g.ir
+    object
+    object_type.members
+    ir_type(g.code.program, field_type)
+    of_member
+  )
+
+# The object that a weak `T!` field's box holds, borrowed; it throws if the object is gone.
+weak_object := (g: Generator, box: String) ->
+  object := emit_weak_object(g.ir, box)
+  throw_if g, g.ir.is_null(object), DEAD_OBJECT
+  object
+
+# `E.MEMBER` is a member of an enum.
+export generate_property := (g: Generator, member: Member) ->
+  target := g.facts.members[member]!
+  return "#{target.index}" if target is EnumValue
+  object_type := type_of(g, member.object)
+  type := type_of(g, member)
+  if target is InterfaceProperty
+    # An interface's getter takes its object owned.
+    object := generate(g, member.object)
+    return emit_interface_read(g, object, object_type as InterfaceType!, target.index, type)
+  (object, is_owned) := generate_borrowed(g, member.object, [], true)
+  name := member.name.name
+  value :=
+    case target
+      when Property then read_property(g, object, object_type, target.kind, name, type, is_owned)
+      when InterfaceProperty then panic('an interface property is read above')
+      when Method then panic('a method must be called')
+      when EnumValue then panic('an enum value is read before its object')
+
+  # A field narrowed where it is read (see checker narrowable FieldPath).
+  field_type := declared_field_type(g, object_type, name) else return value
+  emit_narrowed_owned(g.ir, value, field_type, type)
+
+export declared_field_type := (g: Generator, object_type: Type, name: String) ->
+  case object_type
+    when RecordType then object_type.fields[record_field_index(object_type, name)].type
+    when ObjectType then field_named(info_of(g.code.program, object_type), name).type
+    else nil
+
+# The property of the object, which is released if it is owned: a field, or a property of a
+# builtin type. `s.binary` is the string itself, passing on its ownership, or retained if it is
+# borrowed; `length` borrows its object.
+export read_property := (
+  g: Generator
+  object: String
+  object_type: Type
+  kind: PropertyKind
+  name: String
+  type: Type
+  is_owned = true
+) ->
+  ir := g.ir
+  released := (value: String) ->
+    if is_owned
+      emit_release_value ir, object, object_type
+    value
+  case kind
+    when FIELD then read_any_field(g, object, object_type, name, type, is_owned)
+    when STRING_BINARY
+      emit_retain ir, object unless is_owned
+      object
+    when ARRAY_LENGTH then released(emit_length(ir, object))
+    when MAP_LENGTH then released(emit_map_length(ir, object))
+    when BINARY_LENGTH then released(emit_binary_length(ir, object))
