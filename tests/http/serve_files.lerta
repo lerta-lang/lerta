@@ -1,0 +1,98 @@
+# serve_files gives the files under a directory, a directory's index.html at a path that ends with
+# `/`, and 304 for a copy that is still good.
+import make_dir, make_temp_dir, remove_tree, write_file from 'std:io'
+import fetch, Headers, serve, serve_files from 'std:http'
+
+root := make_temp_dir()
+await write_file("#{root}/a.txt", 'hello')
+await write_file("#{root}/with space.html", '<p>spaced</p>')
+make_dir "#{root}/dir"
+await write_file("#{root}/dir/index.html", '<p>index</p>')
+make_dir "#{root}/empty"
+make_dir "#{root}/odd/index.html"
+await write_file("#{root}/README", 'no extension')
+await write_file("#{root}/b.TXT", 'upper')
+await write_file("#{root}/x.min.js", 'js')
+await write_file("#{root}/.htaccess", 'dotfile')
+
+server := serve(serve_files(root), port: 0)
+base := "http://127.0.0.1:#{server.port}"
+
+show := (path: String, method = 'GET', fields: (String, String)[] = []) ->
+  headers := Headers()
+  headers.set name, value for (name, value) in fields
+  response :=
+    await fetch("#{base}#{path}", method: method, headers: headers, follow_redirects: false)
+  type := response.headers.get('content-type') else '-'
+  location := response.headers.get('location') else '-'
+  body := (await response.text())!
+  print "#{method} #{path}: #{response.status} #{type} #{location} #{body}"
+
+print 'files'
+await show('/a.txt')
+first := await fetch("#{base}/a.txt")
+etag := first.headers.get('etag')!
+last_modified := first.headers.get('last-modified')!
+await show('/a.txt', 'HEAD')
+await show('/with%20space.html')
+await show('/a.txt?v=1')
+await show('/missing')
+await show('/%61.txt')
+await show('//a.txt')
+await show('/./a.txt')
+await show('/README')
+await show('/b.TXT')
+await show('/x.min.js')
+await show('/.htaccess')
+await show('/a.txt', 'POST')
+print (await fetch("#{base}/a.txt", method: 'DELETE')).headers.get('allow')!
+
+print 'directories'
+await show('/dir')
+await show('/dir?x=1')
+
+# Not to `//dir/`, which a browser would take for the host `dir`.
+await show('//dir')
+await show('/dir', 'HEAD')
+await show('/dir/')
+await show('/empty/')
+await show('/odd/')
+
+print 'paths that leave the directory or do not decode'
+await show('/%2E%2E/a.txt')
+await show('/dir%2Findex.html')
+await show('/a%5Cb')
+await show('/%zz')
+await show('/%ff')
+await show('/a.txt%')
+await show('/a.txt%4')
+
+print 'validators'
+await show('/a.txt', 'GET', [('if-none-match', etag)])
+await show('/a.txt', 'HEAD', [('if-none-match', etag)])
+await show('/a.txt', 'GET', [('if-none-match', "\"other\", W/#{etag}")])
+await show('/a.txt', 'GET', [('if-none-match', '*')])
+await show('/a.txt', 'GET', [('if-none-match', '"other"')])
+await show('/a.txt', 'GET', [('if-none-match', 'W/"other"')])
+await show('/a.txt', 'GET', [('if-none-match', "W/#{etag}")])
+await show('/a.txt', 'GET', [('if-modified-since', last_modified)])
+await show('/a.txt', 'GET', [('if-modified-since', 'Tue, 29 Feb 2000 00:00:00 GMT')])
+await show('/a.txt', 'GET', [('if-modified-since', 'Fri, 01 Jan 2100 00:00:00 GMT')])
+
+# Taken as 3 Mar, as the day is not checked against the month's length.
+await show('/a.txt', 'GET', [('if-modified-since', 'Wed, 31 Feb 2100 00:00:00 GMT')])
+for date in [
+  'Friday, 01-Jan-2100 00:00:00 GMT'
+  'Fri, 32 Jan 2100 00:00:00 GMT'
+  'Fri, 01 Jan 2100 24:00:00 GMT'
+  'Fri, 1 Jan 2100 00:00:00 GMT'
+  'Fry, 01 Jan 2100 00:00:00 GMT'
+  'Fri, 01 Jan 2100 00:00:00 UTC'
+]
+  await show('/a.txt', 'GET', [('if-modified-since', date)])
+await show('/a.txt', 'GET', [('if-none-match', '"other"'), ('if-modified-since', last_modified)])
+print etag.starts_with('"') and etag.ends_with('"')
+print last_modified.ends_with(' GMT')
+
+await server.close()
+await remove_tree(root)

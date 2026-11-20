@@ -1,0 +1,144 @@
+# A handler that serves the files under a directory, as a static web server does, with the
+# validators of RFC 9110 that let a client keep a copy: an ETag and a Last-Modified, and 304 for a
+# copy that is still good.
+
+import floor from 'std:math'
+import FileStatus, read_file, stat from 'std:io'
+import date_of, time_of from './http_date'
+import Headers, Request, Response from './http_message'
+
+## A handler that gives the files under `root`, for GET and HEAD.
+export serve_files := (root: String) -> (request: Request) -> await serve_file(root, request)
+
+serve_file := (root: String, request: Request) ->
+  return not_allowed() unless request.method in ['GET', 'HEAD']
+  (path, query) := target_of(request.url)
+  parts := decoded_parts(path) else return plain(400, 'bad request')
+  file := [root, parts...].join('/')
+  status := stat(file) else return plain(404, 'not found')
+  if status.kind == DIR
+    # A directory's page is served at a path that ends with `/`, so that its relative links resolve
+    # inside it.
+    return moved_to(path, query) unless path.ends_with('/')
+    index := "#{file}/index.html"
+    index_status := stat(index) else return plain(404, 'not found')
+    return plain(404, 'not found') if index_status.kind != FILE
+    return await file_response(index, index_status, request)
+  return plain(404, 'not found') if status.kind != FILE
+  await file_response(file, status, request)
+
+file_response := (file: String, status: FileStatus, request: Request) ->
+  modified := floor(status.modified_time).to_int()!
+  etag := "\"#{modified.to_hex()}-#{status.size.to_hex()}\""
+  headers := Headers()
+  headers.set 'etag', etag
+  headers.set 'last-modified', date_of(modified)
+  if is_fresh(request.headers, etag, modified)
+    return Response(headers, status: 304)
+  headers.set 'content-type', content_type(file)
+  Response(headers, body: await read_file(file))
+
+# Whether the client's copy is still good, as RFC 9110 tells: by If-None-Match if it is given, and
+# by If-Modified-Since only otherwise. A date that is not an IMF-fixdate is taken as none.
+is_fresh := (request_headers: Headers, etag: String, modified: Int) ->
+  if tags := request_headers.get('if-none-match')
+    return tags.split(',').any((tag) -> matches(tag.trim(), etag))
+  since := request_headers.get('if-modified-since') else return false
+  seconds := time_of(since) else return false
+  modified <= seconds
+
+# The weak comparison of RFC 9110, which If-None-Match takes: `W/` is left out of both.
+matches := (tag: String, etag: String) ->
+  strong := tag.without_prefix('W/') else tag
+  tag == '*' or strong == etag
+
+# The path of a request's URL, which is absolute (see Request), and its query, empty if it has none.
+target_of := (url: String) ->
+  (_, after_scheme) := url.split_once('://') else ('', url)
+  (_, target) := after_scheme.split_once('/') else (after_scheme, '')
+  (path, query) := "/#{target}".split_once('?') else ("/#{target}", '')
+  (path, query)
+
+# The parts of a path between its `/`s, each decoded from %XX, but the empty ones and `.`, which
+# stand for the directory they are in; nil for a path that would leave the directory, holds an
+# escape that is not one or a part that is not UTF-8, or holds a separator inside a part, as an
+# escaped `/` or a `\`, which Windows takes as one.
+decoded_parts := (path: String) ->
+  parts: String[]
+  for raw in path.split('/')
+    part := percent_decoded(raw) else return nil
+    return nil if part == '..' or part.any((c) -> c in ['/', '\', "\0"])
+    parts.push part unless part in ['', '.']
+  parts
+
+percent_decoded := (text: String) ->
+  return text unless '%' in text
+  bytes := text.binary
+  decoded: Byte[]
+  var at = 0
+  while at < bytes.length
+    byte := bytes[at]
+    if byte != b'%'
+      decoded.push byte
+      at += 1
+      continue
+    return nil if at + 2 >= bytes.length
+    high := hex_value(bytes[at + 1]) else return nil
+    low := hex_value(bytes[at + 2]) else return nil
+    decoded.push (high * 16 + low).to_byte()!
+    at += 3
+  decoded.to_binary().text()
+
+hex_value := (byte: Byte) ->
+  c := byte.to_int()
+  return c - 0x30 if c in 0x30..=0x39
+  lower := c | 0x20
+  return lower - 0x61 + 10 if lower in 0x61..=0x66
+  nil
+
+CONTENT_TYPES :=
+  'html': 'text/html; charset=utf-8'
+  'htm': 'text/html; charset=utf-8'
+  'css': 'text/css; charset=utf-8'
+  'js': 'text/javascript; charset=utf-8'
+  'mjs': 'text/javascript; charset=utf-8'
+  'json': 'application/json'
+  'txt': 'text/plain; charset=utf-8'
+  'md': 'text/markdown; charset=utf-8'
+  'xml': 'application/xml'
+  'svg': 'image/svg+xml'
+  'png': 'image/png'
+  'jpg': 'image/jpeg'
+  'jpeg': 'image/jpeg'
+  'gif': 'image/gif'
+  'webp': 'image/webp'
+  'ico': 'image/x-icon'
+  'pdf': 'application/pdf'
+  'wasm': 'application/wasm'
+  'woff': 'font/woff'
+  'woff2': 'font/woff2'
+
+content_type := (file: String) ->
+  name := file.split('/').last()!
+  (_, extension) := name.split_once('.') else return 'application/octet-stream'
+  CONTENT_TYPES[extension.split('.').last()!.to_lower()] else 'application/octet-stream'
+
+plain := (status: Int, text: String) ->
+  headers := Headers()
+  headers.set 'content-type', 'text/plain; charset=utf-8'
+  Response(headers, status, body: text)
+
+not_allowed := ->
+  response := plain(405, 'method not allowed')
+  response.headers.set 'allow', 'GET, HEAD'
+  response
+
+# A redirect to the directory at the path, with a `/` after it. The path's parts are kept as they
+# are written, but its empty ones, so that it never starts with `//`, which a browser would take for
+# a host.
+moved_to := (path: String, query: String) ->
+  parts := [part for part in path.split('/') when not part.is_empty()]
+  directory := "/#{parts.join('/')}/"
+  headers := Headers()
+  headers.set 'location', query.is_empty() then directory else "#{directory}?#{query}"
+  Response(headers, status: 301)

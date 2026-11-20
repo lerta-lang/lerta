@@ -22,7 +22,7 @@ export date_now := ->
   last_date
 
 # The date of the Unix time, in whole seconds, from 1970 on, whose day 0 was a Thursday.
-date_of := (seconds: Int) ->
+export date_of := (seconds: Int) ->
   day := seconds / SECONDS_PER_DAY
   of_day := seconds % SECONDS_PER_DAY
   { year, month, month_day } := civil_date(day)
@@ -31,6 +31,28 @@ date_of := (seconds: Int) ->
   "#{DAYS[day % 7]}, #{date} #{clock} GMT"
 
 two_digits := (n: Int) -> n.to_string().pad_start(2, '0')
+
+# The Unix time, in whole seconds, of a date as date_of writes it, or nil for any other text, as the
+# obsolete forms that RFC 9110 also reads, which no client sends now. Neither the day of the week
+# nor the day of the month is checked against the date: 31 Feb is taken as 3 Mar, or 2 Mar in a
+# leap year.
+export time_of := (date: String) ->
+  parts := date.split(' ')
+  return nil if parts.length != 6 or not parts[0].ends_with(',') or parts[5] != 'GMT'
+  return nil unless parts[0].without_suffix(',')! in DAYS
+  month := MONTHS.index_of(parts[2]) else return nil
+  clock := parts[4].split(':')
+  numbers := [parts[1], parts[3], clock...]
+  widths := [2, 4, 2, 2, 2]
+  return nil unless clock.length == 3
+  for number at i in numbers
+    return nil if number.byte_count() != widths[i] or not number.is_digits()
+  values := [number.parse_int()! for number in numbers]
+  month_day := values[0]
+  (hour, minute, second) := (values[2], values[3], values[4])
+  return nil if month_day not in 1..=31 or hour >= 24 or minute >= 60 or second >= 61
+  days := days_since_epoch(values[1], month + 1, month_day)
+  days * SECONDS_PER_DAY + hour * 3600 + minute * 60 + second
 
 # The year, month (1 to 12) and day of the month of the days since 1970-01-01, in the Gregorian
 # calendar (Howard Hinnant's civil_from_days): counted in eras of 400 years from a year that starts
@@ -46,3 +68,14 @@ civil_date := (days: Int) ->
   month := shifted_month < 10 then shifted_month + 3 else shifted_month - 9
   year := year_of_era + era * 400 + (month <= 2 then 1 else 0)
   { year, month, month_day }
+
+# The days since 1970-01-01 of a date in the Gregorian calendar, the inverse of civil_date
+# (Howard Hinnant's days_from_civil).
+days_since_epoch := (year: Int, month: Int, month_day: Int) ->
+  shifted_year := month <= 2 then year - 1 else year
+  era := shifted_year / 400
+  year_of_era := shifted_year - era * 400
+  shifted_month := month > 2 then month - 3 else month + 9
+  day_of_year := (153 * shifted_month + 2) / 5 + month_day - 1
+  day_of_era := year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year
+  era * 146097 + day_of_era - 719468

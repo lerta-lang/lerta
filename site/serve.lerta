@@ -1,11 +1,7 @@
 # Serves the website that site.lerta wrote, to look at it before it is published: `lerta run
-# site/serve.lerta -- <directory> [<port>]`. A path that names a directory, as `/reference/`, gives
-# its index.html, as GitHub Pages does.
-import is_dir, is_file, read_file from 'std:io'
+# site/serve.lerta -- <directory> [<port>]`.
 import argv from 'std:process'
-import Headers, Request, Response, serve from 'std:http'
-
-CONTENT_TYPES := { 'html': 'text/html; charset=utf-8', 'css': 'text/css; charset=utf-8' }
+import serve, serve_files from 'std:http'
 
 usage := 'usage: serve <directory> [<port>]'
 root := argv.first() else throw ValueError(usage)
@@ -15,27 +11,5 @@ port :=
   else
     8000
 
-# The file that the path of a URL names, or nil if it names none or leaves the directory.
-file_of := (url: String) ->
-  (_, after_scheme) := url.split_once('://') else return nil
-  (_, rest) := after_scheme.split_once('/') else return nil
-  path_part := rest.before('?') else rest
-  path := "/#{path_part}"
-
-  # `\` too, which Windows takes as a separator.
-  return nil if '\' in path or path.split('/').contains('..')
-
-  file := "#{root}#{path}"
-  return "#{file}index.html" if path.ends_with('/') and is_file("#{file}index.html")
-  return "#{file}/index.html" if is_dir(file) and is_file("#{file}/index.html")
-  is_file(file) then file
-
-handle := (request: Request) ->
-  file := file_of(request.url) else return Response(body: 'not found', status: 404)
-  extension := file.split('.').last()!
-  headers := Headers()
-  headers.set 'content-type', CONTENT_TYPES[extension] else 'application/octet-stream'
-  Response(headers, body: await read_file(file))
-
-server := serve(handle, port: port)
+server := serve(serve_files(root), port: port)
 print "serving #{root} at http://127.0.0.1:#{server.port}/"

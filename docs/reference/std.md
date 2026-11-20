@@ -317,6 +317,27 @@ These responses, and the 500 below, have an empty body.
   - A read of it that fails closes the connection. That leaves its last chunk unsent, or, for HTTP/1.0, the body cut short, which the client cannot tell from a whole one.
 - A response to `HEAD` has no body but its `Content-Length` or `Transfer-Encoding`; one of 204 or 304 has neither.
 
+### Files
+
+```lerta
+import serve, serve_files from 'std:http'
+
+server := serve(serve_files('public'), port: 8080)
+```
+
+`serve_files(root: String): (Request) -> Promise<Response>` gives a handler that serves the files under a directory, as a static web server does.
+
+- **Methods.** It takes `GET` and `HEAD`, and answers any other method 405, with `Allow: GET, HEAD`.
+- **Paths.** The path of the URL, without its query, is split at its `/`s, and each part decoded from `%XX`. The file is the parts joined under `root`, the empty parts and `.` left out.
+  - A path that has a `..` part, a part that holds `/`, `\` or a NUL once decoded, an escape that is not `%` and two hexadecimal digits, or a part that is not UTF-8 once decoded, is answered 400. So a request never reaches outside `root`, but through a symbolic link under it.
+  - What names nothing, nor a file or a directory, is answered 404, with a body of text.
+- **Directories.** A directory is served by its `index.html`, at a path that ends with `/`, so that the page's relative links resolve inside it. At a path without the `/`, it is answered 301 to the path with it, the query kept. A directory without `index.html` is answered 404: no listing is made.
+- **The response** has the file's contents as its body, read whole, and a `Content-Type` by the extension of its name, in any case: `text/html`, `text/css`, `text/javascript`, `text/plain` and `text/markdown` with `charset=utf-8`, the common types of images, fonts, JSON, XML, PDF and WebAssembly, and `application/octet-stream` for any other.
+- **Validators.** It gives an `ETag`, `"<modified>-<size>"` of the file's modified time in whole seconds and its size in bytes, both in hexadecimal, and a `Last-Modified`, the modified time in the form of `Date`.
+  - It answers 304, without a body, with those two fields, where the client's copy is still good, as RFC 9110 tells: if the request has `If-None-Match`, where one of its tags, or `*`, is the ETag, `W/` left out of each; otherwise, where its `If-Modified-Since` is at or after the modified time.
+  - An `If-Modified-Since` that is not in the form of `Date`, as the obsolete forms that RFC 9110 also reads, which no client sends now, is taken as none.
+  - Why from the modified time and the size, not the contents: a request is answered without reading the file, as nginx does. A change within one second that keeps the size is not seen.
+
 ### The client
 
 | Name | |
