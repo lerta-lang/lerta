@@ -2,15 +2,20 @@
 // dropped, and the second finds it there.
 #include "lerta.h"
 
-static void drop_parent(void *parent) {
-  void *child = ((void **)parent)[2];
-  lerta_release(child);
-  lerta_release(child);
+typedef struct {
+  LertaHeader header;
+  void *child;
+} Parent;
+
+static void drop_parent(void *object) {
+  Parent *parent = object;
+  lerta_release(parent->child);
+  lerta_release(parent->child);
 }
 static const LertaType parent_type = {drop_parent, NULL, NULL};
 
 void lerta_main(void) {
-  void **parent = lerta_new(24, &parent_type);
-  parent[2] = lerta_new(16, NULL);
+  Parent *parent = lerta_new(sizeof(Parent), &parent_type);
+  parent->child = lerta_new(sizeof(LertaHeader), NULL);
   lerta_release(parent);
 }

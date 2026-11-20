@@ -23,6 +23,9 @@ work_dir := suite_dir('runtime')
 # The seconds that a check whose program could hang waits for it.
 HANG_SECONDS := 10.0
 
+# The status that a program of test/runtime exits with where its check does not apply.
+SKIPPED := 77
+
 # How a program ended and what it printed.
 struct Outcome
   status: Int
@@ -310,7 +313,11 @@ checks: Check[] = [
     ]
   }
   clean_check('the optimized runtime does not count objects', 'leak', true)
-  on_posix(clean_check('a write of more than 2 GiB is done whole', 'write_large', false))
+  # Skipped where the program exits with SKIPPED, as a 32-bit one does, which has no room for 2 GiB.
+  posix_check('a write of more than 2 GiB is done whole', ->
+    outcome := await build_and_run('write_large', false)
+    outcome.status == SKIPPED then nil else expect_clean(outcome)
+  )
   on_posix(
     clean_check('print_error drops its output once stderr has failed', 'print_error_failed', false)
   )
