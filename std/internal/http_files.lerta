@@ -3,12 +3,13 @@
 # copy that is still good.
 
 import floor from 'std:math'
-import FileStatus, read_file, stat from 'std:io'
+import FileStatus, open, Reader, stat from 'std:io'
 import date_of, time_of from './http_date'
 import Headers, Request, Response from './http_message'
 
 ## A handler that gives the files under `root`, for GET and HEAD.
-export serve_files := (root: String) -> (request: Request) -> await serve_file(root, request)
+export serve_files := (root: String) ->
+  (request: Request): Promise<Response> -> serve_file(root, request)
 
 serve_file := (root: String, request: Request) ->
   return not_allowed() unless request.method in ['GET', 'HEAD']
@@ -23,20 +24,26 @@ serve_file := (root: String, request: Request) ->
     index := "#{file}/index.html"
     index_status := stat(index) else return plain(404, 'not found')
     return plain(404, 'not found') if index_status.kind != FILE
-    return await file_response(index, index_status, request)
+    return file_response(index, index_status, request)
   return plain(404, 'not found') if status.kind != FILE
-  await file_response(file, status, request)
+  file_response(file, status, request)
 
-file_response := (file: String, status: FileStatus, request: Request) ->
+file_response := (file: String, status: FileStatus, request: Request): Response ->
   modified := floor(status.modified_time).to_int()!
   etag := "\"#{modified.to_hex()}-#{status.size.to_hex()}\""
   headers := Headers()
   headers.set 'etag', etag
   headers.set 'last-modified', date_of(modified)
-  if is_fresh(request.headers, etag, modified)
-    return Response(headers, status: 304)
+  return { headers, status: 304 } if is_fresh(request.headers, etag, modified)
   headers.set 'content-type', content_type(file)
-  Response(headers, body: await read_file(file))
+
+  # Sent as it is read, of the length that the status gave: a file that changes meanwhile ends the
+  # connection after it, as its length then tells wrong (see write_body).
+  headers.set 'content-length', status.size.to_string()
+
+  # HEAD, which sends no body, reads none.
+  body := request.method == 'HEAD' then Reader(-> nil) else open(file)
+  { headers, body }
 
 # Whether the client's copy is still good, as RFC 9110 tells: by If-None-Match if it is given, and
 # by If-Modified-Since only otherwise. A date that is not an IMF-fixdate is taken as none.

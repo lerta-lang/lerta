@@ -309,9 +309,10 @@ These responses, and the 500 below, have an empty body.
 
 #### Writing a response
 
-- The server writes `Content-Length` and `Connection` itself, in place of those the handler gives, and leaves out its `Transfer-Encoding`.
+- The server writes `Content-Length` and `Connection` itself, in place of those the handler gives, but the `Content-Length` of a `Reader` body (below), and leaves out its `Transfer-Encoding`.
 - It writes `Date`, the time of the response in the form of RFC 9110, `Thu, 29 Oct 2026 08:00:00 GMT`, unless the handler gives one.
-- **A `Reader` body** has no `Content-Length`. It is sent with `Transfer-Encoding: chunked`, or to an HTTP/1.0 request as it is, ended by closing the connection.
+- **A `Reader` body** of a length that the handler gives in a `Content-Length` is sent with it, as it comes, and the connection may go on after it. One that ends before the length, or goes on after it, is sent up to where it ends or to the length, and ends the connection then, as the client cannot tell where the next response starts. A `Content-Length` that is not a length, or given twice, is answered 500.
+- **A `Reader` body** without one has no `Content-Length`. It is sent with `Transfer-Encoding: chunked`, or to an HTTP/1.0 request as it is, ended by closing the connection.
   - What its reads give at once, without waiting, is joined, up to 64 KiB, into one chunk and one write, the last chunk with it once they give the end, so that a `Reader` of small pieces takes few writes.
   - What comes after a read that waits goes in the next, so it is not held back.
   - A read of it that fails closes the connection. That leaves its last chunk unsent, or, for HTTP/1.0, the body cut short, which the client cannot tell from a whole one.
@@ -332,7 +333,7 @@ server := serve(serve_files('public'), port: 8080)
   - A path that has a `..` part, a part that holds `/`, `\` or a NUL once decoded, an escape that is not `%` and two hexadecimal digits, or a part that is not UTF-8 once decoded, is answered 400. So a request never reaches outside `root`, but through a symbolic link under it.
   - What names nothing, nor a file or a directory, is answered 404, with a body of text.
 - **Directories.** A directory is served by its `index.html`, at a path that ends with `/`, so that the page's relative links resolve inside it. At a path without the `/`, it is answered 301 to the path with it, the query kept. A directory without `index.html` is answered 404: no listing is made.
-- **The response** has the file's contents as its body, read whole, and a `Content-Type` by the extension of its name, in any case: `text/html`, `text/css`, `text/javascript`, `text/plain` and `text/markdown` with `charset=utf-8`, the common types of images, fonts, JSON, XML, PDF and WebAssembly, and `application/octet-stream` for any other.
+- **The response** has the file's contents as its body, a `Reader` of `open` of the size that `stat` gave as its `Content-Length` (above), and a `Content-Type` by the extension of its name, in any case: `text/html`, `text/css`, `text/javascript`, `text/plain` and `text/markdown` with `charset=utf-8`, the common types of images, fonts, JSON, XML, PDF and WebAssembly, and `application/octet-stream` for any other.
 - **Validators.** It gives an `ETag`, `"<modified>-<size>"` of the file's modified time in whole seconds and its size in bytes, both in hexadecimal, and a `Last-Modified`, the modified time in the form of `Date`.
   - It answers 304, without a body, with those two fields, where the client's copy is still good, as RFC 9110 tells: if the request has `If-None-Match`, where one of its tags, or `*`, is the ETag, `W/` left out of each; otherwise, where its `If-Modified-Since` is at or after the modified time.
   - An `If-Modified-Since` that is not in the form of `Date`, as the obsolete forms that RFC 9110 also reads, which no client sends now, is taken as none.

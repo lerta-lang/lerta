@@ -1,0 +1,60 @@
+# A body that is a Reader, of a length that the handler gives in its Content-Length, is sent with
+# it rather than in chunks, and the connection goes on after it; a Reader that ends before the
+# length, or goes on after it, ends the connection, and a length that is not one, or is given twice,
+# is answered 500.
+import Reader from 'std:io'
+import connect_tcp from 'std:net'
+import Headers, Request, Response, serve from 'std:http'
+
+# A Reader of the pieces, one a read.
+reader_of := (pieces: String[]) ->
+  var next = 0
+  read := ->
+    return nil if next == pieces.length
+    next += 1
+    pieces[next - 1].binary
+  Reader(-> read())
+
+handle := (request: Request) ->
+  (length, pieces) :=
+    case request.url.split('/').last()!
+      when 'exact' then ('6', ['abc', 'def'])
+      when 'short' then ('9', ['abc'])
+      when 'long' then ('2', ['abc'])
+      when 'twice' then ('3', ['abc'])
+      when 'empty' then ('', ['abc'])
+      when 'minus' then ('-1', ['abc'])
+      when 'plus' then ('+3', ['abc'])
+      when 'huge' then ('99999999999999999999', ['abc'])
+      else ('x', ['abc'])
+  headers := Headers()
+  headers.set 'content-length', length
+  headers.append 'content-length', length if request.url.ends_with('/twice')
+  Response(headers, body: reader_of(pieces))
+
+server := serve(handle, port: 0, idle_timeout: 0.2)
+
+# Sends the requests, each a request line and the fields after it, on one connection, and prints
+# all that comes back until it ends, as the idle timeout ends one kept alive, without the Date
+# field.
+show := (heads: String[]) ->
+  client := await connect_tcp('127.0.0.1', server.port)
+  requests := ["#{head}\r\nHost: x\r\n\r\n" for head in heads]
+  await client.write(requests.join())
+  response := (await client.reader.read_all()).text()!
+  print [line for line in response.split("\r\n") when not line.starts_with('date: ')].join('|')
+  client.close()
+
+await show(['GET /exact HTTP/1.1', 'GET /exact HTTP/1.1'])
+await show(['HEAD /exact HTTP/1.1', 'GET /exact HTTP/1.1'])
+await show(['GET /short HTTP/1.1', 'GET /exact HTTP/1.1'])
+await show(['GET /long HTTP/1.1', 'GET /exact HTTP/1.1'])
+await show(['GET /bad HTTP/1.1', 'GET /exact HTTP/1.1'])
+for path in ['/twice', '/empty', '/minus', '/plus', '/huge']
+  await show(["GET #{path} HTTP/1.1", 'GET /exact HTTP/1.1'])
+
+# HTTP/1.0 keeps the connection only when asked, which a body of a known length allows.
+alive := "GET /exact HTTP/1.0\r\nConnection: keep-alive"
+await show([alive, alive])
+await show(['GET /exact HTTP/1.0', 'GET /exact HTTP/1.0'])
+await server.close()

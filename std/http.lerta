@@ -11,7 +11,7 @@ import Request, Response from './internal/http_message'
 import
   Incoming, read_rest_of_request, read_request_line, RequestError, ServerOptions
 from './internal/http_request'
-import has_body, response_bytes, write_body from './internal/http_response'
+import has_body, reader_length, response_bytes, write_body from './internal/http_response'
 
 export Body, Headers, Request, Response from './internal/http_message'
 export ServerOptions from './internal/http_request'
@@ -170,32 +170,38 @@ respond := (socket: Socket, server: Server, incoming: Incoming) ->
       return false
   { body } := response
   sends_reader := body is Reader and has_body(response.status, method)
-
-  # A body sent as it comes may read the request's body once the head has gone, too late for 100
-  # Continue, which goes before the head then.
-  await incoming.body.send_continue() if sends_reader
-
-  # A body whose read has failed cannot be read past to the next request, nor can one that the
-  # client holds back until 100 Continue, which it was not sent; and one sent as it comes to
-  # HTTP/1.0 ends with the connection.
-  # A closed server ends the connection, rather than wait for the next request.
-  goes_on := incoming.keep_alive and not server.closed
-  body_left := incoming.body.failure == nil and incoming.body.continue_on == nil
-  keep_alive := goes_on and body_left and (chunked or not sends_reader)
-
   try
+    length :=
+      try
+        body is Reader then reader_length(response)
+      catch _: ValueError
+        await failed()
+        return false
+
+    # A body sent as it comes may read the request's body once the head has gone, too late for 100
+    # Continue, which goes before the head then.
+    await incoming.body.send_continue() if sends_reader
+
+    # A body whose read has failed cannot be read past to the next request, nor can one that the
+    # client holds back until 100 Continue, which it was not sent; and one sent as it comes to
+    # HTTP/1.0, without its length, ends with the connection.
+    # A closed server ends the connection, rather than wait for the next request.
+    goes_on := incoming.keep_alive and not server.closed
+    body_left := incoming.body.failure == nil and incoming.body.continue_on == nil
+    keep_alive := goes_on and body_left and (chunked or not sends_reader or length != nil)
+
     bytes :=
       try
-        response_bytes response, { keep_alive, method, chunked }
+        response_bytes response, { keep_alive, method, chunked, length }
       catch _
         await failed()
         return false
     await socket.write(bytes)
     if body is Reader and sends_reader
-      await write_body(socket, body, chunked)
+      return false unless await write_body(socket, body, { chunked, length })
+    return false unless keep_alive
   finally
     body.close() if body is Reader
-  return false unless keep_alive
   await incoming.body.skip()
   true
 
@@ -203,7 +209,7 @@ respond := (socket: Socket, server: Server, incoming: Incoming) ->
 # empty, which is right for HEAD too.
 own_response := (status: Int, framing: { method: String, chunked: Bool }) ->
   { method, chunked } := framing
-  response_bytes({ status }, { method, chunked, keep_alive: false })
+  response_bytes({ status }, { method, chunked, keep_alive: false, length: nil })
 
 # The next request, or nil if the connection ends, or stays idle, before it starts. A server that
 # is closed meanwhile closes the connection, which the read throws for.

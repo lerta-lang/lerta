@@ -8,16 +8,17 @@ import ascii_lower, check_field, Response from './http_message'
 import bytes_of from './utf8'
 
 # The bytes of the response to a request of `method`, but for a body that is a Reader, which follows
-# them as it comes, in chunks when `chunked`, the connection kept alive after it if `keep_alive`. A
-# response to HEAD, and one of 204 or 304, has no body, but for HEAD its fields tell how the body
-# that a GET would give comes. Throws a ValueError for a status that is no final one, and for fields
-# that Headers would not have taken, which a handler may have put in its fields itself. A Date field
-# is given unless the handler gave one.
+# them as it comes: of its `length`, which reader_length gives, or else in chunks when `chunked`;
+# the connection kept alive after it if `keep_alive`. A response to HEAD, and one of 204 or 304, has
+# no body, but for HEAD its fields tell how the body that a GET would give comes. Throws a
+# ValueError for a status that is no final one, and for fields that Headers would not have taken,
+# which a handler may have put in its fields itself. A Date field is given unless the handler gave
+# one.
 export response_bytes := (
-  response: Response, framing: { keep_alive: Bool, method: String, chunked: Bool }
+  response: Response, framing: { keep_alive: Bool, method: String, chunked: Bool, length: Int? }
 ) ->
   { status, body } := response
-  { keep_alive, method, chunked } := framing
+  { keep_alive, method, chunked, length } := framing
   throw ValueError("not a final status: #{status}") unless status in 200..=599
   var head = "HTTP/1.1 #{status} #{REASONS[status] else ''}\r\n"
   var has_date = false
@@ -29,30 +30,57 @@ export response_bytes := (
   head += "date: #{date_now()}\r\n" unless has_date
   var bytes = b''
   if body is Reader
-    head += "transfer-encoding: chunked\r\n" if has_length(status) and chunked
+    if body_length := length
+      head += "content-length: #{body_length}\r\n" if has_length(status)
+    else if has_length(status) and chunked
+      head += "transfer-encoding: chunked\r\n"
   else
     bytes = bytes_of(body)
     head += "content-length: #{bytes.length}\r\n" if has_length(status)
   head += "connection: #{keep_alive then 'keep-alive' else 'close'}\r\n\r\n"
   has_body(status, method) then head.binary + bytes else head.binary
 
+# The length that the handler gives a body that is a Reader, in its Content-Length, which it is
+# then sent with rather than in chunks; nil if it gives none. Throws a ValueError for one that is
+# not a length, or that is given twice.
+export reader_length := (response: Response) ->
+  values := response.headers.get_all('content-length')
+  return nil if values.is_empty()
+  throw ValueError('content-length given twice') if values.length > 1
+  value := values[0]
+  throw ValueError("not a content-length: #{value}") unless value.is_digits()
+  value.parse_int() else throw ValueError("not a content-length: #{value}")
+
 # A handler need not give a 304 the body that a 200 would have, to give its length.
 has_length := (status: Int) -> status not in [204, 304]
 
 export has_body := (status: Int, method: String) -> has_length(status) and method != 'HEAD'
 
-# Writes the bytes of `body` as they come (see JoinedReads), each write a chunk of its own when
-# `chunked`, or else as they are, which the end of the connection ends; for HTTP/1.0, a body that a
-# failed read cuts short so cannot be told from a whole one. Each write is awaited before the read
-# after the one under way, so that the body comes no faster than the peer takes it, but for a read.
-export write_body := (socket: Socket, body: Reader, chunked: Bool) ->
+# Writes the bytes of `body` as they come (see JoinedReads): of a `length`, as they are, up to it;
+# without one, each write a chunk of its own when `chunked`, or else as they are, which the end of
+# the connection ends; for HTTP/1.0, a body that a failed read cuts short so cannot be told from a
+# whole one. Each write is awaited before the read after the one under way, so that the body comes
+# no faster than the peer takes it, but for a read. Tells whether the body came as its length says:
+# one that ends before it, or goes on after it, cannot be followed by another response.
+export write_body := (socket: Socket, body: Reader, framing: { chunked: Bool, length: Int? }) ->
+  { chunked, length } := framing
   reads := JoinedReads(body)
+  var left = length else INT_MAX
   try
     while bytes := await reads.next()
+      if bytes.length > left
+        await socket.write(bytes[..left])
+        return false
+      left -= bytes.length if length
       ends := chunked and reads.ended
-      written := chunked then chunk_bytes(bytes, ends) else bytes
+      written :=
+        if chunked and length == nil
+          chunk_bytes bytes, ends
+        else
+          bytes
       await socket.write(written)
-    await socket.write(LAST_CHUNK) if chunked and not reads.ended
+    await socket.write(LAST_CHUNK) if chunked and length == nil and not reads.ended
+    length == nil or left == 0
   finally
     reads.cancel()
 

@@ -94,5 +94,14 @@ await show('/a.txt', 'GET', [('if-none-match', '"other"'), ('if-modified-since',
 print etag.starts_with('"') and etag.ends_with('"')
 print last_modified.ends_with(' GMT')
 
+print 'a file of several chunks, sent as it is read'
+big := [n.to_string() for n in 0..30000].join("\n")
+await write_file("#{root}/big.txt", big)
+for method in ['GET', 'HEAD', 'GET']
+  response := await fetch("#{base}/big.txt", method: method)
+  body := await response.binary()
+  same := body == big.binary
+  print "#{method}: #{response.headers.get('content-length')!} #{body.length} #{same}"
+
 await server.close()
 await remove_tree(root)
