@@ -4,8 +4,8 @@
 # that a branch or a loop takes. Only Floats are followed: a Float32's operations round in 32 bits,
 # which a bound computed as a double may fall short of.
 import
-  Assignment, BinaryOperation, Binding, Call, Case, Comprehension, Condition, Declaration,
-  EnumDeclaration, Expression, Extend, Extern, Intrinsic, FloatLiteral, For, FunctionLiteral,
+  Assignment, BinaryOperation, Call, Case, children_of, Comprehension, Condition, condition_value,
+  Declaration, EnumDeclaration, Expression, Extend, Extern, Intrinsic, FloatLiteral, For,
   Identifier, If, Import, IntegerLiteral, InterfaceDeclaration, Member, operands_of, Pass, Range,
   Statement, Try, TypeAlias, TypeDeclaration, UnaryOperation, While
 from '../ast'
@@ -465,42 +465,9 @@ assigned_in_blocks := (analysis: Analysis, blocks: Statement[][]) ->
   assigned
 
 add_assigned := (analysis: Analysis, node: Statement, assigned: Set<Identifier>): void ->
-  each := (child: Statement) -> add_assigned(analysis, child, assigned)
-  case node
-    when Assignment
-      if node.target is Identifier
-        assigned.add local if local := analysis.facts.local_declarations[node.target]
-      each node.value
-    when Declaration then each(node.value)
-    when If
-      each condition_value(node.condition)
-      each child for child in node.then_body
-      each child for child in node.else_body
-    when While
-      each condition_value(node.condition)
-      each child for child in node.body
-    when For
-      each node.iterable
-      each child for child in node.body
-    when Try
-      each child for child in node.body
-      for clause in node.catches
-        each child for child in clause.body
-      each child for child in node.finally_body else []
-    when Case
-      each subject if subject := node.subject
-      for arm in node.arms
-        each child for child in arm.body
-      each child for child in node.otherwise else []
-    when FunctionLiteral then each(child) for child in node.body
-    when
-      Pass, Import, TypeDeclaration, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern,
-      Intrinsic, Extend
-    then pass
-    when Comprehension
-      each child for child in operands_of(node)
-      each child for child in node.body
-    else each(child) for child in operands_of(node)
-
-condition_value := (condition: Condition) ->
-  condition is Binding then condition.value else condition
+  if node is Assignment
+    target := node.target
+    if target is Identifier
+      assigned.add local if local := analysis.facts.local_declarations[target]
+  for child in children_of(node)
+    add_assigned analysis, child, assigned

@@ -1,25 +1,19 @@
-# The places of the expressions of a syntax tree (see Place), which `lerta fmt` writes other
-# expressions in (see rewrites_of).
+# The places of the expressions of a syntax tree, where `lerta fmt` writes other expressions (see
+# rewrites_of).
 import
   ArrayLiteral, Assignment, Await, BinaryOperation, Binding, Call, Case, Cast, Coalesce,
   Comprehension, Condition, Conditional, Declaration, Expression, Extend, For, FunctionLiteral, If,
-  Index, IsTest, MapEntry, MapLiteral, Member, MemberDeclaration, NamedValue, Range, RecordLiteral,
-  Return, Statement, Throw, Try, TupleItem, TupleLiteral, TypeDeclaration, UnaryOperation, Unwrap,
-  While, Yield
+  Index, IsTest, MapLiteral, Member, Range, RecordLiteral, Return, Statement, Throw, Try, TupleItem,
+  TupleLiteral, TypeDeclaration, UnaryOperation, Unwrap, While, Yield
 from '../ast'
 import is_taken_apart from './forms'
 
-# What puts a value in the place of an expression in the syntax tree.
-export type Place = (Expression) -> void
-
-# What is done at an expression in its place, in the order of the source: before its parts are
-# visited, and after; at the condition of an `if` or a `while` that binds no name, after it; and at
-# each statement, after its parts, with the statement written after it in its block (see
-# written_after).
+# What is done at an expression in its place, before its parts are visited; at the condition of an
+# `if` or a `while` that binds no name, after it; and at each statement, after its parts, with the
+# statement written after it in its block (see written_after).
 struct Visit
-  before: ((Expression, Place) -> void)?
-  after: ((Expression, Place) -> void)?
-  condition: ((Expression, Place) -> void)?
+  before: ((Expression) -> void)?
+  condition: ((Expression) -> void)?
   statement: ((Statement, Statement?) -> void)?
 
   # Each list of statements, the program's and each body's, before its statements.
@@ -27,15 +21,17 @@ struct Visit
 
 export places_of := (program: Statement[], visit: Visit) -> visit_statements(visit, program)
 
-visit_place := (visit: Visit, value: Expression, place: Place) ->
-  before value, place if before := visit.before
+visit_place := (visit: Visit, value: Expression) ->
+  before value if before := visit.before
   visit_expression visit, value
-  after value, place if after := visit.after
+
+visit_places := (visit: Visit, values: Expression[]): void ->
+  visit_place visit, value for value in values
 
 visit_statements := (visit: Visit, statements: Statement[]): void ->
   at_statements statements if at_statements := visit.statements
   for statement at i in statements
-    visit_statement visit, statement, (value) -> statements[i] = value
+    visit_statement visit, statement
     if at_statement := visit.statement
       at_statement statement, written_after(statements, i)
 
@@ -46,131 +42,94 @@ written_after := (statements: Statement[], at: Int) ->
     return statements[next] unless is_taken_apart(statements[next])
   nil
 
-visit_statement := (visit: Visit, statement: Statement, place: Place) ->
+visit_statement := (visit: Visit, statement: Statement) ->
   case statement
-    when Declaration then visit_place(visit, statement.value, (value) -> statement.value = value)
+    when Declaration then visit_place(visit, statement.value)
     when Assignment
       visit_expression visit, statement.target
-      visit_place visit, statement.value, (value) -> statement.value = value
+      visit_place visit, statement.value
     when While
-      visit_condition visit, statement.condition, (value) -> statement.condition = value
+      visit_condition visit, statement.condition
       visit_statements visit, statement.body
     when For
-      visit_place visit, statement.iterable, (value) -> statement.iterable = value
+      visit_place visit, statement.iterable
       visit_statements visit, statement.body
-    when TypeDeclaration, Extend then visit_members(visit, statement.members)
-    when Expression then visit_place(visit, statement, place)
+    when TypeDeclaration, Extend
+      for member in statement.members
+        visit_place visit, value if value := member.value
+    when Expression then visit_place(visit, statement)
     else pass
 
-# A member's value is replaced in the member that the removal of its type may have replaced (see
-# field_annotation).
-visit_members := (visit: Visit, members: MemberDeclaration[]) ->
-  for member at i in members
-    if value := member.value
-      visit_place visit, value, (new_value) ->
-        current := members[i]
-        members[i] = { current..., value: new_value }
-
-visit_condition := (visit: Visit, condition: Condition, place: Place) ->
+visit_condition := (visit: Visit, condition: Condition) ->
   if condition is Binding
-    visit_place visit, condition.value, (value) -> condition.value = value
+    visit_place visit, condition.value
   else
-    visit_place visit, condition, place
-    at_condition condition, place if at_condition := visit.condition
-
-visit_all := (visit: Visit, values: Expression[]) ->
-  for value at i in values
-    visit_place visit, value, (new_value) -> values[i] = new_value
-
-visit_named := (visit: Visit, values: NamedValue[]) ->
-  for named at i in values
-    visit_place visit, named.value, (value) -> values[i] = { named..., value }
-
-# The key and the value of an entry are replaced each in the entry that the other may have
-# replaced.
-visit_entries := (visit: Visit, entries: MapEntry[]) ->
-  for entry at i in entries
-    visit_place visit, entry.key, (key) ->
-      current := entries[i]
-      entries[i] = { current..., key }
-    visit_place visit, entry.value, (value) ->
-      current := entries[i]
-      entries[i] = { current..., value }
-
-# A parameter's default is replaced in the parameter that the removal of its type may have replaced
-# (see parameter_annotation).
-visit_function := (visit: Visit, literal: FunctionLiteral) ->
-  params := literal.params
-  for param at i in params
-    if default := param.default
-      visit_place visit, default, (value) ->
-        current := params[i]
-        params[i] = { current..., default: value }
-  visit_statements visit, literal.body
+    visit_place visit, condition
+    at_condition condition if at_condition := visit.condition
 
 # The parts of an expression. The element and the guard of a comprehension are not places: its
 # lazy functions share them (see Comprehension). Nor are the values of an interpolation, which is
 # kept as written.
 visit_expression := (visit: Visit, expression: Expression): void ->
   case expression
-    when FunctionLiteral then visit_function(visit, expression)
-    when Throw then visit_place(visit, expression.message, (value) -> expression.message = value)
-    when Yield then visit_place(visit, expression.value, (value) -> expression.value = value)
-    when Await, Unwrap, UnaryOperation
-      visit_place visit, expression.operand, (value) -> expression.operand = value
+    when FunctionLiteral
+      for param in expression.params
+        visit_place visit, default if default := param.default
+      visit_statements visit, expression.body
+    when Throw then visit_place(visit, expression.message)
+    when Yield then visit_place(visit, expression.value)
+    when Await, Unwrap, UnaryOperation then visit_place(visit, expression.operand)
     when Coalesce
-      visit_place visit, expression.value, (value) -> expression.value = value
-      visit_place visit, expression.fallback, (value) -> expression.fallback = value
-    when ArrayLiteral then visit_all(visit, expression.elements)
-    when MapLiteral then visit_entries(visit, expression.entries)
+      visit_place visit, expression.value
+      visit_place visit, expression.fallback
+    when ArrayLiteral then visit_places(visit, expression.elements)
+    when MapLiteral
+      for entry in expression.entries
+        visit_place visit, entry.key
+        visit_place visit, entry.value
     when Comprehension
-      visit_place visit, expression.iterable, (value) -> expression.iterable = value
+      visit_place visit, expression.iterable
       visit_expression visit, guard if guard := expression.guard
       visit_statements visit, expression.body
       visit_expression visit, expression.element
-    when RecordLiteral then visit_named(visit, expression.fields)
-    when TupleLiteral then visit_all(visit, expression.items)
+    when RecordLiteral
+      visit_place visit, field.value for field in expression.fields
+    when TupleLiteral then visit_places(visit, expression.items)
     when TupleItem then visit_expression(visit, expression.tuple)
     when Index
-      visit_place visit, expression.object, (value) -> expression.object = value
-      visit_place visit, expression.index, (value) -> expression.index = value
-      if default_value := expression.default_value
-        visit_place visit, default_value, (value) -> expression.default_value = value
+      visit_place visit, expression.object
+      visit_place visit, expression.index
+      visit_place visit, default_value if default_value := expression.default_value
     when Call
       visit_expression visit, expression.callee
-      visit_all visit, expression.args
-      visit_named visit, expression.named_args
-    when Member then visit_place(visit, expression.object, (value) -> expression.object = value)
+      visit_places visit, expression.args
+      visit_place visit, arg.value for arg in expression.named_args
+    when Member then visit_place(visit, expression.object)
     when BinaryOperation
-      visit_place visit, expression.left, (value) -> expression.left = value
-      visit_place visit, expression.right, (value) -> expression.right = value
+      visit_place visit, expression.left
+      visit_place visit, expression.right
     when Range
-      if start := expression.start
-        visit_place visit, start, (value) -> expression.start = value
-      if end := expression.end
-        visit_place visit, end, (value) -> expression.end = value
-      if step := expression.step
-        visit_place visit, step, (value) -> expression.step = value
+      visit_place visit, start if start := expression.start
+      visit_place visit, end if end := expression.end
+      visit_place visit, step if step := expression.step
     when IsTest then visit_expression(visit, expression.value)
-    when Cast then visit_place(visit, expression.value, (value) -> expression.value = value)
+    when Cast then visit_place(visit, expression.value)
     when Conditional
-      visit_place visit, expression.condition, (value) -> expression.condition = value
-      visit_place visit, expression.then_value, (value) -> expression.then_value = value
-      visit_place visit, expression.else_value, (value) -> expression.else_value = value
+      visit_place visit, expression.condition
+      visit_place visit, expression.then_value
+      visit_place visit, expression.else_value
     when Case
-      if subject := expression.subject
-        visit_place visit, subject, (value) -> expression.subject = value
+      visit_place visit, subject if subject := expression.subject
       for arm in expression.arms
-        visit_all visit, arm.patterns
+        visit_places visit, arm.patterns
         visit_statements visit, arm.body
       visit_statements visit, otherwise if otherwise := expression.otherwise
     when If
-      visit_condition visit, expression.condition, (value) -> expression.condition = value
+      visit_condition visit, expression.condition
       visit_statements visit, expression.then_body
       visit_statements visit, expression.else_body
     when Return
-      if value := expression.value
-        visit_place visit, value, (new_value) -> expression.value = new_value
+      visit_place visit, value if value := expression.value
     when Try
       visit_statements visit, expression.body
       visit_statements visit, catch_clause.body for catch_clause in expression.catches

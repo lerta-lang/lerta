@@ -1,10 +1,7 @@
 # The names that code assigns, matched without their scopes: those that the function literals and
 # methods of a body assign, for narrowing, and those that expressions assign anywhere, for
 # borrowing in codegen.
-import
-  Assignment, Binding, Case, Comprehension, Condition, Declaration, Expression, Extend, For,
-  FunctionLiteral, Identifier, If, operands_of, Statement, Try, TypeDeclaration, While
-from '../ast'
+import Assignment, children_of, Expression, FunctionLiteral, Identifier, Statement from '../ast'
 
 # The names that the function literals and methods in a body assign, found before the body is
 # checked, so that a `var` of one of them is not narrowed anywhere (see narrowable_local): a literal
@@ -13,7 +10,8 @@ from '../ast'
 # A literal's own `var` of an outer `var`'s name stops the outer one being narrowed too.
 export names_literals_assign := (statements: Statement[]) ->
   names: Set<String>
-  visit_statements names, statements, false
+  for statement in statements
+    add_assigned names, statement, false
   names
 
 # The names that the expressions assign anywhere, in function literals or not, so that a `var` of
@@ -21,69 +19,15 @@ export names_literals_assign := (statements: Statement[]) ->
 export names_assigned := (expressions: Expression[]) ->
   names: Set<String>
   for expression in expressions
-    visit names, expression, true
+    add_assigned names, expression, true
   names
 
-# `collects`: whether the assignments of the statements are collected: those in a function literal
-# of the body, or every one (see names_assigned).
-visit_statements := (names: Set<String>, statements: Statement[], collects: Bool): void ->
-  for statement in statements
-    visit_statement names, statement, collects
-
-visit_statement := (names: Set<String>, statement: Statement, collects: Bool) ->
-  case statement
-    when Declaration then visit(names, statement.value, collects)
-    when Assignment
-      target := statement.target
-      names.add target.name if collects and target is Identifier
-      visit names, target, collects
-      visit names, statement.value, collects
-    when While
-      visit_condition names, statement.condition, collects
-      visit_statements names, statement.body, collects
-    when For
-      visit names, statement.iterable, collects
-      visit_statements names, statement.body, collects
-    when Expression then visit(names, statement, collects)
-    # The methods of a class, a struct or an extend may assign a top-level `var`.
-    when TypeDeclaration, Extend
-      for member in statement.members
-        if value := member.value
-          visit names, value, collects
-    else pass
-
-visit_condition := (names: Set<String>, condition: Condition, collects: Bool) ->
-  if condition is Binding
-    visit names, condition.value, collects
-  else
-    visit names, condition, collects
-
-visit := (names: Set<String>, expression: Expression, collects: Bool): void ->
-  case expression
-    when FunctionLiteral then visit_statements(names, expression.body, true)
-    when If
-      visit_condition names, expression.condition, collects
-      visit_statements names, expression.then_body, collects
-      visit_statements names, expression.else_body, collects
-    when Case
-      if subject := expression.subject
-        visit names, subject, collects
-      for arm in expression.arms
-        for pattern in arm.patterns
-          visit names, pattern, collects
-        visit_statements names, arm.body, collects
-      if otherwise := expression.otherwise
-        visit_statements names, otherwise, collects
-    when Try
-      visit_statements names, expression.body, collects
-      for clause in expression.catches
-        visit_statements names, clause.body, collects
-      if finally_body := expression.finally_body
-        visit_statements names, finally_body, collects
-    when Comprehension
-      for operand in operands_of(expression)
-        visit names, operand, collects
-      visit_statements names, expression.body, collects
-    else
-      for operand in operands_of(expression)
-        visit names, operand, collects
+# `collects`: whether the assignments of the node are collected: those in a function literal of the
+# body, or every one (see names_assigned).
+add_assigned := (names: Set<String>, node: Statement, collects: Bool): void ->
+  if collects and node is Assignment
+    target := node.target
+    names.add target.name if target is Identifier
+  inside := collects or node is FunctionLiteral
+  for child in children_of(node)
+    add_assigned names, child, inside

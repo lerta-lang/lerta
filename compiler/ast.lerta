@@ -96,7 +96,7 @@ export class Throw
 # `yield value`
 export class Yield
   args
-    var value: Expression
+    value: Expression
     var position: Position
 
     # That of the element of a comprehension written with its `for` first, which is an Iter.
@@ -105,20 +105,20 @@ export class Yield
 # `await promise`
 export class Await
   args
-    var operand: Expression
+    operand: Expression
     var position: Position
 
 # `x!`
 export class Unwrap
   args
-    var operand: Expression
+    operand: Expression
     var position: Position
 
 # `x else fallback`
 export class Coalesce
   args
-    var value: Expression
-    var fallback: Expression
+    value: Expression
+    fallback: Expression
     var position: Position
 
 # `[a, b]`
@@ -152,7 +152,7 @@ export class Comprehension
   args
     element: Expression
     variable: Identifier
-    var iterable: Expression
+    iterable: Expression
     guard: Expression?
     lazy: LazyFunctions?
     var position: Position
@@ -232,11 +232,11 @@ export class TupleItem
 # `object[index]`
 export class Index
   args
-    var object: Expression
-    var index: Expression
+    object: Expression
+    index: Expression
 
     # `m[k, default: d]`: what a map takes for a key that it does not hold.
-    var default_value: Expression?
+    default_value: Expression?
 
     var position: Position
 
@@ -245,9 +245,9 @@ export class Index
 export class Call
   args
     callee: Expression
-    var args: Expression[]
-    var named_args: NamedValue[]
-    var type_args: TypeName[]
+    args: Expression[]
+    named_args: NamedValue[]
+    type_args: TypeName[]
     var position: Position
 
     # Made by the parser for `m: Map<K, V>` without a value: of the builtin Map or Set, which
@@ -262,7 +262,7 @@ export class This
 # `object.name`
 export class Member
   args
-    var object: Expression
+    object: Expression
     name: Identifier
     var position: Position
 
@@ -270,15 +270,15 @@ export class Member
 export class UnaryOperation
   args
     operator: String
-    var operand: Expression
+    operand: Expression
     var position: Position
 
 # An arithmetic or comparison operator, `and` or `or`.
 export class BinaryOperation
   args
     operator: String
-    var left: Expression
-    var right: Expression
+    left: Expression
+    right: Expression
     var position: Position
 
 EQUALITY_OPERATORS := ['==', '!=']
@@ -305,15 +305,15 @@ export binary_literal_bytes := (expression: Expression) ->
 # `a..b` or `a..=b`, which may leave out its start, `..b`, or its end, `a..`.
 export class Range
   args
-    var start: Expression?
-    var end: Expression?
+    start: Expression?
+    end: Expression?
     var position: Position
 
     # `a..=b`, whose end is in it, rather than `a..b`; false without an end.
     inclusive: Bool
 
     # `a..b by step`, and `a..b reversed`, which only a loop goes through.
-    var step: Expression?
+    step: Expression?
     reversed := false
 
 # A type written in the source, such as `Int` in a parameter.
@@ -420,8 +420,8 @@ export struct CaseArm
 
 export class Case
   args
-    var subject: Expression?
-    var arms: CaseArm[]
+    subject: Expression?
+    arms: CaseArm[]
     otherwise: Statement[]?
     var position: Position
 
@@ -455,7 +455,7 @@ export type CastTypeName = NamedType | ArrayTypeName
 # `x as T?` or `x as T!`.
 export class Cast
   args
-    var value: Expression
+    value: Expression
     type: CastTypeName
     throws: Bool
     var position: Position
@@ -463,9 +463,9 @@ export class Cast
 # `condition then a else b`.
 export class Conditional
   args
-    var condition: Expression
-    var then_value: Expression
-    var else_value: Expression
+    condition: Expression
+    then_value: Expression
+    else_value: Expression
     var position: Position
 
     # Written without `else`, whose value is then nil.
@@ -488,7 +488,7 @@ export class Pass
 
 export class Return
   args
-    var value: Expression?
+    value: Expression?
     var position: Position
 
 export type Expression =
@@ -502,7 +502,7 @@ export type Expression =
 export class For
   args
     variable: Identifier
-    var iterable: Expression
+    iterable: Expression
     body: Statement[]
     position: Position
     index: Identifier?
@@ -513,8 +513,8 @@ export class Declaration
   args
     mutable: Bool
     name: Identifier
-    var type: TypeName?
-    var value: Expression
+    type: TypeName?
+    value: Expression
     position: Position
 
     # A part of the item of `for (a, b) in xs`, which, as a loop variable, is never warned about
@@ -543,7 +543,7 @@ export class Assignment
   args
     operator: String
     target: AssignmentTarget
-    var value: Expression
+    value: Expression
     position: Position
 
 # `if name := value`: the condition holds when value is not nil, and name is the value
@@ -551,15 +551,19 @@ export class Assignment
 export class Binding
   args
     name: Identifier
-    var value: Expression
+    value: Expression
     position: Position
 
 export type Condition = Expression | Binding
 
+# The expression that the condition evaluates: the value of a Binding, or the condition itself.
+export condition_value := (condition: Condition) ->
+  condition is Binding then condition.value else condition
+
 # `else if` is an `if` alone in the else branch.
 export class If
   args
-    var condition: Condition
+    condition: Condition
     then_body: Statement[]
     else_body: Statement[]
     var position: Position
@@ -569,7 +573,7 @@ export class If
 
 export class While
   args
-    var condition: Condition
+    condition: Condition
     body: Statement[]
     position: Position
 
@@ -662,7 +666,7 @@ export struct ImportName
 # exports none: both pass the module's extends on to the modules that import this one.
 export class Import
   args
-    var names: ImportName[]
+    names: ImportName[]
     module: String
     position: Position
     alias: Identifier?
@@ -755,7 +759,7 @@ export exported_declaration := (statement: Statement) ->
 # The expressions directly under the expression, in the order of the source, whether it evaluates
 # them always, as the operands of `+`, or not, as the branches of `then`/`else` and the element of a
 # comprehension. Those of a function literal, an `if`, a `case` and a `try`, which hold statements,
-# are left to the passes that go through the syntax tree, as each treats them otherwise.
+# are left out (see children_of).
 export operands_of := (expression: Expression): Expression[] ->
   case expression
     when Interpolation then [part for part in expression.parts when part is Call]
@@ -795,3 +799,33 @@ export operands_of := (expression: Expression): Expression[] ->
       value := expression.value
       value then [value] else []
     else []
+
+# The statements and expressions directly under the node, for the passes that look through the
+# whole tree alike: its operands (see operands_of), and the statements of its blocks, the defaults
+# of a function literal's parameters, the patterns of a case and the values of a type's members.
+export children_of := (node: Statement): Statement[] ->
+  case node
+    when Declaration then [node.value]
+    when Assignment then [node.target, node.value]
+    when If then [condition_value(node.condition), node.then_body..., node.else_body...]
+    when While then [condition_value(node.condition), node.body...]
+    when For then [node.iterable, node.body...]
+    when TypeDeclaration, Extend
+      [member.value for member in node.members when member.value != nil]
+    when FunctionLiteral
+      defaults := [param.default for param in node.params when param.default != nil]
+      [defaults..., node.body...]
+    when Case
+      children: Statement[]
+      children.push subject if subject := node.subject
+      children.append [arm.patterns..., arm.body...] for arm in node.arms
+      children.append node.otherwise else []
+      children
+    when Try
+      children: Statement[] = [node.body...]
+      children.append clause.body for clause in node.catches
+      children.append node.finally_body else []
+      children
+    when Comprehension then [operands_of(node)..., node.bindings..., node.body...]
+    when Pass, Import, EnumDeclaration, InterfaceDeclaration, TypeAlias, Extern, Intrinsic then []
+    else [operands_of(node)...]

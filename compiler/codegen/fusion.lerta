@@ -2,9 +2,9 @@
 # lazy comprehension, which go through its source and generate its functions in place, so that no
 # Iter or coroutine is made (see docs/internals/iteration.md#fused-loops).
 import
-  Assignment, Binding, Call, Case, Comprehension, Condition, Declaration, Expression, For,
-  FunctionLiteral, Identifier, If, is_iterated_name, Member, operands_of, Position, Statement, Try,
-  While, Yield
+  Assignment, Call, Case, children_of, Comprehension, Condition, condition_value, Declaration,
+  Expression, For, FunctionLiteral, Identifier, If, is_iterated_name, Member, Position, Statement,
+  Try, While, Yield
 from '../ast'
 import extended_type from '../checker/extensions'
 import Method from '../checker/member_targets'
@@ -246,7 +246,7 @@ yields_of := (statement: Statement): Int? ->
     when Case
       subject := statement.subject
       return nil if subject != nil and has_yield(subject)
-      return nil if statement.arms.any((arm) -> arm.patterns.any(has_yield))
+      return nil if statement.arms.any((arm) -> arm.patterns.any((pattern) -> has_yield(pattern)))
       count_in([arm.body for arm in statement.arms] + [statement.otherwise else []])
     when Try
       catches := [clause.body for clause in statement.catches]
@@ -265,17 +265,15 @@ count_in := (bodies: Statement[][]) ->
   statements.append body for body in bodies
   yield_count(statements)
 
-# Whether the expression yields, in its operands or in the blocks it holds, but for those of the
-# function literals in it.
-has_yield := (expression: Expression): Bool ->
-  case expression
+# Whether the node yields, in its parts or in the blocks it holds, but for those of the function
+# literals in it.
+has_yield := (node: Statement): Bool ->
+  case node
     when FunctionLiteral then false
     when Yield then true
-    when If, Case, Try then yields_of(expression) != 0
-    else operands_of(expression).any(has_yield)
+    else children_of(node).any(has_yield)
 
-condition_yields := (condition: Condition) ->
-  has_yield(condition is Binding then condition.value else condition)
+condition_yields := (condition: Condition) -> has_yield(condition_value(condition))
 
 # The items of a lazy comprehension, or of a call of an Iterable's `map` or `filter` given a
 # function literal, as a loop goes through them in place: the source, the guard and the element as
