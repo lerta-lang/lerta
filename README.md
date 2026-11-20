@@ -128,7 +128,7 @@ make check             # the code in the style (lerta fmt)
   - `local`: here;
   - `docker`: in a container of that image of `tools/docker/` (`linux`, or `wine`, for Windows programs under Wine), on the tree mounted read-only (see `tools/docker/run.sh`);
   - `ssh`: on that host, in a temporary directory that the tree is sent to, which is removed after, the tree being what `make check` checks: the files that git lists, those not added yet included. The commands run in bash, so its `PATH` there must have make and clang, as in the shell of Git for Windows.
-- The host's own target runs `make test`; another the run tests built for it (`bin/test --target`) and `make test-bootstrap` for it. A Windows target elsewhere than on Windows runs under Wine, whose bootstrap needs a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s, which the `wine` image has) on Wine's `PATH` (`WINEPATH`), and fails without one.
+- The host's own target runs `make test`; another the run tests and the runtime checks built for it (`bin/test --target`) and `make test-bootstrap` for it. A Windows target elsewhere than on Windows runs under Wine, whose bootstrap needs a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s, which the `wine` image has) on Wine's `PATH` (`WINEPATH`), and fails without one.
 - `make test-targets TARGETS="windows-amd64 windows-i386"` runs those alone.
 - The targets run one after another, in the order of the file, but those of SSH hosts after the others, each host's after the tree is sent there once. It ends with how each went. An interruption, as Ctrl-C, removes the containers and the temporary directories.
 
@@ -147,7 +147,7 @@ The tests build many programs and run each for the first time, which macOS and W
 
 - `test/main.lerta`, the driver, is built by minilerta into `bin/test`, as `tools/build.lerta` is. Why: a change to `compiler/` cannot break the harness that tests it.
 - `make test` builds and runs it. It runs all the suites, or those named, their checks as one list: as many at once as `-j` says, each result shown as it finishes, and each suite's summary at the end. The processes that the suites run to get ready, such as the builds of the runtimes, count toward `-j` too.
-- Its options are listed at the top of `test/main.lerta`: `-k <text>` (checks whose names hold the text; given more than once, one of the texts), `--failed` (those that failed last time), `--target <target>` (the run tests built for another target), and more.
+- Its options are listed at the top of `test/main.lerta`: `-k <text>` (checks whose names hold the text; given more than once, one of the texts), `--failed` (those that failed last time), `--target <target>` (the run tests and the runtime checks built for another target), and more.
 - A failed check runs once more, alone, after the others, and passes as flaky if it passes then. `--no-retry` turns that off.
 
 ```

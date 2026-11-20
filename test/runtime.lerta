@@ -1,16 +1,19 @@
 # Runtime checks that no Lerta program can trigger: a C program of test/runtime stands in for the
-# generated code and is linked with the runtime as `build` links it.
-import build_flags from '../compiler/clang'
-import Check, in_slot, posix_check, select, SuiteChecks from './lib/report'
+# generated code and is linked with the runtime as `build` links it, for the host or for another
+# target (see lib/target).
+import build_flags, target_flags from '../compiler/clang'
+import Check, in_slot, jobs, select, SuiteChecks from './lib/report'
 import compare_text, expect_status, lines, reason_unless from './lib/expect'
 import
-  exit_in_time, host_build, OUTPUT_LIMIT, root_dir, SetupError, shown_text, suite_dir
+  exit_in_time, system_build, OUTPUT_LIMIT, root_dir, SetupError, shown_text, suite_dir
 from './lib/lerta'
 import timeout from 'std:async'
 import Buffer from 'std:io'
 import encode_json from 'std:json'
 import platform, run from 'std:process'
-import runtime_c_names from '../compiler/platform_description'
+import runtime_c_names, target_system from '../compiler/platform_description'
+import host_target, Target from './lib/target'
+import no_wine_prefixes, start_wine_prefixes, wine_env from './lib/wine'
 import
   is_dir, is_file, list_dir, make_dir, make_link, make_temp_dir, remove_tree, write_file
 from 'std:io'
@@ -22,6 +25,8 @@ work_dir := suite_dir('runtime')
 
 # The seconds that a check whose program could hang waits for it.
 HANG_SECONDS := 10.0
+
+var target = host_target
 
 # The status that a program of test/runtime exits with where its check does not apply.
 SKIPPED := 77
@@ -45,6 +50,26 @@ execute := (
   ended := await exit_in_time(program, ran)
   Outcome(status: ended.code, stdout: shown_text(output.binary), stderr: shown_text(errors.binary))
 
+# Wine runs a Windows program in a prefix of its own, when there are such prefixes (see lib/wine).
+var wine_prefixes = no_wine_prefixes()
+
+# Runs a program that `build` built, which Wine runs for a Windows target elsewhere than on Windows.
+execute_built := (
+  executable: String
+  args: String[] = []
+  cwd: String = work_dir
+  env: Map<String, String> = Map()
+) ->
+  unless target.wine
+    return await execute(executable, args, cwd, nil, env)
+  prefix := wine_prefixes.take()
+  try
+    variables := wine_env(prefix)
+    variables[name] = value for (name, value) in env
+    await execute('wine', [executable, args...], cwd, nil, variables)
+  finally
+    wine_prefixes.give_back prefix if prefix
+
 clang := (args: String[], cwd: String = work_dir) ->
   outcome := await execute('clang', args, cwd)
   throw SetupError("clang #{args.join(' ')} failed:\n#{outcome.stderr}") if outcome.status != 0
@@ -57,16 +82,17 @@ struct Runtime
   libraries: String[]
 var runtime = Runtime(c_files: [], libuv_objects: [], libraries: [])
 
-# Compiles libuv's sources that the host's description lists, with its flags, into the directory
+# Compiles libuv's sources that the target's description lists, with its flags, into the directory
 # that clang runs in, and takes the runtime's C files and the libraries that it lists.
 set_up_runtime := ->
-  build := await host_build()
+  build := await system_build(target_system(target.triple))
   { libuv_sources, libuv_flags, libraries } := build
   objects_dir := "#{work_dir}/libuv"
   make_dir objects_dir
   libuv_paths := ["#{libuv_dir}/#{source}" for source in libuv_sources]
   libuv_args := [
     '-c'
+    target_flags(target.triple)...
     libuv_flags...
     "-I#{libuv_dir}/include"
     "-I#{libuv_dir}/src"
@@ -78,18 +104,18 @@ set_up_runtime := ->
   libuv_objects := ["#{objects_dir}/#{file}" for file in list_dir(objects_dir)]
   runtime = { c_files, libuv_objects, libraries }
 
-# What `build` gives clang for the runtime's sources on the host, with -O or without it and its
+# What `build` gives clang for the runtime's sources for the target, with -O or without it and its
 # default memory checks; libuv is compiled once, without them, by set_up_runtime.
 runtime_clang_args := (optimize: Bool) ->
   # libm, as compiler/build.lerta links it.
   libraries := ["-l#{library}" for library in ['m', runtime.libraries...]]
   [
-    build_flags({ optimize, memory_checks: not optimize, target: nil })...
+    build_flags({ optimize, memory_checks: not optimize, target: target.triple })...
     "-I#{libuv_dir}/include"
     runtime.c_files...
     runtime.libuv_objects...
     libraries...
-    (platform == 'windows' then ["#{sources_dir}/binary_stdout.c"] else [])...
+    (target.windows then ["#{sources_dir}/binary_stdout.c"] else [])...
   ]
 
 var build_count = 0
@@ -98,7 +124,7 @@ var build_count = 0
 # numbered, as a source may be built more than once.
 build := (source: String, optimize: Bool, macros: String[] = []) ->
   build_count += 1
-  executable := "#{work_dir}/#{source}-#{build_count}"
+  executable := "#{work_dir}/#{source}-#{build_count}#{target.executable_suffix}"
   defines := ["-D#{macro}" for macro in macros]
   await clang(
     [
@@ -114,7 +140,7 @@ build := (source: String, optimize: Bool, macros: String[] = []) ->
   executable
 
 build_and_run := (source: String, optimize: Bool, macros: String[] = []) ->
-  await execute(await build(source, optimize, macros))
+  await execute_built(await build(source, optimize, macros))
 
 # The reasons for an outcome other than an exit with 0 and nothing on stderr.
 expect_clean := (outcome: Outcome) ->
@@ -162,10 +188,17 @@ run_on_terminal := (executable: String) ->
       ['-qec', executable, '/dev/null']
   (await execute('script', args, work_dir, b'')).stdout
 
+# A check of what only POSIX targets have, such as /dev/null, fcntl and `script`.
+posix_target_check := (name: String, run: () -> Promise<String[]?>) ->
+  Check(name, run: -> target.windows then nil else await run())
+on_posix_target := (check: Check) -> posix_target_check(check.name, check.run)
+
+# Not under Wine, which shows a link of the host as the directory that it names.
 remove_tree_check := Check
   name: 'lerta_os_remove_tree removes a directory with everything in it, deeper than the ' +
     'descriptors it may open, but not what a link names'
   run: ->
+    return nil if target.wine
     tree := "#{work_dir}/tree"
     linked := "#{work_dir}/linked"
     make_dir "#{tree}/inner/empty"
@@ -175,7 +208,7 @@ remove_tree_check := Check
     await write_file("#{linked}/file", b'')
     make_link linked, "#{tree}/link"
     executable := await build('remove_tree', false)
-    outcome := await execute(executable, [], work_dir, nil, { 'LERTA_TEST_TREE': tree })
+    outcome := await execute_built(executable, [], work_dir, { 'LERTA_TEST_TREE': tree })
     [
       expect_clean(outcome)...
       reason_unless(not is_dir(tree), "#{tree} is still there")...
@@ -183,17 +216,14 @@ remove_tree_check := Check
     ]
 
 # In a directory of its own, where it makes the long one, removed after.
-long_temp_dir_check := posix_check
+long_temp_dir_check := posix_target_check
   'lerta_os_make_temp_dir makes one in a TMPDIR longer than its first buffer for it'
   ->
     dir := make_temp_dir()
     try
-      expect_clean(await execute(await build('long_temp_dir', false), [], dir))
+      expect_clean(await execute_built(await build('long_temp_dir', false), [], dir))
     finally
       await remove_tree(dir)
-
-# A check of what only POSIX systems have, such as /dev/null, fcntl and `script`.
-on_posix := (check: Check) -> posix_check(check.name, check.run)
 
 checks: Check[] = [
   remove_tree_check
@@ -254,10 +284,10 @@ checks: Check[] = [
   }
   { name: 'lerta_string_hash is wyhash under a seed and a secret made in each process', run: ->
     executable := await build('string_hash', true)
-    first := await execute(executable)
-    second := await execute(executable)
+    first := await execute_built(executable)
+    second := await execute_built(executable)
 
-    # The way of i686, which has no 128-bit integers, on the host.
+    # The way of i686, which has no 128-bit integers, for the target.
     narrow := await build_and_run('string_hash', true, ['LERTA_NO_INT128'])
 
     # wyhash, final version 4.3, as the reference's wyhash.h gives them, with its default secret and
@@ -314,14 +344,14 @@ checks: Check[] = [
   }
   clean_check('the optimized runtime does not count objects', 'leak', true)
   # Skipped where the program exits with SKIPPED, as a 32-bit one does, which has no room for 2 GiB.
-  posix_check('a write of more than 2 GiB is done whole', ->
+  posix_target_check('a write of more than 2 GiB is done whole', ->
     outcome := await build_and_run('write_large', false)
     outcome.status == SKIPPED then nil else expect_clean(outcome)
   )
-  on_posix(
+  on_posix_target(
     clean_check('print_error drops its output once stderr has failed', 'print_error_failed', false)
   )
-  on_posix(
+  on_posix_target(
     clean_check(
       'print_error drops its output once a write to stderr has failed'
       'print_error_failed'
@@ -330,22 +360,22 @@ checks: Check[] = [
     )
   )
   # The write is rejected, which no one awaits, so the program reports it and exits with 1.
-  posix_check('a write to stderr is rejected once print_error has failed', ->
+  posix_target_check('a write to stderr is rejected once print_error has failed', ->
     outcome := await build_and_run('print_error_failed', false, ['DROP_BY_WRITE'])
     [
       compare_text('stderr', "cannot write to stderr\n", outcome.stderr)...
       expect_status(1, outcome.status)...
     ]
   )
-  posix_check('output is written out while every thread of the pool is busy', ->
+  posix_target_check('output is written out while every thread of the pool is busy', ->
     executable := await build('write_busy_pool', false)
-    outcome := await timeout(execute(executable), HANG_SECONDS)
+    outcome := await timeout(execute_built(executable), HANG_SECONDS)
     [
       compare_text('stdout', "flushed\nprinted\n", outcome.stdout)...
       expect_status(0, outcome.status)...
     ]
   )
-  posix_check('a write to a non-blocking pipe waits while the pipe is full', ->
+  posix_target_check('a write to a non-blocking pipe waits while the pipe is full', ->
     outcome := await build_and_run('write_non_blocking', false)
     length := outcome.stdout.binary.length
     [
@@ -353,15 +383,15 @@ checks: Check[] = [
       expect_status(0, outcome.status)...
     ]
   )
-  posix_check('a read of a non-blocking stdin waits while the pipe is empty', ->
+  posix_target_check('a read of a non-blocking stdin waits while the pipe is empty', ->
     executable := await build('read_non_blocking', false)
     script := '{ sleep 0.3; printf hi; } | "$0"'
     outcome := await timeout(execute('sh', ['-c', script, executable]), HANG_SECONDS)
     expect_status(0, outcome.status)
   )
-  posix_check("libuv's uv_spawn leaves a handle that it fails to spawn to uv_close", ->
+  posix_target_check("libuv's uv_spawn leaves a handle that it fails to spawn to uv_close", ->
     executable := await build('spawn_fails', false)
-    outcome := await timeout(execute(executable), HANG_SECONDS)
+    outcome := await timeout(execute_built(executable), HANG_SECONDS)
     [
       compare_text('stdout', "EINVAL\n2\n0\n", outcome.stdout)...
       expect_status(0, outcome.status)...
@@ -373,17 +403,24 @@ checks: Check[] = [
       outcome := await build_and_run('interleaved_writes', false, ['EXIT_AT_ONCE'])
       compare_text('stdout', '', outcome.stdout) + compare_text('stderr', '', outcome.stderr)
   }
-  posix_check('the buffer is written out at exit, to a terminal too, in the order of the writes', ->
-    shown := await run_on_terminal(await build('interleaved_writes', false))
-    expected := "first\r\nsecond\r\nthird\r\n"
-    reason :=
-      "expected the terminal to end with #{encode_json(expected)}, got #{encode_json(shown)}"
-    reason_unless(shown.ends_with(expected), reason)
+  posix_target_check(
+    'the buffer is written out at exit, to a terminal too, in the order of the writes'
+    ->
+      shown := await run_on_terminal(await build('interleaved_writes', false))
+      expected := "first\r\nsecond\r\nthird\r\n"
+      reason :=
+        "expected the terminal to end with #{encode_json(expected)}, got #{encode_json(shown)}"
+      reason_unless(shown.ends_with(expected), reason)
   )
 ]
 
-# The checks that the suite selected, if any.
-export suite := ->
+# The checks that the suite selected, if any, of the programs built for `given`.
+export suite := (given: Target) ->
+  target = given
   title := 'runtime checks'
   selected := select(title, checks) else return nil
-  SuiteChecks(title, checks: selected, ready: set_up_runtime())
+  set_up := ->
+    await set_up_runtime()
+    if target.wine
+      wine_prefixes = await start_wine_prefixes(work_dir, jobs())
+  SuiteChecks(title, checks: selected, ready: set_up(), stop: -> await wine_prefixes.stop())

@@ -31,6 +31,13 @@ class WinePrefixes
 
 export no_wine_prefixes := -> WinePrefixes([])
 
+# The variables that a program that Wine runs is given, in the prefix if any, to which a run adds
+# its own.
+export wine_env := (prefix: String?) ->
+  variables := { 'WINEDLLOVERRIDES': WINE_DLL_OVERRIDES }
+  variables['WINEPREFIX'] = prefix if prefix
+  variables
+
 # The error of a step of starting the prefixes.
 struct WineError: Error
 
@@ -97,8 +104,7 @@ start_prefix := (prefix: String, started: String[]) ->
 # running would hold open after this program ends, nor to arrays, whose reads would wait for that
 # wineserver to end.
 run_wine := (prefix: String?, command: String, args: String...) ->
-  env := { 'WINEDLLOVERRIDES': WINE_DLL_OVERRIDES }
-  env['WINEPREFIX'] = prefix if prefix
+  env := wine_env(prefix)
   ran := run('sh', '-c', 'exec "$@" > /dev/null 2>&1', 'sh', command, args..., env: env)
   exit := await exit_in_time(command, ran)
   throw WineError("#{command} failed") if exit.code != 0

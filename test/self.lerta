@@ -286,7 +286,10 @@ driver_checks: Check[] =
     expect_status(0, twice.status) + compare_text('stdout', once.stdout, twice.stdout)
   }
   usage_check(['-j', '0'], '--jobs takes a count above 0, not 0')
-  usage_check(['cli', '--target', 'x86_64-w64-mingw32'], '--target is for the run suite alone')
+  usage_check(
+    ['cli', '--target', 'x86_64-w64-mingw32']
+    '--target is for the run and runtime suites alone'
+  )
   usage_check(['--target', 'x86_64-w64-mingw32', '--failed'], '--failed is for the host alone')
   { name: 'bin/test fails when no check is selected', run: ->
     ran := await run_driver(['format', '-k', 'no such check'], await new_failed_file([]))
@@ -329,6 +332,13 @@ driver_checks: Check[] =
       when not result.reasons.is_empty()
     ]
     expect_results(expected, ran.stdout) + expect_status(1, ran.status)
+  }
+  { name: 'bin/test --target with no suites runs the runtime checks too', run: ->
+    target := host_target_name else return nil
+    name := 'queued to be dropped'
+    ran := await run_driver(['--target', target, '-k', name, '--list'], await new_failed_file([]))
+    expected := "runtime checks:\n  the debug runtime stops a release of an object #{name}\n"
+    expect_status(0, ran.status) + compare_text('stdout', expected, ran.stdout)
   }
   { name: "bin/test --target takes the host's short name for the run tests", run: ->
     target := host_target_name else return nil

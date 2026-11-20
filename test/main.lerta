@@ -58,7 +58,10 @@ SPEC :=
       value: 'text'
       help: 'only the checks whose names hold the text, or one of them if given more than once'
     }
-    target: { value: 'target', help: "the run suite's programs built for it (see test/lib/target)" }
+    target: {
+      value: 'target'
+      help: 'the programs of the run and runtime suites built for it (see test/lib/target)'
+    }
     list: { help: 'the names of the checks that would run, rather than running them' }
     failed: { help: 'only the checks that failed when they last ran for the host' }
     jobs: { short: 'j', value: 'count', help: 'how many checks run at once' }
@@ -77,6 +80,9 @@ exit_with_usage := (problem: String?) ->
     print text
   await remove_work_root()
   exit problem then 2 else 0
+
+# The suites that build programs for --target.
+TARGETED_SUITES: Suite[] = [run, runtime]
 
 # The suites to run, with the options of the checks.
 struct Run
@@ -99,13 +105,13 @@ parse_arguments := ->
       suite
   ]
   if target
-    if given.any((suite) -> suite != run)
-      await exit_with_usage('--target is for the run suite alone')
+    if given.any((suite) -> suite not in TARGETED_SUITES)
+      await exit_with_usage('--target is for the run and runtime suites alone')
     await exit_with_usage('--failed is for the host alone') if failed
   suites :=
     case
       when not given.is_empty() then given
-      when target then [Suite.run]
+      when target then TARGETED_SUITES
       else members<Suite>()
   options := Options
     jobs
@@ -153,7 +159,7 @@ run_suites := (suites: Suite[], target: String?) ->
           when run then await run_suite(target_of(target))
           when cli then await cli_suite()
           when format then format_suite()
-          when runtime then runtime_suite()
+          when runtime then runtime_suite(target_of(target))
           when leaks then leaks_suite()
           when self then self_suite()
       gathered.push checks if checks
