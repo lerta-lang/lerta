@@ -4,6 +4,7 @@
 
 import floor from 'std:math'
 import FileStatus, open, Reader, stat from 'std:io'
+import scan from 'std:scanner'
 import date_of, time_of from './http_date'
 import Headers, Request, Response from './http_message'
 
@@ -59,12 +60,16 @@ matches := (tag: String, etag: String) ->
   strong := tag.without_prefix('W/') else tag
   tag == '*' or strong == etag
 
-# The path of a request's URL, which is absolute (see Request), and its query, empty if it has none.
+# The path of a request's URL, which is absolute (see Request), and its query, empty if it has none:
+# what follows its host, which the first `/`, `?` or `#` ends, up to its fragment.
 target_of := (url: String) ->
   (_, after_scheme) := url.split_once('://') else ('', url)
-  (_, target) := after_scheme.split_once('/') else (after_scheme, '')
-  (path, query) := "/#{target}".split_once('?') else ("/#{target}", '')
-  (path, query)
+  scanner := scan(after_scheme)
+  scanner.skip_while (c) -> c not in '/?#'
+  after_host := scanner.rest()
+  (target, _fragment) := after_host.split_once('#') else (after_host, '')
+  (path, query) := target.split_once('?') else (target, '')
+  (path.is_empty() then '/' else path, query)
 
 # The parts of a path between its `/`s, each decoded from %XX, but the empty ones and `.`, which
 # stand for the directory they are in; nil for a path that would leave the directory, holds an

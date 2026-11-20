@@ -1,6 +1,7 @@
 # serve_files gives the files under a directory, a directory's index.html at a path that ends with
 # `/`, and 304 for a copy that is still good.
 import make_dir, make_temp_dir, remove_tree, write_file from 'std:io'
+import connect_tcp from 'std:net'
 import fetch, Headers, serve, serve_files from 'std:http'
 
 root := make_temp_dir()
@@ -66,6 +67,27 @@ await show('/%zz')
 await show('/%ff')
 await show('/a.txt%')
 await show('/a.txt%4')
+
+print 'paths past the host of a URL, without its fragment'
+
+# The status and body of a request of `target`, as fetch sends no absolute form nor fragment.
+raw := (target: String) ->
+  socket := await connect_tcp('127.0.0.1', server.port)
+  await socket.write("GET #{target} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+  response := (await socket.reader.read_all()).text()!
+  (status, _) := response.split_once("\r\n")!
+  (_, body) := response.split_once("\r\n\r\n")!
+  print "#{target}: #{status.split(' ')[1]} #{body}"
+for target in [
+  'http://x/a.txt'
+  'http://x?/a.txt'
+  'http://x#/a.txt'
+  'http://x/a.txt#/dir/'
+  'http://x/a.txt?v=1#f'
+  'http://x'
+  '/a.txt#f'
+]
+  await raw(target)
 
 print 'validators'
 await show('/a.txt', 'GET', [('if-none-match', etag)])

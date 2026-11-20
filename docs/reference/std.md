@@ -330,7 +330,7 @@ server := serve(serve_files('public'), port: 8080)
 `serve_files(root: String): (Request) -> Promise<Response>` gives a handler that serves the files under a directory, as a static web server does.
 
 - **Methods.** It takes `GET` and `HEAD`, and answers any other method 405, with `Allow: GET, HEAD`.
-- **Paths.** The path of the URL, without its query, is split at its `/`s, and each part decoded from `%XX`. The file is the parts joined under `root`, the empty parts and `.` left out.
+- **Paths.** The path of the URL, what follows its host up to the first `?` or `#`, is split at its `/`s, and each part decoded from `%XX`. The file is the parts joined under `root`, the empty parts and `.` left out.
   - A path that has a `..` part, a part that holds `/`, `\` or a NUL once decoded, an escape that is not `%` and two hexadecimal digits, or a part that is not UTF-8 once decoded, is answered 400. So a request never reaches outside `root`, but through a symbolic link under it.
   - What names nothing, nor a file or a directory, is answered 404, with a body of text.
 - **Directories.** A directory is served by its `index.html`, at a path that ends with `/`, so that the page's relative links resolve inside it. At a path without the `/`, it is answered 301 to the path with it, the query kept. A directory without `index.html` is answered 404: no listing is made.
