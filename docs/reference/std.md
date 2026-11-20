@@ -327,7 +327,7 @@ import serve, serve_files from 'std:http'
 server := serve(serve_files('public'), port: 8080)
 ```
 
-`serve_files(root: String): (Request) -> Promise<Response>` gives a handler that serves the files under a directory, as a static web server does.
+`serve_files(root: String): (Request) -> Promise<Response>` gives a handler that serves the files under a directory, as a static web server does. An empty `root` throws a `ValueError`, `serve the files under an empty root`, as the paths under it would start at the root of the file system.
 
 - **Methods.** It takes `GET` and `HEAD`, and answers any other method 405, with `Allow: GET, HEAD`.
 - **Paths.** The path of the URL, what follows its host up to the first `?` or `#`, is split at its `/`s, and each part decoded from `%XX`. The file is the parts joined under `root`, the empty parts and `.` left out.
