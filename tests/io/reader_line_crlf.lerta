@@ -1,0 +1,50 @@
+# A line read with `crlf` ends with "\r\n" alone, also across chunks: one whose "\n" has no "\r"
+# before it, or that holds a "\r" that no "\n" follows, throws a ValueError, and the next read goes
+# on after it. The last line, which the end ends, may have no "\r\n"; read without `crlf`, a lone
+# "\n" ends a line. A line that is not UTF-8 is taken too, but its lone line end is told first; the
+# "\r" before the "\n" counts toward the limit.
+import LineTooLongError, Reader from 'std:io'
+
+reader_of := (chunks: (String | Binary)[]) ->
+  var next = 0
+  Reader(->
+    return nil if next == chunks.length
+    next += 1
+    chunk := chunks[next - 1]
+    chunk is String then chunk.binary else chunk
+  )
+
+show := (reader: Reader, crlf = true, max: Int = INT_MAX) ->
+  try
+    line := await reader.read_line(max, crlf)
+    print line?.to_literal() else 'end'
+  catch error: ValueError | LineTooLongError
+    print error.message
+
+reader := reader_of(["a\r\nb\nc\rd\r\ne\r", "\r\nf\r\r\ng\r\n\r\nh"])
+await show(reader) for _ in 0..9
+
+print 'a "\r\n" across chunks, and past an empty one'
+split := reader_of(["a\r", "\nb\r", '', "\n"])
+await show(split) for _ in 0..3
+
+print 'a last line with a lone "\r"'
+await show(reader_of(["i\r"]))
+
+print 'without crlf'
+lenient := reader_of(["a\nb\r\n"])
+await show(lenient, false)
+await show(lenient, false)
+
+print 'lines that are not UTF-8'
+NOT_UTF8: Byte[] = [0xFF]
+not_utf8 := NOT_UTF8.to_binary()
+strict := reader_of([not_utf8 + b"\r\nok\r\n", not_utf8 + b"\r\r\n"])
+await show(strict) for _ in 0..3
+loose := reader_of([not_utf8 + b"\nok\n"])
+await show(loose, false) for _ in 0..2
+
+print 'a limit of bytes'
+limited := reader_of(["abc\r\n"])
+await show(limited, true, 3)
+await show(limited, true, 4)

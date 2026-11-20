@@ -527,7 +527,7 @@ A class, exported, that reads a stream in chunks through a buffer.
 |---|---|
 | `read_chunk: () -> Promise<Binary?>` | A field: gives the next chunk, or nil at the end. |
 | `on_close: (() -> void)?` | A field: what `close` calls. |
-| `read_line(max = INT_MAX): Promise<String?>` | The next line, without its `\n` and a `\r` before it, or nil at the end. |
+| `read_line(max = INT_MAX, crlf = false): Promise<String?>` | The next line, without its `\n` and a `\r` before it, or nil at the end; with `crlf`, a line that only `\r\n` ends, as network protocols have it. |
 | `read(max: Int): Promise<Binary?>` | The bytes there are to read, at most `max`, or nil at the end. |
 | `read_exactly(count: Int): Promise<Binary?>` | `count` bytes, or nil at the end. |
 | `read_all(): Promise<Binary>` | All that is left. |
@@ -536,6 +536,8 @@ A class, exported, that reads a stream in chunks through a buffer.
 - **read_line** throws:
   - a `ValueError` for a negative `max`;
   - a `ValueError`, `a line is not valid UTF-8`, for a line that is not;
+  - with `crlf`, a `ValueError`, `a line holds a \r or a \n alone`, for a line whose `\n` has no `\r` before it, or that holds a `\r` that no `\n` follows; the last line, which the end ends, needs no `\r\n`;
+  - each `ValueError` of a line takes the line, so that the next read goes on after it;
   - a `LineTooLongError`, exported too, `a line is longer than <max> bytes`, once more than `max` bytes, a `\r` among them, have come before its `\n`.
 - **read** waits for bytes only if there are none. So `read(0)` takes none and tells whether the end has come.
 - **read_exactly** throws an `IOError`, `the end came after <n> of <count> bytes`, once the end comes after some of them.

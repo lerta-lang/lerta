@@ -633,9 +633,12 @@ export class Reader
 
   ## The next line, without its "\n" and a "\r" before it, or nil at the end. A LineTooLongError
   ## if more than `max` bytes, a "\r" among them, come before its "\n", which leaves them unread.
-  read_line := (max: Int = INT_MAX) ->
+  ## With `crlf`, only "\r\n" ends a line, as network protocols have it: a "\n" without a "\r"
+  ## before it, or a "\r" that no "\n" follows, throws a ValueError, which takes the line, as one
+  ## for a line that is not UTF-8 does.
+  read_line := (max: Int = INT_MAX, crlf = false) ->
     throw ValueError("read a line of a negative count of bytes: #{max}") if max < 0
-    await @exclusive(-> await @line(max))
+    await @exclusive(-> await @line(max, crlf))
 
   ## The bytes there are to read, at most `max`, waiting for some only if there are none; nil at the
   ## end. A `max` of 0 takes none, and tells only whether the end has come.
@@ -690,7 +693,7 @@ export class Reader
       @taken = b''
       bytes
 
-    line := (max: Int) ->
+    line := (max: Int, crlf: Bool) ->
       while await @fill()
         end := @chunk.index_of(b"\n", @start) else @chunk.length
         @taken += @chunk[@start..end]
@@ -698,9 +701,9 @@ export class Reader
         throw LineTooLongError("a line is longer than #{max} bytes") if @taken.length > max
         if end < @chunk.length
           @start = end + 1
-          return ended_line_text(@taken_out())
+          return ended_line_text(@taken_out(), crlf)
       return nil if @taken.is_empty()
-      utf8_line(@taken_out())
+      line_text(@taken_out(), crlf)
 
     # Whether there are bytes to read, past the empty chunks that come before them; false at the
     # end.
@@ -728,13 +731,19 @@ export class Reader
     # All that is left: a part of INT_MAX bytes, as many as a read can ask for, reads to the end.
     rest := -> await @part(INT_MAX) else b''
 
-# A line that ended with "\n", without a "\r" before it.
-ended_line_text := (bytes: Binary) ->
+# A line that ended with "\n", without a "\r" before it, which `crlf` requires.
+ended_line_text := (bytes: Binary, crlf: Bool) ->
   ends_with_return := bytes.last() == b"\r"
+  throw lone_line_end() if crlf and not ends_with_return
   line := ends_with_return then bytes[..(bytes.length - 1)] else bytes
-  utf8_line(line)
+  line_text(line, crlf)
 
-utf8_line := (bytes: Binary) -> bytes.text() else throw ValueError('a line is not valid UTF-8')
+# The text of a line without its end, in which `crlf` takes no "\r", as none ends it.
+line_text := (bytes: Binary, crlf: Bool) ->
+  throw lone_line_end() if crlf and bytes.index_of(b"\r") != nil
+  bytes.text() else throw ValueError('a line is not valid UTF-8')
+
+lone_line_end := -> ValueError('a line holds a \r or a \n alone')
 
 ## The standard input.
 export stdin := Reader(-> lerta_stdin_read())
