@@ -585,6 +585,7 @@ A language server, of the [Language Server Protocol](https://microsoft.github.io
   - a local, a parameter, a top-level value, a function, an import;
   - a class, struct or enum member, a field or a method, own or of an extend;
   - the class, struct, interface, enum or alias that a type name names, as in an annotation or the enum of `Color.RED`.
+- On a declaration's own name, it gives that name, if a name of its module leads to it or other modules may name it (see [References](#references)), so that a client such as VS Code shows its references instead.
 - They answer from the last check of the document's program, or of an open document's program that holds it, as far as it was checked.
 - They give nothing for a name that the checker gave no type, as a builtin type's name or a type parameter, but hover gives the doc comments of an import's name. Definition gives nothing for a declaration in a standard module.
 

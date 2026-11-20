@@ -13,8 +13,8 @@ from './diagnostics'
 import completion_items, CompletionItem, probe_text, writing_at from './complete'
 import Documents from './documents'
 import
-  definition_of, hover_markdown, is_shared, is_written, location_of, module_at, references_in,
-  target_at, Written
+  definition_of, hover_markdown, is_shared, is_written, location_of, module_at, module_references,
+  references_in, target_at, Written
 from './locate'
 import path_of_uri from './uri'
 import entries_for from './workspace'
@@ -83,12 +83,24 @@ export hover := (documents: Documents, params: PositionParams) ->
   markdown := hover_markdown(program, module_index, await read_source(path), at) else return nil
   Hover({ kind: 'markdown', value: markdown })
 
-# Where the name at the position is declared, if in a file that still writes it there.
+# Where the name at the position is declared, if in a file that still writes it there; or the name
+# itself if it is a declaration that a name of its module leads to or that other modules may name,
+# as a client such as VS Code takes a definition at the position itself as a request for its
+# references.
 export definition := (documents: Documents, params: PositionParams) ->
   { path, program, module_index, at } :=
     await cursor_at(documents, params.text_document, params.position) else return nil
-  declared := definition_of(program, module_index, await read_source(path), at) else return nil
-  await written_location(documents, location_of(program, declared.module_index), declared.name)
+  source := await read_source(path)
+  if declared := definition_of(program, module_index, source, at)
+    return
+      await written_location(documents, location_of(program, declared.module_index), declared.name)
+  target := target_at(program, module_index, source, at) else return nil
+
+  # A declaration that other modules may not name is named in its own module alone.
+  is_declaration := is_shared(program, target) or
+    not (await module_references(program, module_index, target)).is_empty()
+  return nil unless is_declaration
+  await written_location(documents, target.key, target.name)
 
 # The names that lead to the declaration that the name at the position leads to, or is, in the
 # programs of the open documents, and, for a declaration that other modules may name, of the entry

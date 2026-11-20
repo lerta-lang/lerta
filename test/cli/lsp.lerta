@@ -448,6 +448,52 @@ hover_definition_check := ->
       )...
     ]
 
+declaration_definition_check := ->
+  Check
+    name: 'lerta lsp leads a declaration that a name leads to, or that is shared, to itself'
+    run: ->
+      dir := new_cli_dir('lsp-declaration-definition')
+      path := "#{dir}/a.lerta"
+      text := "value := 1\nprint value\nunused := 2\nexport shown := 3\nif true\n  print 4\n" +
+        "struct P\n  field: Int\n  twice := -> @field * 2\nf := (n: Int, m: Int) -> n + 1\n" +
+        "print f(1, 2)\nprint 'text'\n"
+      await write_file(path, text)
+      uri := uri_of(path)
+      messages :=
+        did_open(uri, text)
+        definition_request(uri, 0, 1, 1)
+        definition_request(uri, 2, 1, 2)
+        definition_request(uri, 3, 8, 3)
+        definition_request(uri, 4, 0, 4)
+        definition_request(uri, 7, 5, 5)
+        definition_request(uri, 8, 3, 6)
+        definition_request(uri, 9, 6, 7)
+        definition_request(uri, 9, 1, 8)
+        definition_request(uri, 9, 14, 9)
+        definition_request(uri, 11, 8, 10)
+        definition_request(uri, 6, 2, 11)
+      .join()
+      ran := await session(dir, messages)
+      [
+        expect_status(0, ran.status)...
+        exact_responses(
+          ran.stdout_text()
+          [
+            location_fragment(1, uri, 0, 0, 5)
+            '"id":2,"result":null'
+            location_fragment(3, uri, 3, 7, 12)
+            '"id":4,"result":null'
+            location_fragment(5, uri, 7, 2, 7)
+            location_fragment(6, uri, 8, 2, 7)
+            location_fragment(7, uri, 9, 6, 7)
+            location_fragment(8, uri, 9, 0, 1)
+            '"id":9,"result":null'
+            '"id":10,"result":null'
+            '"id":11,"result":null'
+          ]
+        )...
+      ]
+
 alias_hover_check := ->
   Check name: 'lerta lsp writes a union by its alias but an alias by its union', run: ->
     dir := new_cli_dir('lsp-alias-hover')
@@ -1357,6 +1403,7 @@ export checks :=
   changed_import_check()
   close_unsaved_import_check()
   hover_definition_check()
+  declaration_definition_check()
   alias_hover_check()
   generic_hover_check()
   generic_callee_check()

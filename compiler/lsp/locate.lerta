@@ -106,24 +106,34 @@ export target_at := (
 # their files still write them. A module whose text does not write the target's name has none, as
 # a name that leads to a declaration of another module is imported by its name, if under another.
 export references_in := (program: ProgramWide, target: Written) ->
-  keys := [
-    for index in 0..program.modules.length
-      key_of(program, index)
-  ]
-  leads_to_target := (declared: Declared) ->
-    keys[declared.module_index] == target.key and declared.name.position == target.name.position
   found: Written[]
   for module_index in 0..program.modules.length
-    location := location_of(program, module_index)
-    continue if is_standard_name(location)
-    source := await read_source(location)
-    continue unless target.name.name in source
-    lines := source.split("\n")
-    for candidate in module_candidates(program, module_index)
-      continue unless is_written(lines, candidate.name)
-      declared := candidate.declaration() else continue
-      if leads_to_target(declared)
-        found.push { key: keys[module_index], name: candidate.name }
+    found.append await module_references(program, module_index, target)
+  found
+
+# The names that lead to the target in the module, if it is not a standard one, as far as its file
+# still writes them.
+export module_references := (
+  program: ProgramWide, module_index: Int, target: Written
+): Promise<Written[]> ->
+  location := location_of(program, module_index)
+  return [] if is_standard_name(location)
+  source := await read_source(location)
+  return [] unless target.name.name in source
+  lines := source.split("\n")
+  keys: Map<Int, String>
+  leads_to_target := (declared: Declared) ->
+    return false unless declared.name.position == target.name.position
+    index := declared.module_index
+    unless index in keys
+      keys[index] = key_of(program, index)
+    keys[index] == target.key
+  found: Written[]
+  for candidate in module_candidates(program, module_index)
+    continue unless is_written(lines, candidate.name)
+    declared := candidate.declaration() else continue
+    if leads_to_target(declared)
+      found.push { key: text_key(location), name: candidate.name }
   found
 
 # Whether the names of other modules may lead to the target, a declaration of the program: a
