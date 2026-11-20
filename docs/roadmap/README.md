@@ -14,7 +14,7 @@ When a feature is implemented, its description moves to [the reference](../refer
 
 ## Follow-ups
 
-- The documents: a tour of the language of working examples only, a summary of the grammar, and the longest items of the reference (as of generic classes in [objects](../reference/objects.md)) split under headings.
+- The documents: a summary of the grammar, and the longest items of the reference (as of generic classes in [objects](../reference/objects.md)) split under headings.
 
 ## Open questions
 
