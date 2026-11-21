@@ -373,4 +373,5 @@ void lerta_hash_init(void) {
     // Without the system's randomness, the time and an address that ASLR moves still differ by run.
     lerta_hash_seed = uv_hrtime() ^ (uint64_t)(uintptr_t)&lerta_hash_seed;
   }
+  lerta_make_word_hash_keys();
 }

@@ -282,7 +282,7 @@ checks: Check[] = [
     ]
     compare_text('stdout', lines(expected), outcome.stdout) + expect_clean(outcome)
   }
-  { name: 'lerta_string_hash is wyhash under a seed and a secret made in each process', run: ->
+  { name: 'string and word hashes take a seed, a secret and keys that each process draws', run: ->
     executable := await build('string_hash', true)
     first := await execute_built(executable)
     second := await execute_built(executable)
@@ -329,17 +329,24 @@ checks: Check[] = [
       '47c3660fc5e1c9b1'
       '63345c8f3d25085d'
 
-    own_hash := (outcome: Outcome) ->
+    # The hashes under the process's own seed, secret and keys: of "a", and of the word 0.
+    own_hashes := (outcome: Outcome) ->
       printed := outcome.stdout.split("\n")
-      printed.length > known.length then printed[known.length] else ''
-    own_hashes := [own_hash(first), own_hash(second)]
+      [
+        for i in 0..2
+          position := known.length + i
+          printed.length > position then printed[position] else ''
+      ]
+    firsts := own_hashes(first)
+    seconds := own_hashes(second)
     [
-      compare_text('stdout', lines([known..., own_hashes[0]]), first.stdout)...
+      compare_text('stdout', lines([known..., firsts...]), first.stdout)...
       expect_clean(first)...
-      compare_text('stdout', lines([known..., own_hash(narrow)]), narrow.stdout)...
+      compare_text('stdout', lines([known..., own_hashes(narrow)...]), narrow.stdout)...
       expect_clean(narrow)...
       expect_clean(second)...
-      reason_unless(own_hashes[0] != own_hashes[1], 'two processes hashed "a" alike')...
+      reason_unless(firsts[0] != seconds[0], 'two processes hashed "a" alike')...
+      reason_unless(firsts[1] != seconds[1], 'two processes hashed the word 0 alike')...
     ]
   }
   clean_check('the optimized runtime does not count objects', 'leak', true)

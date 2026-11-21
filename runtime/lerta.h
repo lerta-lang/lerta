@@ -189,6 +189,9 @@ LertaString *lerta_binary_push(LertaString *binary, uint8_t byte);
 LertaString *lerta_string_push(LertaString *s, uint32_t c);
 bool lerta_string_equals(const LertaString *a, const LertaString *b);
 uint64_t lerta_string_hash(const LertaString *s);
+// The hash of a word, as of an Int key, or of the hashes of a value's parts, under keys that each
+// process takes at random (see docs/internals/representation.md#maps).
+uint64_t lerta_hash_word(uint64_t word);
 // The place of `text` among an enum's `count` member texts, or -1 if none has it (`parse<E>` of
 // std:enums).
 int64_t lerta_enum_parse(const LertaString *const *texts, int64_t count, const LertaString *text);

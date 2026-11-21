@@ -254,6 +254,10 @@ void lerta_stack_init(void);
 extern uint64_t lerta_hash_seed;
 extern uint64_t lerta_hash_secret[4];
 void lerta_make_hash_secret(uint64_t seed, uint64_t secret[4]);
+// The keys of lerta_hash_word, which lerta_hash_init makes from the seed at start, not at the first
+// hash as lerta_string_hash makes the secret, so that a word's hash need not check for them.
+extern uint64_t lerta_word_hash_keys[2];
+void lerta_make_word_hash_keys(void);
 void lerta_hash_init(void);
 // Gives main's arguments as the system's bytes, which are UTF-8 on Windows: POSIX leaves them as
 // they are, and Windows replaces them with ones read from its UTF-16 command line.

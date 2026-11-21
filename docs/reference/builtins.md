@@ -151,7 +151,7 @@ The classes of regular expressions and their matches (see [Regex](types.md#regex
 - Every type that `==` compares has `equals`, which compares as `==` does. So it satisfies `Equatable`.
 - Every type that can be a [map key](types.md#map) has `hash`, which equal values share. So it satisfies `Hashable`.
 - These are builtin, unless a class or struct declares [its own](objects.md#equality-and-order). One that declares `compare` has a builtin `equals` by it.
-- The builtin `hash` of a `String` or a `Binary`, or of a value that holds one, differs from one run of the program to the next.
+- The builtin `hash` of a `String` or a `Binary`, or of a value that holds one, or of a tuple, a struct or an array that holds anything, differs from one run of the program to the next.
 - The numbers, `Char`, `String` and enums, by the order of their members, have a `compare`, and so satisfy `Comparable`, as does a class or struct that declares its own, and a tuple whose items all satisfy it, by its first items that differ. `<` and the like order by it.
 
 ## Operators

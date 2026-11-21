@@ -6,13 +6,6 @@
 // A removed entry stays in place until the entries are compacted, so that probes pass over it.
 #define EMPTY (-1)
 
-// The splitmix64 finalizer, so that the low bits, which pick the slot, depend on every bit.
-static uint64_t mix(uint64_t hash) {
-  hash = (hash ^ (hash >> 30)) * 0xBF58476D1CE4E5B9u;
-  hash = (hash ^ (hash >> 27)) * 0x94D049BB133111EBu;
-  return hash ^ (hash >> 31);
-}
-
 // The program's own hash and equals, of value keys and of values, may run any code, which must not
 // change the map meanwhile: its search, or its comparison, would go on with entries freed or moved.
 static void start_comparing(const LertaMap *map) { ((LertaMap *)map)->comparing++; }
@@ -29,9 +22,9 @@ static uint64_t hash_key(const LertaMap *map, int64_t key) {
       start_comparing(map);
       uint64_t hash = map->hash(key);
       stop_comparing(map);
-      return mix(hash);
+      return lerta_hash_word(hash);
     }
-    default: return mix((uint64_t)key);
+    default: return lerta_hash_word((uint64_t)key);
   }
 }
 

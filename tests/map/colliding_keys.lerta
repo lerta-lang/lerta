@@ -1,0 +1,51 @@
+# Keys hash under a seed that each run takes at random, so that keys that collide cannot be made
+# ahead of time: neither Int keys, nor keys whose own hash gives such Ints, whose hashes would
+# collide under the seedless splitmix64 finalizer, nor tuples or arrays whose parts trade 1 for 31.
+import monotonic from 'std:time'
+
+KEY_COUNT := 80000
+
+# The inverse of the splitmix64 finalizer, which gives each key that finalizer's hash i << 32, the
+# same in the low 32 bits that pick a slot.
+unmixed := (i: UInt64) ->
+  var x = i << 32
+  x = x ^ x >> 31 ^ x >> 62
+  x = x.wrapping_mul(0x319642b2d24d8ec3)
+  x = x ^ x >> 27 ^ x >> 54
+  x = x.wrapping_mul(0x96de1b173f119089)
+  x ^ x >> 30 ^ x >> 60
+
+# The Int of the same bits.
+as_int := (x: UInt64) ->
+  low := (x & 0x7fffffffffffffff).to_int()!
+  if x >> 63 == 0
+    low
+  else
+    low - 0x7fffffffffffffff - 1
+
+class Id
+  args
+    hash_value: Int
+  equals := (other: Id) -> @hash_value == other.hash_value
+  hash := -> @hash_value
+
+keys := [unmixed(i.to_uint64()!) for i in 1..=KEY_COUNT]
+
+# Without a seed, the keys took seconds, more than the slowest targets take with one.
+in_time := (insert: () -> void) ->
+  start := monotonic()
+  insert()
+  assert monotonic() - start < 2.0
+
+counts: Map<UInt64, Int>
+in_time -> counts[key] = 1 for key in keys
+assert counts.length == KEY_COUNT
+ids: Set<Id>
+in_time ->
+  for key in keys
+    ids.add Id(as_int(key))
+assert ids.length == KEY_COUNT
+
+assert (1, 100).hash() != (2, 69).hash()
+assert [1, 100].hash() != [2, 69].hash()
+print 'done'

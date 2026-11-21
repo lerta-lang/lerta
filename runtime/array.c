@@ -251,7 +251,7 @@ bool lerta_array_equals(const LertaArray *a, const LertaArray *b, LertaEquals eq
 uint64_t lerta_array_hash(const LertaArray *array, LertaHash hash) {
   uint64_t result = (uint64_t)array->length;
   for (int64_t i = 0; i < array->length; i++) {
-    result = result * 31 + item_hash(array, i, hash);
+    result = lerta_hash_word(result ^ item_hash(array, i, hash));
   }
   return result;
 }

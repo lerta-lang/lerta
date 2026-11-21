@@ -2,7 +2,8 @@
 // for each n of LENGTHS, which take each way of wyhash's, and under the seed 0x0706050403020100 for
 // n = 15; then the secrets that lerta_make_hash_secret makes from the seeds 0 and 1, and the hash
 // for n = 15 under the seed 0 and the first of them, which the check compares with wyhash's; then,
-// under the process's own seed and secret, of "a".
+// under the process's own seed and secret, of "a"; and last lerta_hash_word of 0 under the process's
+// own keys.
 #include <stdio.h>
 #include <string.h>
 
@@ -44,5 +45,6 @@ void lerta_main(void) {
   lerta_hash_seed = own_seed;
   memcpy(lerta_hash_secret, own_secret, sizeof own_secret);
   print_hash((const uint8_t *)"a", 1);
+  printf("%016llx\n", (unsigned long long)lerta_hash_word(0));
   fflush(stdout);
 }

@@ -335,6 +335,25 @@ __attribute__((noinline, cold)) void lerta_make_hash_secret(uint64_t seed, uint6
   }
 }
 
+uint64_t lerta_word_hash_keys[2];
+
+// Drawn from a stream of their own, as lerta_make_hash_secret draws from the seed itself: a program
+// that learned the keys from the hashes it sees would learn nothing of the secret, nor the reverse.
+#define WORD_KEYS_STREAM 0x9e3779b97f4a7c15u
+
+void lerta_make_word_hash_keys(void) {
+  uint64_t seed = lerta_hash_seed ^ WORD_KEYS_STREAM;
+  lerta_word_hash_keys[0] = next_random(&seed);
+  // Odd, so that the low word of the product, which the hash folds in, keeps every bit of the word.
+  lerta_word_hash_keys[1] = next_random(&seed) | 1;
+}
+
+// One folded multiply, as foldhash hashes an integer: the keys, unknown to the program, keep it from
+// knowing which words collide.
+uint64_t lerta_hash_word(uint64_t word) {
+  return mixed(word ^ lerta_word_hash_keys[0], lerta_word_hash_keys[1]);
+}
+
 // wyhash (final version 4.3) under lerta_hash_seed and lerta_hash_secret (see
 // docs/internals/representation.md#maps).
 uint64_t lerta_string_hash(const LertaString *s) {
