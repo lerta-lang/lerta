@@ -80,8 +80,14 @@ static inline void visit_entry(bool keys, LertaItemKind kind, LertaMapEntry *ent
   lerta_visit_item(kind, value_of(entry), visitor);
 }
 
-static void release_entry(const LertaMap *map, LertaMapEntry *entry) {
-  visit_entry(keys_are_references(map), map->value_kind, entry, lerta_release);
+// Released from a copy: each release may run a deinit that adds to the map, moving its entries.
+static void release_entry(const LertaMap *map, const LertaMapEntry *entry) {
+  struct {
+    LertaMapEntry entry;
+    LertaItem value;
+  } held;
+  memcpy(&held, entry, sizeof(LertaMapEntry) + value_size(map));
+  visit_entry(keys_are_references(map), map->value_kind, &held.entry, lerta_release);
 }
 
 // What the loop needs of the map is read before it, as LLVM would read it again after each call
