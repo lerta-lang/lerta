@@ -2,6 +2,7 @@
 
 import Signal from 'std:async'
 import platform from './internal/platform'
+import end_before_separators, is_separator from './internal/separators'
 import bytes_of from './internal/utf8'
 
 # A failure gives false, nil or, for lerta_open_file and lerta_open_reader, 0, of which the
@@ -197,16 +198,13 @@ export remove_tree := (path: String) ->
 # drive's `:`, as in `C:..`, ends the part before it too.
 ends_with_dots := (path: String) ->
   bytes := path.binary
-  var end = bytes.length
-  end -= 1 while end > 0 and is_separator(bytes[end - 1])
+  end := end_before_separators(bytes)
   after_drive := platform == 'windows' and bytes.length >= 2 and bytes[1] == b':'
   part_starts := (i: Int) -> is_separator(bytes[i - 1]) or (after_drive and i == 2)
   var start = end
   start -= 1 while start > 0 and not part_starts(start)
   last := bytes[start..end]
   last == b'.' or last == b'..'
-
-is_separator := (byte: Byte) -> byte == b'/' or (platform == 'windows' and byte == b'\')
 
 # An empty path names no directory. Each directory that ends before a separator is made first,
 # whether or not that succeeds, since a parent that cannot be made, such as a drive or a network

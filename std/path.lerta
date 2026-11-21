@@ -4,6 +4,7 @@
 # drive, `C:a`, is not supported. Names compare as written, also on Windows, where the system takes
 # them without case: real paths, which `relative` takes in the compiler, write a name alike.
 
+import below from './internal/separators'
 import cwd, platform from './process'
 
 is_windows := platform == 'windows'
@@ -17,9 +18,9 @@ struct SplitPath
   names: String[]
 
 split_path := (path: String): SplitPath ->
-  slashed := is_windows then path.replace('\', '/') else path
-  bytes := slashed.binary
-  names := [name for name in slashed.split('/') when not name.is_empty()]
+  slashed_path := slashed(path)
+  bytes := slashed_path.binary
+  names := names_in(slashed_path)
   starts_at_separator := bytes.first() == b'/'
   is_share := starts_at_separator and bytes.get(1) == b'/'
   case
@@ -28,6 +29,12 @@ split_path := (path: String): SplitPath ->
       { root: "//#{names[0]}/#{names[1]}/", names: names[2..] }
     when starts_at_separator then { names, root: '/' }
     else { names, root: '' }
+
+slashed := (path: String) -> is_windows then path.replace('\', '/') else path
+
+# The names of a path whose separators are `/`.
+names_in := (slashed_path: String) ->
+  [name for name in slashed_path.split('/') when not name.is_empty()]
 
 # Whether the path starts with a drive and a separator, as `C:\`: `C:` alone names the current
 # directory of that drive, which is relative.
@@ -62,9 +69,16 @@ export stem := (path: String) ->
   name.without_suffix(".#{ending}")!
 
 ## The paths one after another, normalized: `join('a', '../b', 'c')` is `b/c`. An empty one adds
-## nothing, rather than a separator that would make a root of an empty first one.
+## nothing, rather than a separator that would make a root of an empty first one, and the root of
+## each after the first that is not empty is taken as none: `join('a', '/b')` is `a/b`.
 export join := (first: String, rest: String...) ->
-  normalize([path for path in [first, rest...] when not path.is_empty()].join('/'))
+  paths := [path for path in [first, rest...] when not path.is_empty()]
+  first_path := paths.first() else return '.'
+
+  # The rest add only their names, as a network share starts where the first path alone starts
+  # one, as `\\server` does.
+  names := [name for path in paths[1..] for name in names_in(slashed(path))]
+  normalize(below(first_path, names))
 
 ## The path without `.` and empty names, and with each `..` removing the name before it, as text: a
 ## `..` after a name that is a symbolic link names another directory than the system resolves it to.

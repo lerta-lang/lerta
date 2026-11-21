@@ -876,7 +876,7 @@ print relative(dir, source)
 | `base_name(path: String): String` | The last name: `c` for `a/b/c`, and `` for a root. |
 | `extension(path: String): String?` | The last name's part after its last `.`, or nil if it has none: `gz` for `a.tar.gz`; nil for `.profile` or `..`, as the `.`s that start a name start none. |
 | `stem(path: String): String` | The last name without its extension and that `.`: `a.tar` for `a.tar.gz`. |
-| `join(first: String, rest: String...): String` | The paths one after another, normalized: `join('a', '../b', 'c')` is `b/c`. An empty one adds nothing, and a later absolute path does not start again, as in Node's `join`. |
+| `join(first: String, rest: String...): String` | The paths one after another, normalized: `join('a', '../b', 'c')` is `b/c`. An empty one adds nothing, and a later absolute path does not start again, as in Node's `join`; a network share starts only where the first path that is not empty starts one, so `join('/', 'a', 'b')` is `/a/b`, also on Windows. |
 | `normalize(path: String): String` | The path without `.` and empty names, and with each `..` removing the name before it, as text: a `..` after a symbolic link may name another directory than the system resolves it to, as `real_path` of [std:io](#stdio) does. `.` for nothing left. |
 | `is_absolute(path: String): Bool` | Whether the path starts at a root. On Windows, one that starts at `\` alone names a file on the current drive, and is absolute too. |
 | `absolute(path: String, base: String = cwd()): String` | The path as it is if absolute, else from `base`, normalized. |
