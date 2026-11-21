@@ -1,0 +1,29 @@
+# serve_files gives a file modified before 1970 with the date it was, the bits of its time in its
+# tag, and 304 for a copy of that date or after, or of its tag.
+import fetch, Headers, serve, serve_files from 'std:http'
+import make_dir, write_file from 'std:io'
+import run from 'std:process'
+
+make_dir 'root'
+await write_file('root/old.txt', 'old')
+await write_file('root/eve.txt', 'eve')
+await run('sh', '-c', 'TZ=UTC touch -t 196907202017 root/old.txt')
+await run('sh', '-c', 'TZ=UTC touch -t 196912312359.58 root/eve.txt')
+
+server := serve(serve_files('root'), port: 0)
+url := "http://127.0.0.1:#{server.port}/old.txt"
+
+response := await fetch(url)
+modified := response.headers.get('last-modified')!
+etag := response.headers.get('etag')!
+print "#{response.status} #{modified} #{etag} #{(await response.text())!}"
+print (await fetch("http://127.0.0.1:#{server.port}/eve.txt")).headers.get('last-modified')!
+
+status_with := (name: String, value: String) ->
+  headers := Headers()
+  headers.set name, value
+  (await fetch(url, headers: headers)).status
+print await status_with('if-modified-since', modified)
+print await status_with('if-modified-since', 'Sun, 20 Jul 1969 20:16:59 GMT')
+print await status_with('if-none-match', etag)
+await server.close()

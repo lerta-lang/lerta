@@ -10,7 +10,7 @@ SECONDS_PER_DAY := 86400
 
 # The date of the second that the last response was given in, which the next ones of that second
 # give again: a server writes it in every response, and making it is a fair part of a small one.
-var last_second = -1
+var last_second: Int?
 var last_date = ''
 
 # The date of now.
@@ -21,14 +21,20 @@ export date_now := ->
     last_date = date_of(second)
   last_date
 
-# The date of the Unix time, in whole seconds, from 1970 on, whose day 0 was a Thursday.
+# The date of the Unix time, in whole seconds, whose day 0 was a Thursday; the date of a year
+# before 0 or after 9999, which has no four digits, is none that time_of reads.
 export date_of := (seconds: Int) ->
-  day := seconds / SECONDS_PER_DAY
-  of_day := seconds % SECONDS_PER_DAY
+  day := floor_div(seconds, SECONDS_PER_DAY)
+  of_day := modulo(seconds, SECONDS_PER_DAY)
   { year, month, month_day } := civil_date(day)
   clock := [two_digits(n) for n in [of_day / 3600, of_day / 60 % 60, of_day % 60]].join(':')
-  date := "#{two_digits(month_day)} #{MONTHS[month - 1]} #{year}"
-  "#{DAYS[day % 7]}, #{date} #{clock} GMT"
+  date := "#{two_digits(month_day)} #{MONTHS[month - 1]} #{year.to_string().pad_start(4, '0')}"
+  "#{DAYS[modulo(day, 7)]}, #{date} #{clock} GMT"
+
+# The quotient rounded down and the remainder that is not negative, as `/` and `%` round toward
+# zero instead, for a time before 1970.
+floor_div := (n: Int, divisor: Int) -> (n - modulo(n, divisor)) / divisor
+modulo := (n: Int, divisor: Int) -> (n % divisor + divisor) % divisor
 
 two_digits := (n: Int) -> n.to_string().pad_start(2, '0')
 
@@ -59,7 +65,7 @@ export time_of := (date: String) ->
 # in March, so that the leap day ends it.
 civil_date := (days: Int) ->
   shifted := days + 719468
-  era := shifted / 146097
+  era := floor_div(shifted, 146097)
   day_of_era := shifted - era * 146097
   year_of_era := (day_of_era - day_of_era / 1460 + day_of_era / 36524 - day_of_era / 146096) / 365
   day_of_year := day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100)
@@ -73,7 +79,7 @@ civil_date := (days: Int) ->
 # (Howard Hinnant's days_from_civil).
 days_since_epoch := (year: Int, month: Int, month_day: Int) ->
   shifted_year := month <= 2 then year - 1 else year
-  era := shifted_year / 400
+  era := floor_div(shifted_year, 400)
   year_of_era := shifted_year - era * 400
   shifted_month := month > 2 then month - 3 else month + 9
   day_of_year := (153 * shifted_month + 2) / 5 + month_day - 1
