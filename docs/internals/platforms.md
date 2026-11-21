@@ -33,7 +33,7 @@
 
 #### Open files
 
-- A `FileWriter` of `create` writes through an `OpenFile` of `runtime/file.c`, which holds the file. Lerta holds it by its address in the `FileWriter`, whose `deinit` frees it.
+- A `FileWriter` of `create` writes through an `OpenFile` of `runtime/file.c`, which holds the file. Lerta holds its address in an `OpenFile` class of `std:io`, which only `create` makes. The `FileWriter` holds that, and its `deinit` frees the runtime's `OpenFile`. Both fields are private, so that a program can neither give an address as a file nor read one.
 - The buffer is the `FileWriter`'s, a `Binary` that `+=` grows in place, written out by a task on the thread pool, one at a time.
 - Each write takes the place after the one before it, written at that offset, so that the last one, which the free writes at once, as the program may end before the loop would run it, does not race with one on the thread pool for the file's position.
 - An `end` writes the rest on the thread pool, with no promise. The file is closed once it has ended or been freed and the writes on the thread pool have ended.
@@ -61,7 +61,7 @@
 ### Network
 
 - **Handles.** A socket or a listener of `std:net` is a `Handle` of `runtime/handle.c`, which holds its libuv stream and the promise that waits on it.
-  - Lerta holds it as an `Int`, its address, in a `Handle` of `std/internal/handle.lerta`, a class whose `deinit` frees it, beside the functions that read, write, end and close it; `std:net` makes it.
+  - Lerta holds it as an `Int`, its address, in a private field of a `Handle` of `std/internal/handle.lerta`, a class whose `deinit` frees it, beside the functions that read, write, end and close it; `std:net` makes it. The other modules of std read it through `pointer_of`, which no program can import, so that no program learns where the runtime's objects lie.
   - A `Socket` and the function that its `Reader` reads through share the `Handle`, as that function holding the `Socket` would make a cycle; the `Reader` alone keeps it alive too.
   - `accept` and `connect_tcp` take a `Handle` made first, so that no socket is ever only in a promise's value, lost if nothing takes it.
 - **Reads.** A read starts libuv's reads and stops them at the first chunk, so a cancelled read stops them with nothing read and lost.

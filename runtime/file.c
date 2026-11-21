@@ -148,10 +148,11 @@ LertaPromise *lerta_copy_file(const LertaString *from, const LertaString *to) {
   return start_task(LERTA_PLAIN_ITEMS, from, NULL, to, copy_work);
 }
 
-// A file of std:io's open, which Lerta holds by its address, in a FileWriter, and frees. Each write
-// takes the place after the one before, so that a write on the thread pool and the last one, which
-// the free makes at once, may run together. Once ended or freed, the file is closed when the writes
-// on the thread pool have ended; once freed, the OpenFile is freed then too.
+// A file of std:io's open, which Lerta holds by its address, in an OpenFile of std:io, held by a
+// FileWriter, which frees it. Each write takes the place after the one before, so that a write on
+// the thread pool and the last one, which the free makes at once, may run together. Once ended or
+// freed, the file is closed when the writes on the thread pool have ended; once freed, the OpenFile
+// is freed then too.
 typedef struct {
   int64_t file;
   int64_t end;

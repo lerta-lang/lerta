@@ -74,7 +74,8 @@ export create := (path: String) ->
   require_names failure, path
   pointer := lerta_open_file(path)
   throw IOError("#{failure}#{path}") if pointer == 0
-  FileWriter(pointer, path)
+  file := OpenFile(pointer)
+  FileWriter(file, path)
 
 # What a chunk of a file's Reader holds at most.
 FILE_CHUNK_SIZE := 65536
@@ -83,7 +84,7 @@ FILE_CHUNK_SIZE := 65536
 # is closed once nothing holds the Reader.
 class FileReading
   args
-    pointer: Int
+    private pointer: Int
     path: String
 
   read_chunk := ->
@@ -98,13 +99,19 @@ class FileReading
 # As much as stdout's buffer holds before a write waits (see runtime/output.c).
 FILE_BUFFER_SIZE := 65536
 
+# The runtime's file that a FileWriter writes, which only this module makes, so that no address can
+# be given as one.
+class OpenFile
+  args
+    private pointer: Int
+
 # A file's Writer, which gathers what is written and writes it out on the event loop once it holds
 # FILE_BUFFER_SIZE bytes, or when flushed. Its end writes out the rest, as a flush does, and closes
 # the file after; what is left when it is freed, it writes out at once. A write out that fails fails
 # every later write, flush and end (see lerta_open_file_failed).
 export class FileWriter
   args
-    pointer: Int
+    private file: OpenFile
     path: String
   private
     var buffer = b''
@@ -133,7 +140,7 @@ export class FileWriter
     try
       await @write_out()
     finally
-      lerta_open_file_end @pointer, @buffer
+      lerta_open_file_end @file.pointer, @buffer
       @buffer = b''
 
   flush := ->  ## Resolves once all that was written before it is in the file.
@@ -144,11 +151,11 @@ export class FileWriter
     write_out := ->
       while true
         await writing while writing := @writing
-        throw @write_failure() if lerta_open_file_failed(@pointer)
+        throw @write_failure() if lerta_open_file_failed(@file.pointer)
         return if @buffer.is_empty()
         bytes := @buffer
         @buffer = b''
-        @writing = lerta_open_file_append(@pointer, bytes)
+        @writing = lerta_open_file_append(@file.pointer, bytes)
         try
           await @writing!
         finally
@@ -156,11 +163,11 @@ export class FileWriter
 
     check_open := ->
       throw IOError('cannot write to a file that has ended') if @ended
-      throw @write_failure() if lerta_open_file_failed(@pointer)
+      throw @write_failure() if lerta_open_file_failed(@file.pointer)
 
     write_failure := -> IOError("cannot write file: #{@path}")
 
-  deinit := -> lerta_open_file_free(@pointer, @buffer)
+  deinit := -> lerta_open_file_free(@file.pointer, @buffer)
 
 ## Whether the path names a file.
 export is_file := (path: String) -> kind_at(path) == FILE

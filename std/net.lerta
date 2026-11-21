@@ -2,7 +2,7 @@
 
 import Reader from 'std:io'
 import
-  address_text, close_handle, end_handle, Handle, reader_of, write_handle
+  address_text, close_handle, end_handle, Handle, pointer_of, reader_of, write_handle
 from './internal/handle'
 import bytes_of from './internal/utf8'
 
@@ -45,7 +45,7 @@ export struct Listener
 
   accept := ->  ## The next connection that comes, once it has come.
     socket := new_handle()
-    await lerta_tcp_accept(@handle.pointer, socket.pointer)
+    await lerta_tcp_accept(pointer_of(@handle), pointer_of(socket))
     socket_of(socket)
 
   close := -> close_handle(@handle)  ## Stops listening.
@@ -60,19 +60,19 @@ check_address := (failure: String, host: String, port: Int) ->
 export listen_tcp := (host: String, port = 0) ->
   check_address 'cannot listen at ', host, port
   handle := new_handle()
-  Listener(handle, port: lerta_tcp_listen(handle.pointer, host, port))
+  Listener(handle, port: lerta_tcp_listen(pointer_of(handle), host, port))
 
 ## A connection to the host and port.
 export connect_tcp := (host: String, port: Int) ->
   check_address 'cannot connect to ', host, port
   handle := new_handle()
-  await lerta_tcp_connect(handle.pointer, host, port)
+  await lerta_tcp_connect(pointer_of(handle), host, port)
   socket_of(handle)
 
 # The runtime's UDP socket, closed once nothing holds it.
 class UdpHandle
   args
-    pointer: Int
+    private pointer: Int
   deinit := -> lerta_udp_free(@pointer)
 
 ## The data of a UDP packet, and the host and port that sent it.
