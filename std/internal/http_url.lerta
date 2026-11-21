@@ -1,0 +1,101 @@
+# The http URLs of std:http's client: the target that a request is sent to, and the URL that a
+# redirect's Location names.
+
+import scan from 'std:scanner'
+import is_control from './chars'
+import ascii_lower from './http_message'
+
+# The parts of an http URL that a request is sent by.
+export struct Target
+  # The host and the port as the URL writes them, as the Host field does.
+  authority: String
+  host: String
+  port: Int
+
+  # The path and the query, as the request line names them.
+  path: String
+
+# Throws an IOError for an https URL, which needs TLS, and a ValueError for one that is not http, or
+# that holds a user, which the client does not send.
+export parse_url := (url: String) ->
+  not_url := -> ValueError("not an http URL: #{url}")
+  (scheme, rest) := url.split_once('://') else throw not_url()
+  lower_scheme := ascii_lower(scheme)
+  throw IOError("https is not supported so far: #{url}") if lower_scheme == 'https'
+  throw not_url() if lower_scheme != 'http'
+  scanner := scan(rest)
+  authority := scanner.take_while((c) -> c not in '/?#')
+  (path, _fragment) := split_or_whole(scanner.rest(), '#')
+  throw not_url() if '@' in authority or not authority.all(is_host_char)
+  (host, port) := host_and_port(authority) else throw not_url()
+  absolute := path.starts_with('/') then path else "/#{path}"
+  Target(authority, host, port, path: percent_encoded(absolute))
+
+# The URL of a Location, which may be relative to the URL of the request.
+export resolve := (base: Target, location: String) ->
+  return location if has_scheme(location)
+  return "http:#{location}" if location.starts_with('//')
+  origin := "http://#{base.authority}"
+
+  # The same document, whose fragment the request leaves out.
+  return origin + base.path if location.is_empty() or location.starts_with('#')
+
+  return origin + location if location.starts_with('/')
+  (path, _query) := split_or_whole(base.path, '?')
+  return origin + path + location if location.starts_with('?')
+  segments := path.split('/')
+  "#{origin}#{segments.all_but_last().join('/')}/#{location}"
+
+# The text before the first separator and the text after it, or the whole text and '' without one.
+split_or_whole := (text: String, separator: String) -> text.split_once(separator) else (text, '')
+
+# The host is written as it is in the Host field, so it takes printable ASCII alone; a name that is
+# not ASCII would need IDNA.
+is_host_char := (c: Char) -> c.to_int() > 0x20 and c.to_int() < 0x7F
+
+# The path and the query with the characters that a request line cannot hold as they are written
+# as %XX of each byte of their UTF-8, as the WHATWG URL Standard does for http URLs. A `%` is kept,
+# as it may start an escape already written.
+percent_encoded := (target: String) ->
+  (path, query) := target.split_once('?') else return encode_chars(target, PATH_ESCAPED)
+  "#{encode_chars(path, PATH_ESCAPED)}?#{encode_chars(query, QUERY_ESCAPED)}"
+
+# Those of the WHATWG URL Standard but `#`, which starts the fragment that is left out, and the `?`
+# of the path, which starts the query.
+QUERY_ESCAPED := " \"<>'"
+PATH_ESCAPED := ' "<>^`{}'
+
+encode_chars := (text: String, escaped: String) ->
+  needs_escape := (c: Char) -> c.to_int() >= 0x7F or is_control(c) or c in escaped
+  return text unless text.any(needs_escape)
+  var encoded = ''
+  for c in text
+    if needs_escape(c)
+      encoded += "%#{byte.to_hex(2).to_upper()}" for byte in c.to_string().binary
+    else
+      encoded += c
+  encoded
+
+# The host, without the brackets of an IPv6 address, and the port, 80 if none is written.
+host_and_port := (authority: String) ->
+  (host, port_text) := split_authority(authority) else return nil
+  return nil if host.is_empty()
+  return (host, 80) if port_text.is_empty()
+  return nil unless port_text.is_digits()
+  port := port_text.parse_int() else return nil
+  port <= 65535 then (host, port)
+
+split_authority := (authority: String) ->
+  inside := authority.without_prefix('[') else return split_or_whole(authority, ':')
+  (address, after) := inside.split_once(']') else return nil
+  return (address, '') if after.is_empty()
+  port_text := after.without_prefix(':') else return nil
+  (address, port_text)
+
+# Whether a URL starts with its scheme, which is absolute then; a `:` after a `/`, a `?` or a `#`,
+# as of `/login?next=http://a/`, is in a relative one.
+has_scheme := (location: String) ->
+  (scheme, _rest) := location.split_once(':') else return false
+  not scheme.is_empty() and scheme.all(is_scheme_char)
+
+is_scheme_char := (c: Char) -> (c.is_ascii() and c.is_alphanumeric()) or c in '+-.'

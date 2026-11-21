@@ -1,0 +1,88 @@
+# How std:http's client reads the head of a response, its status line and its fields, and tells
+# how its body is framed.
+
+import Reader from 'std:io'
+import ended_early, MAX_LINE, well_formed from './http_chunks'
+import ascii_lower, Headers, without_ows from './http_message'
+
+# A request that a connection failed before any of its response came, which may then be sent again.
+export struct NoAnswer: Error
+
+export struct Head
+  version: String
+  status: Int
+  headers: Headers
+
+# The first head of a response; a failure before its first line comes is a NoAnswer.
+export first_head := (reader: Reader) ->
+  read := ->
+    try
+      await reader.read_line(MAX_LINE)
+    catch error: IOError
+      throw NoAnswer(error.message)
+  line := await well_formed(read(), 'response')
+  await read_any_head(reader, line else throw NoAnswer('the connection closed before a response'))
+
+# A head that follows one of 1xx.
+export next_head := (reader: Reader) ->
+  await read_any_head(reader, await read_line(reader) else throw ended_early('response'))
+
+# How the body of a response is told to end: `left`, the bytes of a body of a Content-Length, or nil
+# for one that ends with the connection; or `chunked`.
+struct Framing
+  left: Int?
+  chunked := false
+
+# A response to HEAD, and one of 204 or 304, has no body, whatever its fields tell.
+export framing := (head: Head, method: String): Framing ->
+  { status, headers } := head
+  return { left: 0 } if method == 'HEAD' or status in [204, 304]
+  if coding := headers.get('transfer-encoding')
+    throw IOError("a transfer coding not supported: #{coding}") if ascii_lower(coding) != 'chunked'
+    return { left: 0, chunked: true }
+  text := headers.get('content-length') else return { left: nil }
+  throw malformed() unless text.is_digits()
+  { left: text.parse_int() else throw malformed() }
+
+read_any_head := (reader: Reader, line: String) ->
+  (version, rest) := line.split_once(' ') else throw malformed()
+  throw malformed() unless version in ['HTTP/1.1', 'HTTP/1.0']
+  (code, _reason) := rest.split_once(' ') else (rest, '')
+  throw malformed() if code.binary.length != 3 or not code.is_digits()
+  status := code.parse_int()!
+  throw malformed() if status < 100
+  Head(version, status, headers: await read_fields(reader))
+
+read_fields := (reader: Reader) ->
+  headers := Headers()
+  var lines = 0
+  while line := await read_line(reader)
+    return headers if line.is_empty()
+    throw malformed() if lines == MAX_FIELDS
+    lines += 1
+
+    # A line that starts with whitespace goes on with the field before it, as RFC 9112 has a user
+    # agent take it, joined by a space.
+    is_folded := line.starts_with(' ') or line.starts_with("\t")
+    throw malformed() if is_folded and headers.fields.is_empty()
+    field := is_folded then folded(headers.fields.pop(), line) else line.split_once(':')
+    (name, value) := field else throw malformed()
+
+    # A value joined of lines may be as long as a line, so that each join copies a bounded value.
+    throw malformed() if value.binary.length > MAX_LINE
+
+    try
+      headers.append name, without_ows(value)
+    catch _: ValueError
+      throw malformed()
+  throw ended_early('response')
+
+folded := (field: (String, String), line: String) ->
+  (name, value) := field
+  (name, "#{value} #{without_ows(line)}")
+
+read_line := (reader: Reader) -> await well_formed(reader.read_line(MAX_LINE), 'response')
+
+MAX_FIELDS := 256
+
+malformed := -> IOError('a malformed response')

@@ -4,17 +4,14 @@
 import Signal, spawn, timeout, TimeoutError from 'std:async'
 import Reader from 'std:io'
 import connect_tcp from 'std:net'
-import scan from 'std:scanner'
 import monotonic from 'std:time'
-import is_control from './chars'
-import
-  CHUNK_SIZE, chunk_bytes, ChunkedBody, ended_early, JoinedReads, LAST_CHUNK, MAX_LINE, SizedBody,
-  well_formed
-from './http_chunks'
+import CHUNK_SIZE, chunk_bytes, ChunkedBody, JoinedReads, LAST_CHUNK, SizedBody from './http_chunks'
+import first_head, framing, Head, next_head, NoAnswer from './http_client_head'
 import Connection from './http_connection'
 import
-  ascii_lower, Body, check_field, Headers, is_token, keeps_alive, Response, without_ows
+  ascii_lower, Body, check_field, Headers, is_token, keeps_alive, Response
 from './http_message'
+import parse_url, resolve, Target from './http_url'
 import bytes_of from './utf8'
 
 ## What a request sends besides its URL, whether a redirect is followed, and the seconds that each
@@ -156,9 +153,6 @@ export class Client
       kept.push { connection, since: monotonic() }
       @idle[authority] = kept
 
-# A request that a connection failed before any of its response came, which may then be sent again.
-struct NoAnswer: Error
-
 connected := (target: Target, seconds: Float) ->
   try
     await timeout(connect_tcp(target.host, target.port), seconds)
@@ -254,78 +248,6 @@ class SentBody
       @failure = error if @connection.write_timed_out
       false
 
-# The parts of an http URL that a request is sent by.
-struct Target
-  # The host and the port as the URL writes them, as the Host field does.
-  authority: String
-  host: String
-  port: Int
-
-  # The path and the query, as the request line names them.
-  path: String
-
-# Throws an IOError for an https URL, which needs TLS, and a ValueError for one that is not http, or
-# that holds a user, which the client does not send.
-parse_url := (url: String) ->
-  not_url := -> ValueError("not an http URL: #{url}")
-  (scheme, rest) := url.split_once('://') else throw not_url()
-  lower_scheme := ascii_lower(scheme)
-  throw IOError("https is not supported so far: #{url}") if lower_scheme == 'https'
-  throw not_url() if lower_scheme != 'http'
-  scanner := scan(rest)
-  authority := scanner.take_while((c) -> c not in '/?#')
-  (path, _fragment) := split_or_whole(scanner.rest(), '#')
-  throw not_url() if '@' in authority or not authority.all(is_host_char)
-  (host, port) := host_and_port(authority) else throw not_url()
-  absolute := path.starts_with('/') then path else "/#{path}"
-  Target(authority, host, port, path: percent_encoded(absolute))
-
-# The host is written as it is in the Host field, so it takes printable ASCII alone; a name that is
-# not ASCII would need IDNA.
-is_host_char := (c: Char) -> c.to_int() > 0x20 and c.to_int() < 0x7F
-
-# The path and the query with the characters that a request line cannot hold as they are written
-# as %XX of each byte of their UTF-8, as the WHATWG URL Standard does for http URLs. A `%` is kept,
-# as it may start an escape already written.
-percent_encoded := (target: String) ->
-  (path, query) := target.split_once('?') else return encode_chars(target, PATH_ESCAPED)
-  "#{encode_chars(path, PATH_ESCAPED)}?#{encode_chars(query, QUERY_ESCAPED)}"
-
-# Those of the WHATWG URL Standard but `#`, which starts the fragment that is left out, and the `?`
-# of the path, which starts the query.
-QUERY_ESCAPED := " \"<>'"
-PATH_ESCAPED := ' "<>^`{}'
-
-encode_chars := (text: String, escaped: String) ->
-  needs_escape := (c: Char) -> c.to_int() >= 0x7F or is_control(c) or c in escaped
-  return text unless text.any(needs_escape)
-  var encoded = ''
-  for c in text
-    if needs_escape(c)
-      encoded += "%#{byte.to_hex(2).to_upper()}" for byte in c.to_string().binary
-    else
-      encoded += c
-  encoded
-
-# The text before the first separator and the text after it, or the whole text and '' without one.
-split_or_whole := (text: String, separator: String) -> text.split_once(separator) else (text, '')
-
-# The host, without the brackets of an IPv6 address, and the port, 80 if none is written.
-host_and_port := (authority: String) ->
-  (host, port_text) := split_authority(authority) else return nil
-  return nil if host.is_empty()
-  return (host, 80) if port_text.is_empty()
-  return nil unless port_text.is_digits()
-  port := port_text.parse_int() else return nil
-  port <= 65535 then (host, port)
-
-split_authority := (authority: String) ->
-  inside := authority.without_prefix('[') else return split_or_whole(authority, ':')
-  (address, after) := inside.split_once(']') else return nil
-  return (address, '') if after.is_empty()
-  port_text := after.without_prefix(':') else return nil
-  (address, port_text)
-
 # The bytes of the request, but for a body that is a Reader, which follows them in chunks.
 request_bytes := (request: Outgoing) ->
   { target, method, body } := request
@@ -342,14 +264,9 @@ FRAMING_FIELDS := ['host', 'content-length', 'transfer-encoding', 'connection']
 # The methods whose request tells the length of its body even when it is empty.
 SENDING_BODY := ['POST', 'PUT', 'PATCH']
 
-struct Head
-  version: String
-  status: Int
-  headers: Headers
-
 # Sends the request, which is written first unless `sent` sends it, and gives the head of the final
 # response, past those of 1xx, which tell of progress alone; each head comes within the request's
-# seconds. A failure before the first line of a response comes is a NoAnswer.
+# seconds. A write of it that fails is a NoAnswer, as a failure of `first_head` is.
 read_head := (connection: Connection, request: Outgoing, sent: SentBody?) ->
   { reader } := connection.socket
   { seconds } := request
@@ -396,78 +313,6 @@ settled_either := <T>(one: Promise, other: Promise<T>) ->
   await either.promise()
 
 without_value := <T>(promise: Promise<T>): Promise -> await promise
-
-first_head := (reader: Reader) ->
-  read := ->
-    try
-      await reader.read_line(MAX_LINE)
-    catch error: IOError
-      throw NoAnswer(error.message)
-  line := await well_formed(read(), 'response')
-  await read_any_head(reader, line else throw NoAnswer('the connection closed before a response'))
-
-next_head := (reader: Reader) ->
-  await read_any_head(reader, await read_line(reader) else throw ended_early('response'))
-
-read_any_head := (reader: Reader, line: String) ->
-  (version, rest) := line.split_once(' ') else throw malformed()
-  throw malformed() unless version in ['HTTP/1.1', 'HTTP/1.0']
-  (code, _reason) := split_or_whole(rest, ' ')
-  throw malformed() if code.binary.length != 3 or not code.is_digits()
-  status := code.parse_int()!
-  throw malformed() if status < 100
-  Head(version, status, headers: await read_fields(reader))
-
-read_fields := (reader: Reader) ->
-  headers := Headers()
-  var lines = 0
-  while line := await read_line(reader)
-    return headers if line.is_empty()
-    throw malformed() if lines == MAX_FIELDS
-    lines += 1
-
-    # A line that starts with whitespace goes on with the field before it, as RFC 9112 has a user
-    # agent take it, joined by a space.
-    is_folded := line.starts_with(' ') or line.starts_with("\t")
-    throw malformed() if is_folded and headers.fields.is_empty()
-    field := is_folded then folded(headers.fields.pop(), line) else line.split_once(':')
-    (name, value) := field else throw malformed()
-
-    # A value joined of lines may be as long as a line, so that each join copies a bounded value.
-    throw malformed() if value.binary.length > MAX_LINE
-
-    try
-      headers.append name, without_ows(value)
-    catch _: ValueError
-      throw malformed()
-  throw ended_early('response')
-
-folded := (field: (String, String), line: String) ->
-  (name, value) := field
-  (name, "#{value} #{without_ows(line)}")
-
-read_line := (reader: Reader) -> await well_formed(reader.read_line(MAX_LINE), 'response')
-
-MAX_FIELDS := 256
-
-malformed := -> IOError('a malformed response')
-
-# How the body of a response is told to end: `left`, the bytes of a body of a Content-Length, or nil
-# for one that ends with the connection; or `chunked`.
-struct Framing
-  left: Int?
-  chunked := false
-
-# A response to HEAD, and one of 204 or 304, has no body, whatever its fields tell.
-framing := (head: Head, method: String): Framing ->
-  { status, headers } := head
-  return { left: 0 } if method == 'HEAD' or status in [204, 304]
-  if coding := headers.get('transfer-encoding')
-    throw IOError("a transfer coding not supported: #{coding}") if ascii_lower(coding) != 'chunked'
-    return { left: 0, chunked: true }
-  text := headers.get('content-length') else return { left: nil }
-  throw malformed() unless text.is_digits()
-  { left: text.parse_int() else throw malformed() }
 
 # The chunks of a body as they come, after which the connection is finished with.
 class BodyChunks
@@ -527,29 +372,6 @@ redirected := (request: Outgoing, response: Response): Outgoing? ->
   headers.remove 'content-type'
   { target, headers, method: 'GET', body: b'', seconds: request.seconds }
 
-# Whether a URL starts with its scheme, which is absolute then; a `:` after a `/`, a `?` or a `#`,
-# as of `/login?next=http://a/`, is in a relative one.
-has_scheme := (location: String) ->
-  (scheme, _rest) := location.split_once(':') else return false
-  not scheme.is_empty() and scheme.all(is_scheme_char)
-
-is_scheme_char := (c: Char) -> (c.is_ascii() and c.is_alphanumeric()) or c in '+-.'
-
 REDIRECTS := [301, 302, 303, 307, 308]
 
 CREDENTIALS := ['authorization', 'cookie', 'proxy-authorization']
-
-# The URL of a Location, which may be relative to the URL of the request.
-resolve := (base: Target, location: String) ->
-  return location if has_scheme(location)
-  return "http:#{location}" if location.starts_with('//')
-  origin := "http://#{base.authority}"
-
-  # The same document, whose fragment the request leaves out.
-  return origin + base.path if location.is_empty() or location.starts_with('#')
-
-  return origin + location if location.starts_with('/')
-  (path, _query) := split_or_whole(base.path, '?')
-  return origin + path + location if location.starts_with('?')
-  segments := path.split('/')
-  "#{origin}#{segments.all_but_last().join('/')}/#{location}"
