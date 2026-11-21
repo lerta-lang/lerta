@@ -38,11 +38,19 @@ names_in := (slashed_path: String) ->
 
 # Whether the path starts with a drive and a separator, as `C:\`: `C:` alone names the current
 # directory of that drive, which is relative.
-is_drive := (bytes: Binary) ->
-  bytes.length >= 3 and bytes[0].is_letter() and bytes[1] == b':' and bytes[2] == b'/'
+is_drive := (bytes: Binary) -> starts_with_drive(bytes) and bytes.get(2) == b'/'
+
+starts_with_drive := (bytes: Binary) ->
+  bytes.length >= 2 and bytes[0].is_letter() and bytes[1] == b':'
 
 joined := (root: String, names: String[]) ->
-  root.is_empty() and names.is_empty() then '.' else "#{root}#{names.join('/')}"
+  return "#{root}#{names.join('/')}" unless root.is_empty()
+  return '.' if names.is_empty()
+  path := names.join('/')
+
+  # A relative path whose first name starts with a drive, as `C:`, would otherwise start at that
+  # drive, or at its current directory.
+  is_windows and starts_with_drive(path.binary) then "./#{path}" else path
 
 ## The directory of the path: `.` for a name alone, and the root for the root.
 export dir_name := (path: String) ->
@@ -82,6 +90,7 @@ export join := (first: String, rest: String...) ->
 
 ## The path without `.` and empty names, and with each `..` removing the name before it, as text: a
 ## `..` after a name that is a symbolic link names another directory than the system resolves it to.
+## On Windows a relative path whose first name starts with a drive, as `C:`, gets `./` before it.
 export normalize := (path: String) ->
   split := split_path(path)
   is_absolute := not split.root.is_empty()
