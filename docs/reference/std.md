@@ -353,7 +353,7 @@ server := serve(serve_files('public'), port: 8080)
 | Name | |
 |---|---|
 | `fetch(url: String, options: FetchOptions): Promise<Response>` | Sends a request with a client that the program shares, as `Client().fetch` does. |
-| `FetchOptions` | A struct of `method = 'GET'`, `headers = Headers()`, `body: Body = ''` and `follow_redirects = true`, given as named arguments: `fetch(url, method: 'POST', body: 'hi')`. |
+| `FetchOptions` | A struct of `method = 'GET'`, `headers = Headers()`, `body: Body = ''`, `follow_redirects = true` and `timeout = 30.0` (see [timeouts](#timeouts)), given as named arguments: `fetch(url, method: 'POST', body: 'hi')`. |
 | `Client` | A class of `idle_timeout = 4.0`, the seconds it keeps a connection, and `max_idle = 8`, the connections it keeps to each host and port, and the methods below. |
 
 - `Client.fetch(url: String, options: FetchOptions): Promise<Response>` is resolved once the head of the response has come.
@@ -393,6 +393,15 @@ server := serve(serve_files('public'), port: 8080)
   - `the connection closed before a response` for a connection that ends before the response.
 - Malformed are: a line longer than 64 KiB, more than 256 lines of fields, and the chunks that the server would take as malformed, their lines and the trailer included.
 - A field folded onto lines that start with a space or a tab is read as one, its lines joined by a space. It is malformed if longer than 64 KiB so joined; such a line before any field is malformed.
+
+#### Timeouts
+
+- `timeout` bounds each wait of a request, in seconds: for its connection, for each part of what it writes, of at most 128 KiB, for the head of each response, and for each chunk of the body as it is read.
+- A wait that takes longer fails the request, or the read of the body, with an `IOError`, `a connection timed out`, `a write timed out` or `a response timed out`, and closes the connection.
+- A negative `timeout` throws a `ValueError`, `a negative timeout: <value>`, before it connects. One of `0.0` fails each request, as no wait ends at once, and `INFINITY` of [std:math](#stdmath) bounds none.
+- A request that times out on a kept connection is not sent again, as the server has not closed it.
+- It bounds each wait, not the whole: a server that sends each chunk within it keeps the request going, however long the whole takes. So does a body that is a `Reader`, each part of it written within it: each head of a response, as of a 100 and of the final one, is waited for within it once the body has been sent, unless it has come before. `timeout` of [std:async](#stdasync) bounds the whole, as `await timeout(fetch(url), 10.0)` does up to the head of the response.
+- A host's name is resolved on libuv's threads, which a timeout does not stop: one that takes longer fails the request, and holds its thread until the name is resolved.
 
 #### Kept connections
 

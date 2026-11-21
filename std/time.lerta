@@ -1,8 +1,8 @@
 # Time: waiting, in the event loop, and the clock (see runtime/time.c).
 
-import ceil, floor from 'std:math'
+import floor from 'std:math'
+import held_sleep from './internal/sleeps'
 
-extern lerta_sleep_milliseconds: (Int) -> Promise
 extern lerta_utc_offset: (Int) -> Int
 
 ## The seconds since the Unix epoch.
@@ -13,13 +13,9 @@ export extern lerta_monotonic_time as monotonic: () -> Float
 
 ## Waits for the seconds while other code runs. A sleep of 0 only lets others go first; a time
 ## past what an Int holds is the longest there is; a negative one throws a ValueError.
-# Rounded up, and one more, so as not to end early: libuv's time is in whole milliseconds, so a
-# timer may fire up to one before its time.
 export sleep := (seconds: Float) ->
   throw ValueError('sleep for a negative time') if seconds < 0
-  milliseconds := ceil(seconds * 1000.0)
-  waited := milliseconds == 0.0 then 0.0 else milliseconds + 1.0
-  lerta_sleep_milliseconds(waited.to_int() else INT_MAX)
+  held_sleep(seconds)
 
 ## The seconds that local time is ahead of UTC at the time; a ValueError for a time out of range.
 # The whole second that holds the time, as a second of local time starts on one of UTC's: a time

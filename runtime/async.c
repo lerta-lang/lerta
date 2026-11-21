@@ -242,7 +242,7 @@ void lerta_loop_run(void (*resume)(void *coroutine)) {
       lerta_queue_shift(&ready);
       resume(coroutine);
     }
-    if (!lerta_loop_wait()) break;
+    if (!lerta_loop_wait() && !lerta_end_unheld_sleeps()) break;
   }
 }
 

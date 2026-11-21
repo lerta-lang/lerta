@@ -1,0 +1,139 @@
+# A fetch fails with an IOError once a wait takes longer than its timeout: for the head of the
+# response, for each chunk of the body, and for each part of what it writes. A request on a
+# connection kept is not sent again for it, and a body sent as it comes may take longer in all. A
+# negative timeout is refused. A response whose body is left unread leaves the program to end then,
+# as its timeout keeps nothing going.
+import spawn from 'std:async'
+import Client, fetch, Request, serve from 'std:http'
+import Reader from 'std:io'
+import listen_tcp, Socket from 'std:net'
+import monotonic, sleep from 'std:time'
+
+# A server that answers a request at /ok whole; gives the head and half the body at /half, and at
+# /half-closed, after which it closes the connection; stops reading at /deaf, and after it answers
+# /ok-then-deaf; answers /continue with a 100 at once, and once it has read the body in chunks,
+# whole; reads the body in chunks at /mute, and gives nothing then; and gives nothing elsewhere. It
+# reads no other body.
+listener := listen_tcp('127.0.0.1')
+var connections = 0
+
+# The connections that it has stopped reading, which it closes at the end.
+deaf: Socket[]
+
+serve_raw := (socket: Socket) ->
+  try
+    while line := await socket.reader.read_line()
+      while field := await socket.reader.read_line()
+        break if field.is_empty()
+      (_, rest) := line.split_once(' ')!
+      (path, _) := rest.split_once(' ')!
+      if path == '/continue'
+        await socket.write("HTTP/1.1 100 Continue\r\n\r\n")
+        await read_chunks(socket)
+      await read_chunks(socket) if path == '/mute'
+      if path in ['/ok', '/ok-then-deaf', '/continue']
+        await socket.write("HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok")
+      else if path in ['/half', '/half-closed']
+        await socket.write("HTTP/1.1 200 OK\r\ncontent-length: 10\r\n\r\nhalf")
+      break if path == '/half-closed'
+      if path in ['/deaf', '/ok-then-deaf']
+        deaf.push socket
+        return
+    socket.close()
+  catch _: IOError
+    socket.close()
+
+read_chunks := (socket: Socket) ->
+  { reader } := socket
+  while size := await reader.read_line()
+    _data := await reader.read_line()
+    return if size == '0'
+
+accept_all := ->
+  while true
+    socket :=
+      try
+        await listener.accept()
+      catch _: IOError
+        return
+    connections += 1
+    spawn serve_raw(socket)
+spawn accept_all()
+
+url := (path: String) -> "http://127.0.0.1:#{listener.port}#{path}"
+
+# The error that the step fails with, and whether it failed in about its timeout, of 0.3 seconds,
+# past the time that a write takes to fill the buffers of the connection.
+fails := (step: () -> Promise) ->
+  start := monotonic()
+  try
+    await step()
+    print 'no failure'
+  catch error: IOError
+    elapsed := monotonic() - start
+    print "#{error.message} #{elapsed >= 0.25 and elapsed < 2.0}"
+
+print 'a head that does not come'
+await fails(-> await fetch(url('/silent'), timeout: 0.3))
+
+print 'a body that stops coming'
+half := await fetch(url('/half'), timeout: 0.3)
+print half.status
+await fails(-> await half.binary())
+
+print 'a request on a connection kept'
+client := Client()
+print (await (await client.fetch(url('/ok'), timeout: 1000.0)).text())!
+before := connections
+
+# Sooner than the deadline that the request before set, and the watch woke for.
+await fails(-> await client.fetch(url('/silent'), timeout: 0.3))
+print "sent again on a new connection: #{connections != before}"
+
+print 'a write that is not taken'
+MEBIBYTE := 'x'.repeat(1024 * 1024).binary
+var left = 200
+endless := Reader(->
+  left -= 1
+  left >= 0 then MEBIBYTE
+)
+await fails(-> await fetch(url('/deaf'), method: 'POST', body: endless, timeout: 0.3))
+deafened := Client()
+print (await (await deafened.fetch(url('/ok-then-deaf'))).text())!
+before_deaf := connections
+large := 'x'.repeat(64 * 1024 * 1024)
+await fails(-> await deafened.fetch(url('/'), method: 'PUT', body: large, timeout: 0.3))
+print "sent again on a new connection: #{connections != before_deaf}"
+
+# Each chunk within the timeout, all of them past it, to a server that reads the body whole.
+# Also after a 100 that comes at once, before the body.
+print 'a body sent slowly but steadily'
+echo := serve((request: Request) -> { body: (await request.text())! })
+
+# Ten chunks, each within the timeout, all of them past it.
+slow := ->
+  var chunks = 0
+  Reader(->
+    await sleep(0.1)
+    chunks += 1
+    chunks <= 10 then b'abc'
+  )
+echoed := await fetch("http://127.0.0.1:#{echo.port}/", method: 'POST', body: slow(), timeout: 0.3)
+print (await echoed.text())!.binary.length
+await echo.close()
+print (await (await fetch(url('/continue'), method: 'POST', body: slow(), timeout: 0.3)).text())!
+
+# A head that does not come once the body has been sent.
+await fails(-> await fetch(url('/mute'), method: 'POST', body: slow(), timeout: 0.3))
+
+print 'a negative timeout'
+try
+  await fetch(url('/ok'), timeout: -1.0)
+catch error: ValueError
+  print error.message
+
+# Its timeout, longer than the harness waits for the test, would fail it if it kept the program.
+print 'a body left unread'
+print (await fetch(url('/half-closed'), timeout: 1000.0)).status
+listener.close()
+socket.close() for socket in deaf

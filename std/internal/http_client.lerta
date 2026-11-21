@@ -1,8 +1,9 @@
 # An HTTP/1.1 client: fetch sends a request and gives a Response whose body is read as it comes,
 # over connections kept alive from one request to the next.
 
+import Signal, spawn, timeout, TimeoutError from 'std:async'
 import Reader from 'std:io'
-import connect_tcp, Socket from 'std:net'
+import connect_tcp from 'std:net'
 import scan from 'std:scanner'
 import monotonic from 'std:time'
 import is_control from './chars'
@@ -10,18 +11,22 @@ import
   CHUNK_SIZE, chunk_bytes, ChunkedBody, ended_early, JoinedReads, LAST_CHUNK, MAX_LINE, SizedBody,
   well_formed
 from './http_chunks'
+import Connection from './http_connection'
 import
   ascii_lower, Body, check_field, Headers, is_token, keeps_alive, Response, without_ows
 from './http_message'
 import bytes_of from './utf8'
 
-## What a request sends besides its URL, and whether a redirect is followed. A body that is a Reader
-## is sent in chunks as it comes, and closed once the final response has come.
+## What a request sends besides its URL, whether a redirect is followed, and the seconds that each
+## wait of the request may take: for its connection, for each part of what it writes, for the head
+## of a response, and for each chunk of the body. A body that is a Reader is sent in chunks as it
+## comes, and closed once the final response has come.
 export struct FetchOptions
   method := 'GET'
   headers := Headers()
   body: Body = ''
   follow_redirects := true
+  timeout := 30.0
 
 ## Keeps each connection whose response has been read to its end, for the next request to the same
 ## host and port, for `idle_timeout` seconds and at most `max_idle` of them to each.
@@ -30,8 +35,9 @@ export class Client
     idle_timeout := 4.0
     max_idle := 8
 
-  # The connections kept by host and port, the latest last.
-  var idle = Map<String, IdleSocket[]>()
+  # The connections kept by host and port, the latest last, with the deadlines of their waits, whose
+  # watches go on from one request to the next.
+  var idle = Map<String, IdleConnection[]>()
 
   ## The response once its head has come; its body is read as it comes.
   fetch := (url: String, options: FetchOptions) ->
@@ -44,8 +50,10 @@ export class Client
   private fetch_body := (url: String, options: FetchOptions, body: Binary | Reader) ->
     { method } := options
     throw ValueError("not a method: #{method}") unless is_token(method)
+    throw ValueError("a negative timeout: #{options.timeout}") if options.timeout < 0.0
     check_field name, value for (name, value) in options.headers.fields
-    var request = Outgoing(method, body, target: parse_url(url), headers: options.headers)
+    target := parse_url(url)
+    var request = Outgoing(method, body, target, headers: options.headers, seconds: options.timeout)
     var response = await @exchange(request)
     var redirects = 0
     next_request := -> options.follow_redirects then redirected(request, response)
@@ -60,7 +68,7 @@ export class Client
   ## Closes the connections kept; the client keeps those it uses after.
   close := ->
     for kept in @idle.values()
-      idle.socket.close() for idle in kept
+      idle.connection.close() for idle in kept
     @idle = Map()
 
   # Sends the request on a connection kept, or on a new one. A kept connection may have been closed
@@ -69,25 +77,28 @@ export class Client
   # twice, so it goes on a new connection, which the server has not had the time to close.
   private exchange := (request: Outgoing) ->
     { target, body } := request
-    if socket := body is Reader then nil else @take_idle(target.authority)
+    if connection := body is Reader then nil else @take_idle(target.authority)
       try
-        return await @send(socket, request)
+        return await @send(connection, request)
       catch error: NoAnswer
         throw IOError(error.message) unless request.method in RESENDABLE
+    socket := await connected(target, request.seconds)
     try
-      await @send(await connect_tcp(target.host, target.port), request)
+      await @send(Connection(socket, write_seconds: request.seconds), request)
     catch error: NoAnswer
       throw IOError(error.message)
 
   # Closes the connection on a failure, after which what it holds is not known. A body that is a
   # Reader is sent while the response is read, as a server may answer before it has read it all, and
   # a failure to read it fails the request.
-  send := (socket: Socket, request: Outgoing) ->
+  send := (connection: Connection, request: Outgoing) ->
     { body } := request
-    sent := body is Reader then SentBody(socket, request, body)
+    { socket } := connection
+    connection.write_seconds = request.seconds
+    sent := body is Reader then SentBody(connection, request, body)
     sending := sent?.send()
     try
-      head := await read_head(socket, request, sent == nil)
+      head := await read_head(connection, request, sent)
       throw failure if failure := sent?.failure
       # What is still being sent when the response has come is not wanted any more.
       sending?.cancel()
@@ -100,9 +111,9 @@ export class Client
       # The connection is given back once the body has been read to its end, or closed.
       finish := ->
         if keeps
-          @give_back request.target.authority, socket
+          @give_back request.target.authority, connection
         else
-          socket.close()
+          connection.close()
 
       { reader } := socket
       chunks: ChunkedBody | SizedBody =
@@ -110,7 +121,7 @@ export class Client
           ChunkedBody reader, name: 'response', room: INT_MAX
         else
           SizedBody reader, left, name: 'response'
-      body := BodyChunks(socket, finish, chunks)
+      body := BodyChunks(connection, finish, chunks, seconds: request.seconds)
 
       # A body that is empty by its framing does not hold the connection until it is read.
       body.end() if left == 0 and not chunked
@@ -119,7 +130,7 @@ export class Client
       Response(body: read_body, status: head.status, headers: head.headers)
     catch error
       sending?.cancel()
-      socket.close()
+      connection.close()
       throw sent?.failure else error
 
   # The latest connection kept for the host and port, after closing those kept too long, which the
@@ -133,23 +144,36 @@ export class Client
           idle
       ]
       for idle in kept
-        idle.socket.close() if now - idle.since >= @idle_timeout
+        idle.connection.close() if now - idle.since >= @idle_timeout
       @idle[authority] = fresh
-      fresh.is_empty() then nil else fresh.pop().socket
+      fresh.is_empty() then nil else fresh.pop().connection
 
-    give_back := (authority: String, socket: Socket) ->
+    give_back := (authority: String, connection: Connection) ->
       kept := @idle[authority] else []
       if kept.length >= @max_idle
-        socket.close()
+        connection.close()
         return
-      kept.push { socket, since: monotonic() }
+      kept.push { connection, since: monotonic() }
       @idle[authority] = kept
 
 # A request that a connection failed before any of its response came, which may then be sent again.
 struct NoAnswer: Error
 
-struct IdleSocket
-  socket: Socket
+connected := (target: Target, seconds: Float) ->
+  try
+    await timeout(connect_tcp(target.host, target.port), seconds)
+  catch _: TimeoutError
+    throw IOError('a connection timed out')
+
+# What the promise gives of the response, which must come within the seconds of the request.
+response_within := <T>(connection: Connection, promise: Promise<T>, seconds: Float): Promise<T> ->
+  try
+    await connection.reads.within(promise, seconds)
+  catch _: TimeoutError
+    throw IOError('a response timed out')
+
+struct IdleConnection
+  connection: Connection
   since: Float
 
 MAX_REDIRECTS := 20
@@ -182,12 +206,15 @@ struct Outgoing
   headers: Headers
   body: Binary | Reader
 
+  # The seconds that each wait may take.
+  seconds: Float
+
 # A request whose body is a Reader, sent in chunks. A read of the body that fails ends the sending
 # side of the connection, so that the server does not wait for the rest; a write that fails ends the
 # sending too, as the server has stopped reading, and its response may have come.
 class SentBody
   args
-    socket: Socket
+    connection: Connection
     request: Outgoing
 
     # The request's body, which is a Reader.
@@ -197,6 +224,9 @@ class SentBody
   private
     var whole = false
     var failure: Error?
+
+  # Resolved once the sending has ended, whether or not the whole body has gone.
+  ended := Signal()
 
   send := ->
     reads := JoinedReads(@body)
@@ -209,15 +239,19 @@ class SentBody
       throw error
     catch error
       @failure = error
-      await @socket.end()
+      await @connection.socket.end()
     finally
       reads.cancel()
+      @ended.resolve()
 
+  # A write that times out fails the request; one that fails otherwise tells that the server has
+  # stopped reading, as it may once it has answered.
   private written := (bytes: Binary) ->
     try
-      await @socket.write(bytes)
+      await @connection.write(bytes)
       true
-    catch _: IOError
+    catch error: IOError
+      @failure = error if @connection.write_timed_out
       false
 
 # The parts of an http URL that a request is sent by.
@@ -313,28 +347,67 @@ struct Head
   status: Int
   headers: Headers
 
-# Sends the request, and gives the head of the final response, past those of 1xx, which tell of
-# progress alone.
-read_head := (socket: Socket, request: Outgoing, writes: Bool) ->
-  { reader } := socket
-  var head = await read_any_head(reader, await first_line(socket, request, writes))
+# Sends the request, which is written first unless `sent` sends it, and gives the head of the final
+# response, past those of 1xx, which tell of progress alone; each head comes within the request's
+# seconds. A failure before the first line of a response comes is a NoAnswer.
+read_head := (connection: Connection, request: Outgoing, sent: SentBody?) ->
+  { reader } := connection.socket
+  { seconds } := request
+  unless sent
+    try
+      await connection.write(request_bytes(request))
+    catch error: IOError
+      # A write that times out on a kept connection, which the server has not closed, is not sent
+      # again.
+      throw error if connection.write_timed_out
+      throw NoAnswer(error.message)
+  var head = await head_within(connection, sent, first_head(reader), seconds)
   while head.status < 200
     # What follows a 101 is another protocol, which the client does not speak.
     throw IOError('switching protocols not supported') if head.status == 101
-    head = await read_any_head(reader, await read_line(reader) else throw ended_early('response'))
+    head = await head_within(connection, sent, next_head(reader), seconds)
   head
 
-# The first line of the response to the request, which is written first if `writes`; a failure
-# before it comes is a NoAnswer.
-first_line := (socket: Socket, request: Outgoing, writes: Bool) ->
-  send := ->
+# The head, within the seconds. A body sent as it comes may take longer than them in all, so they
+# bound the head once the body has been sent, if the head has not come before; a write of it that
+# has timed out leaves the server waiting for the rest, rather than answering.
+head_within := (connection: Connection, sent: SentBody?, head: Promise<Head>, seconds: Float) ->
+  if sent
+    await settled_either(sent.ended.promise(), head)
+    if connection.write_timed_out
+      head.cancel()
+      throw sent.failure!
+  await response_within(connection, head, seconds)
+
+# Waits until either promise is settled, and cancels neither, as `race` of std:async would cancel
+# the other.
+settled_either := <T>(one: Promise, other: Promise<T>) ->
+  either := Signal()
+  settle := (promise: Promise) ->
     try
-      await socket.write(request_bytes(request)) if writes
-      await socket.reader.read_line(MAX_LINE)
+      await promise
+    catch _
+      # Its error goes to what awaits it.
+      return
+    finally
+      either.resolve()
+  spawn settle(one)
+  spawn settle(without_value(other))
+  await either.promise()
+
+without_value := <T>(promise: Promise<T>): Promise -> await promise
+
+first_head := (reader: Reader) ->
+  read := ->
+    try
+      await reader.read_line(MAX_LINE)
     catch error: IOError
       throw NoAnswer(error.message)
-  line := await well_formed(send(), 'response')
-  line else throw NoAnswer('the connection closed before a response')
+  line := await well_formed(read(), 'response')
+  await read_any_head(reader, line else throw NoAnswer('the connection closed before a response'))
+
+next_head := (reader: Reader) ->
+  await read_any_head(reader, await read_line(reader) else throw ended_early('response'))
 
 read_any_head := (reader: Reader, line: String) ->
   (version, rest) := line.split_once(' ') else throw malformed()
@@ -399,19 +472,22 @@ framing := (head: Head, method: String): Framing ->
 # The chunks of a body as they come, after which the connection is finished with.
 class BodyChunks
   args
-    socket: Socket
+    connection: Connection
     finish: () -> void
     chunks: ChunkedBody | SizedBody
+
+    # The seconds that each chunk may take to come.
+    seconds: Float
   private var ended = false
 
   next := ->
     return nil if @ended
     chunk :=
       try
-        await @chunks.next()
+        await response_within(@connection, @chunks.next(), @seconds)
       # A cancelled read leaves the reader where it was, for the next read to go on from.
       catch error: IOError
-        @socket.close()
+        @connection.close()
         throw error
     @end() if chunk == nil
     chunk
@@ -424,7 +500,7 @@ class BodyChunks
   private abandon := ->
     return if @ended
     @ended = true
-    @socket.close()
+    @connection.close()
 
 # The request that a redirect asks for, or nil for a response that is none. A 303, and a 301 or a
 # 302 to POST, as browsers do, ask for a GET without the body. A request to another host or port
@@ -449,7 +525,7 @@ redirected := (request: Outgoing, response: Response): Outgoing? ->
     # A body that is a Reader has been read as it was sent.
     return request.body is Reader then nil else { request..., target, headers }
   headers.remove 'content-type'
-  { target, headers, method: 'GET', body: b'' }
+  { target, headers, method: 'GET', body: b'', seconds: request.seconds }
 
 # Whether a URL starts with its scheme, which is absolute then; a `:` after a `/`, a `?` or a `#`,
 # as of `/login?next=http://a/`, is in a relative one.

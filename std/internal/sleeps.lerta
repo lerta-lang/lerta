@@ -1,0 +1,20 @@
+# The sleeps of the event loop (see runtime/time.c): `sleep` of std:time, and one that leaves the
+# program to end without it.
+
+import ceil from 'std:math'
+
+extern lerta_sleep_milliseconds: (Int) -> Promise
+extern lerta_sleep_unheld_milliseconds: (Int) -> Promise
+
+export held_sleep := (seconds: Float) -> lerta_sleep_milliseconds(milliseconds_of(seconds))
+
+# A sleep that bounds a wait that keeps the program going itself, as a read does, so that the
+# program ends once that wait has.
+export unheld_sleep := (seconds: Float) -> lerta_sleep_unheld_milliseconds(milliseconds_of(seconds))
+
+# Rounded up, and one more, so as not to end early: libuv's time is in whole milliseconds, so a
+# timer may fire up to one before its time. A time past what an Int holds is the longest there is.
+milliseconds_of := (seconds: Float) ->
+  milliseconds := ceil(seconds * 1000.0)
+  waited := milliseconds == 0.0 then 0.0 else milliseconds + 1.0
+  waited.to_int() else INT_MAX

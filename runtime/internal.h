@@ -163,6 +163,9 @@ struct uv_stream_s *lerta_handle_stream(int64_t pointer);
 // The event loop (loop.c). Waits for what settles promises, and settles them, once; false, without
 // waiting, if nothing is left to wait for.
 bool lerta_loop_wait(void);
+// Cancels the unheld sleeps that are left once nothing holds the program, the first time; tells
+// whether it cancelled any (time.c).
+bool lerta_end_unheld_sleeps(void);
 // libuv's loop, for each feature that waits on it to take, rather than uv_default_loop, so that
 // the loop waits on libuv only in a program that has such a feature, and libuv's loop is linked into
 // no other.

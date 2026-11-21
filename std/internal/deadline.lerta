@@ -1,9 +1,14 @@
 # Timeouts of one waiting after another, as those of the reads of a connection, which one sleep that
 # watches them all bounds, rather than a sleep and a race for each, as `timeout` of std:async has.
+# The sleep leaves the program to end without it, as the waits that it bounds, of reads, writes and
+# connections, keep the program going themselves; and the watch ends once no deadline is set, so
+# that a deadline left unused, as that of a response whose body is dropped unread, holds nothing for
+# long, or at once on `stop`, as of a connection closed.
 
-import TimeoutError from 'std:async'
+import spawn, TimeoutError from 'std:async'
 import INFINITY from 'std:math'
-import monotonic, sleep from 'std:time'
+import monotonic from 'std:time'
+import unheld_sleep from './sleeps'
 
 export class Deadline
   # When the promise that `within` waits for is cancelled, if it has not settled.
@@ -16,30 +21,10 @@ export class Deadline
     var wake = INFINITY
     var sleeping: Promise?
 
-    var stopped = false
+    var watching = false
 
     # The waits started, so that one tells whether the deadline is still its own.
     var waits = 0
-
-  # Watches the deadlines until `stop`; started once, and not awaited.
-  watch := ->
-    until @stopped
-      now := monotonic()
-      @expire() if @at <= now
-      @wake = @at
-      sleeping := sleep(@at - now)
-      @sleeping = sleeping
-      try
-        await sleeping
-      catch _: CancelledError
-        # A sooner deadline, or the stop.
-        continue
-      finally
-        @sleeping = nil
-
-  stop := ->
-    @stopped = true
-    @sleeping?.cancel()
 
   # As `timeout` of std:async: the value or the error of the promise if it is settled within the
   # seconds; a TimeoutError otherwise, which cancels it. A wait that starts before the last has
@@ -50,7 +35,10 @@ export class Deadline
     @at = monotonic() + seconds
     @expired = false
     @cancel_waited = -> promise.cancel()
-    @sleeping?.cancel() if @at < @wake
+    if @watching
+      @sleeping?.cancel() if @at < @wake
+    else
+      spawn @watch()
     try
       await promise
     catch error: CancelledError
@@ -62,7 +50,36 @@ export class Deadline
         @at = INFINITY
         @cancel_waited = nil
 
-  private expire := ->
-    @expired = true
+  # Ends the watch at once, with no deadline, which no wait is to set again, rather than at the wake
+  # that the last deadline set.
+  stop := ->
     @at = INFINITY
-    cancel_waited() if cancel_waited := @cancel_waited
+    @sleeping?.cancel()
+
+  private
+    # Wakes at the deadline set, until none is; a wait that ends before it leaves the sleep to end
+    # then, which a wait after it saves starting another.
+    watch := ->
+      @watching = true
+      while @at < INFINITY
+        now := monotonic()
+        if @at <= now
+          @expire()
+          continue
+        @wake = @at
+        sleeping := unheld_sleep(@at - now)
+        @sleeping = sleeping
+        try
+          await sleeping
+        catch _: CancelledError
+          # A sooner deadline.
+          continue
+        finally
+          @sleeping = nil
+      @wake = INFINITY
+      @watching = false
+
+    expire := ->
+      @expired = true
+      @at = INFINITY
+      cancel_waited() if cancel_waited := @cancel_waited

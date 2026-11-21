@@ -286,8 +286,9 @@ void lerta_watch_top_level(LertaPromise *promise);
 void lerta_finish_top_level(LertaPromise *promise);
 
 // Time (time.c). A promise resolved once the milliseconds, which std:time checks are not negative,
-// have passed.
+// have passed; an unheld one does not keep the program going, as libuv's loop does not count it.
 LertaPromise *lerta_sleep_milliseconds(int64_t milliseconds);
+LertaPromise *lerta_sleep_unheld_milliseconds(int64_t milliseconds);
 // Seconds since the Unix epoch, 1970-01-01T00:00:00Z.
 double lerta_unix_time(void);
 // Seconds since an unspecified time, which only go forward.

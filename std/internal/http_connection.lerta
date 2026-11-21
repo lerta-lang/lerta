@@ -1,27 +1,32 @@
-# A connection of std:http's server: its socket, and the deadlines of its reads and of its writes,
-# apart, as a body sent as it comes may read the request's body while a write is under way.
+# A connection of std:http: its socket, and the deadlines of its reads and of its writes, apart, as
+# one may go on while the other is under way: the server's body sent as it comes may read the
+# request's body, and the client reads the response as it sends a body.
 
-import spawn, TimeoutError from 'std:async'
+import TimeoutError from 'std:async'
 import Socket from 'std:net'
 import Deadline from './deadline'
 import CHUNK_SIZE from './http_chunks'
 import bytes_of from './utf8'
 
-# Its client must take each part of a write within `write_seconds`, or is taken to have gone, so
-# that one that keeps taking a large body keeps the connection.
+# Its peer must take each part of a write within `write_seconds`, or is taken to have gone, so that
+# one that keeps taking a large body keeps the connection.
 export class Connection
   args
     socket: Socket
-    write_seconds: Float
+
+    # Which the client sets for each request.
+    var write_seconds: Float
   reads := Deadline()
   private writes := Deadline()
 
-  # Watches the deadlines until `stop`, whose sleeps would otherwise keep the program going.
-  watch := ->
-    spawn @reads.watch()
-    spawn @writes.watch()
+  # Whether a write has timed out, which the client fails the request for, rather than send it again
+  # or take the server to have stopped reading.
+  var write_timed_out = false
 
-  stop := ->
+  # Closes the socket, and stops the watches of the deadlines, which would otherwise go on to the
+  # last wake that a wait set.
+  close := ->
+    @socket.close()
     @reads.stop()
     @writes.stop()
 
@@ -37,6 +42,7 @@ export class Connection
     try
       await @writes.within(@socket.write(bytes), @write_seconds)
     catch _: TimeoutError
+      @write_timed_out = true
       throw IOError('a write timed out')
 
 PART_SIZE := 2 * CHUNK_SIZE
