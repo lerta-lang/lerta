@@ -19,6 +19,7 @@ serve_file := (root: String, request: Request) ->
   return not_allowed() unless request.method in ['GET', 'HEAD']
   (path, query) := target_of(request.url)
   parts := decoded_parts(path) else return plain(400, 'bad request')
+  return plain(404, 'not found') if is_hidden(parts)
   file := below(root, parts)
   status := stat(file) else return plain(404, 'not found')
   if status.kind == DIR
@@ -85,6 +86,15 @@ decoded_parts := (path: String) ->
     return nil if part == '..' or part.any((c) -> c in ['/', '\', "\0"])
     parts.push part unless part in ['', '.']
   parts
+
+# Whether the parts name a hidden file, which is not served, as one that the files of a site often
+# hold but do not mean to give, as `.git` or `.env`: one whose name, or a directory's above it,
+# starts with `.`, but `/.well-known/` of RFC 8615, which sites give; or holds a `~` and a digit, as
+# the short name does that Windows gives a file, `GIT~1` for `.git`, which a FAT volume or a share
+# of Windows finds on other systems too.
+is_hidden := (parts: String[]) ->
+  shown := parts.first() == '.well-known' then parts[1..] else parts
+  shown.any((part) -> part.starts_with('.') or /~\d/.test(part))
 
 percent_decoded := (text: String) ->
   return text unless '%' in text

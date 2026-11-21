@@ -1,5 +1,5 @@
 # serve_files gives the files under a directory, a directory's index.html at a path that ends with
-# `/`, and 304 for a copy that is still good.
+# `/`, and 304 for a copy that is still good; but not the hidden files.
 import make_dir, make_temp_dir, remove_tree, write_file from 'std:io'
 import connect_tcp from 'std:net'
 import fetch, Headers, serve, serve_files from 'std:http'
@@ -17,6 +17,14 @@ await write_file("#{root}/README", 'no extension')
 await write_file("#{root}/b.TXT", 'upper')
 await write_file("#{root}/x.min.js", 'js')
 await write_file("#{root}/.htaccess", 'dotfile')
+await write_file("#{root}/a~b.txt", 'tilde')
+await write_file("#{root}/a~1.txt", 'short')
+await write_file("#{root}/dir/.hidden", 'dotfile')
+make_dir "#{root}/.git"
+await write_file("#{root}/.git/config", 'secret')
+make_dir "#{root}/.well-known"
+await write_file("#{root}/.well-known/a.txt", 'known')
+await write_file("#{root}/.well-known/.hidden", 'dotfile')
 
 server := serve(serve_files(root), port: 0)
 base := "http://127.0.0.1:#{server.port}"
@@ -46,9 +54,24 @@ await show('/./a.txt')
 await show('/README')
 await show('/b.TXT')
 await show('/x.min.js')
-await show('/.htaccess')
 await show('/a.txt', 'POST')
 print (await fetch("#{base}/a.txt", method: 'DELETE')).headers.get('allow')!
+
+# Those whose names start with `.`, also escaped, at any depth, but under `/.well-known/`; and
+# those whose names hold a `~` and a digit, as a short name does, which Windows gives `.git` as
+# `GIT~1`. `/.well-known` itself is not hidden.
+print 'hidden files'
+await show('/.htaccess')
+await show('/.git/config')
+await show('/%2Egit/config')
+await show('/dir/.hidden')
+await show('/.well-known/a.txt')
+await show('/.well-known/.hidden')
+await show('/a~b.txt')
+await show('/a~1.txt')
+await show('/GIT~1/config')
+await show('/GIT%7E1/config')
+await show('/.well-known')
 
 print 'directories'
 await show('/dir')
