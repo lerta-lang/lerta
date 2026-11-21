@@ -24,7 +24,7 @@
 
 ## Weak references
 
-- A weak field or local holds a weak box of its object instead of the object (`lerta_weak_box` in `runtime/memory.c`), or null for nil. The box is a heap object that points at the object; one box serves every weak field and local of the object. A box released while another object is dropped waits to be dropped in turn; a weak local made meanwhile takes a new box, and the waiting one lets go of the object.
+- A weak field or local holds a weak box of its object instead of the object (`lerta_weak_box` in `runtime/memory.c`), or null for nil. The box is a heap object that points at the object; one box serves every weak field and local of the object. A box released while another object is dropped waits to be dropped in turn; a weak local made meanwhile takes a new box, and the waiting one lets go of the object. An object waiting to be dropped is gone to its box, as one being dropped is: code run meanwhile, such as a deinit, finds it gone rather than taking it back.
 - A class's object keeps a pointer to its box after its fields.
 - The two pointers are not counted: the object's drop function first clears the box's pointer, and the box's clears the object's. So the object is freed as soon as nothing else holds it, and the box once nothing holds it.
 - A function literal that captures a weak local holds the box, and so does a weak function literal for `@`. At each call it takes the object from the box, or returns at once if it is gone, and holds it in its outermost scope.

@@ -112,15 +112,15 @@ export class Counter
 
 A weak reference holds an object of a class without keeping it alive, so that objects that refer to each other, such as a parent and its children, are freed.
 
-- **`weak name: Type?`** is a field of a class. It reads as the object, or nil once the object is freed. `weak var` makes it assignable. It may be a constructor argument or be computed, as any field.
+- **`weak name: Type?`** is a field of a class. It reads as the object, or nil once nothing else holds the object. `weak var` makes it assignable. It may be a constructor argument or be computed, as any field.
   - Its type is written: an optional class, which cannot be a type parameter so far.
 - **`weak name: Type!`** is a field for an object that should outlive its holder. `weak var` makes it assignable.
   - It reads as a `Type`, a class. `!` is written as in `x as T!`, and only after a weak field's type.
   - It is a constructor argument, without an initializer.
-  - Reading it throws `weak object is gone` once the object is freed, including while the object's `deinit` runs.
+  - Reading it throws `weak object is gone` once nothing else holds the object, including while the object's `deinit` runs.
 - **`weak name := value`** and **`weak var name = value`** declare a weak local, in a function or in a block of top-level code; a top-level value cannot be weak.
   - Its type is the class's optional type, `Button?`; an annotation must write it so.
-  - It reads as nil once the object is freed, so it is never narrowed: after `weak seen := button`, write `if alive := seen` to take the object.
+  - It reads as nil once nothing else holds the object, so it is never narrowed: after `weak seen := button`, write `if alive := seen` to take the object.
   - A function literal that captures it captures it weakly too. To capture `@` weakly, a [weak function literal](functions.md#function-literals) is shorter.
 
 ### Generic classes and structs

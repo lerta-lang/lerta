@@ -270,8 +270,12 @@ void *lerta_weak_box(void *object, void **slot) {
   return box;
 }
 
+// An object whose count is 0 is queued to be dropped (see drop_released): it is gone, so that no
+// reference brings it back to be queued twice.
 void *lerta_weak_object(void *box) {
-  return box == NULL ? NULL : ((LertaWeakBox *)box)->object;
+  if (box == NULL) return NULL;
+  LertaHeader *object = ((LertaWeakBox *)box)->object;
+  return object != NULL && object->ref_count == 0 ? NULL : object;
 }
 
 void lerta_weak_detach(void **slot) {

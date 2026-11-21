@@ -1,0 +1,61 @@
+# An object queued to be dropped, as the first of two fields released together is while the second
+# is dropped, is gone to a weak reference that the second's deinit reads, whether it reads through
+# it or takes the object: a weak field or a captured weak local reads nil, a `!` field throws, and a
+# weak function literal of the object does nothing.
+class Source
+  args
+    name: String
+  greeter := -> weak -> print("literal: #{@name}")
+
+class Optional
+  args
+    weak source: Source?
+  deinit := ->
+    print @source?.name else 'optional read: gone'
+    if source := @source
+      print source.name
+    else
+      print 'optional taken: gone'
+
+class Bang
+  args
+    weak source: Source!
+  deinit := ->
+    try
+      print @source.name
+    catch error
+      print "bang: #{error.message}"
+
+class Calls
+  args
+    call: () -> void
+  deinit := -> @call()
+
+class Owner
+  args
+    source: Source
+    watcher: Optional | Bang | Calls
+
+capture := (source: Source) ->
+  weak seen := source
+  Calls(->
+    print seen?.name else 'captured read: gone'
+    if alive := seen
+      print alive.name
+    else
+      print 'captured taken: gone'
+  )
+
+own := (watcher: (Source) -> Optional | Bang | Calls) ->
+  source := Source('a' + 'b')
+  Owner(source, watcher: watcher(source))
+
+watch := (watcher: (Source) -> Optional | Bang | Calls) ->
+  owner := own(watcher)
+  print owner.source.name
+
+watch (source) -> Optional(source)
+watch (source) -> Bang(source)
+watch (source) -> capture(source)
+watch (source) -> Calls(source.greeter())
+print 'done'
