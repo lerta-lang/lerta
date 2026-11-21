@@ -248,10 +248,15 @@ print (await response.text())!
 | `idle_timeout = 5.0` | Seconds until the request line of a request has come. After them, the connection is closed without a response. |
 | `head_timeout = 30.0` | Seconds until the rest of its head has come. After them it answers 408. |
 | `body_timeout = 30.0` | Seconds for each chunk of its body, which for a body in chunks includes the lines read before it, as the trailer. After them the handler's read fails with an `IOError`, `a body timed out`. |
+| `write_timeout = 30.0` | Seconds until the client takes each part of a response, of at most 128 KiB, or a `100 Continue`. After them the connection ends, as after a response (see [closing](#connections)); a `100 Continue` sent as the handler reads the body fails that read, with an `IOError`, `a write timed out`. |
+| `max_connections = 100` | The connections served at once. Past them, the next one waits, accepted, for one to end, and those after it wait in the system, as do those that come faster than they are accepted. A connection keeps its place while it waits for its next request, for up to `idle_timeout`, and while it lingers after its last, for up to 2 seconds. |
 
 - A body beyond `max_body` is answered 413 before the body is read.
 - For a body in chunks, the handler's read fails with an `IOError`, `a body too large`, once its data goes beyond `max_body`, or once its lines go beyond it and 64 KiB more together: the sizes, the line end after each chunk and the trailer, each counted with CR LF.
-- A negative option throws a `ValueError`, `a negative <name>: <value>`, as `serve` starts.
+- A negative option throws a `ValueError`, `a negative <name>: <value>`, as `serve` starts, and a `max_connections` below 1 one of `max_connections below 1: <value>`.
+- `max_connections` keeps the server within the system's limit of open files only if the files of a connection, times `max_connections`, plus those of the rest of the program, stay below it. A connection holds its socket and the files that the handler opens, as the one that `serve_files` sends or the connections of `fetch`.
+  - Why 100: a connection of `serve_files` holds two files, and a process may open 256 by default on macOS.
+- `write_timeout` bounds each part, not the whole response: a client that takes each part within it keeps its connection, however long the whole takes, and `max_connections` bounds such connections.
 
 #### Server.close
 
@@ -264,7 +269,7 @@ print (await response.text())!
 
 - A connection serves its requests one after another.
 - It goes on after a response to HTTP/1.1 unless the request's `Connection` holds `close`, and after one to HTTP/1.0 only if it holds `keep-alive`.
-- What the handler leaves unread of a body is read and dropped before the next request; if that read fails, the connection is closed.
+- What the handler leaves unread of a body is read and dropped before the next request, for up to 2 seconds and 64 KiB of its data; if that read fails, or the body goes beyond them, the connection is closed after the response, though its `Connection` may have said `keep-alive`.
 - **100-continue.** To an HTTP/1.1 request with a body and `Expect: 100-continue`, the server sends `100 Continue` as the handler starts to read the body, or before the head of a response whose body is a `Reader`, which may read it.
   - If the handler answers without reading it, the client may not send it, so the connection is closed after the response.
 - **Closing.** A connection is closed once what the client still sends, as a body that the server did not read, has been read and dropped, for up to 2 seconds and 64 KiB, after the server has ended its writing side.

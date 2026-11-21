@@ -72,7 +72,8 @@
   - A receive stops libuv's receives at the first datagram, as a read does, into a buffer of the `Udp` that any datagram fits. Its sender is kept in the `Udp` for `std:net` to read, as a promise gives one value.
   - A send parses a numeric host at once (`uv_ip4_addr`, `uv_ip6_addr`), and resolves a name on the thread pool unless it is the name, and the port, that the `Udp` resolved last, within a second.
 - **HTTP timeouts.** The timeouts of a connection that `serve` of `std:http` serves, one wait after another, go through a `Deadline` of `std/internal/deadline.lerta` rather than `timeout` of `std:async`, whose sleep and race for each read were a tenth of the server's time.
-  - One sleep watches them, until the deadline set, or without end while none is set; a deadline sooner than its wake cancels it to wake then.
+  - The `Connection` of `std/internal/http_connection.lerta` holds one for its reads and one for its writes, as a body sent as it comes may read the request's body while a write is under way. A write longer than 128 KiB goes in parts, each with its own deadline.
+  - One sleep watches each, until the deadline set, or without end while none is set; a deadline sooner than its wake cancels it to wake then.
   - Over a connection kept alive, it sleeps a few times for each idle timeout, however many requests come meanwhile.
 - **SIGPIPE.** On POSIX, SIGPIPE is ignored, as libuv's writes to a socket would raise it on Linux. `lerta_os_write`, which writes stdout and stderr, raises it itself on `EPIPE`, with its default action, so that those still end the program as the signal did (see [std:io](../reference/std.md#stdio)). libuv gives the programs that `run` starts the default disposition of each signal.
 

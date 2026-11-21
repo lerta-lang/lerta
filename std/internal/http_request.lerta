@@ -3,15 +3,17 @@
 
 import TimeoutError from 'std:async'
 import LineTooLongError, Reader from 'std:io'
-import Socket from 'std:net'
+import monotonic from 'std:time'
 import Deadline from './deadline'
 import ChunkedBody, SizedBody from './http_chunks'
+import Connection from './http_connection'
 import ascii_lower, Headers, is_token, keeps_alive, Request, without_ows from './http_message'
 
 ## Where a server listens, at a free port if `port` is 0, and how much and how long it waits for of
 ## a request: the bytes of its request line or of a field, its fields, and the bytes of its body;
 ## the seconds before the request line of a request comes, before the rest of its head does, and
-## before each chunk of its body does.
+## before each chunk of its body does; the seconds before the client takes each part of a
+## response; and the connections it serves at once, past which it waits to accept another.
 export struct ServerOptions
   host := '127.0.0.1'
   port := 0
@@ -21,6 +23,8 @@ export struct ServerOptions
   idle_timeout := 5.0
   head_timeout := 30.0
   body_timeout := 30.0
+  write_timeout := 30.0
+  max_connections := 100
 
 export struct Incoming
   request: Request
@@ -35,9 +39,10 @@ export struct Incoming
 # its body, which the handler reads as it comes. `address` is the server's, the host of the URL when
 # an HTTP/1.0 request gives no Host.
 export read_rest_of_request := (
-  line: String, socket: Socket, options: ServerOptions, address: String, deadline: Deadline
+  line: String, connection: Connection, options: ServerOptions, address: String
 ) ->
-  { reader } := socket
+  { reader } := connection.socket
+  deadline := connection.reads
   parts := line.split(' ')
   throw bad_request() if parts.length != 3
   (method, target, version) := (parts[0], parts[1], parts[2])
@@ -71,7 +76,7 @@ export read_rest_of_request := (
 
   # HTTP/1.0 has no 100 Continue.
   expects := ascii_lower(headers.get('expect') else '') == '100-continue'
-  body.continue_on = socket if expects and version == 'HTTP/1.1' and (chunked or length > 0)
+  body.continue_on = connection if expects and version == 'HTTP/1.1' and (chunked or length > 0)
 
   url := url_of(host, target) else throw bad_request()
   request := Request(method, url, headers, body: Reader(-> await body.next()))
@@ -90,12 +95,13 @@ bad_request := -> RequestError(status: 400, message: 'bad request')
 
 # The request line, which comes within the idle timeout, after an empty line that a client may send
 # after the body of the request before; nil if none does.
-export read_request_line := (reader: Reader, options: ServerOptions, deadline: Deadline) ->
+export read_request_line := (connection: Connection, options: ServerOptions) ->
+  { reader } := connection.socket
   read := ->
     line := await read_limited_line(reader, options.max_line, 414) else return nil
     line.is_empty() then await read_limited_line(reader, options.max_line, 414) else line
   try
-    await deadline.within(read(), options.idle_timeout)
+    await connection.reads.within(read(), options.idle_timeout)
   catch _: TimeoutError
     nil
 
@@ -181,15 +187,17 @@ export class BodyChunks
 
   # The connection of a client that waits for 100 Continue before it sends the body, which is sent
   # before the first read.
-  var continue_on: Socket?
+  var continue_on: Connection?
 
-  next := ->
+  next := -> await @next_within(@seconds)
+
+  private next_within := (seconds: Float) ->
     throw failure if failure := @failure
     return nil if @ended
     chunk :=
       try
         await @send_continue()
-        await @within_seconds(@chunks.next())
+        await @within_seconds(@chunks.next(), seconds)
       catch error: IOError
         @failure = error
         throw error
@@ -197,18 +205,25 @@ export class BodyChunks
     chunk
 
   send_continue := ->
-    socket := @continue_on else return
+    connection := @continue_on else return
     @continue_on = nil
-    await socket.write(CONTINUE)
+    await connection.write(CONTINUE)
 
   # A client that is too slow is taken to have gone.
-  private within_seconds := (read: Promise<Binary?>) ->
+  private within_seconds := (read: Promise<Binary?>, seconds: Float) ->
     try
-      await @deadline.within(read, @seconds)
+      await @deadline.within(read, seconds)
     catch _: TimeoutError
       throw IOError('a body timed out')
 
-  # Reads what the handler has left of the body, so that the next request starts after it.
-  skip := ->
-    var chunk = await @next()
-    chunk = await @next() while chunk != nil
+  # Reads what the handler has left of the body, so that the next request starts after it, if it
+  # comes to at most `limit` bytes; tells whether it does. Its reads share `seconds`, each taking
+  # what is left of them, which bounds them with no timer of their own, and fail as a read too slow
+  # does once they run out.
+  skip := (limit: Int, seconds: Float) ->
+    ends := monotonic() + seconds
+    var left = limit
+    while chunk := await @next_within(min(@seconds, max(ends - monotonic(), 0.0)))
+      left -= chunk.length
+      return false if left < 0
+    true

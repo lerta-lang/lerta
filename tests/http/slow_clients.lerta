@@ -1,0 +1,162 @@
+# A client cannot hold a connection for long by being slow to take a response, or to send a body
+# that the handler leaves unread: one that does not take a response, sent as it comes or at once,
+# has its connection closed once a write waits past write_timeout, and the server's close still
+# ends, while one that keeps taking a large body gets it whole; what the handler leaves unread of a
+# body is read past only within 2 seconds and 64 KiB of its data, beyond which the connection ends
+# after the response; and past max_connections, a connection waits for one to end, as one idle
+# after a response does at its idle_timeout, or one whose write has timed out, unless the server is
+# closed.
+import connect_tcp from 'std:net'
+import Reader from 'std:io'
+import Request, Response, serve from 'std:http'
+import masked_dates from './lib/date'
+import monotonic, sleep from 'std:time'
+
+LARGE := 8000000
+
+# A body that never ends, sent as it is read, at /endless; one of LARGE bytes at /large; a short one
+# elsewhere.
+endless := (request: Request): Response ->
+  { url } := request
+  return { body: 'x'.repeat(LARGE) } if url.ends_with('/large')
+  return { body: 'served' } unless url.ends_with('/endless')
+  chunk := 'x'.repeat(65536).binary
+  { body: Reader(-> chunk) }
+
+print 'a response not taken'
+writer := serve(endless, write_timeout: 0.2)
+for path in ['/endless', '/large']
+  unread := await connect_tcp('127.0.0.1', writer.port)
+  await unread.write("GET #{path} HTTP/1.1\r\nHost: a\r\n\r\n")
+  await sleep(1.0)
+  start := monotonic()
+  received := await unread.reader.read_all()
+  print "#{path}: #{received.text(0, 15)!} #{received.length < LARGE} #{monotonic() - start < 1.0}"
+await writer.close()
+
+print 'a large body taken steadily'
+large := serve((_: Request) -> { body: 'x'.repeat(LARGE) }, write_timeout: 0.3)
+steady := await connect_tcp('127.0.0.1', large.port)
+await steady.write("GET / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n")
+var taken = 0
+while chunk := await steady.reader.read(65536)
+  taken += chunk.length
+  await sleep(0.03)
+print taken > LARGE
+await large.close()
+
+print 'a body left unread'
+ignoring := serve((_: Request) -> { body: 'ignored' })
+
+# The response, and whether the connection ends after it well within body_timeout, in the 2 seconds
+# of skipping and the 2 of lingering.
+ask := (request: String) ->
+  client := await connect_tcp('127.0.0.1', ignoring.port)
+  await client.write(request)
+  asked := monotonic()
+  response := masked_dates((await client.reader.read_all()).text()!).replace("\r\n", ' | ')
+  print "#{response} #{monotonic() - asked < 10.0}"
+  client.close()
+head := (length: Int) -> "POST / HTTP/1.1\r\nHost: a\r\nContent-Length: #{length}\r\n\r\n"
+
+# 64 KiB of it, after which the next request is served, and one more byte, after which it is not,
+# also of data in chunks; and some of it that does not come.
+last := "GET / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n"
+await ask(head(65536) + 'x'.repeat(65536) + last)
+await ask(head(65537) + 'x'.repeat(65537) + last)
+chunked := "POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\n\r\n"
+for size in [65536, 65537]
+  await ask("#{chunked}#{size.to_hex()}\r\n#{'x'.repeat(size)}\r\n0\r\n\r\n#{last}")
+await ask(head(10))
+
+# Some that does not come, read past for no longer than body_timeout, if it is shorter, after
+# which the connection ends.
+hasty := serve((_: Request) -> { body: 'ignored' }, body_timeout: 0.3)
+short := await connect_tcp('127.0.0.1', hasty.port)
+await short.write(head(10))
+shortly := monotonic()
+await short.reader.read_all()
+print "ended within body_timeout: #{monotonic() - shortly < 1.5}"
+short.close()
+await hasty.close()
+
+# One that keeps coming, but too slowly in all: its reads share the 2 seconds.
+trickling := await connect_tcp('127.0.0.1', ignoring.port)
+await trickling.write(head(40))
+print await trickling.reader.read_line() else 'end'
+trickled := monotonic()
+var sent = 0
+trickle := ->
+  try
+    while sent < 40
+      await sleep(0.3)
+      await trickling.write('x')
+      sent += 1
+  catch _: IOError
+    # The server has closed the connection.
+    nil
+await trickle()
+print "ended within the 2 seconds and the lingering: #{monotonic() - trickled < 8.0} #{sent < 40}"
+trickling.close()
+await ignoring.close()
+
+print 'connections past the most'
+one := serve((_: Request) -> { body: 'served' }, max_connections: 1, idle_timeout: 1.0)
+request := "GET / HTTP/1.1\r\nHost: a\r\n\r\n"
+closing := "GET / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n"
+
+# The status line that answers a request on a new connection, once it has come.
+answer_of := (request: String) ->
+  client := await connect_tcp('127.0.0.1', one.port)
+  await client.write(request)
+  (await client.reader.read_all()).text()!.split("\r\n")[0]
+
+# One that has not sent its first request keeps its place until it ends.
+silent := await connect_tcp('127.0.0.1', one.port)
+await sleep(0.1)
+answer := answer_of(closing)
+await sleep(0.3)
+print "answered while the first waits for its first request: #{answer.is_settled()}"
+silent.close()
+print await answer
+
+# One idle after a response keeps it until its idle_timeout.
+kept := await connect_tcp('127.0.0.1', one.port)
+await kept.write(request)
+print await kept.reader.read_line() else 'end'
+next := answer_of(closing)
+await sleep(0.3)
+print "answered while the first is idle: #{next.is_settled()}"
+rest := (await kept.reader.read_all()).text()!
+print "the idle one ends: #{rest.ends_with('served')}"
+kept.close()
+print await next
+
+# A connection that waits for room is closed with the server.
+holding := await connect_tcp('127.0.0.1', one.port)
+await sleep(0.1)
+held := answer_of(closing)
+await sleep(0.1)
+await one.close()
+
+# Closed with its request unread, which may reset it.
+unanswered := ->
+  try
+    (await held).is_empty()
+  catch _: IOError
+    true
+print "the connection waiting is closed: #{await unanswered()}"
+holding.close()
+
+# A connection whose write times out ends after its 2 seconds of lingering at most, and the next
+# connection is served then.
+timed := serve(endless, max_connections: 1, write_timeout: 0.2)
+stuck := await connect_tcp('127.0.0.1', timed.port)
+await stuck.write("GET /endless HTTP/1.1\r\nHost: a\r\n\r\n")
+waiting := await connect_tcp('127.0.0.1', timed.port)
+await waiting.write("GET / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n")
+started := monotonic()
+print (await waiting.reader.read_all()).text()!.split("\r\n")[0]
+print monotonic() - started < 5.0
+stuck.close()
+await timed.close()

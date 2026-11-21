@@ -5,8 +5,8 @@ import Signal, spawn from 'std:async'
 import Reader from 'std:io'
 import Listener, listen_tcp, Socket from 'std:net'
 import address_text from './internal/handle'
-import Deadline from './internal/deadline'
 import CHUNK_SIZE from './internal/http_chunks'
+import Connection from './internal/http_connection'
 import Request, Response from './internal/http_message'
 import
   Incoming, read_rest_of_request, read_request_line, RequestError, ServerOptions
@@ -44,6 +44,10 @@ export class Server
     # Resolved once the server is closed and no connection is left, which close waits for.
     ended := Signal()
 
+    # Resolved once a connection ends while a connection taken waits for max_connections to leave
+    # room for it, which a server closed meanwhile closes then.
+    var room: Signal?
+
   ## Stops listening, and closes the connections that wait for their next request or linger after
   ## their last, even if what a lingering one leaves unread resets it. Those being served go on to
   ## their response, and end then, lingering as ever. Resolves once every connection has ended.
@@ -55,7 +59,12 @@ export class Server
     @end_if_done()
     await @ended.promise()
 
-  private end_if_done := -> @ended.resolve() if @closed and @connections == 0
+  private
+    end_if_done := -> @ended.resolve() if @closed and @connections == 0
+
+    make_room := ->
+      @room?.resolve()
+      @room = nil
 
 ## Listens at once, and serves each connection until the server is closed.
 export serve := (handler: (Request) -> Promise<Response>, options: ServerOptions) ->
@@ -78,8 +87,11 @@ check_options := (options: ServerOptions) ->
     ('idle_timeout', options.idle_timeout)
     ('head_timeout', options.head_timeout)
     ('body_timeout', options.body_timeout)
+    ('write_timeout', options.write_timeout)
   for (name, seconds) in timeouts
     throw ValueError("a negative #{name}: #{seconds}") if seconds < 0.0
+  { max_connections } := options
+  throw ValueError("max_connections below 1: #{max_connections}") if max_connections < 1
 
 accept_all := (server: Server) ->
   while true
@@ -90,6 +102,13 @@ accept_all := (server: Server) ->
         return if server.closed
         throw error
 
+    # Past max_connections, the connection taken waits for one to end: taken first, it can be closed
+    # with the server.
+    while server.connections >= server.options.max_connections and not server.closed
+      room := Signal()
+      server.room = room
+      await room.promise()
+
     # Taken as the server was closed: close may have found no connection left and resolved already,
     # so it is closed rather than served, which would count it only after that.
     if server.closed
@@ -99,33 +118,34 @@ accept_all := (server: Server) ->
 
 serve_connection := (socket: Socket, server: Server) ->
   server.connections += 1
-  deadline := Deadline()
-  spawn deadline.watch()
+  connection := Connection(socket, write_seconds: server.options.write_timeout)
+  connection.watch()
   try
     var going_on = true
     while going_on
-      going_on = await serve_request(socket, server, deadline)
+      going_on = await serve_request(connection, server)
   catch _
     # The peer has gone, or sent less than it said, or a read that the handler left going on has
     # left the connection in no state to go on: it ends, and the server serves the others.
     nil
   finally
-    # close_lingering throws nothing, and the sleep of the deadline would otherwise keep the
-    # program going.
-    await close_lingering(socket, server, deadline)
-    deadline.stop()
+    # close_lingering throws nothing.
+    await close_lingering(connection, server)
+    connection.stop()
     server.connections -= 1
+    server.make_room()
     server.end_if_done()
 
 # Closes the connection once the client has read the response: what the client still sends, as a
 # body that the server did not read, is read and dropped first, for a time and a size, as a socket
 # closed with input unread may be reset, which can lose the response before the client reads it.
 # A server that is closed while it lingers closes it at once.
-close_lingering := (socket: Socket, server: Server, deadline: Deadline) ->
+close_lingering := (connection: Connection, server: Server) ->
+  { socket } := connection
   server.lingering.add socket
   try
     await socket.end()
-    await deadline.within(drain(socket.reader), LINGER_SECONDS)
+    await connection.reads.within(drain(socket.reader), LINGER_SECONDS)
   catch _
     # A peer that has gone, or keeps sending: it is closed anyway.
     nil
@@ -143,25 +163,25 @@ LINGER_SECONDS := 2.0
 LINGER_BYTES := 65536
 
 # Serves the next request on the connection, and tells whether the connection goes on.
-serve_request := (socket: Socket, server: Server, deadline: Deadline) ->
+serve_request := (connection: Connection, server: Server) ->
   incoming :=
     try
-      await read_request(socket, server, deadline) else return false
+      await read_request(connection, server) else return false
     catch error: RequestError
-      await socket.write(own_response(error.status, { method: 'GET', chunked: true }))
+      await connection.write(own_response(error.status, { method: 'GET', chunked: true }))
       return false
     catch _: ValueError
       # A line that is not UTF-8, or a header that Headers does not take.
-      await socket.write(own_response(400, { method: 'GET', chunked: true }))
+      await connection.write(own_response(400, { method: 'GET', chunked: true }))
       return false
-  await respond(socket, server, incoming)
+  await respond(connection, server, incoming)
 
 # Writes the handler's response to the request, and tells whether the connection goes on. A body
 # that is a Reader is closed once sent, or once it is not to be.
-respond := (socket: Socket, server: Server, incoming: Incoming) ->
+respond := (connection: Connection, server: Server, incoming: Incoming) ->
   { request, chunked } := incoming
   { method } := request
-  failed := -> await socket.write(own_response(500, { method, chunked }))
+  failed := -> await connection.write(own_response(500, { method, chunked }))
   response :=
     try
       await server.handler(request)
@@ -196,14 +216,16 @@ respond := (socket: Socket, server: Server, incoming: Incoming) ->
       catch _
         await failed()
         return false
-    await socket.write(bytes)
+    await connection.write(bytes)
     if body is Reader and sends_reader
-      return false unless await write_body(socket, body, { chunked, length })
+      return false unless await write_body(connection, body, { chunked, length })
     return false unless keep_alive
   finally
     body.close() if body is Reader
-  await incoming.body.skip()
-  true
+
+  # What the handler has left of the body is read past within the time and the size of lingering:
+  # one that is longer, or slower, ends the connection instead.
+  await incoming.body.skip(LINGER_BYTES, LINGER_SECONDS)
 
 # The bytes of a response that the server gives itself, after which the connection ends. Its body is
 # empty, which is right for HEAD too.
@@ -213,8 +235,8 @@ own_response := (status: Int, framing: { method: String, chunked: Bool }) ->
 
 # The next request, or nil if the connection ends, or stays idle, before it starts. A server that
 # is closed meanwhile closes the connection, which the read throws for.
-read_request := (socket: Socket, server: Server, deadline: Deadline) ->
-  { reader } := socket
+read_request := (connection: Connection, server: Server) ->
+  { socket } := connection
   options := server.options
   server.waiting.add socket
 
@@ -223,7 +245,7 @@ read_request := (socket: Socket, server: Server, deadline: Deadline) ->
 
   line :=
     try
-      await read_request_line(reader, options, deadline) else return nil
+      await read_request_line(connection, options) else return nil
     finally
       server.waiting.remove socket
-  await read_rest_of_request(line, socket, options, server.address, deadline)
+  await read_rest_of_request(line, connection, options, server.address)

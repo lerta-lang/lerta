@@ -1,0 +1,42 @@
+# A connection of std:http's server: its socket, and the deadlines of its reads and of its writes,
+# apart, as a body sent as it comes may read the request's body while a write is under way.
+
+import spawn, TimeoutError from 'std:async'
+import Socket from 'std:net'
+import Deadline from './deadline'
+import CHUNK_SIZE from './http_chunks'
+import bytes_of from './utf8'
+
+# Its client must take each part of a write within `write_seconds`, or is taken to have gone, so
+# that one that keeps taking a large body keeps the connection.
+export class Connection
+  args
+    socket: Socket
+    write_seconds: Float
+  reads := Deadline()
+  private writes := Deadline()
+
+  # Watches the deadlines until `stop`, whose sleeps would otherwise keep the program going.
+  watch := ->
+    spawn @reads.watch()
+    spawn @writes.watch()
+
+  stop := ->
+    @reads.stop()
+    @writes.stop()
+
+  # Data longer than PART_SIZE goes in parts of CHUNK_SIZE: a chunk of a body that is sent in
+  # chunks, its size line with it, goes in one.
+  write := (data: String | Binary) ->
+    bytes := bytes_of(data)
+    return await @write_part(bytes) if bytes.length <= PART_SIZE
+    for start in 0..bytes.length by CHUNK_SIZE
+      await @write_part(bytes[start..min(start + CHUNK_SIZE, bytes.length)])
+
+  private write_part := (bytes: Binary) ->
+    try
+      await @writes.within(@socket.write(bytes), @write_seconds)
+    catch _: TimeoutError
+      throw IOError('a write timed out')
+
+PART_SIZE := 2 * CHUNK_SIZE

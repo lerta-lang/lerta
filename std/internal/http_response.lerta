@@ -1,7 +1,7 @@
 # How std:http's server writes a response: its head, and its body, at once or as it comes.
 
 import Reader from 'std:io'
-import Socket from 'std:net'
+import Connection from './http_connection'
 import chunk_bytes, JoinedReads, LAST_CHUNK from './http_chunks'
 import date_now from './http_date'
 import ascii_lower, check_field, Response from './http_message'
@@ -62,14 +62,16 @@ export has_body := (status: Int, method: String) -> has_length(status) and metho
 # whole one. Each write is awaited before the read after the one under way, so that the body comes
 # no faster than the peer takes it, but for a read. Tells whether the body came as its length says:
 # one that ends before it, or goes on after it, cannot be followed by another response.
-export write_body := (socket: Socket, body: Reader, framing: { chunked: Bool, length: Int? }) ->
+export write_body := (
+  connection: Connection, body: Reader, framing: { chunked: Bool, length: Int? }
+) ->
   { chunked, length } := framing
   reads := JoinedReads(body)
   var left = length else INT_MAX
   try
     while bytes := await reads.next()
       if bytes.length > left
-        await socket.write(bytes[..left])
+        await connection.write(bytes[..left])
         return false
       left -= bytes.length if length
       ends := chunked and reads.ended
@@ -78,8 +80,8 @@ export write_body := (socket: Socket, body: Reader, framing: { chunked: Bool, le
           chunk_bytes bytes, ends
         else
           bytes
-      await socket.write(written)
-    await socket.write(LAST_CHUNK) if chunked and length == nil and not reads.ended
+      await connection.write(written)
+    await connection.write(LAST_CHUNK) if chunked and length == nil and not reads.ended
     length == nil or left == 0
   finally
     reads.cancel()
