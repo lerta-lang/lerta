@@ -3,6 +3,8 @@
 import make_dir, make_temp_dir, remove_tree, write_file from 'std:io'
 import connect_tcp from 'std:net'
 import fetch, Headers, serve, serve_files from 'std:http'
+import absolute from 'std:path'
+import platform from 'std:process'
 
 root := make_temp_dir()
 await write_file("#{root}/a.txt", 'hello')
@@ -130,6 +132,28 @@ try
   serve_files ''
 catch error: ValueError
   print error.message
+
+# A root that ends with separators, `\` too on Windows, is followed by one alone: on Windows, two
+# that start a path, as after the root of the file system, make a network share, the name of a
+# server and a share after them. Only the roots of the file system test that, on Windows: the
+# first, whose separators end a directory, tells only that they are left out without harm.
+print 'a root that ends with separators'
+separator := platform == 'windows' then '\' else '/'
+(_drive, below_root) := absolute(root).split_once('/')!
+roots := [("#{root}#{separator}/", ''), ('/', "/#{below_root}"), ('//', "/#{below_root}")]
+for (ending, prefix) in roots
+  ended := serve(serve_files(ending), port: 0)
+  for path in ["#{prefix}/a.txt", "#{prefix}/dir/"]
+    response := await fetch("http://127.0.0.1:#{ended.port}#{path}")
+    print "#{response.status} #{(await response.text())!}"
+  await ended.close()
+
+# A root that is a file is served at `/`.
+print 'a file as the root'
+single := serve(serve_files("#{root}/a.txt"), port: 0)
+response := await fetch("http://127.0.0.1:#{single.port}/")
+print "#{response.status} #{(await response.text())!}"
+await single.close()
 
 await server.close()
 await remove_tree(root)

@@ -49,3 +49,9 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - Where: `find_interpolation_end` in `compiler/lexer/string_literal.lerta` passes over a string literal in `#{...}`, but not over a regular expression literal.
 - How to see it: `print "#{/}/.test('}')}"` fails with `unterminated regular expression`, and `print "#{/"/.test('"')}"` with `unterminated interpolation`, where `"#{'}'}"` gives `}`.
 - How to fix it: pass over a regular expression literal there as over a string, where a `/` starts one as the lexer tells it.
+
+## normalize of std:path makes a drive of a relative path's first name on Windows (*unverified*)
+
+- Where: `normalize` in `std/path.lerta` drops the `.` names of a relative path, and gives the names that are left as they are, the first of which may be a drive, as `C:`.
+- How to see it: on Windows, `normalize('./C:/x')`, and so `join('.', 'C:/x')`, give `C:/x`, an absolute path, where the relative path names a file `x` in a directory `C:`, a name that Windows refuses.
+- How to fix it: keep `./` before the names of a relative path whose first name is a drive.

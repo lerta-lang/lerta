@@ -7,6 +7,7 @@ import FileStatus, open, Reader, stat from 'std:io'
 import scan from 'std:scanner'
 import date_of, time_of from './http_date'
 import Headers, Request, Response from './http_message'
+import below from './separators'
 
 ## A handler that gives the files under `root`, for GET and HEAD.
 # An empty root is refused, as the paths under it would start at the root of the file system.
@@ -18,13 +19,13 @@ serve_file := (root: String, request: Request) ->
   return not_allowed() unless request.method in ['GET', 'HEAD']
   (path, query) := target_of(request.url)
   parts := decoded_parts(path) else return plain(400, 'bad request')
-  file := [root, parts...].join('/')
+  file := below(root, parts)
   status := stat(file) else return plain(404, 'not found')
   if status.kind == DIR
     # A directory's page is served at a path that ends with `/`, so that its relative links resolve
     # inside it.
     return moved_to(path, query) unless path.ends_with('/')
-    index := "#{file}/index.html"
+    index := below(root, [parts..., 'index.html'])
     index_status := stat(index) else return plain(404, 'not found')
     return plain(404, 'not found') if index_status.kind != FILE
     return file_response(index, index_status, request)
