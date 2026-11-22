@@ -1,22 +1,33 @@
-# A page of the site as a whole: the template filled with its title, the navigation, the sidebar
-# of its section and its content.
+# A page of the site as a whole: the template filled with its title and its address, the navigation,
+# the sidebar of its section, its content and the links to the pages before and after it.
 import escape_html from './html'
-import directory_of, html_path, REPOSITORY from './links'
+import directory_of, html_path, page_url, REPOSITORY, SITE from './links'
 import Page from './markdown'
 
 # The directories of docs/ that the site holds, in the order of its navigation.
 export SECTIONS := ['tour', 'reference', 'internals']
 
+# What a search engine, or a link to a page, shows under the page's title.
+DESCRIPTION :=
+  'Lerta is a statically typed language that compiles to native code through LLVM, with ' +
+    'CoffeeScript-like syntax and TypeScript-like type inference.'
+
 # The HTML of the page at `path`, as from docs/, among the site's pages by their paths. Each
 # `{{name}}` of the template is filled in one pass, so that what one puts in is not filled again.
 export lay_out := (template: String, path: String, pages: Map<String, Page>) ->
   page := pages[path]!
-  title := path == 'index.md' then 'Lerta' else "#{page.title} · Lerta"
+  title := path == 'index.md' then 'Lerta programming language' else "#{page.title} · Lerta"
+  section := section_pages(path, pages)
   parts :=
     'title': escape_html(title)
+    'description': escape_html(DESCRIPTION)
+    'url': page_url(path)
+    'site': SITE
+    'repository': REPOSITORY
     'navigation': navigation(path)
-    'sidebar': sidebar(path, pages)
+    'sidebar': sidebar(path, section, pages)
     'content': page.html
+    'pager': pager(path, section, pages)
   pieces := template.split('{{')
   filled := [pieces[0]]
   for piece in pieces[1..]
@@ -47,10 +58,10 @@ page_link := (path: String, label: String, current: Bool) ->
 title_case := (word: String) -> word.take(1).join().to_upper() + word.skip(1)
 
 # The pages of the section of the page at `path`: its README, then those its README links to, in
-# that order, each once; empty for a page outside the sections.
-sidebar := (path: String, pages: Map<String, Page>) ->
+# that order, each once; none for a page outside the sections.
+section_pages := (path: String, pages: Map<String, Page>): String[] ->
   section := directory_of(path)
-  return '' if section.is_empty()
+  return [] if section.is_empty()
   readme := "#{section}README.md"
   listed := [readme]
   for target in pages[readme]!.links
@@ -59,7 +70,28 @@ sidebar := (path: String, pages: Map<String, Page>) ->
     page_path := "#{section}#{name}"
     is_listed := page_path in pages and page_path not in listed
     listed.push page_path if '/' not in name and is_listed
+  listed
+
+# The list of the pages of the section, the page at `path` marked; empty outside the sections.
+sidebar := (path: String, section: String[], pages: Map<String, Page>) ->
+  return '' if section.is_empty()
   items := [
-    "<li>#{page_link(each, escape_html(pages[each]!.title), each == path)}</li>" for each in listed
+    "<li>#{page_link(each, escape_html(pages[each]!.title), each == path)}</li>" for each in section
   ]
   "<ul>\n#{items.join("\n")}\n</ul>"
+
+# The links to the pages before and after the page at `path` in its section, by their titles;
+# empty for a page that the section does not list, or that is alone in it.
+pager := (path: String, section: String[], pages: Map<String, Page>) ->
+  at := section.index_of(path) else return ''
+  title := (index: Int) -> escape_html(pages[section[index]]!.title)
+  links: String[]
+  if at > 0
+    links.push pager_link('previous', section[at - 1], "← #{title(at - 1)}")
+  if at + 1 < section.length
+    links.push pager_link('next', section[at + 1], "#{title(at + 1)} →")
+  return '' if links.is_empty()
+  "<nav class=\"pager\">\n#{links.join("\n")}\n</nav>"
+
+pager_link := (class_name: String, path: String, label: String) ->
+  "<a class=\"#{class_name}\" href=\"/#{html_path(path)}\">#{label}</a>"
