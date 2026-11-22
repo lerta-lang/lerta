@@ -499,6 +499,10 @@ COMMANDS_USAGE :=
   '  greet  greet someone'
   '  count  count the arguments'
   ''
+  'options:'
+  '  --dry-run   do nothing'
+  '  -h, --help  show this help'
+  ''
 .join("\n")
 
 GREET_USAGE :=
@@ -510,21 +514,57 @@ GREET_USAGE :=
   ''
 .join("\n")
 
+# Without a command that is an option, the usage has no options.
+PLAIN_USAGE :=
+  'usage: plain <command> [<argument>...]'
+  ''
+  'commands:'
+  '  one'
+  '  two'
+  ''
+.join("\n")
+
+# The arguments of a run, its exit status, and what it prints to stdout and stderr.
+type ArgsRun = (String[], Int, String, String)
+
+# What differs from the runs when tests/args/lib's program of the name, built in the directory, is
+# given the arguments of each.
+args_runs := (dir: String, name: String, runs: ArgsRun[]) ->
+  executable := "#{dir}/#{name}#{host_executable_suffix}"
+  source := "#{root_dir}/tests/args/lib/#{name}.lerta"
+  built := await run_command(compiler, ['build', source, '-o', executable], dir)
+  errors := expect_success("build of #{name}", built)
+  return errors unless errors.is_empty()
+  var reasons: String[]
+  for (args, status, stdout, stderr) in runs
+    ran := await run_command(executable, args, dir)
+    what := "#{name} #{args.join(' ')}"
+    reasons = [
+      reasons...
+      expect_status(status, ran.status).map((reason) -> "#{what}: #{reason}")...
+      compare_text("stdout of #{what}", stdout, ran.stdout_text())...
+      compare_text("stderr of #{what}", stderr, ran.stderr_text())...
+    ]
+  reasons
+
 # parse_command and parse_args print the usage and exit with 0 for `-h`, or with 2 after the error
 # for arguments that do not fit.
 args_exit_check := ->
   Check(name: 'std:args prints the usage and exits with 0 for -h, or with 2 after an error', run: ->
     dir := new_cli_dir('args-exit')
-    executable := "#{dir}/tool#{host_executable_suffix}"
-    source := "#{root_dir}/tests/args/lib/tool.lerta"
-    built := await run_command(compiler, ['build', source, '-o', executable], dir)
-    errors := expect_success('build', built)
-    return errors unless errors.is_empty()
-
-    # The arguments of each run, its exit status, and what it prints to stdout and stderr.
-    runs :=
+    tool_runs: ArgsRun[] =
       (['greet', '-l', 'bob'], 0, "HELLO, bob!\n", '')
       (['-h'], 0, COMMANDS_USAGE, '')
+      (['--help'], 0, COMMANDS_USAGE, '')
+      (['--help=x'], 2, '', "tool: unknown command '--help=x'\n#{COMMANDS_USAGE}")
+      (['-d'], 2, '', "tool: unknown command '-d'\n#{COMMANDS_USAGE}")
+      (['--help', 'greet'], 2, '', "tool: unexpected argument 'greet'\n#{COMMANDS_USAGE}")
+      (['-h', '-h'], 2, '', "tool: unexpected argument '-h'\n#{COMMANDS_USAGE}")
+      (['--dry-run', 'a'], 0, "nothing, with 1\n", '')
+      (['--dry-run', '-h'], 0, "nothing, with 1\n", '')
+      (['--dry-run=x'], 2, '', "tool: unknown command '--dry-run=x'\n#{COMMANDS_USAGE}")
+      (['dry-run'], 2, '', "tool: unknown command 'dry-run'\n#{COMMANDS_USAGE}")
+      (['greet', '--dry-run'], 2, '', "tool: unknown option --dry-run\n#{GREET_USAGE}")
       (['greet', '--help'], 0, GREET_USAGE, '')
       (['greet', '--nope', 'a', 'b', '-h'], 0, GREET_USAGE, '')
       (['greet', '--', '-h'], 0, "hello, -h\n", '')
@@ -532,18 +572,8 @@ args_exit_check := ->
       ([], 2, '', "tool: missing the command\n#{COMMANDS_USAGE}")
       (['nope'], 2, '', "tool: unknown command 'nope'\n#{COMMANDS_USAGE}")
       (['greet'], 2, '', "tool: missing <name>\n#{GREET_USAGE}")
-
-    var reasons: String[]
-    for (args, status, stdout, stderr) in runs
-      ran := await run_command(executable, args, dir)
-      what := "tool #{args.join(' ')}"
-      reasons = [
-        reasons...
-        expect_status(status, ran.status).map((reason) -> "#{what}: #{reason}")...
-        compare_text("stdout of #{what}", stdout, ran.stdout_text())...
-        compare_text("stderr of #{what}", stderr, ran.stderr_text())...
-      ]
-    reasons
+    plain_runs := [(['-h'], 0, PLAIN_USAGE, '')]
+    await args_runs(dir, 'tool', tool_runs) + await args_runs(dir, 'plain', plain_runs)
   )
 
 COLOR_VARIABLES := ['NO_COLOR', 'FORCE_COLOR', 'TERM']

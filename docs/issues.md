@@ -61,3 +61,9 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - Where: `BUILD_TOOL_SOURCES` in the `Makefile`, and the sources of `bin/test` in `tools/build/inputs.lerta`, leave out `site/*.lerta`, which `tools/build/samples.lerta` and `test/run.lerta` import.
 - How to see it: after a change to `site/markdown.lerta` alone, `make check` and the sample checks of `make test` run with the old code.
 - How to fix it: count `site/*.lerta` among the sources of both.
+
+## fmt fails on a long list whose method is called, on a line of its own under `:=`
+
+- Where: not located; one of the rewrites that `lerta fmt` makes of a long line (`compiler/format/`).
+- How to see it: a declaration whose value, on the next line, is a list of strings that `.join("\n")` follows and that is longer than the line, as `X :=` over `  ['usage: plain <command> [<argument>...]', '', 'commands:', '  one', '  two', ''].join("\n")`: `lerta fmt` says that its rewrites would not parse, for an indentation that matches no outer block.
+- How to fix it: find the rewrite that the line takes, and write the items of the list on lines of their own with the call after them, or report the line as one to shorten by hand.

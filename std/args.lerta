@@ -40,23 +40,40 @@ export wants_help := <T: Codable, S: Codable>(args: String[], spec: S) ->
   asks_for_help form_of<T>(spec, nil).parts, args
 
 ## The command that the first argument names, a member of C named as the member with `-` for `_`,
-## and the arguments after it; prints the usage message, of the commands with what the spec says of
-## each, and exits, as parse_args does.
+## or after `--` if the spec says that it is an option, and the arguments after it; prints the usage
+## message, of the commands with what the spec says of each, and exits, as parse_args does, but that
+## `-h` or `--help` must be alone: an argument after it does not fit.
 export parse_command := <C: Enum, S: Codable>(args: String[], spec: S): (C, String[]) ->
   commands := members<C>()
-  helps := read_spec(spec, [command.to_string() for command in commands], ['help'])
-  rows := [
-    (option_name(command.to_string()), helps[command.to_string()]?.help else '')
-    for command in commands
-  ]
-  text :=
-    ["usage: #{program} <command> [<argument>...]", '', 'commands:', table(rows)...].join("\n")
+  names := [command.to_string() for command in commands]
+  specs := read_spec(spec, names, ['help', 'option'])
+  is_option := (name: String) -> specs[name]?.option else false
+  word := (name: String) -> is_option(name) then "--#{option_name(name)}" else option_name(name)
+  row := (name: String) -> (word(name), specs[name]?.help else '')
+  invalid '--help names two options' if names.any((name) -> word(name) == '--help')
+  invalid 'no member is a command' if names.all(is_option)
+  option_rows := [row(name) for name in names when is_option(name)]
+  options: String[] =
+    option_rows.is_empty() then [] else ['', 'options:', table([option_rows..., HELP_ROW])...]
+  text := [
+    "usage: #{program} <command> [<argument>...]"
+    ''
+    'commands:'
+    table([row(name) for name in names when not is_option(name)])...
+    options...
+  ].join("\n")
   first := args.first() else exit_with(text, 'missing the command')
-  if first == '-h' or first == '--help'
+
+  # Alone: it names no command whose usage the arguments after it could ask for.
+  if first in HELP_OPTIONS
+    exit_with text, "unexpected argument '#{args[1]}'" if args.length > 1
     print text
     exit 0
-  command := commands.find((each) -> option_name(each.to_string()) == first)
+  command := commands.find((each) -> word(each.to_string()) == first)
   (command else exit_with(text, "unknown command '#{first}'"), args[1..])
+
+HELP_OPTIONS := ['-h', '--help']
+HELP_ROW := ('-h, --help', 'show this help')
 
 exit_with := (usage: String, message: String) ->
   print_error "#{program}: #{message}"
@@ -70,6 +87,7 @@ struct FieldSpec
   value: String?
   positional := false
   after_dashes := false
+  option := false
 
 SPEC_KEYS := ['short', 'help', 'value', 'positional', 'after_dashes']
 
@@ -95,7 +113,8 @@ field_spec := (name: String, node: Node, keys: String[]) ->
         when 'help' then { spec..., help: text_of(value, name, key) }
         when 'value' then { spec..., value: text_of(value, name, key) }
         when 'positional' then { spec..., positional: flag_of(value, name, key) }
-        else { spec..., after_dashes: flag_of(value, name, key) }
+        when 'after_dashes' then { spec..., after_dashes: flag_of(value, name, key) }
+        else { spec..., option: flag_of(value, name, key) }
   spec
 
 record_fields := (node: Node, what: String) ->
@@ -160,7 +179,7 @@ class Form<T: Codable>
     positionals := [synopsis(part) for part in @parts when part.is_positional()]
     rows := [option_row(part) for part in @parts when not part.is_positional()]
     head := ["usage: #{name} [options]", positionals...].join(' ')
-    [head, '', 'options:', table([rows..., ('-h, --help', 'show this help')])...].join("\n")
+    [head, '', 'options:', table([rows..., HELP_ROW])...].join("\n")
 
 form_of := <T: Codable, S: Codable>(spec: S, command: String?) ->
   fields := fields_of<T>()
@@ -175,7 +194,7 @@ form_of := <T: Codable, S: Codable>(spec: S, command: String?) ->
 # Rejects parts that could not be told apart on the command line, or positional arguments that
 # could not be taken in order.
 check_parts := (parts: Part[]) ->
-  options := ['-h', '--help']
+  options := [HELP_OPTIONS...]
   take := (option: String) ->
     invalid "#{option} names two options" if option in options
     options.push option
@@ -232,7 +251,7 @@ asks_for_help := (parts: Part[], args: String[]) ->
     return false if arg == '--'
     continue if not arg.starts_with('-') or arg == '-'
     (option, inline) := split_inline_value(arg)
-    return true if inline == nil and option in ['-h', '--help']
+    return true if inline == nil and option in HELP_OPTIONS
     part := options[option] else continue
     i += 1 if inline == nil and part.field.kind != SWITCH
   false
