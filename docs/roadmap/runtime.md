@@ -4,7 +4,7 @@ The planned design of safety, errors and exceptions, memory management, concurre
 
 ## Safety
 
-The definition of safety is in [philosophy](../philosophy.md#safety). Planned:
+The definition of safety is in [philosophy](../philosophy.md#goals). Planned:
 
 - FFI and raw pointer operations only inside `unsafe` blocks.
 - A panic prints a stack trace besides its message, perhaps through a **frame record** per function, linked to a global `current_frame` (the LLVM shadow stack approach). Exceptions need none: their traces are made as they unwind ([internals](../internals/execution.md#exception-traces)).

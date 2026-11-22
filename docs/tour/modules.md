@@ -20,7 +20,7 @@ print encode_json(p)
 {"x":3.0,"y":4.0}
 ```
 
-A file is a module. `import` names what it takes from another, from a standard module, `std:<name>`, or from a file relative to the importing one, `'./geometry'`. There is no `import *`, so each name in a module says where it comes from.
+A file is a module. `import` names what it takes from another module: a standard module, `std:<name>`, or a file relative to the importing one, `'./geometry'`. There is no `import *`, so the imports show where each name that a module uses comes from.
 
 ## Exports
 
@@ -45,7 +45,7 @@ A module exports what it marks `export`, and keeps the rest to itself.
 | `std:io` | files, directories and the standard streams |
 | `std:process` | arguments, the environment, exit, and running other programs |
 | `std:path` | paths |
-| `std:json` | JSON, for types of data |
+| `std:json` | JSON, encoded from and decoded into typed values |
 | `std:http` | an HTTP server and client |
 | `std:net` | TCP and UDP |
 | `std:time` | clocks and sleeping |

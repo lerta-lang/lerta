@@ -27,7 +27,7 @@ YELLOW
 RED
 ```
 
-An enum's values are its members. Where an enum is expected, a member is written alone. A `case` that names every member needs no `else`, and one that misses a member is an error.
+An enum's values are its members. Where an enum is expected, a member is written without the enum's name. A `case` that names every member needs no `else`; without an `else`, one that misses a member is an error.
 
 ## Unions
 
@@ -57,7 +57,7 @@ print eval(Add(left: Num(1), right: Neg(Num(5))))
 -4
 ```
 
-A union, `Num | Add | Neg`, is a value of any of its types, and needs no tag to tell which: a `case` chooses by type, and in each arm `e` is of that type. As with enums, every type must be handled.
+A value of a union type, `Num | Add | Neg`, is a value of any one of its types, and you write no tag to say which: a `case` chooses by type, and in each arm `e` is of that type. As with enums, every type must be handled.
 
 `is` tests the type of a union too, and narrows the same way:
 

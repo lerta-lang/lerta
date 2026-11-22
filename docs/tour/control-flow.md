@@ -18,7 +18,7 @@ while n > 0
 one
 ```
 
-A condition is a `Bool`, or an optional value, which holds when it is not nil; a `Bool?` is compared instead, `flag == true`. `0` and `''` are neither, so they are errors as conditions rather than false.
+A condition is a `Bool`, or an optional value, which holds when it is not nil; a `Bool?` is compared instead, `flag == true`. `0` and `''` are neither, so using one as a condition is a compile error; it is not treated as false.
 
 ## Postfix forms
 
@@ -35,7 +35,7 @@ for n in 1..10
 5
 ```
 
-A statement may end with `if`, `unless`, `while`, `until` or `for`, which applies to it alone. `unless` is `if not`. `1..10` counts from 1 up to 10, without 10.
+A statement may end with `if`, `unless`, `while`, `until` or `for`, which applies to that statement alone. `unless` means `if not`. `1..10` counts from 1 up to, but not including, 10.
 
 ```lerta
 print n * n for n in [1, 2, 3]

@@ -1,6 +1,6 @@
 # Async
 
-A program runs on one thread, with an event loop, as in Node.js: while it waits for a timer, a file, a socket or another program, it goes on with other work. There are no threads to share data between, so there are no data races.
+A program runs on one thread, with an event loop, as in Node.js: while it waits for a timer, a file, a socket or another program, it continues with other work. There are no threads to share data between, so there are no data races.
 
 ## await
 
@@ -48,7 +48,7 @@ catch error: TimeoutError
 too slow
 ```
 
-`all` waits for every promise, and `timeout` for one, at most so long; the work it gives up is cancelled.
+`all` waits for every promise. `timeout` waits for one promise, for at most the time given, and cancels the work that it gives up on.
 
 ## Files and programs
 

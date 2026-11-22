@@ -24,7 +24,7 @@ no bo
 looked up bo
 ```
 
-An error is a value of a type that satisfies `Error`, whose one member is `message: String`: `struct NotFound: Error` declares one. A `catch` takes the errors of its type, and `finally` runs however the block ends.
+An error is a value of a type that satisfies `Error`, whose one member is `message: String`. `struct NotFound: Error` declares such a type: a struct that names an interface gets the fields of the interface that it does not declare, here `message`. A `catch` catches the errors of its type, and `finally` runs however the block ends.
 
 ## Errors of the runtime
 
@@ -40,7 +40,7 @@ catch error: IndexError
 index out of range
 ```
 
-What other languages leave undefined throws in Lerta: an index out of range, an integer that overflows or is divided by zero. A program never goes on with a wrong value or corrupt memory.
+Where C leaves the behavior undefined, and other languages wrap around or go on with a wrong value, Lerta throws: for an index out of range, an integer overflow or an integer division by zero. A program never continues with a wrong value or corrupt memory.
 
 ## try as a value
 

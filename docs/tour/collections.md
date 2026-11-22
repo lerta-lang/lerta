@@ -58,7 +58,7 @@ bo is 25
 8
 ```
 
-`at` names the index. A map gives its entries as tuples, in the order they were added, and the tuple is taken apart in place.
+`at` names the index. A map gives its entries as tuples, in the order they were added, and the loop destructures each tuple into its names.
 
 ## Comprehensions
 

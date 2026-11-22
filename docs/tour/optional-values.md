@@ -1,6 +1,6 @@
 # Optional values
 
-There is no null that any value may be. A value that may be missing has an optional type, `T?`, and the compiler makes the program handle nil before it uses the value.
+No value can be nil unless its type says so. A value that may be missing has an optional type, `T?`, and the compiler makes the program handle nil before it uses the value.
 
 ## Narrowing
 
@@ -23,7 +23,7 @@ found BO
 no z
 ```
 
-`find` gives a `String?`. `if name := ...` holds when it is not nil, and inside, `name` is a `String`. A test does the same:
+`find` returns a `String?`. `if name := ...` holds when the value is not nil, and inside the block, `name` is a `String`. A test narrows in the same way:
 
 ```lerta
 greet := (name: String?) ->
@@ -62,9 +62,9 @@ nobody
 bo
 ```
 
-`else` gives a value for nil. `?.` goes on only if the value is not nil, and gives nil otherwise. `!` takes the value, and throws if it is nil, for where it cannot be.
+`else` gives a fallback value for nil. `?.` continues only if the value is not nil, and gives nil otherwise. `!` takes the value, and throws if it is nil: use it where you know the value cannot be nil.
 
-`else` also takes `return`, `break`, `continue` or `throw`, to leave where the value is missing:
+`else` may also be followed by `return`, `break`, `continue` or `throw`, to leave when the value is missing:
 
 ```lerta
 ages := { 'ana': 31 }

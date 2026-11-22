@@ -22,7 +22,7 @@ Point(x: 3, y: 6)
 true
 ```
 
-A struct is a value made of fields, which never change. Inside a method, `@` is the struct, and `@x` its field `x`. Structs compare and print by their fields.
+A struct is a value made of fields, which never change. Inside a method, `@` is the struct, and `@x` its field `x`. Structs are compared and printed by their fields.
 
 ## Defaults and construction
 
@@ -43,7 +43,7 @@ print b
 Options(name: 'build', retries: 3, verbose: true)
 ```
 
-A field with a value is an argument that may be left out. `a...` takes the fields not written from `a`, which makes a changed copy.
+A field with a value is an argument that may be left out. `a...` takes from `a` the fields that are not given, which makes a modified copy.
 
 Where the type is known, `{ ... }` constructs a struct too:
 
@@ -78,6 +78,6 @@ HELLO!
 true
 ```
 
-`extend` gives any type more methods, builtin types too, in its module and in those that import that module.
+`extend` adds methods to a type, including builtin types such as `String` and `Int`, in its own module and in the modules that import it.
 
 For the rules, see [objects](../reference/objects.md).

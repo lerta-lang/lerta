@@ -4,13 +4,13 @@ This directory holds the planned design of what is not implemented yet, by area.
 
 When a feature is implemented, its description moves to [the reference](../reference/README.md), or for the internal design to [the internals](../internals/README.md), and is removed from here.
 
-| File | Area |
+| Page | Area |
 |---|---|
-| [language.md](language.md) | Syntax, control flow, types, operators |
-| [strings.md](strings.md) | Strings, their operations and regular expressions |
-| [objects.md](objects.md) | Classes and structs, interfaces, generics, equality |
-| [runtime.md](runtime.md) | Safety, errors and exceptions, memory management, concurrency, platforms |
-| [programs.md](programs.md) | Modules, FFI, the standard library, tools |
+| [Language](language.md) | Syntax, control flow, types, operators |
+| [Strings](strings.md) | Strings, their operations and regular expressions |
+| [Objects](objects.md) | Classes and structs, interfaces, generics, equality |
+| [Runtime](runtime.md) | Safety, errors and exceptions, memory management, concurrency, platforms |
+| [Programs](programs.md) | Modules, FFI, the standard library, tools |
 
 ## Follow-ups
 

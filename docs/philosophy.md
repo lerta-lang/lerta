@@ -1,7 +1,5 @@
 # Philosophy
 
-Lerta is a language for code you can see at a glance: indented like CoffeeScript, with types inferred as in TypeScript, and compiled to native code through LLVM. Programs are single-threaded and event-driven, with no undefined behavior in Lerta code and no tracing GC, and they run about as fast as Go.
-
 ## Design principles
 
 In priority order:
@@ -12,28 +10,19 @@ In priority order:
    - The formatter lays out every program, so that all Lerta code looks alike.
 2. **Least surprise**
    - Intuitive to read and to write.
-   - Prefer what widely used languages already taught the reader.
+   - Prefer what widely used languages have already taught the reader.
 3. **Fewest rules**
    - Keep the language specification and grammar to the necessary minimum.
    - One way to write each thing.
 4. **Cost is visible**
-   - What a line does shows in it. The only work it does unseen is [reference counting](internals/memory.md) and [exception checks](internals/execution.md#exceptions).
+   - What a line does shows in it. The only work it does unseen is [reference counting](internals/memory.md), [exception checks](internals/execution.md#exceptions) and the checks that safety needs.
 5. **Punctuation in moderation**
    - Too much punctuation is noise; well-placed punctuation reads better than none.
 
-## Safety
+## Goals
 
-Safety means **zero undefined behavior** outside [C functions](reference/functions.md#c-functions), whose existence and types the compiler does not check: every operation returns a defined value or fails in a defined way.
-
-- **Nil safety** comes from [optional types](reference/types.md#optional-values).
-- **Weak safety** comes from [weak references](reference/objects.md#weak-references): once their object is gone, they give nil or throw, never a dangling pointer.
-- **No data races,** because programs are single-threaded.
-
-Planned rules are in [the roadmap](roadmap/runtime.md#safety).
-
-## Performance
-
-Lerta is mostly faster than Swift and Node.js, on par with Go, and close to C, without a tracing GC: memory is [reference counted](internals/memory.md), and generics are monomorphized. Reference cycles are not collected; weak references break them ([roadmap](roadmap/runtime.md#memory-management)). The results are in [bench/](../bench/README.md).
+- **Safety:** zero undefined behavior outside [C functions](reference/functions.md#c-functions), whose existence and types the compiler does not check. Every operation returns a defined value or fails in a defined way.
+- **Performance:** to be as fast as the other compiled languages that check what they run, or faster, and as Node.js, whose compiler works at run time.
 
 ## Non-goals
 

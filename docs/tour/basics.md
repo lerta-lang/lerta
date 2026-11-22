@@ -27,7 +27,7 @@ print count
 
 `:=` declares a name that is never reassigned, the most common kind, and `var` one that is. The types come from the values: `limit` and `count` are `Int`s.
 
-A type may be written after the name, where the value does not tell it:
+A type may be written after the name, where the value does not determine it:
 
 ```lerta
 ratio: Float = 1
@@ -41,7 +41,7 @@ print found else 'not found'
 not found
 ```
 
-`found` is a `String?`, a string or nil, and starts as nil. It cannot be printed as it is, since it may be nil: `else` gives the value for nil (see [optional values](optional-values.md)).
+`found` is a `String?`, a string or nil, and starts as nil. It cannot be printed as it is, since it may be nil: `else` gives the value to use for nil (see [optional values](optional-values.md)).
 
 ## Strings
 

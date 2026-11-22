@@ -18,7 +18,7 @@ print gcd(84, 36)
 12
 ```
 
-A function is declared as any name is, with `:=`: its value is a function literal, `(<parameters>) -> <body>`. The body is an expression on the line of `->`, or an indented block whose last statement gives the result. The return type is inferred, except for a recursive function such as `gcd`, which writes it after the parameters.
+A function is declared as any name is, with `:=`: its value is a function literal, `(<parameters>) -> <body>`. The body is an expression on the same line as `->`, or an indented block whose last statement gives the result. The return type is inferred, except for a recursive function such as `gcd`, where it is written after the parameters.
 
 ## Defaults and named arguments
 
@@ -43,7 +43,7 @@ hi, Bo
 1
 ```
 
-A parameter may have a default. A struct is constructed with named arguments, which may leave out its members with a value, or with the value alone of its one member that must be given (see [structs](structs.md)).
+A parameter may have a default. A function's own arguments are positional. A struct is constructed with named arguments, and the members that have a value of their own may be left out. If only one member must be given, its value may be written alone, as in `Box(5)` (see [structs](structs.md)).
 
 ## Function values
 
@@ -59,7 +59,7 @@ print [3, 1, 2].sorted_by((x) -> -x)
 [3, 2, 1]
 ```
 
-A function is a value of a type such as `(Int) -> Int`. A function literal passed where that type is expected leaves out the types of its parameters, which it takes from there.
+A function is a value of a type such as `(Int) -> Int`. A function literal passed where that type is expected leaves out the types of its parameters, which come from the expected type.
 
 ```lerta
 counter := ->
@@ -78,6 +78,6 @@ print next()
 2
 ```
 
-A literal captures the names it uses, and keeps them alive while it lives.
+A function literal captures the variables it uses, and keeps them alive for as long as it lives.
 
 For the rules, see [functions](../reference/functions.md).
