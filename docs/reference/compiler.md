@@ -1,6 +1,6 @@
 # Compiler
 
-- `lerta` is `bin/lerta`, which `make` builds (see the [README](../../README.md)).
+- `lerta` is `bin/lerta`, which `make` builds (see [Getting started](../../README.md#getting-started)).
 - It carries the standard modules and the runtime in it, so it needs no other file of the repository.
 - It is built with `-O`, without the [memory checks](#memory-checks).
 

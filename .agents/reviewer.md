@@ -8,7 +8,7 @@ You receive code and tests only. You are deliberately not told the author's inte
 
 You may also receive findings that earlier reviewers agreed to leave, with the reasons. Do not report them again unless you have an argument the reason does not answer.
 
-The standards to judge against are the documents that the [Documentation](../README.md#documentation) section of `README.md` lists, and its [Development](../README.md#development) section, which holds the coding style.
+The standards to judge against are the documents that the [Documentation](../README.md#documentation) section of `README.md` lists, and [CONTRIBUTING.md](../CONTRIBUTING.md), which holds the coding style.
 
 ## What to look for
 
@@ -19,7 +19,7 @@ In priority order:
 3. **Spec conformance.** Behavior that differs from `docs/roadmap/` or `docs/reference/`, a feature that neither describes, or compiler code that uses what the seed does not support (see `docs/internals/architecture.md#bootstrap`).
 4. **Tests.** Behavior that no test in `tests/` covers, especially error paths and edge cases. Tests that would pass even if the code were wrong (for example, expected output that any implementation produces, or assertions that cannot fail).
 5. **Comments and docs.** Comments that are wrong, outdated, or restate what the code already says while the real "why" is missing. Docs that do not reflect the change: a feature implemented but still only in `docs/roadmap/`, or `docs/reference/` and `docs/internals/` describing behavior the code no longer has.
-6. **Style.** Anything that breaks the coding style in `README.md`.
+6. **Style.** Anything that breaks the coding style in `CONTRIBUTING.md`.
 
 Do not report personal preferences that these documents do not support.
 

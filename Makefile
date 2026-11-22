@@ -1,5 +1,5 @@
 # Builds minilerta from the seed, the compiler's own LLVM IR, and with it tools/build.lerta, which
-# builds the compiler, and checks and tests it. See README.md for the goals and
+# builds the compiler, and checks and tests it. See CONTRIBUTING.md for the goals and
 # docs/internals/architecture.md#bootstrap for the bootstrap. Written for GNU make 3.81, the one
 # macOS has.
 
@@ -26,14 +26,14 @@ RUNTIME := $(wildcard runtime/*.c runtime/*.h runtime/*.mk)
 BUILD_TOOL_SOURCES := tools/build.lerta $(shell find tools/build compiler std -name '*.lerta')
 
 # The goals, which tools/build.lerta builds once the Makefile has built it from the seed: see
-# README.md. Each runs it, as it finds what to make again itself.
+# CONTRIBUTING.md. Each runs it, as it finds what to make again itself.
 GOALS := all bin/lerta bin/test test test-bootstrap seed check format bench bench-http site site-serve
 
 $(GOALS): build/build$(HOST_EXE)
 	@build/build $@ $(if $(TARGET),--target $(TARGET))
 
 # The targets of test-targets.llit, or those of TARGETS alone, each where it says, and the tests of
-# the target TARGET here, which test-targets runs wherever it runs one (see README.md).
+# the target TARGET here, which test-targets runs wherever it runs one (see CONTRIBUTING.md).
 test-targets: build/build$(HOST_EXE)
 	$(if $(TARGET),$(error make test-targets takes TARGETS, not TARGET))
 	@build/build test-targets $(TARGETS)

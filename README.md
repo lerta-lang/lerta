@@ -1,8 +1,6 @@
 # Lerta
 
-Lerta is a statically typed, compiled language with CoffeeScript-like syntax and TypeScript-like type inference. It compiles to native code through LLVM.
-
-The name comes from the Esperanto word *lerta*, meaning "skillful", "deft" or "good at".
+Lerta is a statically typed language that compiles to native code through LLVM, with CoffeeScript-like syntax and TypeScript-like type inference. Lerta code has no undefined behavior, and its memory is managed without a tracing garbage collector. Against each of Go, Swift and Node.js, it is as fast or faster in most of [its benchmarks](bench/README.md).
 
 ```lerta
 text := 'the quick fox and the lazy dog and the end'
@@ -25,205 +23,59 @@ dog    *
 end    *
 ```
 
+- **Shape shows structure.** Blocks are marked by indentation alone, and the formatter lays out every program the same way.
+- **Types, mostly inferred.** A function declares the types of its parameters. Its return type and the types of its variables are inferred, and all of them are checked at compile time.
+- **Safe by default.** Lerta code has no undefined behavior: a value can be nil only where its type says so, and an index out of range or an integer overflow throws an exception.
+- **Reference counting, with cycle checks.** An object is freed as soon as its last reference goes away, with no tracing garbage collector. Cycles are not collected: `weak` references break them, the compiler warns about those it can see, and debug builds report the objects that leak.
+- **Single-threaded and event-driven.** Programs wait with `await` on an event loop, as in Node.js, and have no data races.
+
+[lerta.org](https://lerta.org/) shows more of the language, and has [a tour](https://lerta.org/tour/) of it.
+
+The name is the Esperanto word *lerta*, which means "skillful" or "deft".
+
 ## Status
 
-Early development. The compiler is written in Lerta and builds itself, starting from a seed of LLVM IR (see [the bootstrap](docs/internals/architecture.md#bootstrap)). What is left is in [the roadmap](docs/roadmap/README.md).
+Lerta is in early development: there are no releases yet, and the language and its standard library may still change incompatibly. The compiler is written in Lerta and builds itself, starting from a seed of LLVM IR (see [the bootstrap](docs/internals/architecture.md#bootstrap)). It runs on Linux, macOS and Windows. What is planned, such as package management, a test runner, a REPL and a playground, is in [the roadmap](docs/roadmap/README.md).
+
+Almost all of the code was written by AI coding agents, directed by the author. [AGENTS.md](AGENTS.md) describes how they work.
 
 ## Getting started
 
-The compiler, `lerta`, runs on Linux, macOS and Windows, and builds programs for them with clang and the host's C toolchain, such as Xcode's Command Line Tools on macOS (see [its tools](docs/reference/compiler.md#tools)). To compile a program:
+There are no binary releases yet, so build the compiler from source. You need make, plus the tools that the compiler itself uses to build programs: clang, and the linker and C library that [Tools](docs/reference/compiler.md#tools) lists for each system (llvm-mingw on Windows). On Windows, use GNU make (for example, `winget install ezwinports.make`) and run it in Git Bash, the shell of [Git for Windows](https://gitforwindows.org/).
 
 ```
-lerta build examples/hello.lerta [-o hello] [-O]
+git clone https://github.com/lerta-lang/lerta
+cd lerta
+make
+bin/lerta run examples/hello.lerta
 ```
 
-The commands of the compiler are in [the reference](docs/reference/compiler.md).
+`make` builds the compiler, `bin/lerta` (`bin/lerta.exe` on Windows). It carries the standard library and the runtime, so it needs no other file from the repository: copy it to a directory on your `PATH` to call it `lerta`, as the documents do. To compile a program into an executable instead of running it:
+
+```
+bin/lerta build examples/hello.lerta -O
+./hello
+```
+
+`build` writes the executable, `hello`, into the current directory. `-O` optimizes it; without `-O`, the build is a debug build, which also checks the program's memory as it runs.
+
+From here, [the tour](docs/tour/README.md) shows the language, [the reference](docs/reference/compiler.md) lists every command and option, and [editors/](editors/) has editor support for VS Code and Vim.
 
 ## Documentation
 
 | Document | Contents |
 |---|---|
-| [docs/tour/](docs/tour/README.md) | A tour of the language for programmers who know another, in short programs with their output |
-| [docs/philosophy.md](docs/philosophy.md) | What Lerta stands for: its design principles, safety, performance and non-goals |
-| [docs/reference/](docs/reference/README.md) | The external specification as implemented: the language, the standard modules and the commands, as a program and its user observe them. It grows with the implementation |
-| [docs/internals/](docs/internals/README.md) | The internal specification as implemented: the architecture, the runtime rules and the bootstrap, the compiler, execution, memory, the representation of values, iteration and awaiting, input and output and the platforms |
-| [docs/roadmap/](docs/roadmap/README.md) | What is planned and not implemented yet, both external and internal, and open questions |
-| [docs/issues.md](docs/issues.md) | Known defects, with their severity and fix |
+| [Tour](docs/tour/README.md) | An introduction to the language for programmers who know another one, in short programs with their output |
+| [Philosophy](docs/philosophy.md) | The design principles, the goals for safety and performance, and what Lerta leaves out |
+| [Reference](docs/reference/README.md) | The language, the standard library and the `lerta` command, as implemented |
+| [Internals](docs/internals/README.md) | How the compiler and the runtime work: the architecture and the bootstrap, memory, the representation of values, iteration and awaiting, input and output, and the platforms |
+| [Roadmap](docs/roadmap/README.md) | What is planned but not implemented yet, and the open questions |
+| [Known issues](docs/issues.md) | The known defects: where each is, how to see it and how to fix it |
 
-## Development
+## Contributing
 
-### Repository layout
-
-| Path | Contents |
-|---|---|
-| `compiler/` | The compiler (see [below](#the-compiler)) |
-| `std/` | The standard modules, in Lerta, which the compiler embeds |
-| `runtime/` | The C runtime, which the compiler embeds; `<system>.mk` says which of its `platform_*.c` files and of libuv's sources, with which flags and libraries, each system builds it with, as make includes it |
-| `seed/` | The seed, from which `make` builds the compiler (see [the bootstrap](docs/internals/architecture.md#bootstrap)) |
-| `LICENSE-MIT`, `LICENSE-APACHE` | Lerta's licenses (see [License](#license)) |
-| `third_party/` | libuv and its licenses, whose notices go with the compiler and the programs it builds (see [License](#license)) |
-| `tools/` | `build.lerta` and `build/`, which build the compiler, and check and test it, for the goals of `make` (see [the bootstrap](docs/internals/architecture.md#bootstrap)); `docker/`, the Docker images that `make test-targets` runs in, with `run.sh` to run a command (bash by default) in one |
-| `test/` | The test driver and suites (see [Testing](#testing)) |
-| `tests/` | The run tests: Lerta sources and their expected output; also the CLI checks' files (`tests/cli/`) and the formatter cases (`tests/format/`) |
-| `examples/` | Example programs, run as tests (expected output in `tests/examples/`) |
-| `bench/` | Benchmarks, how to run them and their results (see [its README](bench/README.md)) |
-| `editors/` | Editor support for VS Code and Vim; each subdirectory's README says how to install it |
-| `site/` | The website, written from `docs/` (see [Website](#website)) |
-
-#### The compiler
-
-| Path in `compiler/` | Role |
-|---|---|
-| `lexer/`, `parser/` | Build the tree of `ast.lerta` |
-| `loader.lerta` | Reads the modules of a program |
-| `checker/` | Checks them |
-| `codegen/` | Emits LLVM IR |
-| `format/` | The formatter (see [the formatter](docs/internals/compiler.md#formatter)) |
-| `llit.lerta` | Reads [llit](docs/internals/llit.md), Lerta literals as data, for the tools |
-| `main.lerta` | The commands |
-| `minilerta.lerta` | The entry the seed is made from |
-
-### Building
-
-What building the compiler needs on each host, besides the tools that it needs to build programs (see [its tools](docs/reference/compiler.md#tools)), on the `PATH`:
-
-| Host | Needs |
-|---|---|
-| Linux, macOS | make |
-| Windows | The shell of [Git for Windows](https://gitforwindows.org/), which `make` runs in, and GNU make (such as `winget install ezwinports.make`) |
-
-On Windows, the compiler is `bin/lerta.exe`.
-
-```
-make                   # bin/lerta, the compiler, built from the seed
-make TARGET=<target>   # bin/lerta-<target>, the compiler for another target
-make test-bootstrap    # the compiler builds itself to the same IR (TARGET builds the stages for it)
-make seed              # rewrites the seed, only when needed (see the bootstrap)
-make clean
-```
-
-`make` rebuilds only when what the compiler is built from changes: the seed, `compiler/`, `std/`, `runtime/`, `third_party/libuv`, the license notices, `tools/build.lerta` or `tools/build/`.
-
-### Testing
-
-The tests run on Linux, macOS and Windows. A check of what only POSIX systems have, such as signals, does not run on Windows; nor do the tests of a `posix/` directory.
-
-```
-make test              # builds bin/lerta, then runs the tests, the bootstrap's among them, on the host only
-make test-targets      # the tests of the targets that test-targets.llit names, each where it says (see below)
-make test-target TARGET=<target>  # the tests of that target here, as test-targets runs them
-make check             # the code in the style (lerta fmt)
-make format            # lays out the .lerta files in the style (lerta fmt --fix); the documents' samples are left to fix by hand
-```
-
-- Every language feature gets run tests in `tests/`: a Lerta source and its expected output, as the top of `test/run.lerta` describes. Programs in `examples/` are run as tests too, and so are the samples of the documents (see [Website](#website)).
-- A test of values, rather than of what a program writes, checks them with `assert` in the `test`s of [tests/lib/test.lerta](tests/lib/test.lerta), as [tests/args/args.lerta](tests/args/args.lerta) does, and needs no expected file.
-- The compilers that the tests run share the compiler's default [cache](docs/reference/compiler.md#cache), or the one that `LERTA_CACHE_DIR` names, with every other build and worktree, as each entry is keyed by what it is made from, so that no build of another compiler or with other flags takes it. It only grows: run `bin/lerta clean` to free the space, or set `LERTA_CACHE_DIR` to an empty directory to test with an empty cache.
-- `make check` checks the tests' style too. Code that breaks it on purpose, as a test of a form that the style rewrites, keeps it with `# fmt: skip` or `# fmt: off` (see [fmt](docs/reference/compiler.md#fmt)). A file that does not parse starts with `# fmt: off`.
-
-#### Testing other targets
-
-`make test-targets` runs the tests of the targets that `test-targets.llit` names (see [llit](docs/internals/llit.md)), each where it says. The file is each developer's own, which git ignores: copy [tools/test-targets.example.llit](tools/test-targets.example.llit) to it and edit it.
-
-- A target is a short name of [`--target`](docs/reference/compiler.md#--target-target), and runs:
-  - `local`: here;
-  - `docker`: in a container of that image of `tools/docker/` (`linux`, or `wine`, for Windows programs under Wine), on the tree mounted read-only (see `tools/docker/run.sh`);
-  - `ssh`: on that host, in a temporary directory that the tree is sent to, which is removed after, the tree being what `make check` checks: the files that git lists, those not added yet included. The commands run in bash, so its `PATH` there must have make and clang, as in the shell of Git for Windows.
-- The host's own target runs `make test`; another the run tests and the runtime checks built for it (`bin/test --target`) and `make test-bootstrap` for it. A Windows target elsewhere than on Windows runs under Wine, whose bootstrap needs a clang for Windows (such as [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)'s, which the `wine` image has) on Wine's `PATH` (`WINEPATH`), and fails without one.
-- `make test-targets TARGETS="windows-amd64 windows-i386"` runs those alone.
-- The targets run one after another, in the order of the file, but those of SSH hosts after the others, each host's after the tree is sent there once. It ends with how each went. An interruption, as Ctrl-C, removes the containers and the temporary directories.
-
-#### Scanning of new programs
-
-The tests build many programs and run each for the first time, which macOS and Windows scan, slowing the tests down significantly. To keep them from it:
-
-- **macOS** scans them with XProtect unless the app that runs them is a developer tool. Add the apps that run `make`, as Terminal, Visual Studio Code, or `/usr/libexec/sshd-keygen-wrapper` for SSH sessions, to System Settings › Privacy & Security › Developer Tools, and restart them, or log in again. If the list is missing, `sudo spctl developer-mode enable-terminal` shows it.
-- **Microsoft Defender** scans them in real time. Exclude the tree, the [cache](docs/reference/compiler.md#cache) and the temporary directory, where `ssh` targets run, in PowerShell as administrator:
-  ```
-  Add-MpPreference -ExclusionPath C:\path\to\lerta, $env:LOCALAPPDATA\lerta, $env:TEMP
-  ```
-- **Smart App Control**, on Windows 11, asks the cloud about each program before it runs. Turn it off in Windows Security › App & browser control › Smart App Control settings. Once off, it stays off until Windows is reinstalled.
-
-#### The driver
-
-- `test/main.lerta`, the driver, is built by minilerta into `bin/test`, as `tools/build.lerta` is. Why: a change to `compiler/` cannot break the harness that tests it.
-- `make test` builds and runs it. It runs all the suites, or those named, their checks as one list: as many at once as `-j` says, each result shown as it finishes, and each suite's summary at the end. The processes that the suites run to get ready, such as the builds of the runtimes, count toward `-j` too.
-- Its options are listed at the top of `test/main.lerta`: `-k <text>` (checks whose names hold the text; given more than once, one of the texts), `--failed` (those that failed last time), `--target <target>` (the run tests and the runtime checks built for another target), and more.
-- A failed check runs once more, alone, after the others, and passes as flaky if it passes then. `--no-retry` turns that off.
-
-```
-bin/test runtime            # the runtime checks alone
-bin/test -k tests/string    # the checks whose names hold tests/string
-bin/test -k tests/string -k tests/char  # those that hold either
-bin/test --failed           # the checks that failed when they last ran
-```
-
-#### Suites
-
-| Suite | File | Checks |
-|---|---|---|
-| `bootstrap` | `test/bootstrap.lerta` | That the compiler builds itself, as `make test-bootstrap` checks, but with stage2 and `bin/lerta` as they are: it fails when stage2 is older than `bin/lerta`; `make test` builds both first |
-| `run` | `test/run.lerta` | The run tests |
-| `cli` | `test/cli.lerta`, checks in `test/cli/*.lerta` | The command line |
-| `format` | `test/format.lerta` | The formatter; its cases are the exact specification of the style |
-| `runtime` | `test/runtime.lerta` | What no Lerta program can trigger: each check links a C program of `test/runtime/`, standing in for generated code, with the runtime |
-| `leaks` | `test/leaks.lerta` | The compiler's own leaks and uses of dropped objects, which the bootstrap's stage2, built with the memory checks, reports while running `dump-llvm` and `fmt` on each test and example |
-| `self` | `test/self.lerta` | The driver itself: it must report the tests of `tests/harness/` (most of which must fail, each as it should) and take its options as it says |
-
-#### Modules
-
-| Module in `test/lib/` | Role |
-|---|---|
-| `lerta` | Where the repository and the compiler are; running it; the run's directories; caching the runtimes before the tests |
-| `report` | Selecting, running and reporting checks |
-| `expect` | What checks expect of the programs they run |
-| `target` | `--target` |
-| `wine` | Running Windows programs under Wine |
-| `cli` | Running the compiler in directories of its own |
-| `lsp` | Sessions with the language server |
-
-### Website
-
-```
-make site              # build/site, the website
-make site-serve        # serves it at http://127.0.0.1:8000/ to look at
-```
-
-- `site/site.lerta` writes the pages that `site/pages.lerta` lists: `site/index.md`, the top page, whose links are written as from `docs/`, `docs/philosophy.md`, and those of `docs/tour/`, `docs/reference/` and `docs/internals/`, each at its path in `docs/`, so that their links work as on GitHub. A link to what is not on the site goes to GitHub (`site/links.lerta`).
-- The site is served at the root of its domain: its links start with `/`.
-- `site/markdown.lerta` takes only the Markdown that `docs/` writes: headings, paragraphs, lists, tables and fenced code; code spans, emphasis and links. Anything else fails the build with its line.
-- A ```` ```lerta ```` block followed by an ```` ```output ```` block, blank lines between them allowed, is a sample, which must print the output and nothing else, and succeed: the run tests run those of README.md and of the site's pages. An output block after anything else fails the build. README.md is read for its samples as `docs/` is, so it keeps to the same Markdown. `make check` checks that the samples are in the style, as lerta fmt does, and reports each place in its document.
-- A ```` ```lerta ```` block is colored by the compiler's lexer (`site/highlight.lerta`); one that the lexer rejects, as code of a planned feature, is shown without colors, with a warning.
-- The run tests write the site, which must give no warning, and the tests in `tests/site/` check the Markdown and the colors.
-
-### Changing the language
-
-- Implement a feature as [the roadmap](docs/roadmap/README.md) specifies it. When it is implemented, move its description to [the reference](docs/reference/README.md) or [the internals](docs/internals/README.md) and remove it from the roadmap.
-- The tour shows the language as a newcomer meets it, not every rule: a feature goes there only if such a reader would miss it, and a change that alters what a page shows updates the page.
-- When a design question is not covered, apply [the principles](docs/philosophy.md) in priority order.
-- Follow [the runtime rules](docs/internals/architecture.md#runtime-rules), and [the bootstrap](docs/internals/architecture.md#bootstrap) for which features the compiler may use.
-
-### Coding style
-
-Simplicity of the result comes first (KISS). Simplicity of the process does not matter.
-
-Unless it conflicts with KISS:
-
-- **DRY.** No duplicated logic.
-- **Separation of concerns.** One module, one responsibility. Split long functions and classes.
-- **Consistency.** Follow the naming and structure that already exist.
-- **Least surprise.**
-
-Let the code speak instead of relying on comments:
-
-- Name things so that **what** they do is clear.
-- Structure logic so that **how** it works is clear. Break complex parts into named intermediate values.
-- Comment only the **why** that the code cannot show.
-
-Documentation follows the same rules: no redundancy, no duplication, and a clear structure. State each fact in one place and point to it from elsewhere.
-
-The style of Lerta code is in [the reference](docs/reference/style.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) describes the layout of the repository, how to build and test the compiler, the rules for changing the language, and the coding style.
 
 ## License
 
-Lerta is licensed under either of the [MIT License](LICENSE-MIT) or the [Apache License, Version 2.0](LICENSE-APACHE), at your option. Programs that the compiler builds hold Lerta's runtime and standard modules, and libuv; what goes with them is in [the reference](docs/reference/compiler.md#cache). How contributions are licensed is in [CONTRIBUTING.md](CONTRIBUTING.md).
+Lerta is licensed under either the [MIT License](LICENSE-MIT) or the [Apache License, Version 2.0](LICENSE-APACHE), at your option. The executables that the compiler builds include Lerta's runtime and standard library, libuv, and tables made from the Unicode Character Database: [`lerta license`](docs/reference/compiler.md#license) prints the notices that go with them. [CONTRIBUTING.md](CONTRIBUTING.md#licensing) says how contributions are licensed.

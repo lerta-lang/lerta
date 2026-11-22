@@ -82,7 +82,7 @@
 ## Platforms
 
 - Targets are Linux, macOS and **Windows**. No POSIX-specific assumptions from the start: OS dependencies are confined to the boundary of libuv and the runtime.
-- How the tests cover other targets, on other machines or in Docker, is in the [README](../../README.md#testing-other-targets).
+- How the tests cover other targets, on other machines or in Docker, is in [CONTRIBUTING.md](../../CONTRIBUTING.md#testing-other-targets).
 
 ### Platform functions
 
