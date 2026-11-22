@@ -49,3 +49,15 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - Where: `find_interpolation_end` in `compiler/lexer/string_literal.lerta` passes over a string literal in `#{...}`, but not over a regular expression literal.
 - How to see it: `print "#{/}/.test('}')}"` fails with `unterminated regular expression`, and `print "#{/"/.test('"')}"` with `unterminated interpolation`, where `"#{'}'}"` gives `}`.
 - How to fix it: pass over a regular expression literal there as over a string, where a `/` starts one as the lexer tells it.
+
+## The reference names an option `-e` of `lerta run` that does not exist
+
+- Where: `docs/reference/syntax.md` and `docs/reference/style.md` say that `;` is for a program given on the command line, and link to `-e` in [the compiler](reference/compiler.md#run), which has no such option.
+- How to see it: `lerta run -e 'print 1'` answers `unknown option -e`.
+- How to fix it: give `run` the option, or name standard input (`lerta run -`) there instead.
+
+## The build tool and the test driver are not rebuilt when only `site/` changes
+
+- Where: `BUILD_TOOL_SOURCES` in the `Makefile`, and the sources of `bin/test` in `tools/build/inputs.lerta`, leave out `site/*.lerta`, which `tools/build/samples.lerta` and `test/run.lerta` import.
+- How to see it: after a change to `site/markdown.lerta` alone, `make check` and the sample checks of `make test` run with the old code.
+- How to fix it: count `site/*.lerta` among the sources of both.
