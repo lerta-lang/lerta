@@ -1,7 +1,7 @@
 # Compiler
 
 - `lerta` is `bin/lerta`, which `make` builds (see [Getting started](../../README.md#getting-started)).
-- It carries the standard modules and the runtime in it, so it needs no other file of the repository.
+- It carries the standard modules, the runtime and its [version](#--version) in it, so it needs no other file of the repository.
 - It is built with `-O`, without the [memory checks](#memory-checks).
 
 ## Tools
@@ -18,7 +18,7 @@ A build for another target needs more (see [`--target`](#--target-target)).
 
 ## Arguments
 
-- They are read by [std:args](std.md#stdargs): `lerta -h` lists the commands, and `lerta <command> -h` prints the usage of the command, with what each option does.
+- They are read by [std:args](std.md#stdargs): `lerta -h` lists the commands and `--version`, and `lerta <command> -h` prints the usage of the command, with what each option does.
 - Arguments that do not fit a command's usage print `lerta: ` and what does not fit, then the usage, to stderr, and exit with code 2.
 - An argument that starts with `-` is taken as an option, but for `-` alone, a source, and the value of an option that takes one, as `-o`, `--target` and `--linker-flag`, which is the next argument whatever it starts with, or what follows `=` after a long option, as `--target=linux-amd64`. An option given twice is an error, but for `--linker-flag`.
 - A path that starts with `-` is written as `./-name.lerta`.
@@ -32,6 +32,15 @@ A build for another target needs more (see [`--target`](#--target-target)).
   - Its imports of files are relative to the current directory.
   - Not valid UTF-8, it prints `<stdin> is not valid UTF-8` and exits with code 1.
   - What `run` runs reads its standard input after it.
+
+## `--version`
+
+```
+lerta --version
+```
+
+- Prints `lerta <version>`, the version being the one line of the repository's `VERSION` when the compiler was built: three numbers, and perhaps a suffix after `-`, as `lerta 0.0.0` or `lerta 0.2.0-dev`.
+- It is written where a command is, and takes no argument, as a command that takes none.
 
 ## Commands
 

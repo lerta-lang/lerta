@@ -2,7 +2,8 @@
 import list_dir, read_text from 'std:io'
 import platform from 'std:process'
 import CompileError from '../../compiler/errors'
-import LICENSE_PATHS from '../../compiler/license'
+import NOTICES from '../../compiler/license'
+import VERSION_PATH from '../../compiler/version'
 import
   described_build, description_path, PlatformBuild, runtime_c_names, SYSTEMS
 from '../../compiler/platform_description'
@@ -26,11 +27,10 @@ struct Inputs
 
   # the files that the compiler carries in build/embedded.lerta: std's sources and tables at any
   # depth, as the seed finds them (see tools/build/embed.lerta), the runtime's, and libuv's: its
-  # headers, and the sources that a description lists, and the license notices that go with
-  # programs it builds;
+  # headers, and the sources that a description lists;
   embedded: String[]
 
-  # the compiler's;
+  # the compiler's, with the texts that it imports: its version and the license notices;
   sources: String[]
 
   # the Lerta test harnesses', which minilerta builds, so that a change to the compiler cannot
@@ -55,13 +55,14 @@ find_inputs := ->
   for build in builds
     libuv_sources.append ["third_party/libuv/#{source}" for source in build.libuv_sources]
   include_headers := files_under('third_party/libuv/include', ['.h'])
+  imported_texts := [VERSION_PATH] + [path for (path, _) in NOTICES]
   libuv := include_headers + files_under('third_party/libuv/src', ['.h']) + libuv_sources
   Inputs(
     host_build
     runtime
     runtime_c
-    embedded: sorted_once(files_under('std', ['.lerta', '.bin']) + runtime + libuv + LICENSE_PATHS)
-    sources: [files_under('compiler', ['.lerta'])..., EMBEDDED_MODULE]
+    embedded: sorted_once(files_under('std', ['.lerta', '.bin']) + runtime + libuv)
+    sources: [files_under('compiler', ['.lerta'])..., EMBEDDED_MODULE, imported_texts...]
     harness: files_under('test', ['.lerta'])
   )
 

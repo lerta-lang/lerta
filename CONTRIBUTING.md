@@ -11,6 +11,7 @@ Before changing the language, read [Changing the language](#changing-the-languag
 | `runtime/` | The C runtime, which the compiler embeds. For each system, `<system>.mk`, which make includes, lists the `platform_*.c` files and the libuv sources that the runtime is built from, with their flags and libraries |
 | `seed/` | The seed, from which `make` builds the compiler (see [the bootstrap](docs/internals/architecture.md#bootstrap)) |
 | `LICENSE-MIT`, `LICENSE-APACHE` | Lerta's licenses (see [License](README.md#license)) |
+| `VERSION` | Lerta's version, on one line, as `0.1.0` or `0.2.0-dev`, which the compiler carries and [`lerta --version`](docs/reference/compiler.md#--version) prints |
 | `third_party/` | libuv and the Unicode Character Database, with their licenses, whose notices go with the compiler and the programs it builds (see [License](README.md#license)) |
 | `tools/` | `build.lerta` and `build/`, which build, check and test the compiler for the goals of `make` (see [the bootstrap](docs/internals/architecture.md#bootstrap)); `docker/`, the Docker images that `make test-targets` runs in, with `run.sh` to run a command (bash by default) in one |
 | `test/` | The test driver and suites (see [Testing](#testing)) |
@@ -45,7 +46,7 @@ make seed              # rewrites the seed, only when needed (see the bootstrap)
 make clean
 ```
 
-`make` rebuilds only when what the compiler is built from changes: the seed, `compiler/`, `std/`, `runtime/`, `third_party/libuv`, the license notices, `tools/build.lerta` or `tools/build/`.
+`make` rebuilds only when what the compiler is built from changes: the seed, `compiler/`, `std/`, `runtime/`, `third_party/libuv`, the license notices, `VERSION`, `tools/build.lerta` or `tools/build/`.
 
 ## Testing
 

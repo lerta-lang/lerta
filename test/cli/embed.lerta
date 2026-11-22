@@ -111,7 +111,23 @@ license_check := ->
     compare_text('stdout', notices.join("\n"), printed.stdout_text())...
   ]
 
+# `lerta --version` prints the version that the repository's VERSION holds, one line of three
+# numbers and perhaps a suffix, without that file, which a directory of its own does not hold.
+version_check := ->
+  dir := new_cli_dir('version')
+  text := await read_text_or_throw("#{root_dir}/VERSION")
+  failures: String[]
+  unless /^\d+\.\d+\.\d+(-[0-9a-z.]+)?\n$/.test(text)
+    failures.push "VERSION is not one line of a version: #{text}"
+  printed := await run_command(compiler, ['--version'], dir)
+  failures.append expect_success('--version', printed)
+  failures.append compare_text('stdout', "lerta #{text}", printed.stdout_text())
+  failures
+
 export checks: Check[] =
+  { name: 'lerta --version prints the version that the compiler carries', run: ->
+    await version_check()
+  }
   { name: 'lerta license prints the notices that the compiler carries', run: ->
     await license_check()
   }

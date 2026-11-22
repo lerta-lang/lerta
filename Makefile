@@ -22,7 +22,8 @@ RUNTIME_C := $(filter-out runtime/platform_%.c,$(wildcard runtime/*.c)) \
   $(addprefix runtime/,$(PLATFORM_SOURCES))
 RUNTIME := $(wildcard runtime/*.c runtime/*.h runtime/*.mk)
 # What tools/build.lerta is built from: itself, the compiler's modules, some of which it imports,
-# and std, which minilerta reads.
+# and std, which minilerta reads. Not the version and the license notices, which two of those
+# modules embed: the tool uses only their paths.
 BUILD_TOOL_SOURCES := tools/build.lerta $(shell find tools/build compiler std -name '*.lerta')
 
 # The goals, which tools/build.lerta builds once the Makefile has built it from the seed: see

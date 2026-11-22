@@ -13,5 +13,5 @@ This reference documents only implemented behavior. The planned design of what i
 | [Builtins](builtins.md) | Builtin functions, the builtin interfaces, `INT_MIN` and `INT_MAX`, and the methods of the builtin types |
 | [Modules](modules.md) | Imports, exports, top-level code and import cycles |
 | [Standard modules](std.md) | The `std:` modules, such as those of arguments, JSON, HTTP, files, processes, the network and time |
-| [Compiler](compiler.md) | The commands (`build`, `run`, `fmt`, `lsp` and the dumps), the cache and diagnostics |
+| [Compiler](compiler.md) | `--version`, the commands (`build`, `run`, `fmt`, `lsp` and the dumps), the cache and diagnostics |
 | [Style](style.md) | Coding conventions for Lerta code |
