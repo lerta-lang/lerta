@@ -6,6 +6,9 @@ export struct Command
   program: String
   args: String[]
 
+  # The variables set for the program besides the runner's own.
+  env := Map<String, String>()
+
 export is_found := (command: String) ->
   (await run('sh', '-c', "command -v #{command} >/dev/null")).code == 0
 
@@ -13,7 +16,8 @@ export is_found := (command: String) ->
 # succeeded, and what it printed, empty if not captured.
 export run_failure := (label: String, command: Command, capture = false) ->
   output := Buffer()
-  exit := await run(command.program, command.args..., stdout: capture then output)
+  { program, args, env } := command
+  exit := await run(program, args..., env: env, stdout: capture then output)
   failure := exit.code != 0 then "#{label} failed with exit code #{exit.code}"
   (failure, output.binary)
 

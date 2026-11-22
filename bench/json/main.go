@@ -129,8 +129,8 @@ func (p *Parser) parseString() string {
 	for p.bytes[p.position] != '"' {
 		p.position++
 	}
-	// Copied, as the other languages copy, rather than a slice that shares the text.
-	text := strings.Clone(p.bytes[start:p.position])
+	// A slice that shares the text, as Go's strings do.
+	text := p.bytes[start:p.position]
 	p.skipByte()
 	return text
 }

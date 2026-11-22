@@ -36,9 +36,11 @@ var all: [String] = []
 for _ in 0..<lines { all.append(lineOf()) }
 
 // ASCII's \w, \d and word boundaries, as Lerta's are, where Swift's are Unicode's by default;
-// \s stays Unicode's White_Space, as Lerta's is.
+// \s stays Unicode's White_Space, as Lerta's is. It matches by Unicode scalars, as the others do,
+// rather than by grapheme clusters, Swift's default.
 func ascii(_ pattern: String) -> Regex<AnyRegexOutput> {
   try! Regex(pattern).asciiOnlyWordCharacters().asciiOnlyDigits().wordBoundaryKind(.simple)
+    .matchingSemantics(.unicodeScalar)
 }
 
 let itemRead = ascii(#"\b(?:GET|POST) /items/\d+"#)

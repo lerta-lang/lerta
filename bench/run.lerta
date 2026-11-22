@@ -1,5 +1,5 @@
 # Builds each benchmark in Lerta, Swift, Go, JavaScript (Node.js) and C, but in the languages that
-# NOT_WRITTEN names for it, runs each 3 times, checks that every run of every language prints the
+# NOT_WRITTEN names for it, runs each RUNS times, checks that every run of every language prints the
 # benchmark's main.out, and prints the version of each language, the best wall-clock time of each
 # in seconds, and last the geometric mean of those of each language.
 # In each row, the least time of the languages but C is in bold where stdout is colored. C is built
@@ -27,7 +27,12 @@ LANGUAGES := EXTENSIONS.keys().to_array()
 # expressions, and Windows has no POSIX regex.h.
 NOT_WRITTEN := { 'regex': ['c'] }
 
-RUNS := 3
+RUNS := 10
+
+# Go collects garbage on as many threads as the machine has, which on one of 20 made binary_trees
+# and word_count two to three times slower than on 4, and their times differ from run to run. So
+# its programs run as on a machine of 4.
+GO_ENV := { 'GOMAXPROCS': '4' }
 
 # Swift links libm for `rounded()` only when asked, at least on Linux; Windows has none.
 SWIFT_LIBM: String[] = platform == 'windows' then [] else ['-lm']
@@ -61,6 +66,10 @@ first_line := (label: String, command: String) ->
   text := await run_checked(label, { program: 'sh', args: ['-c', "#{command} 2>&1"] }, true)
   text.split("\n")[0]
 
+# Node.js itself, which runs the benchmarks rather than the `node` on the PATH: that may be the
+# script of a version manager, whose own start each run would be timed with.
+node_program := await first_line('the path of node', 'node -p process.execPath')
+
 # The version of the language, the commit for Lerta.
 version := (language: String) ->
   return 'no swiftc' if language == 'swift' and not has_swift
@@ -82,7 +91,7 @@ build := (name: String, language: String) ->
   executable := "#{OUT}/#{name}-#{language}"
   output := ['-o', executable]
   if language == 'node'
-    return Command(program: 'node', args: [source])
+    return Command(program: node_program, args: [source])
   return nil if language == 'swift' and not has_swift
   return nil if language == 'go' and not has_go
   compile: Command =
@@ -92,7 +101,8 @@ build := (name: String, language: String) ->
       when 'go' then { program: 'go', args: ['build', output..., source] }
       else { program: 'swiftc', args: ['-O', source, SWIFT_LIBM..., output...] }
   await build_quietly("building #{name} in #{language}", compile)
-  Command(program: executable, args: [])
+  env: Map<String, String> = language == 'go' then GO_ENV else Map()
+  Command(env, program: executable, args: [])
 
 # cl takes its options with `-`, as `/` would start a path that Git Bash's sh rewrites.
 c_args := (source: String, executable: String) ->

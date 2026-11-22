@@ -32,26 +32,31 @@ function makeText() {
   return text + ']';
 }
 
-// Each part read skips the spaces after it, so that the next starts at its first byte.
+// Each part read skips the spaces after it, so that the next starts at its first character. It
+// reads the string itself, by its code units, as JavaScript does: the text is ASCII.
 class Parser {
-  constructor(bytes) {
-    this.bytes = bytes;
+  constructor(text) {
+    this.text = text;
     this.position = 0;
-    this.decoder = new TextDecoder();
+  }
+
+  // The code unit at the position.
+  peek() {
+    return this.text.charCodeAt(this.position);
   }
 
   skipSpaces() {
-    while (this.position < this.bytes.length && this.bytes[this.position] === SPACE) this.position++;
+    while (this.position < this.text.length && this.peek() === SPACE) this.position++;
   }
 
-  // Skips a punctuation byte, as `[` or `,`, which the text has at the position.
-  skipByte() {
+  // Skips a punctuation character, as `[` or `,`, which the text has at the position.
+  skipChar() {
     this.position++;
     this.skipSpaces();
   }
 
   parseValue() {
-    switch (this.bytes[this.position]) {
+    switch (this.peek()) {
       case 0x5b: return this.parseArray(); // [
       case 0x7b: return this.parseObject(); // {
       case QUOTE: return this.parseString();
@@ -68,60 +73,58 @@ class Parser {
   }
 
   parseArray() {
-    this.skipByte();
+    this.skipChar();
     const items = [];
-    if (this.bytes[this.position] !== 0x5d) { // ]
+    if (this.peek() !== 0x5d) { // ]
       items.push(this.parseValue());
-      while (this.bytes[this.position] === COMMA) {
-        this.skipByte();
+      while (this.peek() === COMMA) {
+        this.skipChar();
         items.push(this.parseValue());
       }
     }
-    this.skipByte();
+    this.skipChar();
     return items;
   }
 
   parseObject() {
-    this.skipByte();
+    this.skipChar();
     const fields = new Map();
-    if (this.bytes[this.position] !== 0x7d) { // }
+    if (this.peek() !== 0x7d) { // }
       this.parseField(fields);
-      while (this.bytes[this.position] === COMMA) {
-        this.skipByte();
+      while (this.peek() === COMMA) {
+        this.skipChar();
         this.parseField(fields);
       }
     }
-    this.skipByte();
+    this.skipChar();
     return fields;
   }
 
   parseField(fields) {
     const key = this.parseString();
-    this.skipByte();
+    this.skipChar();
     fields.set(key, this.parseValue());
   }
 
   parseString() {
     const start = this.position + 1;
     this.position = start;
-    while (this.bytes[this.position] !== QUOTE) this.position++;
-    const text = this.decoder.decode(this.bytes.subarray(start, this.position));
-    this.skipByte();
+    while (this.peek() !== QUOTE) this.position++;
+    const text = this.text.slice(start, this.position);
+    this.skipChar();
     return text;
   }
 
   parseInt() {
     let value = 0;
-    while (this.bytes[this.position] >= ZERO && this.bytes[this.position] <= NINE) {
-      value = value * 10 + (this.bytes[this.position] - ZERO);
+    for (let c = this.peek(); c >= ZERO && c <= NINE; c = this.peek()) {
+      value = value * 10 + (c - ZERO);
       this.position++;
     }
     this.skipSpaces();
     return value;
   }
 }
-
-const encoder = new TextEncoder();
 
 // The integers, the lengths of the strings, the true booleans and the items and fields, added up.
 function sum(value) {
@@ -135,7 +138,7 @@ function sum(value) {
   return total;
 }
 
-const text = encoder.encode(makeText());
+const text = makeText();
 let total = 0;
 for (let i = 0; i < PARSES; i++) total += sum(new Parser(text).parseValue());
 console.log(total);
