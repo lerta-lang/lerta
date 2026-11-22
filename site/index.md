@@ -104,21 +104,21 @@ Reference counting does not free objects that refer to each other in a cycle, an
 
 ## Fast
 
-Generics are monomorphized, and exceptions compile to ordinary return values. In most of [the benchmarks](../bench/README.md), Lerta is as fast as Go, Swift and Node.js, or faster. The times in seconds, lower is better, measured on Linux x86-64 on 2026-11-21:
+Generics are monomorphized, and exceptions compile to ordinary return values. In most of [the benchmarks](../bench/README.md), Lerta is as fast as Go, Swift and Node.js, or faster. The times in seconds, lower is better, measured on Linux x86-64 on 2026-11-22:
 
 | Benchmark | Lerta | Swift | Go | Node.js | C |
 |---|---|---|---|---|---|
-| binary_trees | 0.13 | 0.29 | 0.17 | 0.12 | 0.13 |
-| expr | 0.29 | 0.38 | 0.36 | 1.00 | 0.36 |
+| binary_trees | 0.13 | 0.29 | 0.21 | 0.12 | 0.13 |
+| expr | 0.29 | 0.38 | 0.36 | 0.99 | 0.35 |
 | fib | 0.35 | 0.35 | 0.34 | 0.62 | 0.10 |
 | iter | 0.19 | 0.19 | 0.19 | 1.57 | 0.25 |
-| json | 0.45 | 1.00 | 0.40 | 0.71 | 0.52 |
+| json | 0.45 | 1.01 | 0.42 | 0.73 | 0.52 |
 | mandelbrot | 0.32 | 0.32 | 0.34 | 0.35 | 0.32 |
 | nbody | 0.51 | 0.32 | 0.53 | 0.49 | 0.34 |
-| regex | 0.44 | 4.22 | 0.74 | 0.30 | – |
-| sieve | 0.24 | 0.25 | 0.23 | 0.31 | 0.23 |
-| tokens | 0.19 | 0.30 | 0.22 | 0.45 | 0.14 |
-| word_count | 0.66 | 1.83 | 0.80 | 0.88 | 0.52 |
+| regex | 0.44 | 4.22 | 0.74 | 0.31 | – |
+| sieve | 0.24 | 0.25 | 0.22 | 0.30 | 0.22 |
+| tokens | 0.19 | 0.30 | 0.22 | 0.44 | 0.14 |
+| word_count | 0.66 | 1.83 | 0.56 | 0.88 | 0.52 |
 
 C is included as a baseline. The benchmarks are small programs that were written for this project, in each language, and Lerta has been tuned on them. [Method](../bench/README.md#method) explains how they are built and timed, and what to keep in mind when reading the results.
 
