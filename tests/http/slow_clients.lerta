@@ -39,9 +39,11 @@ large := serve((_: Request) -> { body: 'x'.repeat(LARGE) }, write_timeout: 0.3)
 steady := await connect_tcp('127.0.0.1', large.port)
 await steady.write("GET / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n")
 var taken = 0
+
+# 0.03 seconds for each 64 KiB, however much each read gives.
 while chunk := await steady.reader.read(65536)
   taken += chunk.length
-  await sleep(0.03)
+  await sleep(0.03 * chunk.length.to_float() / 65536.0)
 print taken > LARGE
 await large.close()
 
