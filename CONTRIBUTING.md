@@ -77,6 +77,14 @@ make format            # lays out the .lerta files in the style (lerta fmt --fix
 - `make test-targets TARGETS="windows-amd64 windows-i386"` runs those alone.
 - The targets run one after another, in the order of the file, but those of SSH hosts after the others, each host's after the tree is sent there once. The run ends with a summary of how each target went. An interruption, such as Ctrl-C, removes the containers and the temporary directories.
 
+### Continuous integration
+
+GitHub Actions runs the tests on each push to `main` and on each pull request (`.github/workflows/ci.yml`).
+
+- Each target of [`--target`](docs/reference/compiler.md#--target-target) but `macos-universal` runs `make test-target` in a job of its own, on a runner of its system and architecture; a 32-bit target runs on the runner of its 64-bit one.
+- Another job runs `make check`, on Linux.
+- The Windows jobs use llvm-mingw of the version that the `wine` image has, and turn off the [scanning of new programs](#scanning-of-new-programs); the macOS jobs run with it.
+
 ### Scanning of new programs
 
 The tests build many programs and run each for the first time. macOS and Windows scan such programs, which slows the tests down significantly. To prevent this:

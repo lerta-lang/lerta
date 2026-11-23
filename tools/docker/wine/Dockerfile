@@ -9,7 +9,8 @@ RUN dpkg --add-architecture i386 \
   && rm -rf /var/lib/apt/lists/*
 # Without these, Wine writes its own messages to the programs' stderr.
 ENV WINEDEBUG=-all XDG_RUNTIME_DIR=/tmp/xdg
-# The checksum is that of the archive when it was first fetched: llvm-mingw publishes none.
+# The checksum is the one that llvm-mingw's release gives of the archive. The tests on GitHub use
+# the same version (.github/workflows/ci.yml).
 ARG LLVM_MINGW_VERSION=20261006
 ARG LLVM_MINGW=llvm-mingw-$LLVM_MINGW_VERSION-ucrt-x86_64
 ARG LLVM_MINGW_SHA256=317492c456aa27ee607a5919f1d2d38dcdc1112516a24d0bf4b00d078f52d17a

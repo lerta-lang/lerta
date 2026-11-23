@@ -1,0 +1,100 @@
+# The check of the style, and the tests of each target on a runner of its system (see
+# CONTRIBUTING.md#continuous-integration).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to a pull request replaces its run; each commit of main keeps its own.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  # llvm-mingw, as tools/docker/wine/Dockerfile has it, with the checksum that its release gives
+  # of the archive of each architecture.
+  LLVM_MINGW_VERSION: '20261006'
+  LLVM_MINGW_SHA256_x86_64: 317492c456aa27ee607a5919f1d2d38dcdc1112516a24d0bf4b00d078f52d17a
+  LLVM_MINGW_SHA256_aarch64: 9a835d5179c9f3a5a783c11a7f14062a249b4765dd11add64a66786864e82ab2
+
+jobs:
+  # The style is the same on every system, so one job checks it.
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang
+      - run: make check
+
+  test:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # A 32-bit target runs on the runner of its 64-bit one, which runs its programs as they
+        # are.
+        include:
+          - target: linux-amd64
+            runner: ubuntu-24.04
+          - target: linux-i386
+            runner: ubuntu-24.04
+            packages: gcc-multilib
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+          - target: macos-arm64
+            runner: macos-15
+          - target: macos-amd64
+            runner: macos-15-intel
+          - target: windows-amd64
+            runner: windows-2025
+            llvm_mingw: x86_64
+          - target: windows-i386
+            runner: windows-2025
+            llvm_mingw: x86_64
+          - target: windows-arm64
+            runner: windows-11-arm
+            llvm_mingw: aarch64
+    defaults:
+      run:
+        # Git Bash on Windows, which the build needs there.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install clang
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang ${{ matrix.packages }}
+
+      # Windows scans each program that runs for the first time, as the tests' all do.
+      - name: Turn off the scanning of new programs
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+
+      - name: Install make and llvm-mingw
+        if: runner.os == 'Windows'
+        run: |
+          choco install make --no-progress -y
+          name="llvm-mingw-$LLVM_MINGW_VERSION-ucrt-${{ matrix.llvm_mingw }}"
+          curl -sSfL -o "$RUNNER_TEMP/llvm-mingw.zip" \
+            "https://github.com/mstorsjo/llvm-mingw/releases/download/$LLVM_MINGW_VERSION/$name.zip"
+          sha256="${{ env[format('LLVM_MINGW_SHA256_{0}', matrix.llvm_mingw)] }}"
+          echo "$sha256  $RUNNER_TEMP/llvm-mingw.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/llvm-mingw.zip" -d "$RUNNER_TEMP"
+          cygpath -w "$RUNNER_TEMP/$name/bin" >> "$GITHUB_PATH"
+
+      - name: Test
+        run: make test-target TARGET=${{ matrix.target }}
