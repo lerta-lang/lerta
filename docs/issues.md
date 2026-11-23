@@ -67,3 +67,9 @@ Known defects. Each says where it is, how to see it and how to fix it. An issue 
 - Where: not located; one of the rewrites that `lerta fmt` makes of a long line (`compiler/format/`).
 - How to see it: a declaration whose value, on the next line, is a list of strings that `.join("\n")` follows and that is longer than the line, as `X :=` over `  ['usage: plain <command> [<argument>...]', '', 'commands:', '  one', '  two', ''].join("\n")`: `lerta fmt` says that its rewrites would not parse, for an indentation that matches no outer block.
 - How to fix it: find the rewrite that the line takes, and write the items of the list on lines of their own with the call after them, or report the line as one to shorten by hand.
+
+## Tests of serve_files and lerta lsp fail when the temporary directory is on another drive, or has a short name (*unverified*)
+
+- Where: `uri_of` in `test/lib/lsp.lerta` leaves a path on Windows as it is, where the language server resolves it to its long name; `tests/http/serve_files.lerta` serves `/` and `//` of the drive of the working directory, where the files are in the temporary directory.
+- How to see it: on a runner of GitHub with Windows, whose temporary directory is `C:\Users\RUNNER~1\AppData\Local\Temp` and whose tree is on `D:`, the checks of `lerta lsp` with imports get no answer, and `serve_files` answers 404 for the roots `/` and `//`; `.github/workflows/ci.yml` moves the temporary directory to avoid them.
+- How to fix it: resolve the paths of `uri_of` to their long names on Windows too, and serve the roots of the drive of the temporary directory.

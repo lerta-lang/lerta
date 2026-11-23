@@ -12,7 +12,7 @@ import Request, Response, serve from 'std:http'
 import masked_dates from './lib/date'
 import monotonic, sleep from 'std:time'
 
-LARGE := 8000000
+LARGE := 16000000
 
 # A body that never ends, sent as it is read, at /endless; one of LARGE bytes at /large; a short one
 # elsewhere.
@@ -34,8 +34,10 @@ for path in ['/endless', '/large']
   print "#{path}: #{received.text(0, 15)!} #{received.length < LARGE} #{monotonic() - start < 1.0}"
 await writer.close()
 
+# Its write_timeout is longer than a write may wait on Linux for half of the 4 MB that the kernel
+# buffers to drain, but shorter than the whole takes.
 print 'a large body taken steadily'
-large := serve((_: Request) -> { body: 'x'.repeat(LARGE) }, write_timeout: 0.3)
+large := serve((_: Request) -> { body: 'x'.repeat(LARGE) }, write_timeout: 2.0)
 steady := await connect_tcp('127.0.0.1', large.port)
 await steady.write("GET / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n")
 var taken = 0

@@ -257,6 +257,7 @@ print (await response.text())!
 - `max_connections` keeps the server within the system's limit of open files only if the files of a connection, times `max_connections`, plus those of the rest of the program, stay below it. A connection holds its socket and the files that the handler opens, as the one that `serve_files` sends or the connections of `fetch`.
   - Why 100: a connection of `serve_files` holds two files, and a process may open 256 by default on macOS.
 - `write_timeout` bounds each part, not the whole response: a client that takes each part within it keeps its connection, however long the whole takes, and `max_connections` bounds such connections.
+  - A part is taken once the system has buffered it, which may first wait for much of what it buffers to drain: on Linux, by default, up to half of its 4 MB, so a `write_timeout` must also cover that at the slowest rate a client is to keep up with.
 
 #### Server.close
 
