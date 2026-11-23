@@ -186,6 +186,7 @@ Without `-O`, or with `--memory-checks`, the program checks its memory.
 | `linux-i386` | `i686-linux-gnu` |
 | `linux-amd64` | `x86_64-linux-gnu` |
 | `linux-arm64` | `aarch64-linux-gnu` |
+| `linux-armhf` | `arm-linux-gnueabihf`: ARMv6 with VFP, which runs on ARMv7 too |
 | `macos-amd64` | `x86_64-apple-macos` |
 | `macos-arm64` | `arm64-apple-macos` |
 | `windows-i386` | `i686-w64-mingw32` |

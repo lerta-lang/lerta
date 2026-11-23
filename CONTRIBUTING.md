@@ -81,7 +81,7 @@ make format            # lays out the .lerta files in the style (lerta fmt --fix
 
 GitHub Actions runs the tests on each push to `main` and on each pull request (`.github/workflows/ci.yml`).
 
-- Each target of [`--target`](docs/reference/compiler.md#--target-target) but `macos-universal` runs `make test-target` in a job of its own, on a runner of its system and architecture; a 32-bit target runs on the runner of its 64-bit one.
+- Each target of [`--target`](docs/reference/compiler.md#--target-target) but `macos-universal` and `linux-armhf` runs `make test-target` in a job of its own, on a runner of its system and architecture; a 32-bit target runs on the runner of its 64-bit one. GitHub has no runner for `linux-armhf`, whose tests run on a Raspberry Pi with `make test-targets`.
 - Another job runs `make check`, on Linux.
 - The Windows jobs use llvm-mingw of the version that the `wine` image has, and turn off the [scanning of new programs](#scanning-of-new-programs); the macOS jobs run with it.
 
