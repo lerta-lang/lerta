@@ -39,7 +39,13 @@ Almost all of the code was written by AI coding agents, directed by the author. 
 
 The compiler builds programs with clang, and the linker and C library that [Tools](docs/reference/compiler.md#tools) lists for each system (llvm-mingw on Windows): install them first.
 
-Download the compiler for your system from [the releases](https://github.com/lerta-lang/lerta/releases). Its archive, `lerta-<version>-<target>.tar.gz`, named by [the target](docs/reference/compiler.md#--target-target), or `.zip` on Windows, holds it alone, `lerta` (`lerta.exe` on Windows), which carries the standard library and the runtime: put it in a directory on your `PATH`. The macOS one is not signed, so if a browser downloaded it, run `xattr -d com.apple.quarantine lerta` before it.
+On macOS or Linux, [Homebrew](https://brew.sh/) installs the compiler:
+
+```
+brew install lerta-lang/tap/lerta
+```
+
+Or download the compiler for your system from [the releases](https://github.com/lerta-lang/lerta/releases). Its archive, `lerta-<version>-<target>.tar.gz`, named by [the target](docs/reference/compiler.md#--target-target), or `.zip` on Windows, holds it alone, `lerta` (`lerta.exe` on Windows), which carries the standard library and the runtime: put it in a directory on your `PATH`. The macOS one is not signed, so if a browser downloaded it, run `xattr -d com.apple.quarantine lerta` before it.
 
 Write a program, `hello.lerta`:
 

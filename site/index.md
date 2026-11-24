@@ -126,7 +126,13 @@ Almost all of the code was written by AI coding agents, directed by the author.
 
 ## Get started
 
-Download the compiler for your system from [the releases](https://github.com/lerta-lang/lerta/releases), and put it in a directory on your `PATH`. It builds programs with clang: [Tools](reference/compiler.md#tools) lists what each system needs, and [Getting started](../README.md#getting-started) has the details, and how to build the compiler from source.
+On macOS or Linux, [Homebrew](https://brew.sh/) installs the compiler:
+
+```
+brew install lerta-lang/tap/lerta
+```
+
+Or download the compiler for your system from [the releases](https://github.com/lerta-lang/lerta/releases), and put it in a directory on your `PATH`. It builds programs with clang: [Tools](reference/compiler.md#tools) lists what each system needs, and [Getting started](../README.md#getting-started) has the details, and how to build the compiler from source.
 
 ```
 echo "print 'hello, world'" > hello.lerta
