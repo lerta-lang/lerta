@@ -142,7 +142,7 @@ make site-serve        # serves it at http://127.0.0.1:8000/ to look at
 ```
 
 - `site/site.lerta` writes the pages that `site/pages.lerta` lists: `site/index.md`, the top page, whose links are written as if the file were in `docs/`; `docs/philosophy.md`; and the pages of `docs/tour/`, `docs/reference/` and `docs/internals/`. Each is written at its path in `docs/`, so that their links work as on GitHub. A link to what is not on the site goes to GitHub (`site/links.lerta`).
-- The site is served at the root of its domain, [lerta.org](https://lerta.org/): its links start with `/`.
+- The site is served at the root of its domain, [lerta.org](https://lerta.org/): its links start with `/`. GitHub Pages serves it, as GitHub Actions builds it on each push to `main` (`.github/workflows/site.yml`); the repository's Pages settings take GitHub Actions as the source and hold the domain.
 - `site/template.html` is the template that wraps each document. `site/layout.lerta` fills it in: the title, URL and description that search engines and link previews show, the navigation, the sidebar for the document's section, and the links to the previous and next pages of that section.
 - The images are copied as they are. `site/images.sh` renders `og.png`, the preview image shown when the site is linked, from `og.svg`, and `favicon.ico` and `apple-touch-icon.png` from `favicon.svg`: run it by hand after changing an SVG.
 - `site/markdown.lerta` takes only the Markdown that `docs/` writes: headings, paragraphs, lists, tables and fenced code; code spans, emphasis and links. Anything else fails the build with its line.
