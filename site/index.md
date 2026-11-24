@@ -120,19 +120,17 @@ C is included as a baseline. The benchmarks are small programs that were written
 
 ## Status
 
-Lerta is in early development: there are no releases yet, and the language and its standard library may still change incompatibly. The compiler is written in Lerta, builds itself, and runs on Linux, macOS and Windows. [The reference](reference/README.md) describes what works today. [The roadmap](roadmap/README.md) describes what is planned, such as package management, a test runner, a REPL and a playground.
+Lerta is in early development: the language and its standard library may still change incompatibly. The compiler is written in Lerta, builds itself, and runs on Linux, macOS and Windows. [The reference](reference/README.md) describes what works today. [The roadmap](roadmap/README.md) describes what is planned, such as package management, a test runner, a REPL and a playground.
 
 Almost all of the code was written by AI coding agents, directed by the author.
 
 ## Get started
 
-There are no binary releases yet, so build the compiler from source. You need make and clang: [Tools](reference/compiler.md#tools) lists what each system needs, and [Getting started](../README.md#getting-started) has the details.
+Download the compiler for your system from [the releases](https://github.com/lerta-lang/lerta/releases), and put it in a directory on your `PATH`. It builds programs with clang: [Tools](reference/compiler.md#tools) lists what each system needs, and [Getting started](../README.md#getting-started) has the details, and how to build the compiler from source.
 
 ```
-git clone https://github.com/lerta-lang/lerta
-cd lerta
-make
-bin/lerta run examples/hello.lerta
+echo "print 'hello, world'" > hello.lerta
+lerta run hello.lerta
 ```
 
 ## Learn more

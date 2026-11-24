@@ -31,29 +31,41 @@ The name is the Esperanto word *lerta*, which means "skillful" or "deft".
 
 ## Status
 
-Lerta is in early development: there are no releases yet, and the language and its standard library may still change incompatibly. The compiler is written in Lerta and builds itself, starting from a seed of LLVM IR (see [the bootstrap](docs/internals/architecture.md#bootstrap)). It runs on Linux, macOS and Windows. What is planned, such as package management, a test runner, a REPL and a playground, is in [the roadmap](docs/roadmap/README.md).
+Lerta is in early development: the language and its standard library may still change incompatibly. The compiler is written in Lerta and builds itself, starting from a seed of LLVM IR (see [the bootstrap](docs/internals/architecture.md#bootstrap)). It runs on Linux, macOS and Windows. What is planned, such as package management, a test runner, a REPL and a playground, is in [the roadmap](docs/roadmap/README.md).
 
 Almost all of the code was written by AI coding agents, directed by the author. [AGENTS.md](AGENTS.md) describes how they work.
 
 ## Getting started
 
-There are no binary releases yet, so build the compiler from source. You need make, plus the tools that the compiler itself uses to build programs: clang, and the linker and C library that [Tools](docs/reference/compiler.md#tools) lists for each system (llvm-mingw on Windows). On Windows, use GNU make (for example, `winget install ezwinports.make`) and run it in Git Bash, the shell of [Git for Windows](https://gitforwindows.org/).
+The compiler builds programs with clang, and the linker and C library that [Tools](docs/reference/compiler.md#tools) lists for each system (llvm-mingw on Windows): install them first.
+
+Download the compiler for your system from [the releases](https://github.com/lerta-lang/lerta/releases). Its archive, `lerta-<version>-<target>.tar.gz`, named by [the target](docs/reference/compiler.md#--target-target), or `.zip` on Windows, holds it alone, `lerta` (`lerta.exe` on Windows), which carries the standard library and the runtime: put it in a directory on your `PATH`. The macOS one is not signed, so if a browser downloaded it, run `xattr -d com.apple.quarantine lerta` before it.
+
+Write a program, `hello.lerta`:
+
+```lerta
+print 'hello, world'
+```
+
+and run it, or compile it into an executable:
+
+```
+lerta run hello.lerta
+lerta build hello.lerta -O
+./hello
+```
+
+`build` writes the executable, `hello`, into the current directory. `-O` optimizes it; without `-O`, the build is a debug build, which also checks the program's memory as it runs.
+
+To build the compiler from source instead, you need make too. On Windows, use GNU make (for example, `winget install ezwinports.make`) and run it in Git Bash, the shell of [Git for Windows](https://gitforwindows.org/).
 
 ```
 git clone https://github.com/lerta-lang/lerta
 cd lerta
 make
-bin/lerta run examples/hello.lerta
 ```
 
-`make` builds the compiler, `bin/lerta` (`bin/lerta.exe` on Windows). It carries the standard library and the runtime, so it needs no other file from the repository: copy it to a directory on your `PATH` to call it `lerta`, as the documents do. To compile a program into an executable instead of running it:
-
-```
-bin/lerta build examples/hello.lerta -O
-./hello
-```
-
-`build` writes the executable, `hello`, into the current directory. `-O` optimizes it; without `-O`, the build is a debug build, which also checks the program's memory as it runs.
+`make` builds the compiler, `bin/lerta` (`bin/lerta.exe` on Windows), which needs no other file from the repository.
 
 From here, [the tour](docs/tour/README.md) shows the language, [the reference](docs/reference/compiler.md) lists every command and option, and [editors/](editors/) has editor support for VS Code and Vim.
 

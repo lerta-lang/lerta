@@ -79,7 +79,7 @@ make format            # lays out the .lerta files in the style (lerta fmt --fix
 
 ### Continuous integration
 
-GitHub Actions runs the tests on each push to `main` and on each pull request (`.github/workflows/ci.yml`).
+GitHub Actions runs the tests on each push to `main`, on each pull request, and on each tag of a [release](#releases) (`.github/workflows/ci.yml`).
 
 - Each target of [`--target`](docs/reference/compiler.md#--target-target) but `macos-universal` and `linux-armhf` runs `make test-target` in a job of its own, on a runner of its system and architecture; a 32-bit target runs on the runner of its 64-bit one. GitHub has no runner for `linux-armhf`, whose tests run on a Raspberry Pi with `make test-targets`.
 - Another job runs `make check`, on Linux.
@@ -149,6 +149,16 @@ make site-serve        # serves it at http://127.0.0.1:8000/ to look at
 - A ```` ```lerta ```` block followed by an ```` ```output ```` block, blank lines between them allowed, is a sample, which must print the output and nothing else, and succeed: the run tests run those of README.md and of the site's pages. An output block after anything else fails the build. README.md is read for its samples as `docs/` is, so it keeps to the same Markdown. `make check` checks that the samples are in the style, as `lerta fmt` does, and reports each place in its document.
 - A ```` ```lerta ```` block is colored by the compiler's lexer (`site/highlight.lerta`); one that the lexer rejects, such as code of a planned feature, is shown without colors, with a warning.
 - The run tests write the site, which must give no warning, and the tests in `tests/site/` check the Markdown and the colors.
+
+## Releases
+
+A release is made from a tag `v<version>` of a commit of `main` whose `VERSION` holds that version:
+
+1. Set `VERSION` to the version, such as `0.1.0`, and push the commit to `main`.
+2. Tag the commit `v0.1.0`, and push the tag.
+3. On the tag, [CI](#continuous-integration) checks that the tag is `v` followed by `VERSION`, and runs the tests. Once they all pass, it makes a draft release of the compiler of each target that it tests, and of `macos-universal`: each alone, in `lerta-<version>-<target>.tar.gz`, or `.zip` for Windows (`tools/package.sh`), with their `SHA256SUMS`.
+4. Write the draft's notes by hand, and publish it.
+5. Set `VERSION` to the next version with `-dev`, such as `0.2.0-dev`.
 
 ## Changing the language
 
