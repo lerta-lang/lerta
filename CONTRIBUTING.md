@@ -79,7 +79,7 @@ make format            # lays out the .lerta files in the style (lerta fmt --fix
 
 ### Continuous integration
 
-GitHub Actions runs the tests on each push to `main`, on each pull request, and on each tag of a [release](#releases) (`.github/workflows/ci.yml`).
+GitHub Actions runs the tests on each push to `main` and on each pull request (`.github/workflows/ci.yml`). For a push to `main`, each job then packs the compiler of its target for a [release](#releases).
 
 - Each target of [`--target`](docs/reference/compiler.md#--target-target) but `macos-universal` and `linux-armhf` runs `make test-target` in a job of its own, on a runner of its system and architecture; a 32-bit target runs on the runner of its 64-bit one. GitHub has no runner for `linux-armhf`, whose tests run on a Raspberry Pi with `make test-targets`.
 - Another job runs `make check`, on Linux.
@@ -156,7 +156,7 @@ A release is made from a tag `v<version>` of a commit of `main` whose `VERSION` 
 
 1. Set `VERSION` to the version, such as `0.1.0`, and push the commit to `main`.
 2. Tag the commit `v0.1.0`, and push the tag.
-3. On the tag, [CI](#continuous-integration) checks that the tag is `v` followed by `VERSION`, and runs the tests. Once they all pass, it makes a draft release of the compiler of each target that it tests, and of `macos-universal`: each alone, in `lerta-<version>-<target>.tar.gz`, or `.zip` for Windows (`tools/package.sh`), with their `SHA256SUMS`.
+3. On the tag, `.github/workflows/release.yml` checks that the tag is `v` followed by `VERSION`, and waits for the [CI](#continuous-integration) run of the commit on `main`, so that the commit is tested once. Once its tests all pass, it makes a draft release of what that run packed: the compiler of each target that it tests, and of `macos-universal`, each alone, in `lerta-<version>-<target>.tar.gz`, or `.zip` for Windows (`tools/package.sh`), with their `SHA256SUMS`. If the CI run fails, and passes when run again, run the release again too.
 4. Write the draft's notes by hand, and publish it.
 5. Set `VERSION` to the next version with `-dev`, such as `0.2.0-dev`.
 

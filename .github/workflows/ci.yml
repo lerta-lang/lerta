@@ -1,20 +1,19 @@
 # The check of the style, and the tests of each target on a runner of its system (see
-# CONTRIBUTING.md#continuous-integration); for a tag of a version, the release too (see
-# CONTRIBUTING.md#releases).
+# CONTRIBUTING.md#continuous-integration); for a commit of main, the archives that a release gives
+# too (see CONTRIBUTING.md#releases).
 name: CI
 
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
 
 permissions:
   contents: read
 
-# A newer push to a pull request replaces its run; each commit of main, and each tag, keeps its own.
+# A newer push to a pull request replaces its run; each commit of main keeps its own.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || format('{0}-{1}', github.ref, github.sha) }}
+  group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -31,11 +30,6 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      # First, so that the run of a tag of the wrong version shows its failure at once, though the
-      # tests go on.
-      - name: Check the tag against VERSION
-        if: github.ref_type == 'tag'
-        run: test "$GITHUB_REF_NAME" = "v$(cat VERSION)"
       - name: Install clang
         run: |
           sudo apt-get update
@@ -117,35 +111,13 @@ jobs:
       - name: Test
         run: make test-target TARGET=${{ matrix.target }}
 
+      # For a release of the commit, which takes them from here (see release.yml).
       - name: Package
-        if: github.ref_type == 'tag'
+        if: github.event_name == 'push'
         run: tools/package.sh ${{ matrix.target }} ${{ matrix.also_released }}
 
-      - if: github.ref_type == 'tag'
+      - if: github.event_name == 'push'
         uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.target }}
           path: build/release/*
-
-  # A draft, which is published once its notes are written by hand.
-  release:
-    if: github.ref_type == 'tag'
-    needs: [check, test]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: release-*
-          merge-multiple: true
-          path: release
-      - name: Create the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cd release
-          sha256sum * > SHA256SUMS
-          gh release create "$GITHUB_REF_NAME" * --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
-            --title "Lerta ${GITHUB_REF_NAME#v}"

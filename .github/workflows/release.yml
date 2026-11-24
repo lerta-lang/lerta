@@ -1,0 +1,50 @@
+# A draft release of a tag of the version, of the archives that the CI run of the tag's commit on
+# main made once its tests all passed, so that the commit is tested once (see
+# CONTRIBUTING.md#releases). The draft is published once its notes are written by hand.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    # The CI run may have only begun, and its Windows jobs take an hour.
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the tag against VERSION
+        run: test "$GITHUB_REF_NAME" = "v$(cat VERSION)"
+
+      # The commit may be pushed to main after its tag, so the run may not be there yet.
+      - name: Wait for the CI run of the commit
+        run: |
+          until
+            run=$(gh run list --workflow ci.yml --branch main --event push --commit "$GITHUB_SHA" \
+              --json databaseId,status,conclusion --jq '.[0] // empty')
+            [ -n "$run" ] && [ "$(echo "$run" | jq -r .status)" = completed ]
+          do
+            sleep 60
+          done
+          echo "$run"
+          [ "$(echo "$run" | jq -r .conclusion)" = success ]
+          echo "RUN_ID=$(echo "$run" | jq -r .databaseId)" >> "$GITHUB_ENV"
+
+      - name: Create the release
+        run: |
+          gh run download "$RUN_ID" --pattern 'release-*' --dir artifacts
+          mkdir release
+          mv artifacts/*/* release
+          cd release
+          sha256sum * > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" * --draft --verify-tag \
+            --title "Lerta ${GITHUB_REF_NAME#v}"
