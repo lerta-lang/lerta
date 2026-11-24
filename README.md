@@ -3,24 +3,20 @@
 Lerta is a statically typed language that compiles to native code through LLVM, with CoffeeScript-like syntax and TypeScript-like type inference. Lerta code has no undefined behavior, and its memory is managed without a tracing garbage collector. Against each of Go, Swift and Node.js, it is as fast or faster in most of [its benchmarks](bench/README.md).
 
 ```lerta
-text := 'the quick fox and the lazy dog and the end'
+words := 'listen night silent stone enlist thing notes tones inlets'.split(' ')
 
-counts: Map<String, Int>
-for word in text.split(' ')
-  counts[word, default: 0] += 1
+groups: Map<String, String[]>
+for word in words
+  letters := [char for char in word].sorted().join()
+  groups[letters, default: []].push(word)
 
-for (word, count) in counts.to_array().sorted_by(((_, n)) -> -n)
-  print "#{word.pad_end(6)} #{'*'.repeat(count)}"
+print group.join(' ') for group in groups.values()
 ```
 
 ```output
-the    ***
-and    **
-quick  *
-fox    *
-lazy   *
-dog    *
-end    *
+listen silent enlist inlets
+night thing
+stone notes tones
 ```
 
 - **Shape shows structure.** Blocks are marked by indentation alone, and the formatter lays out every program the same way.
