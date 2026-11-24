@@ -14,11 +14,15 @@ import monotonic, sleep from 'std:time'
 
 LARGE := 16000000
 
+# Made once, as `repeat` builds it a character at a time, which takes a slow machine long enough to
+# count against the waits below.
+large_body := 'x'.repeat(LARGE)
+
 # A body that never ends, sent as it is read, at /endless; one of LARGE bytes at /large; a short one
 # elsewhere.
 endless := (request: Request): Response ->
   { url } := request
-  return { body: 'x'.repeat(LARGE) } if url.ends_with('/large')
+  return { body: large_body } if url.ends_with('/large')
   return { body: 'served' } unless url.ends_with('/endless')
   chunk := 'x'.repeat(65536).binary
   { body: Reader(-> chunk) }
@@ -28,7 +32,10 @@ writer := serve(endless, write_timeout: 0.2)
 for path in ['/endless', '/large']
   unread := await connect_tcp('127.0.0.1', writer.port)
   await unread.write("GET #{path} HTTP/1.1\r\nHost: a\r\n\r\n")
-  await sleep(1.0)
+
+  # Long past write_timeout, as a slow machine that runs many other tests at once may take a second
+  # to start writing.
+  await sleep(3.0)
   start := monotonic()
   received := await unread.reader.read_all()
   print "#{path}: #{received.text(0, 15)!} #{received.length < LARGE} #{monotonic() - start < 1.0}"
@@ -37,7 +44,7 @@ await writer.close()
 # Its write_timeout is longer than a write may wait on Linux for half of the 4 MB that the kernel
 # buffers to drain, but shorter than the whole takes.
 print 'a large body taken steadily'
-large := serve((_: Request) -> { body: 'x'.repeat(LARGE) }, write_timeout: 2.0)
+large := serve((_: Request) -> { body: large_body }, write_timeout: 2.0)
 steady := await connect_tcp('127.0.0.1', large.port)
 await steady.write("GET / HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n")
 var taken = 0
